@@ -30,6 +30,7 @@ Status: Active
 | REQ-MODEL-005 | Decided | `models.json` はモデル選定時に使用した `model_catalog.json` の provenance として少なくとも `schemaVersion`、`generation`、`generatedAt` を記録する。現在の catalog の `generation` が異なる場合は選定済み Model / Version / File を現在の catalog に対して再検証し、generation の不一致だけでは `models.json` を無効化しない。 | `contracts/project-artifacts.md` |
 | REQ-MODEL-006 | Decided | `models.json` は既存形式との互換性を要件とせず、ComfyUI Batch Studio 専用の新しい schema を定義して使用する。 | `contracts/project-artifacts.md` |
 | REQ-MODEL-007 | Decided | LoRA の推奨・基準強度を Civitai 由来の情報として取得できる場合、`models.json` にその値と provenance を保持する。Civitai に根拠となる情報がない場合は値を捏造しない。 | `contracts/project-artifacts.md` |
+| REQ-MODEL-008 | Decided | `models.json` Schema v1 を `schemas/models.schema.json` として固定する。確定版は `catalog`、単一 `checkpoint`、`loras[]` を持ち、Checkpoint の `ref` は `checkpoint.main`、LoRA の `ref` は `lora.*` とする。Model / Version / File identity、名前、URL、`trainedWords`、Grok の `reason` を保持し、LoRA の Civitai 由来基準値は任意の `strengthBaseline` として provenance 付きで保持する。未解決 `missingRequirements` は確定版 `models.json` に含めず Draft / UI state として扱い、1件でも残る場合は Confirm を許可しない。 | `contracts/project-artifacts.md` |
 
 ## 4. Prompt Planning
 
@@ -77,9 +78,8 @@ Status: Active
 
 未決事項は実装時に暗黙決定せず、Decision Log へ判断を追加してから `Open` / `Draft` を `Decided` へ変更する。
 
-1. `models.json` 専用 schema の正式フィールド、stable reference、`missingRequirements` の配置。
-2. Workflow Template Manifest の正式 schema。
-3. Workflow の保存パス・枝タイトル・画像枚数など、Grok 指定と Compiler 派生値の境界。
-4. R2 File Manager との将来の直接 API 統合。
-5. ComfyUI Queue / 進捗管理を将来スコープへ追加する条件。
-6. Civitai の投稿画像メタデータ等から LoRA の基準強度を導出する場合の正式アルゴリズム、provenance schema、および Civitai の単一 weight を `strengthModel` / `strengthClip` へどう初期展開するか。
+1. Workflow Template Manifest の正式 schema。
+2. Workflow の保存パス・枝タイトル・画像枚数など、Grok 指定と Compiler 派生値の境界。
+3. R2 File Manager との将来の直接 API 統合。
+4. ComfyUI Queue / 進捗管理を将来スコープへ追加する条件。
+5. Civitai の投稿画像メタデータ等から LoRA の基準強度を導出する場合の正式アルゴリズム、provenance schema、および Civitai の単一 weight を `strengthModel` / `strengthClip` へどう初期展開するか。
