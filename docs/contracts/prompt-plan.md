@@ -10,6 +10,8 @@ Status: Draft schema / Decided semantics
 
 `prompt_plan.json` はプロジェクト内の確定済み Prompt Plan を表す標準ファイル名とする。Grok の回答をそのまま即時保存するのではなく、Batch Studio の検証とユーザー承認を経た内容だけをこのファイルへ確定する。
 
+人間向けの確認・編集は `prompt_plan.json` を基に Batch Studio の Prompt Plan Web UI で提供する。新規方式では同内容を別の Markdown 正本として並行管理しない。
+
 ## 2. 決定済みの意味構造
 
 Grok から最低限次を受け取る。
@@ -47,6 +49,8 @@ User approval
    v
 prompt_plan.json
    |
+   +--> Prompt Plan Web UI
+   |
    v
 Workflow Compiler
 ```
@@ -54,13 +58,13 @@ Workflow Compiler
 原則:
 
 - Workflow Compiler はプロジェクト直下の確定済み `prompt_plan.json` を Prompt Plan の機械可読入力として使用する。
+- Prompt Plan Web UI も同じ `prompt_plan.json` を表示・編集対象とする。
 - Grok の貼り戻し直後の内容は Draft であり、検証・承認前に `prompt_plan.json` を上書きしない。
 - 確定前の候補は `._batch_studio/drafts/` で管理する。
 - 確定版を更新する場合、更新前の版は `._batch_studio/history/` へ退避する。
 - `prompt_plan_v2.json`、`prompt_plan_final.json`、`prompt_plan_final2.json` のように版管理をファイル名へ埋め込まない。
 - 正式 field name と JSON Schema は別途確定する。ファイル名と lifecycle の確定は schema の未決事項に依存しない。
-
-`prompt_tree.md` が独立正本か派生成果物かは別要件であり、本節では決めない。
+- 新規プロジェクトでは `prompt_tree.md` を生成・維持せず、Workflow Compiler の入力にも使用しない。
 
 ## 4. Draft JSON shape
 
@@ -369,15 +373,28 @@ LoRA strength の許容範囲は現時点で固定しない。モデルによっ
 
 これらを ComfyUI Workflow 内部事情だけを理由に Prompt Plan へ追加しない。
 
-## 15. prompt_tree.md との関係
+## 15. Human-readable view / Legacy prompt_tree.md
 
-未決。
+人間向けの Prompt 構造は Batch Studio の Prompt Plan Web UI で表示・編集する。
 
-`prompt_plan.json` は Workflow Compiler の確定済み機械可読入力である。
+```text
+prompt_plan.json
+   |
+   +--> Prompt Plan Web UI
+   |
+   `--> Workflow Compiler
+```
 
-`prompt_tree.md` は次のどちらかを今後決める。
+Web UI は少なくとも common、Root LoRA、Branch、Branch LoRA、leaf prompt、validation state を人間が追跡できる形で表示する。
 
-- Grok が別途作る独立 Artifact。
-- Prompt Plan から Batch Studio が生成する人間可読 view。
+UI の変更は `prompt_plan.json` の編集として扱う。表示用 Markdown を別の正本として生成・維持しない。
+
+`prompt_tree.md` は Legacy Artifact とする。
+
+- 新規プロジェクトでは生成しない。
+- Workflow Compiler の入力にしない。
+- Grok への Workflow 生成用添付として使用しない。
+- 既存プロジェクトに存在する場合は Legacy import / migration 候補として扱える。
+- Legacy 内容を新方式へ移行する場合は、Batch Studio の検証とユーザー承認を経て `prompt_plan.json` として確定する。
 
 詳細は `project-artifacts.md` と Decision Log を参照する。
