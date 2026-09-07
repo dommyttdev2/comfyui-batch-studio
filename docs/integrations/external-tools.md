@@ -30,6 +30,7 @@ https://github.com/dommyttdev2/civit-model-viewer.git
 - collection 同期。
 - model / version / file 情報取得。
 - thumbnail 情報取得。
+- Civitai 由来の LoRA strength evidence / recommendation 情報取得が必要になった場合の Civitai API 通信。
 - `data/model_catalog.json` の保存・更新。
 
 Batch Studio はこの同期処理を複製しない。
@@ -43,6 +44,7 @@ Batch Studio は保存済み `model_catalog.json` を read-only source として
 - Grok へ Model Selection の根拠ファイルとして提示。
 - Grok が返した選定結果の Model / Version / File 実在確認。
 - catalog 更新世代の検出。
+- catalog に Civitai 由来の LoRA 強度基準が含まれる場合、その値と provenance を `models.json` へ固定する。
 
 ### 2.3 Catalog structure currently relied on
 
@@ -74,13 +76,71 @@ collections[]
 
 Batch Studio 側は catalog の全フィールドを Project schema へコピーする必要はない。選定と再照合に必要な identity を保存する。
 
-### 2.4 Sync flow
+2026-09-07 時点の `civit-model-viewer` 実装では、Model / Version / File、trained words、thumbnail 等を収集しているが、投稿画像の LoRA weight を `model_catalog.json` へ出力する処理は持っていない。
+
+### 2.4 Civitai LoRA strength research note
+
+2026-09-07 時点の Civitai Site API では、Model / Model Version の公開レスポンスに汎用的な「推奨 LoRA 強度」フィールドは確認できない。
+
+一方、Images API では次のように投稿画像の generation metadata を要求できる。
+
+```text
+GET /api/v1/images?modelVersionId={id}&withMeta=true
+```
+
+metadata が存在する画像では、概念上次の情報を得られる場合がある。
+
+```json
+{
+  "meta": {
+    "civitaiResources": [
+      {
+        "type": "lora",
+        "modelVersionId": 12345,
+        "weight": 0.7
+      }
+    ]
+  }
+}
+```
+
+この `weight` は「その投稿画像で実際に使用された値」であり、Civitai / 作者が明示した汎用推奨値とは限らない。
+
+したがって、複数画像の weight から `models.json` 用の基準値を導出する場合は次を必須とする。
+
+- 元データが Civitai 由来であることを保持する。
+- 「作者推奨」と「投稿画像からの導出値」を区別する。
+- 集計方法を provenance として追跡可能にする。
+- metadata がない、または十分な evidence がない場合は値を生成しない。
+
+正式な集計アルゴリズム、最低 sample 数、外れ値処理、どの画像を対象とするかは未決。
+
+### 2.5 Catalog extension for strength
+
+Batch Studio は Civitai API key を所有しないため、Civitai 由来の LoRA strength を利用する場合も Batch Studio が Civitai API を直接呼ぶ方式にはしない。
+
+必要な情報は `civit-model-viewer` が取得し、将来の `model_catalog.json` schema に strength evidence / recommendation と provenance を追加する方向とする。
+
+正式 field name は Draft。
+
+概念例:
+
+```text
+versions[]
+  strengthRecommendation
+    value
+    source
+    basis
+    sampleCount
+```
+
+### 2.6 Sync flow
 
 ```text
 User / civit-model-viewer
        |
        v
-Civitai Collection
+Civitai Collection / Civitai metadata
        |
        v
 SYNC
@@ -90,10 +150,10 @@ model_catalog.json
        |
        +--> Grok Model Selection
        |
-       `--> Batch Studio Validation
+       `--> Batch Studio Validation / models.json
 ```
 
-### 2.5 Missing model flow
+### 2.7 Missing model flow
 
 ```text
 Grok
@@ -105,7 +165,7 @@ Grok
   -> Grok再選定
 ```
 
-### 2.6 Catalog path
+### 2.8 Catalog path
 
 ローカル配置場所を旧 `scripts/civitai` に固定しない。
 
@@ -213,6 +273,7 @@ LoRA_{project}.json
 例:
 
 - catalog が読めない -> Model Selection/validation を unavailable と表示。
+- strength evidence が catalog にない -> `models.json` の Civitai 由来基準強度を absent とし、経験則で偽装補完しない。
 - R2 File Manager がない -> R2 transfer は unavailable。Local file だけで READY にできるかは別 availability rule で判定。
 - Grok Web が未ログイン -> Grok工程は開始不可。Artifact の既存閲覧は可能。
 
