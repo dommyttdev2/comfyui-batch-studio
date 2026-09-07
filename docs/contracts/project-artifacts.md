@@ -32,8 +32,8 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 | --- | --- | --- | --- |
 | `project_brief.json` | Batch Studio / User | 初期画面 | Story作成前の最小入力 |
 | `story.md` | Grok + User | Brief / reference | 作品・場面設計の人間可読正本 |
-| `models.json` | Grok selection + Batch Studio validation + User | `story.md`, `model_catalog.json` | 使用モデルの固定結果 |
-| `prompt_plan.json` | Grok + User | `story.md`, `models.json` | Workflow生成用の意味的Prompt正本候補 |
+| `models.json` | Grok selection + Batch Studio validation + User | `story.md`, `model_catalog.json` | 使用モデルの固定結果と Civitai 由来のモデル基準情報 |
+| `prompt_plan.json` | Grok + User | `story.md`, `models.json` | Workflow生成用の意味的Prompt正本候補。実際の LoRA 適用強度も保持する |
 | `prompt_tree.md` | Open | 既存プロジェクト / 将来派生 | 人間可読Prompt Tree。正本関係は未決 |
 | `LoRA_{project_name}.json` | Workflow Compiler | Template, Manifest, models, plan | 最終ComfyUI Workflow |
 | `project_meta.json` | Batch Studio | System | Artifact status、version、将来hash等 |
@@ -70,6 +70,10 @@ Grok が `model_catalog.json` から選定した「このプロジェクトで�
 
 Batch Studio は選定主体ではなく、実在性の検証と確定保存を担当する。
 
+`models.json` は同時に、選定したモデルについて **Civitai をソースとする基準情報** を保持する。LoRA の推奨・基準強度を Civitai 由来で取得できる場合、その値は `models.json` が所有する。
+
+ここで保持する強度は「モデル側の基準情報」であり、最終 Workflow へ必ずそのまま適用される値ではない。実際に各 Root / Branch で使用する強度は `prompt_plan.json` が所有する。
+
 ### 6.2 Schema 方針
 
 `models.json` は既存の Civitai Selection API 等の既存形式との互換性を要件としない。
@@ -85,6 +89,7 @@ ComfyUI Batch Studio の責務に合わせた専用 schema を新規定義し、
 - model role。
 - trained words / trigger words。
 - Grok の選定理由など、後続工程で必要な意味情報。
+- LoRA について Civitai 由来で取得できる推奨・基準強度と、その provenance。
 - catalog 内に必要モデルがなかった場合の不足要件。
 
 既存形式からの移行・読込互換が必要になった場合は、正本 schema 自体を既存形式へ寄せず、Importer / Migration の別責務として扱う。
@@ -122,6 +127,11 @@ Draft concept:
       "fileId": 30002,
       "fileName": "character.safetensors",
       "trainedWords": ["character trigger"],
+      "strengthRecommendation": {
+        "value": 0.7,
+        "source": "civitai",
+        "basis": "image-metadata"
+      },
       "reason": "..."
     }
   ],
@@ -129,7 +139,9 @@ Draft concept:
 }
 ```
 
-これは専用 schema の方向を示す Draft であり、正式フィールド名は未確定。
+これは専用 schema の方向を示す Draft であり、`strengthRecommendation` を含む正式フィールド名は未確定。
+
+上記の `value: 0.7` は schema 例であり、Civitai からその値を直接取得できることを意味しない。
 
 ### 6.4 catalog generation
 
@@ -148,6 +160,22 @@ Draft concept:
 
 `ref` という正式フィールド名、命名規則、一意性制約は Draft。
 
+### 6.6 LoRA strength recommendation
+
+`models.json` に保存する LoRA 強度は、Civitai を source of truth とする **推奨・基準情報** である。
+
+原則:
+
+- Civitai から明示的または追跡可能な根拠を得られる場合だけ保存する。
+- 根拠がない場合は null / absent とし、経験則だけで `models.json` を補完しない。
+- 値だけではなく、その値をどの Civitai 情報から得たかを追跡可能にする。
+- Civitai 上の「実際に投稿画像で使われた weight」から基準値を導出する場合、それを作者の明示的推奨値と同一視しない。
+- 導出値を採用する場合は、導出方法と evidence を provenance に含める。
+
+2026-09-07 時点の Civitai Site API 調査では、Model / Model Version の公開レスポンスに汎用的な「推奨 LoRA 強度」フィールドは確認できない。一方、Images API の `withMeta=true` では投稿画像の `meta.civitaiResources[].weight` として、その画像で使われた LoRA weight を取得できる場合がある。
+
+したがって、投稿画像群から基準値を算出する場合の集計アルゴリズムは別途確定する。
+
 ## 7. prompt_plan.json
 
 意味的な Grok -> Batch Studio 契約。
@@ -158,9 +186,13 @@ Workflow 内部形式を含まず、主に次を持つ。
 
 - project common prompt
 - root LoRA references
+- root LoRA の実適用強度
 - branches
 - branch LoRA references
+- branch LoRA の実適用強度
 - branch leaves / matrix prompts
+
+`models.json` の強度はモデル基準情報、`prompt_plan.json` の強度は当該プロジェクトで実際に Workflow へ適用する可変値であり、役割が異なる。
 
 ## 8. prompt_tree.md
 
