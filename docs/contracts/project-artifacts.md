@@ -70,7 +70,26 @@ Grok が `model_catalog.json` から選定した「このプロジェクトで�
 
 Batch Studio は選定主体ではなく、実在性の検証と確定保存を担当する。
 
-### 6.2 必要な識別情報
+### 6.2 Schema 方針
+
+`models.json` は既存の Civitai Selection API 等の既存形式との互換性を要件としない。
+
+ComfyUI Batch Studio の責務に合わせた専用 schema を新規定義し、その schema をプロジェクト内の正本とする。
+
+専用 schema は少なくとも次を直接表現できる必要がある。
+
+- 選定元 catalog の provenance。
+- Project 内で安定して参照できる model reference。
+- Civitai Model / Version / File identity。
+- 実ファイル名。
+- model role。
+- trained words / trigger words。
+- Grok の選定理由など、後続工程で必要な意味情報。
+- catalog 内に必要モデルがなかった場合の不足要件。
+
+既存形式からの移行・読込互換が必要になった場合は、正本 schema 自体を既存形式へ寄せず、Importer / Migration の別責務として扱う。
+
+### 6.3 Draft shape
 
 最低限、選定項目をカタログへ一意に照合できる情報を保存する。
 
@@ -110,22 +129,24 @@ Draft concept:
 }
 ```
 
-このフィールド名と既存 `models.json` 互換性は実装前に確定するため Draft とする。
+これは専用 schema の方向を示す Draft であり、正式フィールド名は未確定。
 
-### 6.3 catalog generation
+### 6.4 catalog generation
 
 `model_catalog.json` が更新されても、generation が変わっただけで `models.json` を無効にしない。
 
 - generation 変更: stale warning。
 - 選定した Model / Version / File が現在の catalog から消えた: blocking または強い警告。
 
-### 6.4 Stable reference
+`catalog.generation` を必須にするか、`generatedAt` や hash 等も保持するかは正式 schema 確定時に決める。
+
+### 6.5 Stable reference
 
 `prompt_plan.json` は `.safetensors` ファイル名を重複記載するのではなく、`models.json` の選定項目を一意に参照できる stable reference を使う方針を推奨する。
 
 例 `checkpoint.main`, `lora.character`, `lora.pose.cowgirl`。
 
-`ref` という正式フィールド名は Draft。
+`ref` という正式フィールド名、命名規則、一意性制約は Draft。
 
 ## 7. prompt_plan.json
 
