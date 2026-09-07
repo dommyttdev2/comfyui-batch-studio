@@ -638,7 +638,7 @@ observed-usage-derived
 
 `observed-usage-derived` の場合は `method` と `sampleCount` を必須とする。
 
-正式な集計アルゴリズム自体は `OPEN-006` のまま別途決定する。
+正式な observed usage 集計アルゴリズムと Prompt Plan 初期展開ruleは `DEC-021` で確定する。
 
 Civitai 根拠がない場合は `strengthBaseline` を省略し、null や経験則で補完しない。
 
@@ -936,6 +936,125 @@ extension、numeric sequence、collision suffix、timestamp、seed等のcustom-n
 
 ---
 
+## DEC-021: Civitai observed LoRA baseline uses median of per-post medians
+
+Date: 2026-09-07
+Status: Accepted
+
+### Decision
+
+Civitai投稿画像metadataのLoRA weightからmodel/version側の `strengthBaseline` を導出する場合、v1の正式policyを固定する。
+
+Civitai API通信と集計は `civit-model-viewer` が所有し、Batch Studioは保存済み `model_catalog.json` の結果だけを読む。
+
+### Source / sampling
+
+exact selected LoRA `modelVersionId` を対象に、Images APIを次の条件で利用する。
+
+```text
+modelVersionId = exact selected version
+withMeta       = true
+sort           = Newest
+limit          = 200
+```
+
+有効observation候補は次をすべて満たすresourceだけとする。
+
+```text
+resource.type == lora
+resource.modelVersionId == exact selected versionId
+resource.weight is numeric
+image.postId is available
+```
+
+名前・ファイル名・prompt文字列の類似検索で別versionの値を混ぜない。
+
+### Post normalization / aggregation
+
+同じpostに複数画像があっても各画像を独立票にしない。
+
+```text
+perPostValue(post)
+  = median(valid LoRA weights in that post)
+
+strengthBaseline.value
+  = median(all valid perPostValue)
+```
+
+最低 evidence:
+
+```text
+valid distinct post count >= 5
+```
+
+5 distinct posts未満なら `strengthBaseline` を生成しない。
+
+v1ではweightを0..1等へclampせず、追加のrange filter、IQR除去、trimmed mean等を行わない。外れ値へのrobustnessはmedianに委ねる。
+
+### Provenance
+
+observed baselineは次で記録する。
+
+```text
+source      = civitai
+basis       = observed-usage-derived
+method      = median-of-post-medians:newest-200
+sampleCount = distinct post count used in aggregation
+```
+
+`sampleCount` は画像枚数ではない。
+
+地域・browsing level・metadata公開状態によって観測集合が限定され得るため、この値は **Civitai observed usage baseline** とし、作者推奨値や普遍的最適値と呼ばない。
+
+### creator-declared boundary
+
+`creator-declared` provenanceは、Civitaiがstructured field等でcreatorの明示strengthを提供し、その意味を機械的に確認できる場合だけ使用できる。
+
+Model / Version descriptionの文章をregexやLLMで解析して `creator-declared` 値を作らない。
+
+### Catalog / models boundary
+
+viewerはversion-specific optional `strengthBaseline` を `model_catalog.json` へexportする。
+
+Batch Studioは選定versionのbaselineを利用可能な場合、同じvalue/provenanceを `models.json` のoptional `strengthBaseline` に固定できる。
+
+`schemas/models.schema.json` は既に必要なoptional shapeを表現できるため、本Decisionだけを理由とする `models.json.schemaVersion` bumpは行わない。
+
+strength evidenceのfreshnessはviewer SYNC snapshotの `model_catalog.generation` / `generatedAt` と同じ境界で扱う。
+
+### Prompt Plan initialization
+
+Civitai baselineが単一scalar `w` であり、その値をPrompt Planの初期値に利用する場合は次のように機械展開する。
+
+```text
+strengthModel = w
+strengthClip  = w
+```
+
+これはCivitaiがModel/CLIP別に同じ値を推奨したという意味ではない。単一source scalarを2つの実適用fieldへ初期化するためのmechanical mappingである。
+
+初期化後の `strengthModel` / `strengthClip` はProject側の実適用値として独立変更でき、変更しても `models.json.strengthBaseline` は変えない。
+
+baselineが存在しない場合、Batch Studioは `1.0 / 1.0` や `0.7 / 0.7` 等の経験則defaultを暗黙補完しない。Grokまたはユーザーが実適用値を明示する。
+
+### Rationale
+
+- 画像数の多い単一postがbaselineを支配することを防ぐ。
+- exact version identityを維持し、別versionのweight混入を防ぐ。
+- medianにより複雑な外れ値ruleを導入せずrobustな中心値を得る。
+- observed usageとcreator recommendationをprovenance上分離する。
+- Civitai API ownershipをviewerに維持し、Batch Studioへsecret/API責務を持ち込まない。
+- single scalarからModel/CLIPの差を推測せず、初期化後のProject調整余地を残す。
+
+### Resolves
+
+- `REQ-MODEL-009` を Decided とする。
+- `REQ-PLAN-007` を Decided とする。
+- `REQ-INT-004` を Decided とする。
+- `OPEN-006` を Superseded とする。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
@@ -994,27 +1113,8 @@ v1は `1 leaf = 1 image`、stable IDベースのWorkflow filename / save path / 
 ## OPEN-006: Civitai strength derivation and model/clip mapping
 
 Date: 2026-09-07
-Status: Open
+Status: Superseded
 
-### Questions
+`DEC-021` により解決済み。
 
-Civitai が model-level の明示推奨値を返さず、投稿画像 metadata の LoRA weight から基準値を導出する場合の正式ルールを決める。
-
-- 対象画像の選び方。
-- 最低 sample 数。
-- median / mode / trimmed mean 等の aggregation method。
-- 外れ値処理。
-- Civitai metadata の freshness。
-- observed usage と creator-declared recommendation の区別。
-
-また、Civitai の LoRA weight が単一値である一方、現在の AnimaLoraStack / Prompt Plan は `strengthModel` と `strengthClip` の2値を持つため、初期値への展開規則を決める。
-
-例:
-
-```text
-weight = 0.7
-  -> strengthModel = 0.7
-  -> strengthClip  = 0.7
-```
-
-と単純に同値へする案はあるが、未合意のため確定しない。
+exact `modelVersionId` のNewest最大200画像から、1 post = 1 observationとしてper-post medianを作り、そのmedianを `observed-usage-derived` baselineとする。最低5 distinct posts、追加outlier処理なし、`method = median-of-post-medians:newest-200`、`sampleCount = distinct post count` とした。single baseline scalarをPrompt Plan初期値へ使う場合は `strengthModel` / `strengthClip` へ同値展開し、baseline absent時の暗黙defaultは禁止する。
