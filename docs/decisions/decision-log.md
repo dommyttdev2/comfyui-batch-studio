@@ -220,6 +220,33 @@ ComfyUI queue submission / progress / result retrieval は将来拡張とする�
 
 ---
 
+## DEC-012: models.json uses a Batch Studio-specific schema
+
+Date: 2026-09-07
+Status: Accepted
+
+### Decision
+
+プロジェクト正本の `models.json` は、既存の Civitai Selection API 等の既存 `models.json` 形式との互換性を要件としない。
+
+ComfyUI Batch Studio の後続処理に必要な情報を自然に表現できる専用 schema を新規定義する。
+
+### Rationale
+
+- Grok のモデル選定結果を stable reference で後続 `prompt_plan.json` から参照したい。
+- catalog provenance、Model / Version / File identity、trained words、選定理由、不足要件等を正本として扱いたい。
+- 既存形式に合わせるための冗長な変換や制約を新しい内部契約へ持ち込まない。
+
+### Consequence
+
+既存プロジェクトや外部形式からの互換が必要になった場合は、専用 schema 自体を崩さず Importer / Migration として別途扱う。
+
+### Resolves
+
+`OPEN-002` のうち「既存形式との互換範囲」を解決する。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
@@ -239,17 +266,22 @@ Options:
 
 ---
 
-## OPEN-002: models.json final schema
+## OPEN-002: models.json dedicated schema details
 
 Date: 2026-09-07
 Status: Open
 
-### Questions
+### Decided
 
-- 既存 `models.json` 形式との互換範囲。
-- stable model reference の正式 field name。
+- `models.json` は Batch Studio 専用 schema とする。
+- 既存形式との互換性は要件としない。
+
+### Remaining Questions
+
+- stable model reference の正式 field name と命名規則。
 - catalog metadata をどこまで snapshot するか。
 - `missingRequirements` を同一ファイルに持つか selection draft と分離するか。
+- role、trained words、reason、LoRA strength 等をどこまで `models.json` が所有するか。
 
 ---
 
