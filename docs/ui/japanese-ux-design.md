@@ -8,7 +8,9 @@ ComfyUI Batch Studio を日本語 UI として実装する際に、ユーザー�
 
 本書は **画面レイアウトやコンポーネント構成を固定する設計書ではない**。
 
-実際の画面構成、ペイン数、タブ、カード、一覧形式、モーダル、テーブル、ツリー、Inspector 等の具体的な UI 実装は、実装エージェントが本書と上位契約を満たす範囲で判断する。
+実際の画面構成、ペイン数、タブ、カード、モーダル、Inspector 等の具体的な UI 実装は、実装エージェントが本書と上位契約を満たす範囲で判断する。
+
+ただし、Prompt Plan の主表示については、ユーザーが実際の ComfyUI Workflow と近い感覚で意味構造を把握できることを重視し、左から右へ展開する擬似 Workflow Tree を必須 UX とする。これは ComfyUI の実 Node / Link を表示するものではなく、Prompt Plan の意味構造を可視化するための表現である。
 
 上位の責務・契約は次を正本とする。
 
@@ -28,16 +30,17 @@ docs/contracts/prompt-plan.md
 
 実装エージェントは、次を自由に決定してよい。
 
-- 画面レイアウト。
+- 画面全体のレイアウト。
 - ペイン構成。
 - Navigation の視覚表現。
 - タブ / セクション / モーダル等の使い分け。
-- 一覧を Table / Tree / List / Card 等のどれで表現するか。
 - Editor / Inspector の配置。
+- Matrix 内の生成項目一覧を Table / List / Tree 等のどれで表現するか。
 - Responsive / resize behavior。
 - 共通 Component の切り方。
 - loading / transition / animation の表現。
 - keyboard shortcut や詳細な操作補助。
+- 擬似 Workflow Tree の描画ライブラリや内部実装方式。
 
 ただし、次は変更してはならない。
 
@@ -48,6 +51,8 @@ docs/contracts/prompt-plan.md
 - Workflow Compiler の責務。
 - Civitai / R2 / ComfyUI の外部連携境界。
 - 本書に定義する必須 UX capability。
+- Prompt Plan の主表示を、左から右へ展開する擬似 Workflow Tree とすること。
+- Prompt Plan の Leaf を主ツリー上へ1件ずつ大量展開せず、Branch ごとの Matrix ノード内へ集約すること。
 
 UI 都合だけで domain schema や責務境界を変更しない。
 
@@ -102,20 +107,95 @@ Batch Studio は次を行わない。
 
 Batch Studio は「渡すものを準備する」「返ってきたものを取り込む」部分を支援する。
 
-### 3.4 大量データを現実的に扱えること
+### 3.4 Prompt Plan は ComfyUI に近い擬似 Workflow Tree で理解できること
 
 Prompt Plan は数百〜数千の生成項目を持つ可能性がある。
 
-実装方式はエージェントに任せるが、少なくとも次を満たすこと。
+主表示では大量の Leaf を1件ずつ並べるのではなく、Prompt Plan の意味構造を ComfyUI Workflow に近い擬似ノードツリーとして可視化する。
 
-- 数百件規模でも実用的な速度で閲覧できる。
-- ブランチ単位で生成項目を把握できる。
-- 特定の生成項目を素早く探せる。
-- 生成項目の Positive / Negative を確認・編集できる。
-- validation error / warning の対象へ移動できる。
-- 大量件数を一度に展開することで著しく操作性が落ちない。
+ツリーの主方向は **左から右** とする。
 
-Tree-only、Table-only 等の具体的な表示方式は固定しない。
+概念構造:
+
+```text
+[共通プロンプト]
+      |
+      v
+[全体共通 LoRA]
+      |
+      +--------------------+--------------------+
+      |                    |                    |
+      v                    v                    v
+[Branch LoRA b01]    [Branch LoRA b02]    [Branch LoRA b03]
+      |                    |                    |
+      v                    v                    v
+[Matrix 48件]         [Matrix 72件]         [Matrix 36件]
+```
+
+実際の画面では接続方向を左から右として表現し、ユーザーが次の流れを一目で追えること。
+
+```text
+共通設定
+→ 全体共通 LoRA
+→ Branch 固有 LoRA
+→ Matrix
+```
+
+要件:
+
+- 共通プロンプトを独立した擬似ノードとして認識できる。
+- 全体共通 LoRA を独立した擬似ノードとして認識できる。
+- `prompt_plan.branches[]` ごとにサブツリーとして分岐していることを視覚的に把握できる。
+- Branch ごとの LoRA 設定を擬似ノードとして認識できる。
+- Branch ごとの Leaf 群を Matrix ノードとして集約表示する。
+- Matrix ノードから当該 Branch の生成項目数 / 予定画像枚数を把握できる。
+- Leaf を主ツリーへ1件ずつノードとして展開しない。
+- Matrix ノードを選択すると、その Matrix に属する生成項目を確認できる。
+- Matrix 内の任意の生成項目を選択し、`name` / Positive / Negative を確認・編集できる。
+- validation error / warning が存在する場合、どの Branch / Matrix に問題があるかツリー上から把握できる。
+- 数百件規模でもツリー全体の俯瞰性を失わない。
+
+この擬似ツリーは Prompt Plan の意味構造を表示するものであり、実際の ComfyUI Workflow JSON を直接表示するものではない。
+
+Prompt Plan UI へ次のような Compiler-owned 実ノードを持ち込まない。
+
+```text
+Node ID
+Link ID
+Reroute
+CLIPTextEncode
+KSampler
+VAEDecode
+SceneSaveImage
+その他 ComfyUI 内部ノード
+```
+
+概念上の分離:
+
+```text
+Prompt Plan UI
+  共通プロンプト
+  全体共通 LoRA
+  Branch LoRA
+  Matrix
+       |
+       v
+Workflow Compiler
+       |
+       v
+実 ComfyUI Workflow
+  Checkpoint
+  LoRA Stack
+  SceneMatrix
+  ScenePrompter
+  CLIP Encode
+  KSampler
+  VAEDecode
+  SceneSaveImage
+  ...
+```
+
+Matrix 内の生成項目一覧や詳細編集をどの UI 技法で表現するかは実装エージェントに任せる。
 
 ---
 
@@ -132,6 +212,7 @@ Tree-only、Table-only 等の具体的な表示方式は固定しない。
 | Prompt Plan | プロンプト設計 |
 | Branch | ブランチ |
 | Leaf | 生成項目 |
+| Matrix | Matrix |
 | Common Prompt | 共通プロンプト |
 | Root LoRA | 全体共通 LoRA |
 | Branch LoRA | ブランチ LoRA |
@@ -357,7 +438,7 @@ Prompt Plan は次の2種類の作業を区別して扱えること。
 
 ```text
 A. Grok から Prompt Plan を受け取る
-B. 受け取った大量の Prompt Plan をレビュー・修正する
+B. 受け取った Prompt Plan を擬似 Workflow Tree でレビュー・修正する
 ```
 
 具体的にタブで分けるか、別画面にするか等は実装エージェントに任せる。
@@ -393,22 +474,64 @@ Batch Studio は JSON code block 等から Prompt Plan candidate を抽出でき
 
 ### 13.3 Prompt Plan レビュー
 
-ユーザーは最低限次を行えること。
+Prompt Plan の主レビュー UI は、3.4 の **左から右へ展開する擬似 Workflow Tree** とする。
+
+ユーザーはツリー全体から最低限次を行えること。
+
+- common positive / negative を表す共通プロンプトノードを確認・選択できる。
+- Root LoRA を表す全体共通 LoRA ノードを確認・選択できる。
+- Branch の分岐構造を視覚的に把握できる。
+- Branch label / Branch LoRA を確認できる。
+- 各 Branch の末端に対応する Matrix ノードを確認できる。
+- Matrix ノードから生成項目数 / 予定画像枚数を把握できる。
+- validation error / warning がある Branch / Matrix をツリー上で識別できる。
+- Branch ordering を確認・編集できる。
+
+ノード選択後の詳細編集では最低限次を行えること。
+
+共通プロンプトノード:
 
 - common positive / negative の確認・編集。
-- Root LoRA の確認。
-- Branch の一覧把握。
-- Branch label の確認・編集。
-- Branch LoRA の確認。
-- Branch ごとの生成項目数確認。
-- 各生成項目の ID / name / positive / negative の確認。
-- 各生成項目の編集。
-- Branch / Leaf ordering の編集。
-- validation error / warning 対象の確認。
-- 大量の生成項目から目的の項目を検索・絞り込みできること。
-- Draft / Confirm lifecycle を維持すること。
 
-具体的な Tree / Table / List / Inspector の採用は固定しない。
+全体共通 LoRA ノード:
+
+- Root LoRA 一覧の確認。
+- 実適用強度の確認・編集。
+
+Branch LoRA ノード:
+
+- Branch label の確認・編集。
+- Branch LoRA 一覧の確認。
+- 実適用強度の確認・編集。
+
+Matrix ノード:
+
+- 当該 Branch の生成項目一覧を確認できる。
+- 目的の生成項目を検索・絞り込みできる。
+- Leaf ordering を確認・編集できる。
+- validation error / warning 対象へ移動できる。
+- 任意の生成項目を選択できる。
+
+生成項目選択後:
+
+- `leaf.id` を確認できる。
+- `leaf.name` を確認・編集できる。
+- Positive を確認・編集できる。
+- Negative を確認・編集できる。
+
+大量Leafは主ツリーへ直接展開しない。
+
+```text
+Branch
+  -> Matrix
+       -> 内部に数十〜数百の生成項目
+```
+
+という情報階層を維持する。
+
+Matrix 内部の一覧方式、詳細パネル位置、検索 UI、Leaf reorder UI 等は実装エージェントに任せる。
+
+Draft / Confirm lifecycle は常に維持する。
 
 ### 13.4 Prompt Plan 再修正
 
@@ -596,6 +719,8 @@ Empty / Error state は状態だけでなく、可能な限り次の行動を示
 - 技術用語は必要な詳細表示で確認できるようにし、通常操作では人間向け名称を優先する。
 - `strengthBaseline`、`modelRef`、`schemaVersion` 等の内部用語を通常の主要操作ラベルへ露出しすぎない。
 - 数百件以上の Prompt Plan でも操作可能な性能を確保する。
+- Prompt Plan の主ツリーを左から右へ追跡できること。
+- Branch 数が増えても共通部分と各 Branch / Matrix の関係を把握できること。
 - destructive / confirm action は誤操作しにくくする。
 - Draft と Confirmed の違いをユーザーが認識できること。
 
@@ -605,10 +730,11 @@ Empty / Error state は状態だけでなく、可能な限り次の行動を示
 
 次は別文書が正本であり、本 UX 文書では詳細定義しない。
 
-- 個別画面のレイアウト。
+- Prompt Plan 擬似 Workflow Tree 以外の個別画面レイアウト。
 - Component hierarchy。
-- Table / Tree / List 等の具体的 UI 技法。
+- Matrix 内部の Table / List / Tree 等の具体的 UI 技法。
 - Modal / Drawer / Inspector 等の採否。
+- 擬似 Workflow Tree の描画ライブラリ / 実装技術。
 - CSS / Design System / color / typography の詳細。
 - `models.json` schema。
 - `prompt_plan.json` schema。
@@ -632,9 +758,13 @@ Empty / Error state は状態だけでなく、可能な限り次の行動を示
 2. Grokとの手動往復がStory / Models / Prompt Planそれぞれで成立する。
 3. Grokから受け取った内容を直接確定せず Draft / Validation / Confirm を経由する。
 4. 不足モデル等のBlocking状態から解決方法を理解できる。
-5. 数百件規模のPrompt Planを実用的にレビュー・修正できる。
-6. Civitai baselineとProject実適用strengthを混同しない。
-7. Workflow工程でGrokにWorkflow JSONを生成させない。
-8. Model Availability / PreflightでREADY/BLOCKED理由を追跡できる。
-9. UI都合で正式schemaや責務境界を変更していない。
-10. 通常操作が日本語で理解できる。
+5. Prompt Plan が左から右へ展開する擬似 Workflow Tree として表示される。
+6. 共通プロンプト → 全体共通 LoRA → Branch LoRA → Matrix の関係を視覚的に追跡できる。
+7. 数百件の Leaf を主ツリーへ直接展開せず Matrix 内へ集約している。
+8. Matrix を選択して内部の生成項目を確認でき、各生成項目の Positive / Negative を確認・修正できる。
+9. validation error / warning の属する Branch / Matrix をツリーから把握できる。
+10. Civitai baselineとProject実適用strengthを混同しない。
+11. Workflow工程でGrokにWorkflow JSONを生成させない。
+12. Model Availability / PreflightでREADY/BLOCKED理由を追跡できる。
+13. UI都合で正式schemaや責務境界を変更していない。
+14. 通常操作が日本語で理解できる。
