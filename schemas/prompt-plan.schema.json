@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ComfyUI Batch Studio Prompt Plan",
+  "description": "Formal JSON Schema for prompt_plan.json schemaVersion 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "common",
+    "rootLoras",
+    "branches"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "common": {
+      "$ref": "#/$defs/commonPrompt"
+    },
+    "rootLoras": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/loraUsage"
+      }
+    },
+    "branches": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/branch"
+      }
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+    },
+    "commonPrompt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "positive",
+        "negative"
+      ],
+      "properties": {
+        "positive": {
+          "type": "string"
+        },
+        "negative": {
+          "type": "string"
+        }
+      }
+    },
+    "loraUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modelRef",
+        "strengthModel",
+        "strengthClip"
+      ],
+      "properties": {
+        "modelRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "strengthModel": {
+          "type": "number"
+        },
+        "strengthClip": {
+          "type": "number"
+        }
+      }
+    },
+    "leaf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "positive",
+        "negative"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "positive": {
+          "type": "string"
+        },
+        "negative": {
+          "type": "string"
+        }
+      }
+    },
+    "branch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "loras",
+        "leaves"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "loras": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/loraUsage"
+          }
+        },
+        "leaves": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/leaf"
+          }
+        }
+      }
+    }
+  },
+  "$comment": "Batch Studio semantic validation additionally requires every branch.id to be unique across the project and every leaf.id to be unique across all branches. modelRef value naming and target identity are owned by the models.json contract. Array order is authoritative for branch and leaf ordering."
+}
