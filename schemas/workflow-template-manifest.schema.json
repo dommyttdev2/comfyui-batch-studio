@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ComfyUI Batch Studio Workflow Template Manifest",
+  "description": "Formal JSON Schema for Workflow Template Manifest schemaVersion 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "manifestVersion",
+    "template",
+    "common",
+    "branchPrototype"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "manifestVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "template": {
+      "$ref": "#/$defs/templateBinding"
+    },
+    "common": {
+      "$ref": "#/$defs/commonArea"
+    },
+    "branchPrototype": {
+      "$ref": "#/$defs/branchPrototype"
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "roleNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodeId"
+      ],
+      "properties": {
+        "nodeId": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "templateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "sha256"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "commonRoles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpoint",
+        "rootLoraStack",
+        "planCommonPrompt",
+        "promptOutput"
+      ],
+      "properties": {
+        "checkpoint": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "rootLoraStack": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "planCommonPrompt": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "promptOutput": {
+          "$ref": "#/$defs/roleNode"
+        }
+      }
+    },
+    "commonArea": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "roles"
+      ],
+      "properties": {
+        "roles": {
+          "$ref": "#/$defs/commonRoles"
+        }
+      }
+    },
+    "branchRoles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "loraStack",
+        "promptIngress",
+        "mainMatrix",
+        "prompter",
+        "counter",
+        "latent",
+        "expand",
+        "positiveEncode",
+        "negativeEncode",
+        "sampler",
+        "vaeDecode",
+        "save"
+      ],
+      "properties": {
+        "loraStack": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "promptIngress": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "mainMatrix": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "fixedMatrix": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "prompter": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "counter": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "latent": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "expand": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "positiveEncode": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "negativeEncode": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "sampler": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "vaeDecode": {
+          "$ref": "#/$defs/roleNode"
+        },
+        "save": {
+          "$ref": "#/$defs/roleNode"
+        }
+      }
+    },
+    "commonBoundaryEndpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "slot"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "checkpoint",
+            "rootLoraStack",
+            "planCommonPrompt",
+            "promptOutput"
+          ]
+        },
+        "slot": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "branchBoundaryEndpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "slot"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "loraStack",
+            "promptIngress",
+            "mainMatrix",
+            "fixedMatrix",
+            "prompter",
+            "counter",
+            "latent",
+            "expand",
+            "positiveEncode",
+            "negativeEncode",
+            "sampler",
+            "vaeDecode",
+            "save"
+          ]
+        },
+        "slot": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "target"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "source": {
+          "$ref": "#/$defs/commonBoundaryEndpoint"
+        },
+        "target": {
+          "$ref": "#/$defs/branchBoundaryEndpoint"
+        }
+      }
+    },
+    "layoutOffset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offset"
+      ],
+      "properties": {
+        "offset": {
+          "$ref": "#/$defs/layoutOffset"
+        }
+      }
+    },
+    "branchPrototype": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodeIds",
+        "groupIds",
+        "roles",
+        "boundaries",
+        "layout"
+      ],
+      "properties": {
+        "nodeIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "groupIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "roles": {
+          "$ref": "#/$defs/branchRoles"
+        },
+        "boundaries": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/boundary"
+          }
+        },
+        "layout": {
+          "$ref": "#/$defs/layout"
+        }
+      }
+    }
+  },
+  "$comment": "Batch Studio semantic validation additionally verifies template.sha256 against the exact UTF-8 template file bytes; common role nodes exist outside branchPrototype.nodeIds; branch role nodes belong to branchPrototype.nodeIds; boundary ids are unique; each declared Common-to-Branch boundary corresponds to exactly one template link; every link crossing the prototype ownership boundary is declared exactly once; links whose origin and target are both prototype nodes are derived as internal prototype links and cloned without being listed in the manifest; role aliases may intentionally point to the same node. Compiler execution provenance, including compiler version and manifest hash, is recorded outside this manifest."
+}
