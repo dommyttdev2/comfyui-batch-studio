@@ -2,9 +2,9 @@
 
 ## 1. このディレクトリの役割
 
-この `docs/` は、ComfyUI Batch Studio の要件・設計・データ契約・外部連携・判断履歴を、今後の仕様追加に耐えられる形で管理する正本である。
+この `docs/` は、ComfyUI Batch Studio の要件・設計・データ契約・UI・外部連携・品質基準・判断履歴・実装順序を、今後の仕様追加に耐えられる形で管理する正本である。
 
-旧ドキュメントのように一つの設計書へ UI、データ、外部連携、Grok プロンプト、Workflow 内部構造を集約しない。変更理由と変更単位が異なる内容は分離し、同じ事実を複数文書へ重複記載しない。
+一つの巨大な設計書へ UI、データ、外部連携、Grok 契約、Workflow 内部構造を集約しない。変更理由と変更単位が異なる内容は分離し、同じ事実を複数文書へ重複記載しない。
 
 ## 2. ドキュメント構成
 
@@ -23,11 +23,14 @@ docs/
 │  ├─ grok-contract.md
 │  └─ prompt-plan.md
 ├─ ui/
+│  ├─ application-shell.md
 │  └─ project-initialization.md
 ├─ integrations/
 │  └─ external-tools.md
 ├─ quality/
 │  └─ validation-and-security.md
+├─ roadmap/
+│  └─ implementation-phases.md
 └─ decisions/
    └─ decision-log.md
 ```
@@ -36,17 +39,19 @@ docs/
 
 | 文書 | 正本とする内容 |
 | --- | --- |
-| `requirements/requirements.md` | 要件 ID、状態、受け入れ条件、未決事項 |
-| `product/scope-and-flow.md` | 製品目的、責務境界、対象範囲、全体工程 |
+| `requirements/requirements.md` | 要件 ID、状態、未決事項の索引 |
+| `product/scope-and-flow.md` | 製品目的、責務境界、対象範囲、全体工程、工程 Gate |
 | `architecture/system-architecture.md` | Electron 構成、サービス境界、信頼境界、データフロー |
-| `architecture/workflow-compiler.md` | 1枝テンプレートから最終 ComfyUI Workflow を機械生成する方式 |
-| `contracts/project-artifacts.md` | プロジェクト内ファイル、正本関係、互換性 |
+| `architecture/workflow-compiler.md` | 1枝 Template から最終 ComfyUI Workflow を機械生成する方式 |
+| `contracts/project-artifacts.md` | プロジェクト内ファイル、正本関係、依存関係、互換性 |
 | `contracts/grok-contract.md` | Grok Web への入力、Grok の責務、Grok から受け取る成果物 |
 | `contracts/prompt-plan.md` | `prompt_plan.json` の意味構造と Draft schema |
+| `ui/application-shell.md` | 主画面、工程 navigation、Grok Work Card、Artifact editor、各工程の共通 UX |
 | `ui/project-initialization.md` | 新規プロジェクト画面と `project_brief.json` |
-| `integrations/external-tools.md` | civit-model-viewer、R2 File Manager、ComfyUI との境界 |
-| `quality/validation-and-security.md` | 検証、Preflight、秘密情報、Grok Web 隔離 |
-| `decisions/decision-log.md` | 合意済み設計判断と未決判断の履歴 |
+| `integrations/external-tools.md` | civit-model-viewer、R2 File Manager、ComfyUI、Project filesystem との境界 |
+| `quality/validation-and-security.md` | 検証、Preflight、秘密情報、Grok Web 隔離、failure policy |
+| `roadmap/implementation-phases.md` | 依存関係に沿った実装順序。要件の正本ではない |
+| `decisions/decision-log.md` | 合意済み設計判断、置換された判断、未決判断の履歴 |
 
 ## 4. 文書更新ルール
 
@@ -59,6 +64,7 @@ docs/
 - `prompt_plan.json` のフィールド定義は `contracts/prompt-plan.md` が所有する。
 - Workflow の Node ID / Link ID 再採番は `architecture/workflow-compiler.md` が所有する。
 - Grok が Workflow JSON を生成しないという責務境界は `product/scope-and-flow.md` と Decision Log で宣言し、具体的な Grok 返却形式は `contracts/grok-contract.md` が所有する。
+- 主画面の UI 共通構造は `ui/application-shell.md` が所有し、個別 Artifact schema は UI 文書へコピーしない。
 
 ### 4.2 Requirement ID
 
@@ -69,18 +75,19 @@ docs/
 - **Requirement**: システムが満たす必要がある振る舞い。
 - **Decision**: なぜその方式を採用したかという設計判断。
 - **Open Question**: まだ固定していない内容。
+- **Roadmap**: 何から実装するか。仕様そのものではない。
 
-合意済み方針を後から変更する場合は、Decision Log に「置換された判断」を残す。
+合意済み方針を後から変更する場合は、Decision Log に置換関係を残す。
 
 ### 4.4 Schema version
 
-`project_brief.json`、`models.json`、`prompt_plan.json` 等の機械可読形式は `schemaVersion` を持つ。破壊的変更を文章だけで吸収しない。
+`project_brief.json`、`models.json`、`prompt_plan.json`、Template Manifest 等の機械可読形式は `schemaVersion` を持つ。破壊的変更を文章だけで吸収しない。
 
 ### 4.5 Draft と Decided
 
 会話中に出た提案を自動的に確定仕様へしない。
 
-- ユーザーと合意済み: `Decided`
+- ユーザーと合意済み: `Decided` / Decision Log では `Accepted`
 - 実装前に詳細確定が必要: `Draft`
 - 方針自体が未確定: `Open`
 
@@ -90,8 +97,26 @@ docs/
 
 > **Grok は「何を作るか・何を使うか」を考える。Batch Studio は「その決定を管理・検証・機械変換・保存する」。ユーザーが最終的に確定する。**
 
-特に Workflow については例外なく、Grok に ComfyUI Workflow JSON を生成させない。Grok から受け取るのは共通プロンプト、使用 LoRA、枝と葉のプロンプトを表す構造化 JSON であり、最終 Workflow は Batch Studio の Workflow Compiler が生成する。
+特に Workflow については、Grok に ComfyUI Workflow JSON を生成させない。Grok から受け取るのは共通プロンプト、使用 LoRA、枝と葉のプロンプトを表す構造化 JSON であり、最終 Workflow は Batch Studio の Workflow Compiler が生成する。
 
-## 6. 旧文書からの移行
+使用モデルの選定は Grok が `civit-model-viewer` の `model_catalog.json` を根拠に行い、Batch Studio はその結果を検証・保存する。
 
-旧 `design.md`、`grok-prompt-contracts.md`、`project-initialization-schema.md` の内容は、この新構成へ責務別に移す。移行完了後は旧文書を残して二重正本にしない。
+## 6. 要件追加時の流れ
+
+新しい要件を追加するときは次の順を基本とする。
+
+```text
+1. requirements/requirements.md に要件または Open Question を追加
+2. 方式選択が必要なら decisions/decision-log.md に判断を追加
+3. 正本となる domain document を更新
+4. schema 変更なら schemaVersion / migration を検討
+5. roadmap が影響を受ける場合だけ implementation-phases.md を更新
+```
+
+UI 要望だけで Compiler schema を変えたり、ComfyUI node 内部事情だけで Grok contract を変えたりしない。
+
+## 7. 旧文書からの移行
+
+旧 `design.md`、`grok-prompt-contracts.md`、`project-initialization-schema.md` の内容は、この新構成へ責務別に移行した。
+
+移行後は旧文書を残して二重正本にしない。過去内容の履歴は Git history から参照する。
