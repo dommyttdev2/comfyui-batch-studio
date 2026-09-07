@@ -8,7 +8,6 @@ Status: Draft roadmap
 
 Goal: 実装前に境界と schema の未決事項を減らす。
 
-- Branch naming / save path / image count policy。
 - Artifact status state model。
 
 `models.json` Schema v1 は解決済みであり、機械可読正本は `schemas/models.schema.json` とする。
@@ -16,6 +15,8 @@ Goal: 実装前に境界と schema の未決事項を減らす。
 `prompt_plan.json` Schema v1 も解決済みであり、機械可読正本は `schemas/prompt-plan.schema.json` とする。
 
 Workflow Template Manifest Schema v1 も解決済みであり、機械可読正本は `schemas/workflow-template-manifest.schema.json` とする。
+
+Workflow naming / save path / image count policy v1 も解決済みであり、`architecture/workflow-compiler.md` を正本とする。
 
 `prompt_tree.md` の正本関係も解決済みであり、標準 Artifact から外す。人間向け Prompt 表示・編集は Prompt Plan Web UI が担当する。
 
@@ -47,6 +48,8 @@ Exit criteria:
 Goal: 新規 Project と Story の Draft -> Confirm lifecycle を実装する。
 
 - Project initialization UI。
+- `project.id` stable ID generation / validation。
+- `generation.target_image_count` target semantics。
 - `project_brief.json`。
 - `project_meta.json`。
 - Draft / history。
@@ -57,6 +60,8 @@ Goal: 新規 Project と Story の Draft -> Confirm lifecycle を実装する。
 Exit criteria:
 
 - 新規 Project 作成から `story.md` 確定まで完結する。
+- `project.id` が filesystem-safe stable ID rule を満たす。
+- display name変更だけで既存 `project.id` を自動変更しない。
 - final overwrite 前に history が残る。
 
 ## Phase 3: Model Catalog / Grok Model Selection
@@ -99,6 +104,7 @@ Goal: Grok の意味的 Prompt JSON を正規 Artifact として取り込み、�
 - Branch / Branch LoRA / leaf tree view。
 - Branch / leaf ordering editor。
 - leaf prompt editor。
+- target image count とactual leaf総数の差分表示。
 - validation result の該当箇所表示。
 - Draft / confirm。
 - `prompt_tree.md` を新規生成しない。
@@ -109,6 +115,7 @@ Exit criteria:
 - 未知 field、必須 field 欠落、不正 stable ID を確定できない。
 - Branch ID / Leaf ID の Project-wide 重複を確定できない。
 - 解決不能 `modelRef` を持つ Prompt Plan を確定 Workflow 入力にできない。
+- target image countとの差分だけでは確定をBlockしない。
 - 人間向けの Prompt 構造確認・編集が `prompt_plan.json` を正本として Web UI 内で完結する。
 - ComfyUI 内部 JSON を Grok output に要求しない。
 - `prompt_tree.md` を Workflow Compiler の入力にしない。
@@ -131,6 +138,7 @@ Goal: 1本の Branch Prototype を正式な Compiler input にする。
 - Manifest role / ownership / boundary semantic validation。
 - Prototype内部LinkをNode ownershipから自動導出するvalidation。
 - 未宣言cross-boundary Linkのblocking validation。
+- Template-owned prompt transformが `1 leaf = 1 generation` cardinalityを維持することを確認。
 
 Exit criteria:
 
@@ -139,10 +147,11 @@ Exit criteria:
 - ManifestにPrototype内部Link ID一覧を重複保持しない。
 - Template hash不一致をCompile前に検出できる。
 - Branch専用Reroute等がGroup外でも `nodeIds` で明示所有できる。
+- Template-owned nodeがleaf数を暗黙増幅しない。
 
 ## Phase 6: Workflow Compiler
 
-Goal: Prompt Plan branch 数と一致する最終 Workflow を決定論的に生成する。
+Goal: Prompt Plan branch 数と一致し、leaf総数と一致する予定画像数を持つ最終 Workflow を決定論的に生成する。
 
 - Common checkpoint patch。
 - Root LoRA Stack patch。
@@ -155,7 +164,13 @@ Goal: Prompt Plan branch 数と一致する最終 Workflow を決定論的に生
 - Manifest layout offset適用。
 - Branch LoRA Stack patch。
 - leaf -> SceneMatrix conversion。
-- title / save path policy。
+- `leaf.id -> row_id / path_label`、`leaf.name -> name` mapping。
+- 全Branch `ScenePromptCounter.count = 1` patch。
+- Branch / Project image count derivation。
+- Branch human-readable title derivation from `branch.id` / `branch.label`。
+- Workflow filename `LoRA_{project.id}.json`。
+- Save path `BatchStudio/{project.id}/{branch.id}`。
+- SceneSaveImageのphysical filename suffix/indexはcustom nodeへ委譲。
 - `last_node_id` / `last_link_id` update。
 - compiled workflow validation。
 - Compiler version / Manifest hash / Template identity+hash を Workflow build provenance として `project_meta.json` に記録。
@@ -170,7 +185,13 @@ linkIdCollision == 0
 danglingLink == 0
 undeclaredBoundaryLink == 0
 templateHashMismatch == 0
+allBranchCounterCount == 1
+actualImageCount == totalPromptPlanLeafCount
+savePathMismatch == 0
+leafPathLabelMismatch == 0
 ```
+
+`generation.target_image_count` とactualImageCountの差分はinformational / warningであり、それだけではCompile failureにしない。
 
 ## Phase 7: Model Availability / R2 Handoff
 
@@ -192,6 +213,7 @@ Goal: Project を `READY` / `BLOCKED` に判定する。
 - catalog refs。
 - Prompt Plan refs。
 - Workflow refs / structure。
+- planned image count / target delta。
 - model availability。
 - external tool availability。
 - Blocking / Warning summary。
