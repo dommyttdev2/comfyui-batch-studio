@@ -1,6 +1,6 @@
 # Prompt Plan Contract
 
-Status: Draft schema / Decided semantics
+Status: Active / Schema v1
 
 ## 1. 目的
 
@@ -11,6 +11,12 @@ Status: Draft schema / Decided semantics
 `prompt_plan.json` はプロジェクト内の確定済み Prompt Plan を表す標準ファイル名とする。Grok の回答をそのまま即時保存するのではなく、Batch Studio の検証とユーザー承認を経た内容だけをこのファイルへ確定する。
 
 人間向けの確認・編集は `prompt_plan.json` を基に Batch Studio の Prompt Plan Web UI で提供する。新規方式では同内容を別の Markdown 正本として並行管理しない。
+
+機械可読な正式 JSON Schema は次を正本とする。
+
+```text
+schemas/prompt-plan.schema.json
+```
 
 ## 2. 決定済みの意味構造
 
@@ -63,10 +69,11 @@ Workflow Compiler
 - 確定前の候補は `._batch_studio/drafts/` で管理する。
 - 確定版を更新する場合、更新前の版は `._batch_studio/history/` へ退避する。
 - `prompt_plan_v2.json`、`prompt_plan_final.json`、`prompt_plan_final2.json` のように版管理をファイル名へ埋め込まない。
-- 正式 field name と JSON Schema は別途確定する。ファイル名と lifecycle の確定は schema の未決事項に依存しない。
 - 新規プロジェクトでは `prompt_tree.md` を生成・維持せず、Workflow Compiler の入力にも使用しない。
 
-## 4. Draft JSON shape
+## 4. Schema v1
+
+正式な field name は次とする。
 
 ```json
 {
@@ -106,7 +113,41 @@ Workflow Compiler
 }
 ```
 
-フィールド名は実装前に JSON Schema として固定するため Draft。意味は本書の記述を基準とする。
+### 4.1 Root fields
+
+| Field | Requirement |
+| --- | --- |
+| `schemaVersion` | 必須。v1 は `1` |
+| `common` | 必須 object |
+| `rootLoras` | 必須 array。0件可 |
+| `branches` | 必須 array。1件以上 |
+
+Schema v1 では root を含む各 object に未知 field を許可しない。
+
+```text
+additionalProperties: false
+```
+
+汎用的な `metadata`、`extensions`、`extra` 等の自由記述領域は v1 に設けない。
+
+### 4.2 Stable ID
+
+Branch ID と Leaf ID の形式は次とする。
+
+```regex
+^[a-z][a-z0-9._-]{0,63}$
+```
+
+要件:
+
+- 1〜64文字。
+- 先頭は小文字英字。
+- 以降は小文字英数字、`.`、`_`、`-` を許可する。
+- Branch ID は Project 内の全 Branch で一意。
+- Leaf ID は全 Branch を横断して Project 内で一意。
+- 並べ替え後も同一の意味要素には可能な限り同じ ID を維持する。
+
+JSON Schema 単体では object property を基準とした Project-wide uniqueness を十分に表現できないため、一意性は Batch Studio semantic validator でも必ず検証する。
 
 ## 5. common
 
@@ -118,6 +159,8 @@ Workflow Compiler
   "negative": "..."
 }
 ```
+
+`positive` / `negative` はともに必須 string とし、空文字を許容する。
 
 対象例:
 
@@ -146,19 +189,31 @@ Root LoRA が不要な場合:
 
 を許容する。
 
+LoRA usage の正式 shape:
+
+```json
+{
+  "modelRef": "lora.character",
+  "strengthModel": 0.7,
+  "strengthClip": 0.7
+}
+```
+
+3 field はすべて必須とする。暗黙 default は持たない。
+
 ## 7. Model reference
 
-Prompt Plan に `.safetensors` の実ファイル名を何度も複製して書かせず、`models.json` 内の確定選定を一意に参照する方式を採る方向とする。
-
-Draft field:
+Prompt Plan に `.safetensors` の実ファイル名を何度も複製して書かせず、`models.json` 内の確定選定を `modelRef` で一意に参照する。
 
 ```json
 "modelRef": "lora.pose.cowgirl"
 ```
 
-Compiler はこの参照を `models.json` から実ファイル名へ解決する。
+`modelRef` は必須の非空文字列とする。
 
-正式な reference field name と `models.json` schema はまだ Draft。
+`modelRef` という field name は Prompt Plan Schema v1 で正式採用する。一方、`lora.character` 等の **参照値そのものの命名規則と target identity** は `models.json` contract が所有する。
+
+Compiler は `modelRef` を `models.json` から実ファイル名へ解決する。
 
 ### 7.1 Invalid reference
 
@@ -184,21 +239,21 @@ Prompt Plan validation error
 }
 ```
 
+ただし Schema v1 では `leaves` は1件以上を必須とする。
+
 ### 8.1 id
 
-Compiler / UI / metadata が扱える安定識別子。
+Compiler / UI / metadata が扱う stable ID。
 
-要件:
-
-- Project 内で一意。
-- 空でない。
-- Branch 並べ替え後も可能な限り同一の意味に同じ id を維持する。
-
-命名規約の厳密 schema は Draft。
+形式と一意性は 4.2 に従う。
 
 ### 8.2 label
 
 人間向けの短い意味名。
+
+- 必須 string。
+- 空文字不可。
+- stable ID の文字制約は適用しない。
 
 Compiler は label を Node / Group title の生成材料に使えるが、ComfyUI title 全文を Grok に作らせない。
 
@@ -236,12 +291,15 @@ prompt_plan.json
 
 要件:
 
+- `strengthModel` と `strengthClip` はともに必須 number。
+- 暗黙 default を持たない。
+- 0..1 等の固定範囲を Schema v1 では設けない。
 - Root LoRA と Branch LoRA はそれぞれ実適用強度を持てる。
 - Batch Studio の Web UI から `prompt_plan.json` 側の強度を調整できる。
 - UI で実適用強度を変更しても `models.json` の推奨・基準値は変更しない。
 - Compiler は `prompt_plan.json` の実適用強度を最終 Workflow の LoRA Stack へ反映する。
 
-Civitai 由来の基準値を `prompt_plan.json` の初期値へどう反映するかは別途決める。特に Civitai 側で得られる weight が単一値である場合、それを `strengthModel` / `strengthClip` へどのように展開するかは未決である。
+Civitai 由来の基準値を `prompt_plan.json` の初期値へどう反映するかは別途決める。特に Civitai 側で得られる weight が単一値である場合、それを `strengthModel` / `strengthClip` へどのように展開するかは `OPEN-006` の責務とする。
 
 ## 9. leaves
 
@@ -256,17 +314,28 @@ Civitai 由来の基準値を `prompt_plan.json` の初期値へどう反映す�
 }
 ```
 
+Branch ごとに1件以上を必須とする。
+
 ### 9.1 id
 
-Compiler が `row_id` に変換できる一意識別子。
+Compiler が `row_id` に変換できる stable ID。
+
+形式と Project-wide uniqueness は 4.2 に従う。
 
 ### 9.2 name
 
 人間向け識別名と `path_label` 等の派生元。
 
+- 必須 string。
+- 空文字不可。
+- stable ID の文字制約は適用しない。
+
 ### 9.3 positive / negative
 
 その leaf 固有の prompt 差分。
+
+- ともに必須 string。
+- 空文字を許容する。
 
 原則として common prompt の全文を各 leaf に再掲しない。
 
@@ -303,6 +372,8 @@ scene_matrix_json
 
 これらは Workflow Compiler が生成する。
 
+未知 field を Schema v1 で許可しないため、Grok がこれらを追加した場合は schema validation で検出可能とする。
+
 ## 11. SceneMatrix mapping
 
 1 leaf から Compiler は Main SceneMatrix の1行を作る。
@@ -327,41 +398,53 @@ Custom node schema が変化した場合は Prompt Plan schema を変えず、Co
 
 `leaves` 配列順を SceneMatrix の行順とする。
 
-別途 `order` を重複保持しないことを基本とする。
+別途 `order` field を重複保持しない。
+
+Prompt Plan Web UI で並べ替えた場合は、対応する配列自体の順序を変更する。
 
 ## 13. Validation
 
-最低限:
+Validation は次の2層で行う。
 
-### Root
+```text
+JSON Schema validation
+  +
+Batch Studio semantic validation
+```
 
-- `schemaVersion` が対応版。
-- `branches` が配列。
-- Branch が1件以上。
+### 13.1 JSON Schema validation
 
-### LoRA
+`schemas/prompt-plan.schema.json` により少なくとも次を検証する。
 
-- model reference が `models.json` で解決可能。
-- strength が有限数。
-- 同じ Branch 内の明らかな重複参照を警告。
+- `schemaVersion == 1`。
+- 必須 field の存在。
+- field type。
+- Branch 1件以上。
+- Branch ごとの Leaf 1件以上。
+- stable ID pattern / length。
+- label / name が非空。
+- LoRA usage の `modelRef` / `strengthModel` / `strengthClip` が必須。
+- 未知 field が存在しない。
 
-LoRA strength の許容範囲は現時点で固定しない。モデルによって 0..1 に限定できない可能性があるため、範囲は別要件として判断する。
+### 13.2 Semantic validation
 
-### Branch
+JSON Schemaだけでは表現しにくい次を Batch Studio が検証する。
 
-- `id` 一意。
-- `label` 空でない。
-- `leaves` 1件以上。
+- Branch ID の Project-wide uniqueness。
+- Leaf ID の Project-wide uniqueness。
+- `modelRef` が `models.json` で解決可能。
+- 同じ Root / Branch 内の明らかな重複 LoRA reference を warning。
+- 必要に応じた cross-artifact validation。
 
-### Leaf
+解決不能 `modelRef` は Workflow Compile を BLOCKED とする。
 
-- `id` が Project 内で一意、または少なくとも Branch 内で一意とする正式範囲を実装前に確定。
-- `name` 空でない。
-- positive / negative は string。
+## 14. Schema evolution / 将来拡張
 
-## 14. 将来拡張候補
+Schema v1 には汎用 `metadata` / `extensions` / `extra` field を設けない。
 
-意味的な要件が発生した場合のみ追加を検討する。
+意味的な要件が発生した場合のみ正式 schema 変更を検討する。
+
+候補:
 
 - leaf image count。
 - generation phase / chapter metadata。
@@ -372,6 +455,8 @@ LoRA strength の許容範囲は現時点で固定しない。モデルによっ
 - Prompt category 構造。
 
 これらを ComfyUI Workflow 内部事情だけを理由に Prompt Plan へ追加しない。
+
+既存 v1 が受理しない新 field を追加する場合は、後方互換性を評価し、必要なら `schemaVersion` を更新して migration policy を定義する。
 
 ## 15. Human-readable view / Legacy prompt_tree.md
 
