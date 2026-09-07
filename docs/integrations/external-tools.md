@@ -250,10 +250,11 @@ project_meta.json
 story.md
 models.json
 prompt_plan.json
-prompt_tree.md (status Open)
 LoRA_{project}.json
 ._batch_studio/
 ```
+
+既存プロジェクトで `prompt_tree.md` が存在する場合は Legacy Artifact として認識できるが、新規プロジェクトの標準 Artifact、Workflow Compiler の入力、Grok への標準添付候補には含めない。
 
 ## 6. Secret boundary
 
