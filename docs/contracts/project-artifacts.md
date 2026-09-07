@@ -104,6 +104,7 @@ Draft concept:
 {
   "schemaVersion": 1,
   "catalog": {
+    "schemaVersion": 1,
     "generation": 42,
     "generatedAt": "..."
   },
@@ -143,14 +144,39 @@ Draft concept:
 
 上記の `value: 0.7` は schema 例であり、Civitai からその値を直接取得できることを意味しない。
 
-### 6.4 catalog generation
+### 6.4 Catalog provenance and revalidation
 
-`model_catalog.json` が更新されても、generation が変わっただけで `models.json` を無効にしない。
+`models.json` は、モデル選定時に使用した `model_catalog.json` の provenance として v1 では少なくとも次を保持する。
 
-- generation 変更: stale warning。
-- 選定した Model / Version / File が現在の catalog から消えた: blocking または強い警告。
+```text
+catalog.schemaVersion
+catalog.generation
+catalog.generatedAt
+```
 
-`catalog.generation` を必須にするか、`generatedAt` や hash 等も保持するかは正式 schema 確定時に決める。
+`generation` は「その選定後に catalog が変更されたか」を検出するための世代番号として扱う。
+
+原則:
+
+- 現在の catalog と `models.json` の `catalog.generation` が同じであれば、generation 差分を理由とする再検証は不要。
+- `catalog.generation` が異なる場合は、`models.json` に固定された全 Model / Version / File identity を現在の catalog に対して再検証する。
+- generation が異なるだけでは `models.json` を invalid / stale と判定しない。
+- 選定済み Model / Version / File がすべて現在の catalog に存在する場合は `models.json` を valid と扱う。必要に応じて「catalog更新後に再検証済み」という情報表示は可能。
+- identity は維持されているが後続処理に関係する metadata が変化した場合は valid を維持しつつ warning を表示できる。
+- 選定済み Model / Version / File が現在の catalog から消失した場合は、その selection を blocking error として扱い、再選定またはユーザー対応を要求する。
+
+したがって意味は次の通り。
+
+```text
+generation mismatch
+  != project stale
+
+generation mismatch
+  = catalog changed since selection
+  = selected identities must be revalidated
+```
+
+v1 では catalog 内容全体の hash を必須 provenance としない。完全な内容同一性や監査用 snapshot が将来必要になった場合は `contentHash` 等を schema version 更新で追加する。
 
 ### 6.5 Stable reference
 
