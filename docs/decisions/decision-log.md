@@ -557,6 +557,130 @@ Semantic validator は Project-wide ID uniqueness、`models.json` に対する `
 
 ---
 
+## DEC-018: models.json Schema v1 is fixed and represents resolved selections only
+
+Date: 2026-09-07
+Status: Accepted
+
+### Decision
+
+`models.json` Schema v1 の正式構造を固定し、機械可読 schema の正本を次とする。
+
+```text
+schemas/models.schema.json
+```
+
+root structure:
+
+```text
+schemaVersion
+catalog
+checkpoint
+loras
+```
+
+Generic `selections[] + role` 方式は採用せず、単一 Checkpoint と LoRA 配列を構造上分離する。
+
+### Stable reference
+
+正式 field name は `ref`。
+
+Checkpoint:
+
+```text
+checkpoint.main
+```
+
+LoRA:
+
+```regex
+^lora\.[a-z][a-z0-9._-]{0,58}$
+```
+
+Project 内の全 `ref` は一意とし、`prompt_plan.json` の `modelRef` はこの `ref` を参照する。
+
+### Selection identity
+
+Checkpoint / LoRA は少なくとも次を保持する。
+
+```text
+modelId
+modelName
+versionId
+versionName
+fileId
+fileName
+modelUrl
+trainedWords
+reason
+```
+
+Model / Version / File identity と名前・URL・trainedWords は catalog 由来、`reason` は Grok の Project-specific selection rationale とする。
+
+現行 catalog から確認できない `baseModel` や独自 semantic role を Civitai 由来情報として捏造しない。
+
+### LoRA strength baseline
+
+LoRA は Civitai 由来の根拠がある場合のみ任意 `strengthBaseline` を持てる。
+
+```text
+strengthBaseline.value
+strengthBaseline.provenance.source = civitai
+strengthBaseline.provenance.basis
+```
+
+Schema v1 の basis:
+
+```text
+creator-declared
+observed-usage-derived
+```
+
+`observed-usage-derived` の場合は `method` と `sampleCount` を必須とする。
+
+正式な集計アルゴリズム自体は `OPEN-006` のまま別途決定する。
+
+Civitai 根拠がない場合は `strengthBaseline` を省略し、null や経験則で補完しない。
+
+### missingRequirements boundary
+
+`missingRequirements` は確定版 `models.json` Schema v1 に含めない。
+
+```text
+missingRequirements
+  = Grok response / Models Draft / UI state
+
+models.json
+  = resolved confirmed selections only
+```
+
+未解決 `missingRequirements` が1件でもある場合は Models status を `BLOCKED` とし、`models.json` の Confirm を許可しない。
+
+### Validation boundary
+
+```text
+JSON Schema validation
+  +
+Batch Studio semantic validation
+```
+
+JSON Schema は structure / required / ref format / Civitai ID types / strength provenance / unknown fields を検証する。
+
+Semantic validator は Project-wide `ref` uniqueness、current catalog での Model / Version / File identity、Prompt Plan `modelRef` resolution、catalog generation mismatch revalidation、unresolved missing requirements blocking を検証する。
+
+### Extension policy
+
+Schema v1 では `additionalProperties: false` とし、汎用 `metadata` / `extensions` / `extra` を設けない。
+
+VAE / Text Encoder / Embedding / ControlNet 等を Project Model Artifact として扱う必要が生じた場合は schema evolution として追加する。
+
+### Resolves
+
+- `REQ-MODEL-008` を Decided とする。
+- `OPEN-002` を Superseded とする。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
@@ -571,23 +695,11 @@ Status: Superseded
 ## OPEN-002: models.json dedicated schema details
 
 Date: 2026-09-07
-Status: Open
+Status: Superseded
 
-### Decided
+`DEC-018` により解決済み。
 
-- `models.json` は Batch Studio 専用 schema とする。
-- 既存形式との互換性は要件としない。
-- catalog provenance は v1 で少なくとも `schemaVersion` / `generation` / `generatedAt` を保持する。
-- catalog generation の不一致は再検証トリガーであり、それ自体では invalid にしない。
-- Civitai 由来の LoRA 推奨・基準強度は `models.json` が所有する。
-- Project で実際に適用する LoRA 強度は `prompt_plan.json` が所有する。
-
-### Remaining Questions
-
-- stable model reference の正式 field name と命名規則。
-- `missingRequirements` を同一ファイルに持つか selection draft と分離するか。
-- strength recommendation / provenance の正式 field names。
-- role、trained words、reason を正式 schema でどう表現するか。
+`models.json` Schema v1 の正式 root structure、stable `ref`、Checkpoint / LoRA separation、Civitai identity fields、Grok `reason`、optional `strengthBaseline` provenance、`missingRequirements` の Draft/UI 分離を固定し、機械可読 schema を `schemas/models.schema.json` とした。
 
 ---
 
