@@ -18,6 +18,15 @@ let grokView: WebContentsView | null = null;
 let grokVisible = true;
 let localRatio = 0.45;
 
+function isSafeExternalUrl(target: string): boolean {
+  try {
+    const url = new URL(target);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 function isAllowedGrokNavigation(target: string): boolean {
   try {
     const url = new URL(target);
@@ -77,7 +86,7 @@ function createWindow(): void {
 
   localView = new WebContentsView({
     webPreferences: {
-      preload: path.resolve(__dirname, '../preload/index.js'),
+      preload: path.resolve(__dirname, '../../src/preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -97,14 +106,14 @@ function createWindow(): void {
   mainWindow.contentView.addChildView(grokView);
 
   grokView.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (isSafeExternalUrl(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
 
   grokView.webContents.on('will-navigate', (event, url) => {
     if (!isAllowedGrokNavigation(url)) {
       event.preventDefault();
-      void shell.openExternal(url);
+      if (isSafeExternalUrl(url)) void shell.openExternal(url);
     }
   });
 
