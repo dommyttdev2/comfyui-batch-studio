@@ -444,6 +444,119 @@ Legacy conversion の実装は v1 の必須条件ではなく、必要性が確�
 
 ---
 
+## DEC-017: Prompt Plan Schema v1 is fixed and machine-readable
+
+Date: 2026-09-07
+Status: Accepted
+
+### Decision
+
+`prompt_plan.json` Schema v1 の正式 field name と構造を固定する。
+
+機械可読 schema の正本:
+
+```text
+schemas/prompt-plan.schema.json
+```
+
+正式 root fields:
+
+```text
+schemaVersion
+common
+rootLoras
+branches
+```
+
+正式 LoRA usage fields:
+
+```text
+modelRef
+strengthModel
+strengthClip
+```
+
+正式 Branch fields:
+
+```text
+id
+label
+loras
+leaves
+```
+
+正式 Leaf fields:
+
+```text
+id
+name
+positive
+negative
+```
+
+### Stable ID policy
+
+Branch / Leaf の stable ID は次の形式とする。
+
+```regex
+^[a-z][a-z0-9._-]{0,63}$
+```
+
+- Branch ID は Project 内の全 Branch で一意。
+- Leaf ID は全 Branch を横断して Project 内で一意。
+- JSON Schema 単体では property-based uniqueness を十分に表現できないため、Batch Studio semantic validator が一意性を保証する。
+
+### LoRA usage policy
+
+- `modelRef` / `strengthModel` / `strengthClip` はすべて必須。
+- `strengthModel` / `strengthClip` に暗黙 default を設けない。
+- strength の固定範囲を Schema v1 では設けない。
+- `modelRef` field name は Prompt Plan が所有するが、参照値の命名規則と target identity は `models.json` contract が所有する。
+
+### Ordering policy
+
+- `branches` 配列順を Workflow branch 順とする。
+- `leaves` 配列順を SceneMatrix row 順とする。
+- 別途 `order` field を持たない。
+
+### Extension policy
+
+Schema v1 は object の未知 field を許可しない。
+
+```text
+additionalProperties: false
+```
+
+汎用 `metadata` / `extensions` / `extra` 領域も v1 には設けない。
+
+意味的な新要件が発生した場合のみ正式 schema 変更として追加し、必要に応じて `schemaVersion` と migration policy を更新する。
+
+### Validation boundary
+
+```text
+JSON Schema validation
+  +
+Batch Studio semantic validation
+```
+
+JSON Schema は shape / required / type / ID pattern / array minimum / unknown fields 等を検証する。
+
+Semantic validator は Project-wide ID uniqueness、`models.json` に対する `modelRef` 解決、cross-artifact constraints 等を検証する。
+
+### Rationale
+
+- Grok / Web UI / Compiler が同じ field contract を共有できる。
+- Schema drift と未知 field の混入を早期検出できる。
+- UI の並べ替えと Workflow 順序を単一の配列順で表現できる。
+- 人間向け自由 metadata を無制限に持ち込まず、意味要件を明示的に schema evolution へ反映できる。
+
+### Resolves
+
+- `REQ-PLAN-006` を Decided とする。
+- `OPEN-003` を Superseded とする。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
@@ -481,13 +594,11 @@ Status: Open
 ## OPEN-003: prompt_plan.json formal JSON Schema
 
 Date: 2026-09-07
-Status: Open
+Status: Superseded
 
-意味構造は Accepted だが、正式 field name、ID uniqueness scope、将来 metadata の扱いを実装前に固定する。
+`DEC-017` により解決済み。
 
-ファイル名、確定版の lifecycle、Workflow Compiler の正規入力であることは `DEC-015` で Accepted 済み。
-
-人間向け表示・編集を Prompt Plan Web UI に統合し、`prompt_tree.md` を標準 Artifact としないことは `DEC-016` で Accepted 済み。
+Prompt Plan Schema v1 の正式 field name、Project-wide ID uniqueness、ordering、unknown field policy、schema evolution policy を固定し、機械可読 schema を `schemas/prompt-plan.schema.json` とした。
 
 ---
 
