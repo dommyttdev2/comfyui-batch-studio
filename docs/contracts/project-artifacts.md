@@ -36,7 +36,7 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 | `models.json` | Grok selection + Batch Studio validation + User | `story.md`, `model_catalog.json` | 使用モデルの固定結果と Civitai 由来のモデル基準情報 |
 | `prompt_plan.json` | Grok + Batch Studio validation + User approval | `story.md`, `models.json` | Workflow Compiler が読む確定済みの機械可読 Prompt Plan。実際の LoRA 適用強度も保持する |
 | `LoRA_{project_name}.json` | Workflow Compiler | Template, Manifest, models, plan | 最終ComfyUI Workflow |
-| `project_meta.json` | Batch Studio | System | Artifact status、version、将来hash等 |
+| `project_meta.json` | Batch Studio | System | Artifact status、version、Workflow build provenance 等 |
 
 Legacy:
 
@@ -454,6 +454,8 @@ LoRA_Character_Batch_...json
 
 新規プロジェクトで利用する Batch Studio metadata。
 
+`project_meta.json` 全体の正式 schema はまだ Draft だが、Workflow Compiler が生成した Workflow の build provenance を `workflowBuild` として保持する責務は確定済みとする。
+
 Draft example:
 
 ```json
@@ -467,17 +469,39 @@ Draft example:
     "models": {"path": "models.json", "status": "confirmed"},
     "promptPlan": {"path": "prompt_plan.json", "status": "confirmed"},
     "workflow": {"path": "LoRA_15_example.json", "status": "generated"}
+  },
+  "workflowBuild": {
+    "compilerVersion": "1.0.0",
+    "manifest": {
+      "schemaVersion": 1,
+      "version": "1.0.0",
+      "sha256": "..."
+    },
+    "template": {
+      "id": "default-scene-batch",
+      "version": "1.0.0",
+      "sha256": "..."
+    }
   }
 }
 ```
 
+`workflowBuild` の意味:
+
+- `compilerVersion`: Compile を実行した Compiler release version。
+- `manifest.schemaVersion`: 使用した Manifest schema version。
+- `manifest.version`: 使用した `manifestVersion`。
+- `manifest.sha256`: Compile 時の Manifest UTF-8 file bytes に対する SHA-256。
+- `template.id`: Workflow Template の stable ID。
+- `template.version`: Workflow Template release version。
+- `template.sha256`: Manifest が bind した Template UTF-8 file bytes の SHA-256。
+
+Manifest 自身には Compiler version や Manifest 自身の hash を埋め込まない。これらは実行結果側の provenance として `project_meta.json` が保持する。
+
 将来追加候補:
 
 - artifact hashes
-- template version / hash
-- compiler version
-- manifest version
-- source catalog generation
+- source catalog generation の project-level snapshot
 
 既存プロジェクトでは metadata を必須にしない。
 
