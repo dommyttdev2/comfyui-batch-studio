@@ -30,10 +30,10 @@ https://github.com/dommyttdev2/civit-model-viewer.git
 - collection 同期。
 - model / version / file 情報取得。
 - thumbnail 情報取得。
-- Civitai 由来の LoRA strength evidence / recommendation 情報取得が必要になった場合の Civitai API 通信。
+- Civitai 由来の LoRA strength evidence 取得・集計。
 - `data/model_catalog.json` の保存・更新。
 
-Batch Studio はこの同期処理を複製しない。
+Batch Studio はこの同期・Civitai API通信を複製しない。
 
 ### 2.2 Batch Studio responsibility
 
@@ -44,7 +44,9 @@ Batch Studio は保存済み `model_catalog.json` を read-only source として
 - Grok へ Model Selection の根拠ファイルとして提示。
 - Grok が返した選定結果の Model / Version / File 実在確認。
 - catalog 更新世代の検出。
-- catalog に Civitai 由来の LoRA 強度基準が含まれる場合、その値と provenance を `models.json` へ固定する。
+- catalog に Civitai 由来の LoRA `strengthBaseline` が含まれる場合、その値と provenance を `models.json` へ固定する。
+
+Batch Studio 自身は strength evidence を再集計せず、Civitai APIを直接呼ばない。
 
 ### 2.3 Catalog structure currently relied on
 
@@ -74,24 +76,29 @@ collections[]
     versions[]
 ```
 
-Batch Studio 側は catalog の全フィールドを Project schema へコピーする必要はない。選定と再照合に必要な identity を保存する。
+Batch Studio 側は catalog の全フィールドを Project schema へコピーする必要はない。選定と再照合に必要な identity と、利用可能な Civitai provenance だけを保存する。
 
-2026-09-07 時点の `civit-model-viewer` 実装では、Model / Version / File、trained words、thumbnail 等を収集しているが、投稿画像の LoRA weight を `model_catalog.json` へ出力する処理は持っていない。
+2026-09-07 時点の `civit-model-viewer` 実装では、Model / Version / File、trained words、thumbnail 等を収集しているが、投稿画像の LoRA weight を `model_catalog.json` へ出力する処理はまだ持っていない。この strength evidence export は本契約に従う追加実装対象とする。
 
-### 2.4 Civitai LoRA strength research note
+### 2.4 Civitai LoRA strength source
 
-2026-09-07 時点の Civitai Site API では、Model / Model Version の公開レスポンスに汎用的な「推奨 LoRA 強度」フィールドは確認できない。
+2026-09-07 時点の Civitai Site API では、Model / Model Version の公開レスポンスに汎用的な「推奨 LoRA 強度」field は確認できない。
 
-一方、Images API では次のように投稿画像の generation metadata を要求できる。
+一方、Images API は specific model version と generation metadata を指定できる。
 
 ```text
-GET /api/v1/images?modelVersionId={id}&withMeta=true
+GET /api/v1/images
+  ?modelVersionId={versionId}
+  &withMeta=true
+  &sort=Newest
+  &limit=200
 ```
 
-metadata が存在する画像では、概念上次の情報を得られる場合がある。
+metadata が存在する画像では、次のような情報を得られる場合がある。
 
 ```json
 {
+  "postId": 123,
   "meta": {
     "civitaiResources": [
       {
@@ -104,56 +111,158 @@ metadata が存在する画像では、概念上次の情報を得られる場�
 }
 ```
 
-この `weight` は「その投稿画像で実際に使用された値」であり、Civitai / 作者が明示した汎用推奨値とは限らない。
+この `weight` は「その投稿画像で実際に使用された値」であり、Civitai / 作者が明示した汎用推奨値とは扱わない。
 
-したがって、複数画像の weight から `models.json` 用の基準値を導出する場合は次を必須とする。
+地域・browsing level・metadata非公開等により取得できる画像集合が限定される可能性があるため、導出値の意味は **Civitai observed usage baseline** とする。普遍的推奨値と表示しない。
 
-- 元データが Civitai 由来であることを保持する。
-- 「作者推奨」と「投稿画像からの導出値」を区別する。
-- 集計方法を provenance として追跡可能にする。
-- metadata がない、または十分な evidence がない場合は値を生成しない。
+### 2.5 observed-usage-derived algorithm
 
-正式な集計アルゴリズム、最低 sample 数、外れ値処理、どの画像を対象とするかは未決。
+`civit-model-viewer` が exact selected LoRA version の observed baseline を作る場合、v1では次を固定する。
 
-### 2.5 Catalog extension for strength
-
-Batch Studio は Civitai API key を所有しないため、Civitai 由来の LoRA strength を利用する場合も Batch Studio が Civitai API を直接呼ぶ方式にはしない。
-
-必要な情報は `civit-model-viewer` が取得し、将来の `model_catalog.json` schema に strength evidence / recommendation と provenance を追加する方向とする。
-
-正式 field name は Draft。
-
-概念例:
+#### Sampling
 
 ```text
-versions[]
-  strengthRecommendation
-    value
-    source
-    basis
-    sampleCount
+modelVersionId = exact selected version
+sort           = Newest
+limit          = 200
+withMeta       = true
 ```
 
-### 2.6 Sync flow
+対象resourceは次をすべて満たすものだけとする。
 
 ```text
-User / civit-model-viewer
-       |
-       v
-Civitai Collection / Civitai metadata
-       |
-       v
+resource.type == "lora"
+resource.modelVersionId == exact selected versionId
+resource.weight is a JSON number
+image.postId is available
+```
+
+モデル名・ファイル名・prompt文字列の類似検索で別versionのweightを混ぜない。
+
+#### Post normalization
+
+同じ投稿に複数画像が存在しても投稿枚数を票数として扱わない。
+
+各 `postId` 内の有効weight群について median を求め、1 post = 1 observation とする。
+
+```text
+Post A weights [0.7, 0.7, 0.8] -> 0.7
+Post B weights [0.6]           -> 0.6
+Post C weights [0.75, 0.8]     -> 0.775
+```
+
+#### Aggregation
+
+post median 群の median を最終 `strengthBaseline.value` とする。
+
+```text
+strengthBaseline.value
+  = median(per-post medians)
+```
+
+最低条件:
+
+```text
+valid distinct post count >= 5
+```
+
+5 posts未満の場合は observed baseline を生成しない。
+
+v1では追加のweight範囲filter、clamp、IQR除去、trimmed mean等の外れ値処理を行わない。weightの固定範囲を仮定せず、median自体のrobustnessを利用する。
+
+### 2.6 Strength provenance / catalog extension
+
+導出値は version に属する optional `strengthBaseline` として `model_catalog.json` へ出力する。
+
+正式 field name:
+
+```text
+strengthBaseline
+```
+
+概念shape:
+
+```json
+{
+  "strengthBaseline": {
+    "value": 0.7,
+    "provenance": {
+      "source": "civitai",
+      "basis": "observed-usage-derived",
+      "method": "median-of-post-medians:newest-200",
+      "sampleCount": 17
+    }
+  }
+}
+```
+
+意味:
+
+- `value`: median of per-post medians。
+- `source`: `civitai`。
+- `basis`: v1実装では `observed-usage-derived`。
+- `method`: `median-of-post-medians:newest-200`。
+- `sampleCount`: 有効画像枚数ではなく distinct `postId` 数。
+
+`versions[].strengthBaseline` をversion-specific sourceとし、現在選択versionをitem rootへ展開する既存export構造では selected version の `strengthBaseline` を item rootにもmirrorできる。
+
+`model_catalog.json` 自体の schemaVersion 更新要否・migrationは `civit-model-viewer` 側のcatalog schema ownershipに従う。Batch Studio側の `models.json` Schema v1 は既存の optional `strengthBaseline` shapeでこの値を保持できるため、今回の決定だけを理由とした `models.json.schemaVersion` bumpは不要。
+
+### 2.7 creator-declared boundary
+
+`models.json` Schema v1 は provenance `basis = creator-declared` を表現可能だが、v1の observed aggregationで説明文を解析して creator-declared 値を捏造しない。
+
+```text
+Model description / version description
+  -> regex / LLM extraction
+  -> creator-declared
+```
+
+のような経路は禁止する。
+
+将来 Civitai が creator の明示strengthを structured field / structured API data として提供し、そのidentityと意味を機械的に検証できる場合のみ `creator-declared` を利用できる。
+
+### 2.8 Freshness
+
+strength evidence専用の独立timestampを `models.json` Schema v1へ追加しない。
+
+viewerがSYNC時に再集計し、`model_catalog.json` の既存provenanceを更新する。
+
+```text
 SYNC
+ -> strength evidence refresh
+ -> model_catalog.generation increment
+ -> model_catalog.generatedAt update
+```
+
+Batch Studio は既存の catalog generation mismatch revalidation rule に従う。
+
+### 2.9 Sync flow
+
+```text
+Civitai Collection / Civitai Images metadata
+       |
+       v
+civit-model-viewer SYNC
+  - Model / Version / File identity
+  - exact-version LoRA weight evidence
+  - per-post median
+  - median of post medians
        |
        v
 model_catalog.json
        |
        +--> Grok Model Selection
        |
-       `--> Batch Studio Validation / models.json
+       `--> Batch Studio Validation
+               |
+               v
+            models.json
 ```
 
-### 2.7 Missing model flow
+strength evidence が不足している場合は `strengthBaseline` absent のまま同期を成功させる。値がないことを同期失敗として扱わない。
+
+### 2.10 Missing model flow
 
 ```text
 Grok
@@ -165,7 +274,7 @@ Grok
   -> Grok再選定
 ```
 
-### 2.8 Catalog path
+### 2.11 Catalog path
 
 ローカル配置場所を旧 `scripts/civitai` に固定しない。
 
@@ -221,7 +330,7 @@ Batch Studio は ComfyUI で実行可能な Workflow を生成し、Preflight �
 
 ```text
 Batch Studio
-   -> LoRA_{project}.json
+   -> LoRA_{project.id}.json
    -> models available
    -> READY
 ```
@@ -250,7 +359,7 @@ project_meta.json
 story.md
 models.json
 prompt_plan.json
-LoRA_{project}.json
+LoRA_{project.id}.json
 ._batch_studio/
 ```
 
@@ -274,7 +383,7 @@ LoRA_{project}.json
 例:
 
 - catalog が読めない -> Model Selection/validation を unavailable と表示。
-- strength evidence が catalog にない -> `models.json` の Civitai 由来基準強度を absent とし、経験則で偽装補完しない。
+- strength evidence が catalog にない、または valid distinct posts が5未満 -> `models.json` の Civitai 由来基準強度を absent とし、経験則で偽装補完しない。
 - R2 File Manager がない -> R2 transfer は unavailable。Local file だけで READY にできるかは別 availability rule で判定。
 - Grok Web が未ログイン -> Grok工程は開始不可。Artifact の既存閲覧は可能。
 
