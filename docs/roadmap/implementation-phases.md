@@ -18,6 +18,8 @@ Workflow Template Manifest Schema v1 も解決済みであり、機械可読正�
 
 Workflow naming / save path / image count policy v1 も解決済みであり、`architecture/workflow-compiler.md` を正本とする。
 
+Civitai LoRA strength evidenceの取得・集計・Prompt Plan初期展開policyも解決済みであり、`integrations/external-tools.md`、`contracts/project-artifacts.md`、`contracts/prompt-plan.md` を正本とする。
+
 `prompt_tree.md` の正本関係も解決済みであり、標準 Artifact から外す。人間向け Prompt 表示・編集は Prompt Plan Web UI が担当する。
 
 Exit criteria:
@@ -68,6 +70,20 @@ Exit criteria:
 
 Goal: `civit-model-viewer` catalog を使った Grok 選定と検証を実装する。
 
+External dependency (`civit-model-viewer`):
+
+- exact `modelVersionId` のImages API metadata取得。
+- `sort=Newest` / `limit=200` / `withMeta=true` sampling。
+- `meta.civitaiResources` から exact LoRA version weight抽出。
+- 1 `postId` = 1 observation のper-post median。
+- minimum 5 distinct posts。
+- median of per-post medians。
+- `method = median-of-post-medians:newest-200` / distinct-post `sampleCount` provenance。
+- optional version-level `strengthBaseline` を `model_catalog.json` へexport。
+- evidence不足時はbaseline absentのままSYNC成功。
+
+Batch Studio:
+
 - catalog path configuration。
 - `model_catalog.json` reader/index。
 - generation / generatedAt display。
@@ -78,6 +94,8 @@ Goal: `civit-model-viewer` catalog を使った Grok 選定と検証を実装す
 - Project-wide model `ref` uniqueness の semantic validation。
 - Model / Version / File identity validation。
 - Civitai 由来 `strengthBaseline` / provenance 表示。
+- `observed-usage-derived` を作者推奨値として表示しない。
+- expected `method` / `sampleCount` semantic validation。
 - `missingRequirements` を Draft / UI state として表示。
 - unresolved `missingRequirements` がある場合の Confirm blocking。
 - catalog generation mismatch 時の selected identity revalidation。
@@ -90,6 +108,7 @@ Exit criteria:
 - `ref` 重複や架空 Model / Version / File identity を確定できない。
 - 未解決 `missingRequirements` がある状態で `models.json` を Confirm できない。
 - catalog generation が変化しても、それだけで `models.json` を invalid にしない。
+- strength evidenceが不足しているLoRAに経験則baselineを捏造しない。
 
 ## Phase 4: Prompt Plan
 
@@ -104,6 +123,9 @@ Goal: Grok の意味的 Prompt JSON を正規 Artifact として取り込み、�
 - Branch / Branch LoRA / leaf tree view。
 - Branch / leaf ordering editor。
 - leaf prompt editor。
+- `models.json.strengthBaseline.value = w` を初期値に使う場合の `strengthModel=w` / `strengthClip=w` 同値展開。
+- baseline absent時はBatch Studioによる暗黙strength defaultなし。
+- baseline初期値と現在のproject実適用値を区別して表示。
 - target image count とactual leaf総数の差分表示。
 - validation result の該当箇所表示。
 - Draft / confirm。
@@ -115,6 +137,8 @@ Exit criteria:
 - 未知 field、必須 field 欠落、不正 stable ID を確定できない。
 - Branch ID / Leaf ID の Project-wide 重複を確定できない。
 - 解決不能 `modelRef` を持つ Prompt Plan を確定 Workflow 入力にできない。
+- baseline absent時にBatch Studioが1.0/1.0等を黙って補完しない。
+- baselineを初期展開した後もModel/CLIP値を独立編集でき、`models.json` baselineを変更しない。
 - target image countとの差分だけでは確定をBlockしない。
 - 人間向けの Prompt 構造確認・編集が `prompt_plan.json` を正本として Web UI 内で完結する。
 - ComfyUI 内部 JSON を Grok output に要求しない。
