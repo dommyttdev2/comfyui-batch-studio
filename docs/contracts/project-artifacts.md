@@ -33,7 +33,7 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 | `project_brief.json` | Batch Studio / User | 初期画面 | Story作成前の最小入力 |
 | `story.md` | Grok + User | Brief / reference | 作品・場面設計の人間可読正本 |
 | `models.json` | Grok selection + Batch Studio validation + User | `story.md`, `model_catalog.json` | 使用モデルの固定結果と Civitai 由来のモデル基準情報 |
-| `prompt_plan.json` | Grok + User | `story.md`, `models.json` | Workflow生成用の意味的Prompt正本候補。実際の LoRA 適用強度も保持する |
+| `prompt_plan.json` | Grok + Batch Studio validation + User approval | `story.md`, `models.json` | Workflow Compiler が読む確定済みの機械可読 Prompt Plan。実際の LoRA 適用強度も保持する |
 | `prompt_tree.md` | Open | 既存プロジェクト / 将来派生 | 人間可読Prompt Tree。正本関係は未決 |
 | `LoRA_{project_name}.json` | Workflow Compiler | Template, Manifest, models, plan | 最終ComfyUI Workflow |
 | `project_meta.json` | Batch Studio | System | Artifact status、version、将来hash等 |
@@ -204,9 +204,35 @@ v1 では catalog 内容全体の hash を必須 provenance としない。完�
 
 ## 7. prompt_plan.json
 
-意味的な Grok -> Batch Studio 契約。
+`prompt_plan.json` は Grok から返された意味的な生成計画を、Batch Studio の検証とユーザー承認を経て確定した機械可読 Artifact である。
 
-正本定義は `prompt-plan.md` が所有する。
+標準ファイル名:
+
+```text
+prompt_plan.json
+```
+
+プロジェクト直下には現在の確定版を1ファイルだけ置き、Workflow Compiler はこの確定版を Prompt Plan の入力として使用する。
+
+```text
+Grok response
+   -> Draft
+   -> Batch Studio validation
+   -> User approval
+   -> prompt_plan.json
+   -> Workflow Compiler
+```
+
+確定前の候補や旧版は標準ファイル名へ直接保存しない。
+
+```text
+._batch_studio/drafts/prompt_plan/{timestamp}
+._batch_studio/history/prompt_plan/{timestamp}
+```
+
+版番号や `final` などの状態をファイル名へ埋め込まず、`prompt_plan_v2.json`、`prompt_plan_final.json` 等を正規運用として作らない。
+
+正本定義の詳細は `prompt-plan.md` が所有する。
 
 Workflow 内部形式を含まず、主に次を持つ。
 
@@ -314,6 +340,7 @@ Draft example:
 
 - ユーザー確認前に final artifact を上書きしない。
 - Grok の貼り戻し直後は Draft。
+- 確定済み `prompt_plan.json` の更新時は、更新前の版を history へ退避してから新しい確定版へ置き換える。
 - Compiler output も最初は generated candidate とし、検証後に確定可能とする。
 
 ## 12. Artifact Dependency
