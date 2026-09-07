@@ -14,9 +14,11 @@ Grok から最低限次を受け取る。
 
 1. 共通 prompt。
 2. 全枝共通で使用する LoRA。
-3. Branch 一覧。
-4. Branch ごとの LoRA。
-5. Branch ごとの SceneMatrix 用 leaf prompt 群。
+3. Root LoRA の実適用強度。
+4. Branch 一覧。
+5. Branch ごとの LoRA。
+6. Branch LoRA の実適用強度。
+7. Branch ごとの SceneMatrix 用 leaf prompt 群。
 
 ## 3. Draft JSON shape
 
@@ -171,6 +173,29 @@ Compiler は label を Node / Group title の生成材料に使えるが、Comfy
 0件を許容する。
 
 Branch LoRA が0件でも、Root LoRA + common prompt + leaf prompt で生成する有効 Branch であり得る。
+
+### 7.4 LoRA strength ownership
+
+`prompt_plan.json` に保存する strength は、そのプロジェクトで **実際に Workflow へ適用する値** である。
+
+`models.json` に保存する Civitai 由来の推奨・基準強度とは責務が異なる。
+
+```text
+models.json
+  = model/version に紐づく Civitai 由来の基準情報
+
+prompt_plan.json
+  = Root / Branch ごとに実際に使用する可変値
+```
+
+要件:
+
+- Root LoRA と Branch LoRA はそれぞれ実適用強度を持てる。
+- Batch Studio の Web UI から `prompt_plan.json` 側の強度を調整できる。
+- UI で実適用強度を変更しても `models.json` の推奨・基準値は変更しない。
+- Compiler は `prompt_plan.json` の実適用強度を最終 Workflow の LoRA Stack へ反映する。
+
+Civitai 由来の基準値を `prompt_plan.json` の初期値へどう反映するかは別途決める。特に Civitai 側で得られる weight が単一値である場合、それを `strengthModel` / `strengthClip` へどのように展開するかは未決である。
 
 ## 8. leaves
 
