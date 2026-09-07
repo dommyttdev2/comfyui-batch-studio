@@ -8,12 +8,13 @@ Status: Draft roadmap
 
 Goal: 実装前に境界と schema の未決事項を減らす。
 
-- `models.json` final schema。
 - Workflow Template / Manifest schema。
 - Branch naming / save path / image count policy。
 - Artifact status state model。
 
-`prompt_plan.json` Schema v1 は解決済みであり、機械可読正本は `schemas/prompt-plan.schema.json` とする。
+`models.json` Schema v1 は解決済みであり、機械可読正本は `schemas/models.schema.json` とする。
+
+`prompt_plan.json` Schema v1 も解決済みであり、機械可読正本は `schemas/prompt-plan.schema.json` とする。
 
 `prompt_tree.md` の正本関係も解決済みであり、標準 Artifact から外す。人間向け Prompt 表示・編集は Prompt Plan Web UI が担当する。
 
@@ -65,16 +66,24 @@ Goal: `civit-model-viewer` catalog を使った Grok 選定と検証を実装す
 - `model_catalog.json` reader/index。
 - generation / generatedAt display。
 - Grok Model Selection prompt preparation。
-- `models.json` import。
+- Models Draft / import。
+- `schemas/models.schema.json` を使った Schema v1 validation。
+- Checkpoint `checkpoint.main` / LoRA `lora.*` ref validation。
+- Project-wide model `ref` uniqueness の semantic validation。
 - Model / Version / File identity validation。
-- `missingRequirements` handling。
+- Civitai 由来 `strengthBaseline` / provenance 表示。
+- `missingRequirements` を Draft / UI state として表示。
+- unresolved `missingRequirements` がある場合の Confirm blocking。
 - catalog generation mismatch 時の selected identity revalidation。
+- Confirm 後に確定版 `models.json` 保存。
 
 Exit criteria:
 
 - Grok が catalog から選んだ file を Batch Studio が再照合できる。
+- Schema v1 に準拠し semantic validation を通過した `models.json` だけを確定できる。
+- `ref` 重複や架空 Model / Version / File identity を確定できない。
+- 未解決 `missingRequirements` がある状態で `models.json` を Confirm できない。
 - catalog generation が変化しても、それだけで `models.json` を invalid にしない。
-- 架空 identity を確定できない。
 
 ## Phase 4: Prompt Plan
 
