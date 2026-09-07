@@ -706,7 +706,7 @@ branchPrototype
 
 ### Role contract
 
-Compiler code は Template 固有 Node ID を直接知たない。Common / Branch の semantic role を Manifest から Node ID へ解決する。
+Compiler code は Template 固有 Node ID を直接知らない。Common / Branch の semantic role を Manifest から Node ID へ解決する。
 
 Common必須roles:
 
@@ -821,13 +821,118 @@ Semantic validationは少なくともrole node existence、Prototype membership�
 
 ### Scope boundary
 
-Branch / Node / Group title、Save path、image count、output filename metadataはManifest責務に含めない。これらは `OPEN-005` のCompiler naming/count policyで扱う。
+Branch / Node / Group title、Save path、image count、output filename metadataはManifest責務に含めない。これらは `DEC-020` のCompiler naming/count policyで扱う。
 
 ### Resolves
 
 - `REQ-WF-007` を Decided とする。
 - `REQ-WF-008` を Decided とする。
 - `OPEN-004` を Superseded とする。
+
+---
+
+## DEC-020: Workflow naming and image count are compiler-derived from stable IDs
+
+Date: 2026-09-07
+Status: Accepted
+
+### Decision
+
+v1 のWorkflow naming / save path / image count / leaf output identityをCompilerの決定論的policyとして固定する。
+
+Grokの自由文、Templateのコピー残り、display labelをfilesystem identityの正本にしない。
+
+### Project ID
+
+`project.id` は表示名 `project.title` と分離したfilesystem-safe stable IDとする。
+
+```regex
+^[a-z0-9][a-z0-9._-]{0,63}$
+```
+
+表示名変更だけでは既存 `project.id` を自動変更しない。
+
+### Image count
+
+v1は次を固定する。
+
+```text
+imagesPerLeaf = 1
+branchImageCount = branch.leaves.length
+projectImageCount = sum(all branch leaves)
+```
+
+Compilerは各Branchの `ScenePromptCounter.count` を `1` にpatchする。
+
+Template-owned `fixedMatrix` 等が1 leafを複数generationへ暗黙増幅するTemplateはv1では無効とする。
+
+`project_brief.json.generation.target_image_count` はStory / Prompt Planningの目標値であり、実枚数の正本ではない。目標との差分はwarning / informationalとして表示できるが、その差分だけではPrompt Plan確定やCompileをBlockしない。
+
+### Human-readable title
+
+`branch.label` は人間向け表示専用とし、filesystem pathには使用しない。
+
+Compilerが動的設定する主要title:
+
+```text
+Group             = Gen - {branch.id} - {displayLabel} ({branchImageCount})
+Branch LoRA Stack = LoRA - {branch.id} - {displayLabel}
+Main SceneMatrix  = Prompt - {branch.id} - {displayLabel} ({branchImageCount})
+Counter           = 1 image per leaf
+SceneSaveImage    = Save - {branch.id} - {displayLabel} ({branchImageCount})
+```
+
+その他の内部Node titleは原則Template titleを維持する。
+
+`displayLabel` のtrim / newline removal / whitespace collapse / display truncationは表示上だけ行い、`prompt_plan.json` の `branch.label` を書き換えない。
+
+### Workflow / save path
+
+新規Workflow filename:
+
+```text
+LoRA_{project.id}.json
+```
+
+Branch save path:
+
+```text
+BatchStudio/{project.id}/{branch.id}
+```
+
+`project.title` と `branch.label` はfilesystem pathへ使用しない。
+
+### Leaf output identity
+
+SceneMatrix mapping:
+
+```text
+leaf.id   -> row_id
+leaf.id   -> path_label
+leaf.name -> name
+filename_enabled = true
+```
+
+`leaf.id` をstable output identity、`leaf.name` を人間向け表示名とする。
+
+### Physical filename boundary
+
+Batch Studioはsave directoryとleaf identityまでを所有する。
+
+extension、numeric sequence、collision suffix、timestamp、seed等のcustom-node固有の最終filename形成は `SceneSaveImage` に委譲し、Batch Studioで再実装しない。
+
+### Rationale
+
+- display labelやProject title変更でfilesystem identityが変わる事故を防ぐ。
+- Templateをコピーした際に旧ProjectのSave pathや枚数titleが残る事故を防ぐ。
+- Prompt Planのleaf数から予定枚数を一意に計算できる。
+- SceneSaveImageのversion固有filename挙動をBatch Studioへ重複実装しない。
+
+### Resolves
+
+- `REQ-PROJ-002` を Decided とする。
+- `REQ-WF-009` を Decided とする。
+- `OPEN-005` を Superseded とする。
 
 ---
 
@@ -878,17 +983,11 @@ Workflow Template Manifest Schema v1 の正式role、Prototype Node/Group owners
 ## OPEN-005: Generated naming and count policy
 
 Date: 2026-09-07
-Status: Open
+Status: Superseded
 
-Compiler が派生する以下の正式ルールを決める。
+`DEC-020` により解決済み。
 
-- Branch / Node title。
-- Save path。
-- per-leaf image count。
-- branch total image count。
-- output filename metadata。
-
-Grok の自由文へ依存させない方針自体は維持する。
+v1は `1 leaf = 1 image`、stable IDベースのWorkflow filename / save path / leaf output identity、人間向けtitleの `branch.label` 利用、SceneSaveImageへのphysical filename委譲を正式policyとして固定した。
 
 ---
 
