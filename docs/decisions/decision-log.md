@@ -184,13 +184,13 @@ UNUSED branch、空 Matrix の予約 branch、余剰 bypass branch を残さな�
 ## DEC-009: Workflow clone uses Manifest, not hard-coded Node IDs
 
 Date: 2026-09-07
-Status: Accepted in principle / schema Draft
+Status: Accepted
 
 ### Decision
 
 Compiler code へ特定 Node ID を散在させず、Template Manifest に Common role、Branch Prototype、boundary、layout 等を宣言する。
 
-Manifest の正式 JSON Schema は実装前に確定する。
+Manifest の正式 JSON Schema と ownership / boundary rule は `DEC-019` で確定した。
 
 ---
 
@@ -681,6 +681,156 @@ VAE / Text Encoder / Embedding / ControlNet 等を Project Model Artifact とし
 
 ---
 
+## DEC-019: Workflow Template Manifest Schema v1 defines ownership and boundaries
+
+Date: 2026-09-07
+Status: Accepted
+
+### Decision
+
+Workflow Template Manifest Schema v1 を固定し、機械可読 schema の正本を次とする。
+
+```text
+schemas/workflow-template-manifest.schema.json
+```
+
+Manifest root structure:
+
+```text
+schemaVersion
+manifestVersion
+template
+common
+branchPrototype
+```
+
+### Role contract
+
+Compiler code は Template 固有 Node ID を直接知たない。Common / Branch の semantic role を Manifest から Node ID へ解決する。
+
+Common必須roles:
+
+```text
+checkpoint
+rootLoraStack
+planCommonPrompt
+promptOutput
+```
+
+Branch必須roles:
+
+```text
+loraStack
+promptIngress
+mainMatrix
+prompter
+counter
+latent
+expand
+positiveEncode
+negativeEncode
+sampler
+vaeDecode
+save
+```
+
+Branch任意role:
+
+```text
+fixedMatrix
+```
+
+複数roleが同じ Node ID を共有することを許容する。
+
+### Prototype ownership
+
+Branch clone対象のNode正本は `branchPrototype.nodeIds[]`、Group正本は `branchPrototype.groupIds[]` とする。
+
+Group membershipからNode ownershipを推測しない。Branch専用Reroute等がGroup外に存在しても `nodeIds` により所有できる。
+
+Prototype内部Link ID一覧はManifestへ保持しない。
+
+```text
+origin in prototype.nodeIds
+AND
+target in prototype.nodeIds
+=> internal prototype link
+```
+
+としてTemplateから決定論的に導出する。
+
+### Boundary contract
+
+Schema v1 の外部境界は Common -> Branch とし、Manifestでは source role/slot と target role/slot を宣言する。
+
+Template ownership境界を跨ぐLinkはすべて `boundaries[]` にちょうど1回宣言されなければならない。
+
+- 宣言Boundaryに一致するTemplate Linkがちょうど1件必要。
+- 未宣言cross-boundary LinkはCompile blocking error。
+- Branch 2..NではCommon sourceからclone targetへ新規Linkを生成する。
+
+### Layout
+
+Branch配置は `branchPrototype.layout.offset.x/y` を正本とし、Node位置とclone Group boundingへ同じ2次元offsetを適用する。
+
+Compiler codeへ固定vertical gapを埋め込まない。
+
+### Template binding
+
+ManifestはTemplateへ次でbindする。
+
+```text
+template.id
+template.version
+template.sha256
+```
+
+`template.sha256` はWorkflow Template JSONのUTF-8 file bytesそのものに対するSHA-256とする。
+
+hash不一致はCompile blocking error。
+
+`schemaVersion` はManifest構造仕様、`manifestVersion` はManifest実体release version、`template.version` はTemplate実体release versionを表す。
+
+### Build provenance
+
+Compiler versionはManifest自身へ記録しない。
+
+Compile時に次をWorkflow build provenanceとして `project_meta.json` 側へ記録する方針とする。
+
+```text
+compilerVersion
+manifest.schemaVersion
+manifest.version
+manifest.sha256
+template.id
+template.version
+template.sha256
+```
+
+Manifest自身のhashはCompile時に外部計算する。
+
+### Validation boundary
+
+```text
+JSON Schema validation
+  +
+Batch Studio semantic validation
+```
+
+Semantic validationは少なくともrole node existence、Prototype membership、Group existence、Boundary一意性、cross-boundary completeness、Template SHA-256、layout collision riskを確認する。
+
+### Scope boundary
+
+Branch / Node / Group title、Save path、image count、output filename metadataはManifest責務に含めない。これらは `OPEN-005` のCompiler naming/count policyで扱う。
+
+### Resolves
+
+- `REQ-WF-007` を Decided とする。
+- `REQ-WF-008` を Decided とする。
+- `OPEN-004` を Superseded とする。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
@@ -717,15 +867,11 @@ Prompt Plan Schema v1 の正式 field name、Project-wide ID uniqueness、orderi
 ## OPEN-004: Workflow Template Manifest schema
 
 Date: 2026-09-07
-Status: Open
+Status: Superseded
 
-確定対象:
+`DEC-019` により解決済み。
 
-- role naming。
-- prototype node/link/group ownership。
-- common/branch boundary ports。
-- layout policy。
-- template version/hash。
+Workflow Template Manifest Schema v1 の正式role、Prototype Node/Group ownership、内部Link自動導出、Common→Branch boundary、2次元layout、Template version/hash binding、Workflow build provenance境界を固定し、機械可読 schema を `schemas/workflow-template-manifest.schema.json` とした。
 
 ---
 
