@@ -9,12 +9,13 @@ Status: Draft roadmap
 Goal: 実装前に境界と schema の未決事項を減らす。
 
 - `models.json` final schema。
-- `prompt_plan.json` formal JSON Schema。
 - Workflow Template / Manifest schema。
 - Branch naming / save path / image count policy。
 - Artifact status state model。
 
-`prompt_tree.md` の正本関係は解決済みであり、標準 Artifact から外す。人間向け Prompt 表示・編集は Prompt Plan Web UI が担当する。
+`prompt_plan.json` Schema v1 は解決済みであり、機械可読正本は `schemas/prompt-plan.schema.json` とする。
+
+`prompt_tree.md` の正本関係も解決済みであり、標準 Artifact から外す。人間向け Prompt 表示・編集は Prompt Plan Web UI が担当する。
 
 Exit criteria:
 
@@ -80,20 +81,24 @@ Exit criteria:
 Goal: Grok の意味的 Prompt JSON を正規 Artifact として取り込み、同じデータを人間向け Web UI で確認・編集できるようにする。
 
 - Prompt Plan Grok Work Card。
-- `prompt_plan.json` parser / schema validation。
+- `schemas/prompt-plan.schema.json` を使った Schema v1 validation。
+- Project-wide Branch ID / Leaf ID uniqueness の semantic validation。
+- `models.json` に対する `modelRef` semantic validation。
 - common prompt display / editor。
 - Root LoRA refs / applied strength editor。
 - Branch / Branch LoRA / leaf tree view。
 - Branch / leaf ordering editor。
 - leaf prompt editor。
-- model reference validation。
 - validation result の該当箇所表示。
 - Draft / confirm。
 - `prompt_tree.md` を新規生成しない。
 
 Exit criteria:
 
-- 有効 Prompt Plan が Workflow Compiler へ入力できる。
+- Schema v1 に準拠し semantic validation を通過した Prompt Plan が Workflow Compiler へ入力できる。
+- 未知 field、必須 field 欠落、不正 stable ID を確定できない。
+- Branch ID / Leaf ID の Project-wide 重複を確定できない。
+- 解決不能 `modelRef` を持つ Prompt Plan を確定 Workflow 入力にできない。
 - 人間向けの Prompt 構造確認・編集が `prompt_plan.json` を正本として Web UI 内で完結する。
 - ComfyUI 内部 JSON を Grok output に要求しない。
 - `prompt_tree.md` を Workflow Compiler の入力にしない。
