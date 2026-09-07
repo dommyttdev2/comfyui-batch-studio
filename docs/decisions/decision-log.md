@@ -71,7 +71,7 @@ Grok の選定根拠は `civit-model-viewer` が出力する `model_catalog.json
 ### Batch Studio responsibility
 
 - catalog identity validation。
-- stale catalog warning。
+- catalog generation 差分時の再検証。
 - missing requirements の表示。
 - user confirmation / save。
 
@@ -288,6 +288,58 @@ Batch Studio 自身は Civitai API を直接呼ばず、必要な Civitai 情報
 
 ---
 
+## DEC-014: Catalog generation mismatch triggers revalidation, not invalidation
+
+Date: 2026-09-07
+Status: Accepted
+
+### Decision
+
+`models.json` はモデル選定時に使用した `model_catalog.json` の provenance として、v1 では少なくとも次を保持する。
+
+```text
+catalog.schemaVersion
+catalog.generation
+catalog.generatedAt
+```
+
+現在の `model_catalog.json` の `generation` が `models.json` に記録された値と異なる場合、Batch Studio は選定済み Model / Version / File identity を現在の catalog に対して再検証する。
+
+generation の不一致だけでは `models.json` を invalid / stale と判定しない。
+
+### Rationale
+
+`generation` は catalog 全体の更新世代であり、プロジェクトと無関係なモデル追加・更新でも変化し得る。そのため世代番号の違い自体をプロジェクトの異常とみなすと不要な警告や再選定を発生させる。
+
+意味は次の通りとする。
+
+```text
+generation mismatch
+  != project stale
+
+generation mismatch
+  = catalog changed since selection
+  = selected identities must be revalidated
+```
+
+### Revalidation result
+
+- 選定済み Model / Version / File がすべて存在する: `VALID`。
+- identity は存在するが後続処理に関係する metadata が変化した: `VALID` を維持し必要に応じて warning。
+- 選定済み Model / Version / File が消失した: blocking error。再選定またはユーザー対応が必要。
+
+### Hash policy
+
+v1 では catalog 全体の content hash を必須としない。完全な内容同一性や監査用 snapshot が必要になった場合に schema version 更新で追加する。
+
+### Resolves
+
+`REQ-MODEL-005` を Decided とする。
+
+`OPEN-002` のうち catalog provenance の最低保持範囲を解決する。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
@@ -316,13 +368,14 @@ Status: Open
 
 - `models.json` は Batch Studio 専用 schema とする。
 - 既存形式との互換性は要件としない。
+- catalog provenance は v1 で少なくとも `schemaVersion` / `generation` / `generatedAt` を保持する。
+- catalog generation の不一致は再検証トリガーであり、それ自体では invalid にしない。
 - Civitai 由来の LoRA 推奨・基準強度は `models.json` が所有する。
 - Project で実際に適用する LoRA 強度は `prompt_plan.json` が所有する。
 
 ### Remaining Questions
 
 - stable model reference の正式 field name と命名規則。
-- catalog metadata をどこまで snapshot するか。
 - `missingRequirements` を同一ファイルに持つか selection draft と分離するか。
 - strength recommendation / provenance の正式 field names。
 - role、trained words、reason を正式 schema でどう表現するか。
