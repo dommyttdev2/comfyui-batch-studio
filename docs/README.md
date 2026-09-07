@@ -24,6 +24,7 @@ docs/
 │  └─ prompt-plan.md
 ├─ ui/
 │  ├─ application-shell.md
+│  ├─ japanese-ux-design.md
 │  └─ project-initialization.md
 ├─ integrations/
 │  └─ external-tools.md
@@ -46,7 +47,8 @@ docs/
 | `contracts/project-artifacts.md` | プロジェクト内ファイル、正本関係、依存関係、互換性 |
 | `contracts/grok-contract.md` | Grok Web への入力、Grok の責務、Grok から受け取る成果物 |
 | `contracts/prompt-plan.md` | `prompt_plan.json` の意味構造と Draft schema |
-| `ui/application-shell.md` | 主画面、工程 navigation、Grok Work Card、Artifact editor、各工程の共通 UX |
+| `ui/application-shell.md` | 主画面、工程 navigation、Grok pane、Artifact editor 等の上位 Shell / 共通 interaction |
+| `ui/japanese-ux-design.md` | 日本語 UI 実装向けの画面名称、工程別 UX、Grok 手動連携、Prompt Plan 大量レビュー、状態・ボタン文言等の Draft 詳細設計 |
 | `ui/project-initialization.md` | 新規プロジェクト画面と `project_brief.json` |
 | `integrations/external-tools.md` | civit-model-viewer、R2 File Manager、ComfyUI、Project filesystem との境界 |
 | `quality/validation-and-security.md` | 検証、Preflight、秘密情報、Grok Web 隔離、failure policy |
@@ -64,7 +66,7 @@ docs/
 - `prompt_plan.json` のフィールド定義は `contracts/prompt-plan.md` が所有する。
 - Workflow の Node ID / Link ID 再採番は `architecture/workflow-compiler.md` が所有する。
 - Grok が Workflow JSON を生成しないという責務境界は `product/scope-and-flow.md` と Decision Log で宣言し、具体的な Grok 返却形式は `contracts/grok-contract.md` が所有する。
-- 主画面の UI 共通構造は `ui/application-shell.md` が所有し、個別 Artifact schema は UI 文書へコピーしない。
+- 主画面の UI 共通構造は `ui/application-shell.md` が所有し、日本語 UI の工程別実装詳細は `ui/japanese-ux-design.md` が Draft として具体化する。個別 Artifact schema は UI 文書へコピーしない。
 
 ### 4.2 Requirement ID
 
