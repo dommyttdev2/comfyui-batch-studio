@@ -8,6 +8,8 @@ Status: Draft schema / Decided semantics
 
 このファイルは ComfyUI Workflow JSON ではない。ComfyUI 固有の Node / Link / Widget 構造を持たず、作品全体の共通 prompt、使用 LoRA、枝、葉 prompt を表す。
 
+`prompt_plan.json` はプロジェクト内の確定済み Prompt Plan を表す標準ファイル名とする。Grok の回答をそのまま即時保存するのではなく、Batch Studio の検証とユーザー承認を経た内容だけをこのファイルへ確定する。
+
 ## 2. 決定済みの意味構造
 
 Grok から最低限次を受け取る。
@@ -20,7 +22,47 @@ Grok から最低限次を受け取る。
 6. Branch LoRA の実適用強度。
 7. Branch ごとの SceneMatrix 用 leaf prompt 群。
 
-## 3. Draft JSON shape
+## 3. Artifact lifecycle
+
+標準ファイル名:
+
+```text
+prompt_plan.json
+```
+
+プロジェクトごとに、現在の確定版は1ファイルだけを持つ。
+
+```text
+Grok response
+   |
+   v
+Draft
+   |
+   v
+Batch Studio validation
+   |
+   v
+User approval
+   |
+   v
+prompt_plan.json
+   |
+   v
+Workflow Compiler
+```
+
+原則:
+
+- Workflow Compiler はプロジェクト直下の確定済み `prompt_plan.json` を Prompt Plan の機械可読入力として使用する。
+- Grok の貼り戻し直後の内容は Draft であり、検証・承認前に `prompt_plan.json` を上書きしない。
+- 確定前の候補は `._batch_studio/drafts/` で管理する。
+- 確定版を更新する場合、更新前の版は `._batch_studio/history/` へ退避する。
+- `prompt_plan_v2.json`、`prompt_plan_final.json`、`prompt_plan_final2.json` のように版管理をファイル名へ埋め込まない。
+- 正式 field name と JSON Schema は別途確定する。ファイル名と lifecycle の確定は schema の未決事項に依存しない。
+
+`prompt_tree.md` が独立正本か派生成果物かは別要件であり、本節では決めない。
+
+## 4. Draft JSON shape
 
 ```json
 {
@@ -62,7 +104,7 @@ Grok から最低限次を受け取る。
 
 フィールド名は実装前に JSON Schema として固定するため Draft。意味は本書の記述を基準とする。
 
-## 4. common
+## 5. common
 
 `common` は全 Branch / leaf に共通するプロジェクト固有 prompt を表す。
 
@@ -82,7 +124,7 @@ Grok から最低限次を受け取る。
 
 Template 自体が所有する品質 preset 等は `common` へ重複させない。Template-owned prompt と Plan-owned prompt の境界は Workflow Compiler が Manifest で管理する。
 
-## 5. rootLoras
+## 6. rootLoras
 
 全 Branch に共通適用する LoRA。
 
@@ -100,7 +142,7 @@ Root LoRA が不要な場合:
 
 を許容する。
 
-## 6. Model reference
+## 7. Model reference
 
 Prompt Plan に `.safetensors` の実ファイル名を何度も複製して書かせず、`models.json` 内の確定選定を一意に参照する方式を採る方向とする。
 
@@ -114,7 +156,7 @@ Compiler はこの参照を `models.json` から実ファイル名へ解決す�
 
 正式な reference field name と `models.json` schema はまだ Draft。
 
-### 6.1 Invalid reference
+### 7.1 Invalid reference
 
 `modelRef` を解決できない場合:
 
@@ -125,7 +167,7 @@ Prompt Plan validation error
 
 自動的に似た名前の model へ置換しない。
 
-## 7. branches
+## 8. branches
 
 `branches` は意味的に異なる LoRA Stack / SceneMatrix 系列を表す。
 
@@ -138,7 +180,7 @@ Prompt Plan validation error
 }
 ```
 
-### 7.1 id
+### 8.1 id
 
 Compiler / UI / metadata が扱える安定識別子。
 
@@ -150,13 +192,13 @@ Compiler / UI / metadata が扱える安定識別子。
 
 命名規約の厳密 schema は Draft。
 
-### 7.2 label
+### 8.2 label
 
 人間向けの短い意味名。
 
 Compiler は label を Node / Group title の生成材料に使えるが、ComfyUI title 全文を Grok に作らせない。
 
-### 7.3 loras
+### 8.3 loras
 
 当該 Branch だけに適用する LoRA。
 
@@ -174,7 +216,7 @@ Compiler は label を Node / Group title の生成材料に使えるが、Comfy
 
 Branch LoRA が0件でも、Root LoRA + common prompt + leaf prompt で生成する有効 Branch であり得る。
 
-### 7.4 LoRA strength ownership
+### 8.4 LoRA strength ownership
 
 `prompt_plan.json` に保存する strength は、そのプロジェクトで **実際に Workflow へ適用する値** である。
 
@@ -197,7 +239,7 @@ prompt_plan.json
 
 Civitai 由来の基準値を `prompt_plan.json` の初期値へどう反映するかは別途決める。特に Civitai 側で得られる weight が単一値である場合、それを `strengthModel` / `strengthClip` へどのように展開するかは未決である。
 
-## 8. leaves
+## 9. leaves
 
 `leaves` は当該 Branch の Main SceneMatrix に入る行を意味する。
 
@@ -210,15 +252,15 @@ Civitai 由来の基準値を `prompt_plan.json` の初期値へどう反映す�
 }
 ```
 
-### 8.1 id
+### 9.1 id
 
 Compiler が `row_id` に変換できる一意識別子。
 
-### 8.2 name
+### 9.2 name
 
 人間向け識別名と `path_label` 等の派生元。
 
-### 8.3 positive / negative
+### 9.3 positive / negative
 
 その leaf 固有の prompt 差分。
 
@@ -233,7 +275,7 @@ final negative = template common + plan common negative + leaf negative
 
 実際の連結は ScenePrompter / SceneMatrix custom node の Workflow 構造に従う。
 
-## 9. Grok が返さないフィールド
+## 10. Grok が返さないフィールド
 
 次は Prompt Plan の責務外。
 
@@ -257,7 +299,7 @@ scene_matrix_json
 
 これらは Workflow Compiler が生成する。
 
-## 10. SceneMatrix mapping
+## 11. SceneMatrix mapping
 
 1 leaf から Compiler は Main SceneMatrix の1行を作る。
 
@@ -275,7 +317,7 @@ scene_matrix_json
 
 Custom node schema が変化した場合は Prompt Plan schema を変えず、Compiler adapter だけを更新できることを目標とする。
 
-## 11. Ordering
+## 12. Ordering
 
 `branches` 配列順を Workflow 上の枝順とする。
 
@@ -283,7 +325,7 @@ Custom node schema が変化した場合は Prompt Plan schema を変えず、Co
 
 別途 `order` を重複保持しないことを基本とする。
 
-## 12. Validation
+## 13. Validation
 
 最低限:
 
@@ -313,7 +355,7 @@ LoRA strength の許容範囲は現時点で固定しない。モデルによっ
 - `name` 空でない。
 - positive / negative は string。
 
-## 13. 将来拡張候補
+## 14. 将来拡張候補
 
 意味的な要件が発生した場合のみ追加を検討する。
 
@@ -327,11 +369,11 @@ LoRA strength の許容範囲は現時点で固定しない。モデルによっ
 
 これらを ComfyUI Workflow 内部事情だけを理由に Prompt Plan へ追加しない。
 
-## 14. prompt_tree.md との関係
+## 15. prompt_tree.md との関係
 
 未決。
 
-`prompt_plan.json` は Workflow Compiler の入力として必須方向である。
+`prompt_plan.json` は Workflow Compiler の確定済み機械可読入力である。
 
 `prompt_tree.md` は次のどちらかを今後決める。
 
