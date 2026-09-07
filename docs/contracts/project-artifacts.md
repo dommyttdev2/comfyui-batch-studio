@@ -72,39 +72,34 @@ Brief は Story 全体の詳細 schema ではなく、Grok に最初の提案を
 
 ### 6.1 意味
 
-Grok が `model_catalog.json` から選定した「このプロジェクトで実際に使うモデル・バージョン・ファイル」を固定する。
+Grok が `model_catalog.json` から選定した「このプロジェクトで実際に使う Checkpoint / LoRA の Model / Version / File」を固定する。
 
-Batch Studio は選定主体ではなく、実在性の検証と確定保存を担当する。
+Batch Studio は選定主体ではなく、catalog 実在性の検証、Draft 管理、ユーザー確認、確定保存を担当する。
 
-`models.json` は同時に、選定したモデルについて **Civitai をソースとする基準情報** を保持する。LoRA の推奨・基準強度を Civitai 由来で取得できる場合、その値は `models.json` が所有する。
+`models.json` は同時に、選定した LoRA について Civitai をソースとする基準強度を取得できる場合、その値と provenance を保持する。
 
-ここで保持する強度は「モデル側の基準情報」であり、最終 Workflow へ必ずそのまま適用される値ではない。実際に各 Root / Branch で使用する強度は `prompt_plan.json` が所有する。
+ここで保持する強度はモデル側の基準情報であり、最終 Workflow へ必ずそのまま適用される値ではない。実際に Root / Branch で使用する強度は `prompt_plan.json` が所有する。
 
-### 6.2 Schema 方針
+### 6.2 Schema v1
 
-`models.json` は既存の Civitai Selection API 等の既存形式との互換性を要件としない。
+`models.json` は Batch Studio 専用 schema とし、既存の Civitai Selection API 等の既存形式との互換性を要件としない。
 
-ComfyUI Batch Studio の責務に合わせた専用 schema を新規定義し、その schema をプロジェクト内の正本とする。
+機械可読 schema の正本:
 
-専用 schema は少なくとも次を直接表現できる必要がある。
+```text
+schemas/models.schema.json
+```
 
-- 選定元 catalog の provenance。
-- Project 内で安定して参照できる model reference。
-- Civitai Model / Version / File identity。
-- 実ファイル名。
-- model role。
-- trained words / trigger words。
-- Grok の選定理由など、後続工程で必要な意味情報。
-- LoRA について Civitai 由来で取得できる推奨・基準強度と、その provenance。
-- catalog 内に必要モデルがなかった場合の不足要件。
+Schema v1 の root fields:
 
-既存形式からの移行・読込互換が必要になった場合は、正本 schema 自体を既存形式へ寄せず、Importer / Migration の別責務として扱う。
+```text
+schemaVersion
+catalog
+checkpoint
+loras
+```
 
-### 6.3 Draft shape
-
-最低限、選定項目をカタログへ一意に照合できる情報を保存する。
-
-Draft concept:
+概念 shape:
 
 ```json
 {
@@ -112,45 +107,128 @@ Draft concept:
   "catalog": {
     "schemaVersion": 1,
     "generation": 42,
-    "generatedAt": "..."
+    "generatedAt": "2026-09-07T10:30:00Z"
   },
-  "selections": [
-    {
-      "ref": "checkpoint.main",
-      "role": "checkpoint",
-      "modelId": 10001,
-      "versionId": 20001,
-      "fileId": 30001,
-      "fileName": "model.safetensors",
-      "modelUrl": "...",
-      "trainedWords": [],
-      "reason": "..."
-    },
+  "checkpoint": {
+    "ref": "checkpoint.main",
+    "modelId": 10001,
+    "modelName": "Example Checkpoint",
+    "versionId": 20001,
+    "versionName": "v1.0",
+    "fileId": 30001,
+    "fileName": "example_checkpoint.safetensors",
+    "modelUrl": "https://civitai.com/models/10001?modelVersionId=20001",
+    "trainedWords": [],
+    "reason": "Grok selection reason"
+  },
+  "loras": [
     {
       "ref": "lora.character",
-      "role": "lora",
       "modelId": 10002,
+      "modelName": "Character LoRA",
       "versionId": 20002,
+      "versionName": "v2.0",
       "fileId": 30002,
       "fileName": "character.safetensors",
-      "trainedWords": ["character trigger"],
-      "strengthRecommendation": {
+      "modelUrl": "https://civitai.com/models/10002?modelVersionId=20002",
+      "trainedWords": ["character_trigger"],
+      "reason": "Grok selection reason",
+      "strengthBaseline": {
         "value": 0.7,
-        "source": "civitai",
-        "basis": "image-metadata"
-      },
-      "reason": "..."
+        "provenance": {
+          "source": "civitai",
+          "basis": "observed-usage-derived",
+          "method": "median",
+          "sampleCount": 24
+        }
+      }
     }
-  ],
-  "missingRequirements": []
+  ]
 }
 ```
 
-これは専用 schema の方向を示す Draft であり、`strengthRecommendation` を含む正式フィールド名は未確定。
+`strengthBaseline` の例にある値・method は schema 表現例であり、正式な集計アルゴリズムを意味しない。
 
-上記の `value: 0.7` は schema 例であり、Civitai からその値を直接取得できることを意味しない。
+### 6.3 Checkpoint / LoRA separation
 
-### 6.4 Catalog provenance and revalidation
+Schema v1 では generic `selections[] + role` 方式を採らず、Checkpoint と LoRA を構造上分離する。
+
+```text
+checkpoint
+  = Project で使用する Checkpoint 1件
+
+loras[]
+  = Project で使用する LoRA 0件以上
+```
+
+そのため `role: checkpoint` / `role: lora` のような技術種別 field は持たない。
+
+Character / Style / Pose / Concept 等のプロジェクト内での意味付けは stable `ref` で表す。
+
+### 6.4 Stable reference
+
+正式 field name は `ref` とする。
+
+Checkpoint は予約値:
+
+```text
+checkpoint.main
+```
+
+LoRA は次の形式:
+
+```regex
+^lora\.[a-z][a-z0-9._-]{0,58}$
+```
+
+例:
+
+```text
+lora.character
+lora.character.secondary
+lora.style
+lora.pose.cowgirl
+lora.concept.facesitting
+```
+
+原則:
+
+- Project 内の全 `ref` は一意。
+- `prompt_plan.json` の `modelRef` はこの `ref` を参照する。
+- `.safetensors` ファイル名を Prompt Plan 側の安定識別子として使わない。
+- `ref` はモデルファイル名変更や catalog 表示名変更から Project 内参照を分離する。
+
+JSON Schema は形式を検証し、Project-wide uniqueness と `prompt_plan.json` からの参照解決は Batch Studio semantic validator が検証する。
+
+### 6.5 Civitai identity
+
+`checkpoint` と各 `loras[]` は、確定時に少なくとも次を保持する。
+
+```text
+modelId
+modelName
+versionId
+versionName
+fileId
+fileName
+modelUrl
+trainedWords
+reason
+```
+
+意味:
+
+- `modelId` / `versionId` / `fileId`: `model_catalog.json` へ一意に再照合する Civitai identity。
+- `modelName` / `versionName` / `fileName` / `modelUrl` / `trainedWords`: 選定時の catalog 由来情報。
+- `reason`: Grok が当該 Project でそのモデルを選定した理由。
+
+`reason` は Civitai provenance ではなく Grok 由来の意味情報である。
+
+現行 `civit-model-viewer` の catalog exporter から確認できない `baseModel` や Batch Studio 独自 semantic role を Civitai 由来情報として捏造しない。
+
+`trainedWords` が存在しない場合も空配列 `[]` として保持する。
+
+### 6.6 Catalog provenance and revalidation
 
 `models.json` は、モデル選定時に使用した `model_catalog.json` の provenance として v1 では少なくとも次を保持する。
 
@@ -167,11 +245,9 @@ catalog.generatedAt
 - 現在の catalog と `models.json` の `catalog.generation` が同じであれば、generation 差分を理由とする再検証は不要。
 - `catalog.generation` が異なる場合は、`models.json` に固定された全 Model / Version / File identity を現在の catalog に対して再検証する。
 - generation が異なるだけでは `models.json` を invalid / stale と判定しない。
-- 選定済み Model / Version / File がすべて現在の catalog に存在する場合は `models.json` を valid と扱う。必要に応じて「catalog更新後に再検証済み」という情報表示は可能。
+- 選定済み Model / Version / File がすべて現在の catalog に存在する場合は `models.json` を valid と扱う。
 - identity は維持されているが後続処理に関係する metadata が変化した場合は valid を維持しつつ warning を表示できる。
-- 選定済み Model / Version / File が現在の catalog から消失した場合は、その selection を blocking error として扱い、再選定またはユーザー対応を要求する。
-
-したがって意味は次の通り。
+- 選定済み Model / Version / File が現在の catalog から消失した場合は blocking error とする。
 
 ```text
 generation mismatch
@@ -182,31 +258,106 @@ generation mismatch
   = selected identities must be revalidated
 ```
 
-v1 では catalog 内容全体の hash を必須 provenance としない。完全な内容同一性や監査用 snapshot が将来必要になった場合は `contentHash` 等を schema version 更新で追加する。
+v1 では catalog 内容全体の hash を必須 provenance としない。
 
-### 6.5 Stable reference
+### 6.7 LoRA strengthBaseline
 
-`prompt_plan.json` は `.safetensors` ファイル名を重複記載するのではなく、`models.json` の選定項目を一意に参照できる stable reference を使う方針を推奨する。
+Civitai 由来の根拠を取得できる LoRA だけ、任意 field `strengthBaseline` を持てる。
 
-例 `checkpoint.main`, `lora.character`, `lora.pose.cowgirl`。
+```json
+{
+  "strengthBaseline": {
+    "value": 0.7,
+    "provenance": {
+      "source": "civitai",
+      "basis": "observed-usage-derived",
+      "method": "median",
+      "sampleCount": 24
+    }
+  }
+}
+```
 
-`ref` という正式フィールド名、命名規則、一意性制約は Draft。
+Schema v1 の `basis`:
 
-### 6.6 LoRA strength recommendation
-
-`models.json` に保存する LoRA 強度は、Civitai を source of truth とする **推奨・基準情報** である。
+```text
+creator-declared
+observed-usage-derived
+```
 
 原則:
 
-- Civitai から明示的または追跡可能な根拠を得られる場合だけ保存する。
-- 根拠がない場合は null / absent とし、経験則だけで `models.json` を補完しない。
-- 値だけではなく、その値をどの Civitai 情報から得たかを追跡可能にする。
-- Civitai 上の「実際に投稿画像で使われた weight」から基準値を導出する場合、それを作者の明示的推奨値と同一視しない。
-- 導出値を採用する場合は、導出方法と evidence を provenance に含める。
+- Civitai 由来の根拠がない場合は `strengthBaseline` field 自体を省略する。
+- `null` や経験則による仮値で正本を埋めない。
+- `source` は Schema v1 では `civitai`。
+- `observed-usage-derived` の場合は `method` と `sampleCount` を必須にする。
+- `creator-declared` と observed usage 由来の値を同一視しない。
+- observed usage から値を導出する正式な集計アルゴリズムは別 Decision / Requirement で定める。
 
-2026-09-07 時点の Civitai Site API 調査では、Model / Model Version の公開レスポンスに汎用的な「推奨 LoRA 強度」フィールドは確認できない。一方、Images API の `withMeta=true` では投稿画像の `meta.civitaiResources[].weight` として、その画像で使われた LoRA weight を取得できる場合がある。
+2026-09-07 時点では現行 `civit-model-viewer` は投稿画像 weight を `model_catalog.json` へ export していないため、通常は `strengthBaseline` absent になり得る。
 
-したがって、投稿画像群から基準値を算出する場合の集計アルゴリズムは別途確定する。
+### 6.8 missingRequirements
+
+`missingRequirements` は確定版 `models.json` Schema v1 に含めない。
+
+不足要件は Grok response、Models Draft、Batch Studio UI state で管理する。
+
+```text
+Grok selection response
+   -> missingRequirements
+   -> Models Draft / UI
+   -> User updates Civitai collection
+   -> civit-model-viewer SYNC
+   -> Grok re-selection
+   -> validation
+   -> models.json Confirm
+```
+
+未解決 `missingRequirements` が1件でも存在する場合:
+
+```text
+Models status = BLOCKED
+models.json Confirm = prohibited
+```
+
+したがって確定済み `models.json` は「解決済みの使用モデル集合」だけを表す。
+
+### 6.9 Extension / validation policy
+
+Schema v1 では未知 field を許可しない。
+
+```text
+additionalProperties: false
+```
+
+汎用 `metadata` / `extensions` / `extra` 領域も設けない。
+
+検証は二段構成とする。
+
+```text
+JSON Schema validation
+  +
+Batch Studio semantic validation
+```
+
+JSON Schema:
+
+- root / object shape。
+- required fields。
+- Civitai ID type。
+- ref format。
+- `strengthBaseline` provenance shape。
+- unknown field rejection。
+
+Semantic validator:
+
+- Project-wide `ref` uniqueness。
+- Model / Version / File identity の current catalog 実在確認。
+- `prompt_plan.json` の `modelRef` 解決。
+- unresolved `missingRequirements` の Confirm blocking。
+- catalog generation mismatch 時の revalidation。
+
+将来、VAE / Text Encoder / Embedding / ControlNet 等を Project Model Artifact として管理する要件が生じた場合は、汎用 field へ押し込まず schema evolution として追加する。
 
 ## 7. prompt_plan.json
 
