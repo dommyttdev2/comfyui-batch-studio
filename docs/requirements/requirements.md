@@ -27,7 +27,7 @@ Status: Active
 | REQ-MODEL-002 | Decided | Grok は `civit-model-viewer` が出力する `model_catalog.json` を根拠にモデル・バージョン・ファイルを選定する。 | `integrations/external-tools.md` |
 | REQ-MODEL-003 | Decided | Batch Studio は Grok の選定結果を `model_catalog.json` と照合し、存在しない Model / Version / File を確定させない。 | `quality/validation-and-security.md` |
 | REQ-MODEL-004 | Decided | カタログ内に必要モデルがない場合、Grok は架空のファイル名を作らず不足要件として返す。 | `contracts/grok-contract.md` |
-| REQ-MODEL-005 | Draft | `models.json` は選定元カタログの `generation` を記録し、カタログ更新後に stale warning を出せること。 | `contracts/project-artifacts.md` |
+| REQ-MODEL-005 | Decided | `models.json` はモデル選定時に使用した `model_catalog.json` の provenance として少なくとも `schemaVersion`、`generation`、`generatedAt` を記録する。現在の catalog の `generation` が異なる場合は選定済み Model / Version / File を現在の catalog に対して再検証し、generation の不一致だけでは `models.json` を無効化しない。 | `contracts/project-artifacts.md` |
 | REQ-MODEL-006 | Decided | `models.json` は既存形式との互換性を要件とせず、ComfyUI Batch Studio 専用の新しい schema を定義して使用する。 | `contracts/project-artifacts.md` |
 | REQ-MODEL-007 | Decided | LoRA の推奨・基準強度を Civitai 由来の情報として取得できる場合、`models.json` にその値と provenance を保持する。Civitai に根拠となる情報がない場合は値を捏造しない。 | `contracts/project-artifacts.md` |
 
@@ -77,7 +77,7 @@ Status: Active
 未決事項は実装時に暗黙決定せず、Decision Log へ判断を追加してから `Open` / `Draft` を `Decided` へ変更する。
 
 1. `prompt_tree.md` の正本関係。
-2. `models.json` 専用 schema の正式フィールド、stable reference、catalog metadata snapshot 範囲、`missingRequirements` の配置。
+2. `models.json` 専用 schema の正式フィールド、stable reference、`missingRequirements` の配置。
 3. `prompt_plan.json` の正式フィールド名と JSON Schema。
 4. Workflow Template Manifest の正式 schema。
 5. Workflow の保存パス・枝タイトル・画像枚数など、Grok 指定と Compiler 派生値の境界。
