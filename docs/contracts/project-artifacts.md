@@ -142,7 +142,7 @@ loras
         "provenance": {
           "source": "civitai",
           "basis": "observed-usage-derived",
-          "method": "median",
+          "method": "median-of-post-medians:newest-200",
           "sampleCount": 24
         }
       }
@@ -151,7 +151,7 @@ loras
 }
 ```
 
-`strengthBaseline` の例にある値・method は schema 表現例であり、正式な集計アルゴリズムを意味しない。
+`strengthBaseline.value` は実適用値ではなく、Civitai由来のモデル/version側baselineである。
 
 ### 6.3 Checkpoint / LoRA separation
 
@@ -268,20 +268,6 @@ v1 では catalog 内容全体の hash を必須 provenance としない。
 
 Civitai 由来の根拠を取得できる LoRA だけ、任意 field `strengthBaseline` を持てる。
 
-```json
-{
-  "strengthBaseline": {
-    "value": 0.7,
-    "provenance": {
-      "source": "civitai",
-      "basis": "observed-usage-derived",
-      "method": "median",
-      "sampleCount": 24
-    }
-  }
-}
-```
-
 Schema v1 の `basis`:
 
 ```text
@@ -289,16 +275,74 @@ creator-declared
 observed-usage-derived
 ```
 
-原則:
+#### observed-usage-derived
+
+v1で投稿画像metadataから基準値を導出する正式policy:
+
+```text
+source images:
+  exact modelVersionId
+  sort=Newest
+  withMeta=true
+  max 200 images
+
+valid resource:
+  type == lora
+  modelVersionId == exact selected versionId
+  weight is numeric
+  postId available
+
+per post:
+  median(valid weights in the post)
+
+final value:
+  median(per-post medians)
+
+minimum evidence:
+  5 distinct posts
+```
+
+provenance:
+
+```json
+{
+  "strengthBaseline": {
+    "value": 0.7,
+    "provenance": {
+      "source": "civitai",
+      "basis": "observed-usage-derived",
+      "method": "median-of-post-medians:newest-200",
+      "sampleCount": 24
+    }
+  }
+}
+```
+
+`sampleCount` は画像枚数ではなく、aggregationに利用した distinct `postId` 数を表す。
+
+v1ではweightを0..1等へclampせず、追加の範囲filter / IQR除去 / trimmed meanを行わない。5 distinct posts未満なら `strengthBaseline` を生成しない。
+
+この値はCivitai上で観測できた利用例のbaselineであり、作者の明示推奨値や普遍的最適値と表示しない。
+
+#### creator-declared
+
+`creator-declared` は、将来Civitaiがstructured field等で作者の明示strengthを提供し、その意味を機械的に確認できる場合に利用できる。
+
+Model / Version descriptionの文章からregexやLLMで値を抽出し、それを `creator-declared` として保存することは禁止する。
+
+#### General rules
 
 - Civitai 由来の根拠がない場合は `strengthBaseline` field 自体を省略する。
 - `null` や経験則による仮値で正本を埋めない。
 - `source` は Schema v1 では `civitai`。
 - `observed-usage-derived` の場合は `method` と `sampleCount` を必須にする。
 - `creator-declared` と observed usage 由来の値を同一視しない。
-- observed usage から値を導出する正式な集計アルゴリズムは別 Decision / Requirement で定める。
+- strength evidence取得・集計は `civit-model-viewer` の責務で、Batch Studioはcatalogに保存された結果を再集計しない。
+- evidence freshnessは `model_catalog.json` のSYNC、`generation`、`generatedAt` と同じsnapshot boundaryで扱う。
 
-2026-09-07 時点では現行 `civit-model-viewer` は投稿画像 weight を `model_catalog.json` へ export していないため、通常は `strengthBaseline` absent になり得る。
+`schemas/models.schema.json` は既にこの optional provenance shapeを表現できるため、本policy確定だけを理由とする `models.json.schemaVersion` bumpは不要。
+
+現行 `civit-model-viewer` が投稿画像weightをまだexportしていない期間は、通常どおり `strengthBaseline` absentになり得る。
 
 ### 6.8 missingRequirements
 
@@ -360,6 +404,7 @@ Semantic validator:
 - `prompt_plan.json` の `modelRef` 解決。
 - unresolved `missingRequirements` の Confirm blocking。
 - catalog generation mismatch 時の revalidation。
+- catalog由来 observed baselineを使用する場合の `method` / `sampleCount` policy整合。
 
 将来、VAE / Text Encoder / Embedding / ControlNet 等を Project Model Artifact として管理する要件が生じた場合は、汎用 field へ押し込まず schema evolution として追加する。
 
