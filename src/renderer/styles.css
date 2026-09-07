@@ -1,0 +1,76 @@
+:root {
+  font-family: Inter, "Noto Sans JP", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #e7e9ee;
+  background: #0f1115;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; min-width: 0; min-height: 100%; background: #0f1115; }
+button, input { font: inherit; }
+button {
+  border: 1px solid #343945;
+  background: #1a1e26;
+  color: #e7e9ee;
+  border-radius: 9px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: #242a35; border-color: #495164; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: #e7e9ee; color: #101217; border-color: transparent; font-weight: 700; }
+
+.app-shell { min-height: 100vh; background: #0f1115; }
+.topbar {
+  min-height: 92px;
+  padding: 18px 22px;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: center;
+  border-bottom: 1px solid #262b34;
+  background: #12151b;
+}
+h1, h2, h3, p { margin-top: 0; }
+h1 { font-size: 20px; margin-bottom: 4px; }
+h2 { font-size: 28px; margin-bottom: 0; }
+h3 { font-size: 18px; margin-bottom: 8px; }
+.eyebrow { color: #8f98a8; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; margin-bottom: 6px; }
+.project-path, .muted { color: #858e9e; font-size: 12px; word-break: break-all; }
+.toolbar, .grok-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.content-grid { display: grid; grid-template-columns: 190px minmax(0, 1fr); min-height: calc(100vh - 92px); }
+.sidebar { border-right: 1px solid #262b34; padding: 18px 12px; background: #12151b; }
+.nav-title { color: #6f7887; font-size: 11px; padding: 0 10px 8px; }
+.nav-item { width: 100%; text-align: left; border: 0; background: transparent; margin: 2px 0; }
+.nav-item.active { background: #252b36; font-weight: 700; }
+.workspace { padding: 24px; overflow: auto; }
+.workspace-heading { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 16px; }
+.ratio-control { display: grid; grid-template-columns: auto minmax(120px, 260px) 44px; gap: 12px; align-items: center; color: #9aa3b3; font-size: 12px; margin-bottom: 22px; }
+.error-banner { border: 1px solid #7e4147; background: #2a171a; color: #ffb8bd; padding: 12px 14px; border-radius: 10px; margin-bottom: 18px; }
+.empty-state { min-height: 430px; display: grid; place-items: center; align-content: center; text-align: center; max-width: 680px; margin: auto; color: #aeb5c1; }
+.empty-state h3 { color: #f2f3f5; margin-top: 18px; }
+.empty-icon { width: 64px; height: 64px; border: 1px solid #3a414f; border-radius: 16px; display: grid; place-items: center; font-weight: 800; background: #171b22; }
+.next-action, .panel { border: 1px solid #2c323d; background: #151920; border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+.next-action { border-color: #46516a; background: #171c25; }
+.panel.compact { max-width: 720px; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 10px; }
+.artifact-list { display: grid; }
+.artifact-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 13px 0; border-top: 1px solid #262b34; }
+.artifact-row:first-child { border-top: 0; }
+.badge { border-radius: 999px; padding: 5px 9px; font-size: 11px; white-space: nowrap; border: 1px solid #3b4350; }
+.badge.present { color: #bde9ca; border-color: #355b42; background: #16241b; }
+.badge.missing { color: #a9b0bc; }
+.badge.legacy { color: #f0d29b; border-color: #67542e; background: #261f12; }
+.facts { margin: 0; }
+.facts div { display: grid; grid-template-columns: 140px 1fr; gap: 18px; padding: 8px 0; }
+.facts dt { color: #8f98a8; }
+.facts dd { margin: 0; }
+
+@media (max-width: 850px) {
+  .content-grid { grid-template-columns: 1fr; }
+  .sidebar { display: flex; gap: 6px; overflow-x: auto; border-right: 0; border-bottom: 1px solid #262b34; }
+  .nav-title { display: none; }
+  .nav-item { width: auto; white-space: nowrap; }
+  .workspace-heading, .topbar { align-items: flex-start; flex-direction: column; }
+}
