@@ -17,14 +17,15 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 ├─ story.md
 ├─ models.json
 ├─ prompt_plan.json
-├─ prompt_tree.md          # 位置づけは Open
 ├─ LoRA_{project_name}.json
 └─ ._batch_studio/
    ├─ drafts/
    └─ history/
 ```
 
-既存プロジェクトでは全ファイルが存在することを要求しない。
+新規プロジェクトでは `prompt_tree.md` を標準 Artifact として生成・維持しない。
+
+既存プロジェクトでは全ファイルが存在することを要求しない。既存の `prompt_tree.md` は Legacy Artifact として認識できるが、新規の正本関係には参加させない。
 
 ## 3. Artifact 一覧
 
@@ -34,9 +35,14 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 | `story.md` | Grok + User | Brief / reference | 作品・場面設計の人間可読正本 |
 | `models.json` | Grok selection + Batch Studio validation + User | `story.md`, `model_catalog.json` | 使用モデルの固定結果と Civitai 由来のモデル基準情報 |
 | `prompt_plan.json` | Grok + Batch Studio validation + User approval | `story.md`, `models.json` | Workflow Compiler が読む確定済みの機械可読 Prompt Plan。実際の LoRA 適用強度も保持する |
-| `prompt_tree.md` | Open | 既存プロジェクト / 将来派生 | 人間可読Prompt Tree。正本関係は未決 |
 | `LoRA_{project_name}.json` | Workflow Compiler | Template, Manifest, models, plan | 最終ComfyUI Workflow |
 | `project_meta.json` | Batch Studio | System | Artifact status、version、将来hash等 |
+
+Legacy:
+
+| Artifact | Status | Role |
+| --- | --- | --- |
+| `prompt_tree.md` | Legacy only | 既存プロジェクトの過去形式。新規生成・正本運用・Workflow Compiler の直接入力には使用しない |
 
 ## 4. project_brief.json
 
@@ -246,33 +252,35 @@ Workflow 内部形式を含まず、主に次を持つ。
 
 `models.json` の強度はモデル基準情報、`prompt_plan.json` の強度は当該プロジェクトで実際に Workflow へ適用する可変値であり、役割が異なる。
 
-## 8. prompt_tree.md
+人間向けの確認・編集は `prompt_plan.json` から構築した Batch Studio の Prompt Plan Web UI で行う。Markdown など別の人間可読 Artifact を正本として並行管理しない。
 
-Status: Open
+## 8. Legacy prompt_tree.md
 
-既存プロジェクトでは重要な人間可読成果物として存在する一方、今回決定した `prompt_plan.json` と内容が重複する。
+Status: Legacy only
 
-次のどちらにするかはまだ固定しない。
+`prompt_tree.md` は新規プロジェクトの標準 Artifact ではない。
 
-### Option A: 独立正本
+原則:
+
+- Batch Studio は新規プロジェクトで `prompt_tree.md` を生成・維持しない。
+- Workflow Compiler は `prompt_tree.md` を直接入力として使用しない。
+- 人間向け Prompt Tree はファイルではなく Prompt Plan Web UI で表示する。
+- UI 上の編集結果は `prompt_plan.json` に反映し、別の Markdown 正本を作らない。
+- `prompt_tree.md` が欠損・削除されていても、新規方式の Workflow 生成には影響しない。
+
+既存プロジェクトに `prompt_tree.md` が存在する場合は Legacy Artifact として認識できる。
+
+Legacy から新方式へ移行する必要がある場合は、`prompt_tree.md` を自動的に正本へ昇格させず、Import / conversion candidate として解析し、ユーザー確認を経て `prompt_plan.json` として確定する。
 
 ```text
-Grok -> prompt_tree.md
-Grok -> prompt_plan.json
+Legacy prompt_tree.md
+      -> Import / conversion candidate
+      -> Batch Studio validation / review
+      -> User approval
+      -> prompt_plan.json
 ```
 
-欠点: 同じ Prompt 設計を二重管理し、食い違いが起こり得る。
-
-### Option B: 派生成果物
-
-```text
-Grok -> prompt_plan.json (machine-readable source)
-Batch Studio -> prompt_tree.md (human-readable projection)
-```
-
-利点: Workflow と人間向け表示の情報源を一本化できる。
-
-この判断は実装前に Decision Log へ追加する。
+Legacy conversion の詳細 schema / parser は必要になった時点で別要件として定義する。
 
 ## 9. Workflow Artifact
 
@@ -368,4 +376,4 @@ civit-model-viewer   prompt_plan.json
               LoRA_{project}.json
 ```
 
-`prompt_tree.md` は Open decision のため依存グラフから一旦分離している。
+`prompt_tree.md` は Legacy Artifact であり、この新規 Artifact dependency graph には含めない。
