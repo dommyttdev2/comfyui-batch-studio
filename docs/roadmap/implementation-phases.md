@@ -10,10 +10,11 @@ Goal: 実装前に境界と schema の未決事項を減らす。
 
 - `models.json` final schema。
 - `prompt_plan.json` formal JSON Schema。
-- `prompt_tree.md` の正本関係。
 - Workflow Template / Manifest schema。
 - Branch naming / save path / image count policy。
 - Artifact status state model。
+
+`prompt_tree.md` の正本関係は解決済みであり、標準 Artifact から外す。人間向け Prompt 表示・編集は Prompt Plan Web UI が担当する。
 
 Exit criteria:
 
@@ -29,6 +30,7 @@ Goal: 既存 Project を壊さずに閲覧し、Grok Web と並べて利用で�
 - Grok persistent session isolation。
 - Project root scan。
 - 既存 Artifact status 表示。
+- Legacy `prompt_tree.md` が存在する場合は Legacy として識別。
 - `Open Folder` / `Copy Prompt`。
 - Grok DOM 自動操作なし。
 
@@ -65,29 +67,38 @@ Goal: `civit-model-viewer` catalog を使った Grok 選定と検証を実装す
 - `models.json` import。
 - Model / Version / File identity validation。
 - `missingRequirements` handling。
-- stale catalog warning。
+- catalog generation mismatch 時の selected identity revalidation。
 
 Exit criteria:
 
 - Grok が catalog から選んだ file を Batch Studio が再照合できる。
+- catalog generation が変化しても、それだけで `models.json` を invalid にしない。
 - 架空 identity を確定できない。
 
 ## Phase 4: Prompt Plan
 
-Goal: Grok の意味的 Prompt JSON を正規 Artifact として取り込む。
+Goal: Grok の意味的 Prompt JSON を正規 Artifact として取り込み、同じデータを人間向け Web UI で確認・編集できるようにする。
 
 - Prompt Plan Grok Work Card。
 - `prompt_plan.json` parser / schema validation。
-- common prompt display。
-- Root LoRA refs。
-- Branch / Branch LoRA / leaf viewer。
+- common prompt display / editor。
+- Root LoRA refs / applied strength editor。
+- Branch / Branch LoRA / leaf tree view。
+- Branch / leaf ordering editor。
+- leaf prompt editor。
 - model reference validation。
+- validation result の該当箇所表示。
 - Draft / confirm。
+- `prompt_tree.md` を新規生成しない。
 
 Exit criteria:
 
 - 有効 Prompt Plan が Workflow Compiler へ入力できる。
+- 人間向けの Prompt 構造確認・編集が `prompt_plan.json` を正本として Web UI 内で完結する。
 - ComfyUI 内部 JSON を Grok output に要求しない。
+- `prompt_tree.md` を Workflow Compiler の入力にしない。
+
+Legacy `prompt_tree.md` から `prompt_plan.json` への migration は、既存プロジェクトで必要性が確認された場合に別要件として追加できる。Phase 4 の必須条件にはしない。
 
 ## Phase 5: Workflow Template / Manifest
 
