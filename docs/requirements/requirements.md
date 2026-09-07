@@ -17,6 +17,7 @@ Status: Active
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-PROJ-001 | Decided | 初期画面は細かなストーリー設計を要求せず、プロジェクト名・対象キャラクター・ターゲット読者・固定前提・大まかな要望を Brief として保存する。 | `ui/project-initialization.md` |
+| REQ-PROJ-002 | Decided | `project.id` は表示名とは独立した filesystem-safe stable ID とし、`^[a-z0-9][a-z0-9._-]{0,63}$` を満たす。Workflow filename・生成物保存先等の機械識別には `project.title` ではなく `project.id` を使用し、表示名変更だけで ID を変更しない。 | `ui/project-initialization.md` |
 | REQ-STORY-001 | Decided | Story の調査・案出し・詳細化は Grok に担当させ、ユーザーとの会話後に `story.md` を確定する。 | `contracts/grok-contract.md` |
 
 ## 3. Model Selection
@@ -55,6 +56,7 @@ Status: Active
 | REQ-WF-006 | Decided | Root LoRA は全枝共通、Branch LoRA は当該枝だけに適用する。Root LoRA が不要なプロジェクトでは空 Stack を許容する。 | `architecture/workflow-compiler.md` |
 | REQ-WF-007 | Decided | Template の可変Nodeを Node ID のコード埋め込みで特定せず、`schemas/workflow-template-manifest.schema.json` に従う Manifest の semantic role、Prototype ownership、Common→Branch boundary から解決する。Prototype内部Linkは両端Nodeのownershipから自動導出し、ManifestへLink ID一覧を重複保持しない。 | `architecture/workflow-compiler.md` |
 | REQ-WF-008 | Decided | Manifest Schema v1 は Common/Branch role、`branchPrototype.nodeIds` / `groupIds`、Boundaryのrole+slot、2次元layout offset、`manifestVersion`、Template `id` / `version` / SHA-256 binding を定義する。Template hash不一致や未宣言cross-boundary LinkはCompileをBlockする。Compiler versionとManifest hashはManifest自身ではなくWorkflow build provenanceとして `project_meta.json` 側へ記録する。 | `architecture/workflow-compiler.md` |
+| REQ-WF-009 | Decided | v1 の生成枚数は `1 leaf = 1 image` とし、Branch枚数は `branch.leaves.length`、Project実枚数は全leaf総数からCompilerが算出する。`project_brief.json` の `generation.target_image_count` はPrompt設計の目標値であり差分だけではCompileをBlockしない。Workflow名は `LoRA_{project.id}.json`、保存先は `BatchStudio/{project.id}/{branch.id}`、SceneMatrix `row_id` / `path_label` は `leaf.id`、人間向け `name` は `leaf.name` とする。Branch/Groupの表示titleには `branch.label` を使用するがfilesystem identityには使用しない。 | `architecture/workflow-compiler.md` |
 
 ## 6. External Tools
 
@@ -78,7 +80,6 @@ Status: Active
 
 未決事項は実装時に暗黙決定せず、Decision Log へ判断を追加してから `Open` / `Draft` を `Decided` へ変更する。
 
-1. Workflow の保存パス・枝タイトル・画像枚数など、Grok 指定と Compiler 派生値の境界。
-2. R2 File Manager との将来の直接 API 統合。
-3. ComfyUI Queue / 進捗管理を将来スコープへ追加する条件。
-4. Civitai の投稿画像メタデータ等から LoRA の基準強度を導出する場合の正式アルゴリズム、provenance schema、および Civitai の単一 weight を `strengthModel` / `strengthClip` へどう初期展開するか。
+1. R2 File Manager との将来の直接 API 統合。
+2. ComfyUI Queue / 進捗管理を将来スコープへ追加する条件。
+3. Civitai の投稿画像メタデータ等から LoRA の基準強度を導出する場合の正式アルゴリズム、provenance schema、および Civitai の単一 weight を `strengthModel` / `strengthClip` へどう初期展開するか。
