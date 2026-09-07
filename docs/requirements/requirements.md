@@ -32,6 +32,7 @@ Status: Active
 | REQ-MODEL-006 | Decided | `models.json` は既存形式との互換性を要件とせず、ComfyUI Batch Studio 専用の新しい schema を定義して使用する。 | `contracts/project-artifacts.md` |
 | REQ-MODEL-007 | Decided | LoRA の推奨・基準強度を Civitai 由来の情報として取得できる場合、`models.json` にその値と provenance を保持する。Civitai に根拠となる情報がない場合は値を捏造しない。 | `contracts/project-artifacts.md` |
 | REQ-MODEL-008 | Decided | `models.json` Schema v1 を `schemas/models.schema.json` として固定する。確定版は `catalog`、単一 `checkpoint`、`loras[]` を持ち、Checkpoint の `ref` は `checkpoint.main`、LoRA の `ref` は `lora.*` とする。Model / Version / File identity、名前、URL、`trainedWords`、Grok の `reason` を保持し、LoRA の Civitai 由来基準値は任意の `strengthBaseline` として provenance 付きで保持する。未解決 `missingRequirements` は確定版 `models.json` に含めず Draft / UI state として扱い、1件でも残る場合は Confirm を許可しない。 | `contracts/project-artifacts.md` |
+| REQ-MODEL-009 | Decided | Civitai 投稿画像の LoRA weight から `observed-usage-derived` の `strengthBaseline` を作る場合、exact `modelVersionId` の Newest 最大200画像を metadata 付きで取得し、同一 `postId` 内の有効 weight の median を1 observation としたうえで、その post median 群の median を採用する。最低5 distinct postsを要求し、追加の範囲filter / outlier除去は行わない。provenance `method` は `median-of-post-medians:newest-200`、`sampleCount` は distinct post 数とする。根拠不足時は `strengthBaseline` を生成しない。 | `contracts/project-artifacts.md` |
 
 ## 4. Prompt Planning
 
@@ -43,6 +44,7 @@ Status: Active
 | REQ-PLAN-004 | Decided | `prompt_plan.json` を Prompt 設計の機械可読な正本とし、人間向けの確認・編集は Batch Studio の Prompt Plan Web UI で提供する。新規プロジェクトでは `prompt_tree.md` を標準 Artifact として生成・維持せず、Workflow Compiler の入力にも使用しない。既存の `prompt_tree.md` は Legacy Artifact としてのみ扱う。 | `contracts/project-artifacts.md` |
 | REQ-PLAN-005 | Decided | `prompt_plan.json` は Root / Branch で実際に適用する LoRA 強度を保持する。この値は Batch Studio の Web UI から調整可能とし、`models.json` に保存した Civitai 由来の推奨・基準値を書き換えない。 | `contracts/prompt-plan.md` |
 | REQ-PLAN-006 | Decided | `prompt_plan.json` Schema v1 の正式 field name と構造を固定し、機械可読 schema を `schemas/prompt-plan.schema.json` とする。Branch ID / Leaf ID は Project 全体で一意とし、配列順を順序の正本とする。LoRA の `modelRef` / `strengthModel` / `strengthClip` は必須、未知 field と汎用 metadata/extensions 領域は v1 で許可しない。 | `contracts/prompt-plan.md` |
+| REQ-PLAN-007 | Decided | `models.json` に Civitai 由来 `strengthBaseline.value = w` が存在し、そのbaselineを Prompt Plan の初期値に使用する場合は `strengthModel = w`、`strengthClip = w` と同値展開する。この展開は単一source scalarの機械的初期化であり、CivitaiがModel/CLIP別値を推奨した意味ではない。baselineが存在しない場合、Batch Studioは経験則による暗黙defaultを補完せず、Grokまたはユーザーが実適用値を明示する。 | `contracts/prompt-plan.md` |
 
 ## 5. Workflow Compiler
 
@@ -65,7 +67,7 @@ Status: Active
 | REQ-INT-001 | Decided | Civitai との同期・API key 管理は `civit-model-viewer` の責務とし、Batch Studio は保存済み `model_catalog.json` を読む。 | `integrations/external-tools.md` |
 | REQ-INT-002 | Decided | R2 の実体ファイル操作は初期段階では既存 R2 File Manager へ委譲する。 | `integrations/external-tools.md` |
 | REQ-INT-003 | Decided | Batch Studio は Civitai API key と R2 secret を Grok へ渡さない。 | `quality/validation-and-security.md` |
-| REQ-INT-004 | Draft | Civitai 由来の LoRA 強度情報を利用する場合も、Civitai API 通信は `civit-model-viewer` の責務とし、必要な strength evidence / recommendation を `model_catalog.json` 経由で Batch Studio へ渡せるようにする。 | `integrations/external-tools.md` |
+| REQ-INT-004 | Decided | Civitai 由来 LoRA strength evidence の取得・集計は `civit-model-viewer` が担当し、Batch Studio は Civitai API を直接呼ばない。viewer は exact version の投稿metadataから決定済みpolicyで optional `strengthBaseline` と provenance を生成し、`model_catalog.json` 経由で Batch Studio へ渡す。説明文解析や経験則による値を Civitai provenance として捏造しない。 | `integrations/external-tools.md` |
 
 ## 7. Validation / Security
 
@@ -82,4 +84,3 @@ Status: Active
 
 1. R2 File Manager との将来の直接 API 統合。
 2. ComfyUI Queue / 進捗管理を将来スコープへ追加する条件。
-3. Civitai の投稿画像メタデータ等から LoRA の基準強度を導出する場合の正式アルゴリズム、provenance schema、および Civitai の単一 weight を `strengthModel` / `strengthClip` へどう初期展開するか。
