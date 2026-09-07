@@ -46,7 +46,7 @@ R2 / Models
 Preflight
 ```
 
-`Prompt Tree` の独立 navigation は `prompt_tree.md` の位置づけが確定した時点で決める。
+`Prompt Tree` の独立 navigation は設けない。人間向けの Prompt Tree / Branch / Leaf 表示と編集は `Prompt Plan` 画面へ統合する。
 
 ## 4. Project List / Overview
 
@@ -103,6 +103,8 @@ Grok から貼り戻す工程では次を提供する。
 - explicit Confirm。
 
 Grok の回答を paste した瞬間に final file を更新しない。
+
+Web UI 上で Artifact を編集する場合も同じ lifecycle を使い、確定済み Artifact を無確認で直接上書きしない。
 
 ## 7. Status Model
 
@@ -170,17 +172,43 @@ Missing requirements
 
 ## 10. Prompt Plan Screen
 
+`prompt_plan.json` を人間向けに確認・編集する正規 UI とする。
+
+Raw JSON をそのまま主画面として見せるのではなく、意味構造を Tree / grouped view として表現する。
+
 表示:
 
 - common positive / negative。
-- Root LoRA list。
+- Root LoRA list と実適用強度。
 - Branch list。
-- Branch LoRA list。
+- Branch ごとの LoRA list と実適用強度。
 - leaf count。
-- leaf prompt preview。
+- leaf name / positive / negative。
 - model reference validation。
+- Draft / Confirmed / validation status。
+
+操作:
+
+- Branch の展開 / 折りたたみ。
+- common prompt の編集。
+- Root / Branch LoRA の実適用強度編集。
+- leaf prompt の編集。
+- Branch / leaf の順序編集。
+- validation result の該当箇所表示。
+- Draft save / explicit Confirm。
+
+UI の編集対象は `prompt_plan.json` の意味データであり、`prompt_tree.md` 等の別 Markdown Artifact を生成・編集しない。
 
 Grok の JSON を ComfyUI 内部 JSON として見せない。
+
+### 10.1 Legacy prompt_tree.md
+
+既存プロジェクトで `prompt_tree.md` を検出した場合は Legacy Artifact として扱う。
+
+- 独立した通常 navigation を作らない。
+- Workflow Compiler の入力にしない。
+- 新規プロジェクトでは生成しない。
+- 移行機能を実装する場合は `prompt_plan.json` への Import / conversion candidate として扱い、validation と user approval を必須にする。
 
 ## 11. Workflow Screen
 
@@ -246,3 +274,5 @@ Grok text injection、automatic send、file picker automation は含めない。
 - purpose。
 
 `Open Folder` は Explorer を開く補助であり、Grok の file upload を代行しない。
+
+`prompt_tree.md` は新規フローの標準添付候補に含めない。
