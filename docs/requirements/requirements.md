@@ -38,7 +38,7 @@ Status: Active
 | REQ-PLAN-001 | Decided | Grok から Workflow JSON を受け取らず、共通プロンプト、ルート LoRA、枝ごとの LoRA、枝内 Matrix 用プロンプト群を JSON で受け取る。 | `contracts/prompt-plan.md` |
 | REQ-PLAN-002 | Decided | Grok の JSON は ComfyUI の Node ID、Link ID、`widgets_values`、`scene_matrix_json` 等の内部形式を含まない。 | `contracts/prompt-plan.md` |
 | REQ-PLAN-003 | Decided | Grok から受け取り、Batch Studio の検証とユーザー承認を経て確定する構造化 Prompt Plan の標準ファイル名を `prompt_plan.json` とする。プロジェクトごとに確定版は1ファイルとし、Workflow Compiler はこのファイルを Prompt Plan の機械可読入力として使用する。確定前の回答や旧版は `prompt_plan.json` を上書きせず Draft / History 領域で管理する。 | `contracts/prompt-plan.md` |
-| REQ-PLAN-004 | Open | `prompt_tree.md` を独立した正本として維持するか、`prompt_plan.json` から生成する人間向け派生成果物とするかを確定する。 | `contracts/project-artifacts.md` |
+| REQ-PLAN-004 | Decided | `prompt_plan.json` を Prompt 設計の機械可読な正本とし、人間向けの確認・編集は Batch Studio の Prompt Plan Web UI で提供する。新規プロジェクトでは `prompt_tree.md` を標準 Artifact として生成・維持せず、Workflow Compiler の入力にも使用しない。既存の `prompt_tree.md` は Legacy Artifact としてのみ扱う。 | `contracts/project-artifacts.md` |
 | REQ-PLAN-005 | Decided | `prompt_plan.json` は Root / Branch で実際に適用する LoRA 強度を保持する。この値は Batch Studio の Web UI から調整可能とし、`models.json` に保存した Civitai 由来の推奨・基準値を書き換えない。 | `contracts/prompt-plan.md` |
 
 ## 5. Workflow Compiler
@@ -76,11 +76,10 @@ Status: Active
 
 未決事項は実装時に暗黙決定せず、Decision Log へ判断を追加してから `Open` / `Draft` を `Decided` へ変更する。
 
-1. `prompt_tree.md` の正本関係。
-2. `models.json` 専用 schema の正式フィールド、stable reference、`missingRequirements` の配置。
-3. `prompt_plan.json` の正式フィールド名と JSON Schema。
-4. Workflow Template Manifest の正式 schema。
-5. Workflow の保存パス・枝タイトル・画像枚数など、Grok 指定と Compiler 派生値の境界。
-6. R2 File Manager との将来の直接 API 統合。
-7. ComfyUI Queue / 進捗管理を将来スコープへ追加する条件。
-8. Civitai の投稿画像メタデータ等から LoRA の基準強度を導出する場合の正式アルゴリズム、provenance schema、および Civitai の単一 weight を `strengthModel` / `strengthClip` へどう初期展開するか。
+1. `models.json` 専用 schema の正式フィールド、stable reference、`missingRequirements` の配置。
+2. `prompt_plan.json` の正式フィールド名と JSON Schema。
+3. Workflow Template Manifest の正式 schema。
+4. Workflow の保存パス・枝タイトル・画像枚数など、Grok 指定と Compiler 派生値の境界。
+5. R2 File Manager との将来の直接 API 統合。
+6. ComfyUI Queue / 進捗管理を将来スコープへ追加する条件。
+7. Civitai の投稿画像メタデータ等から LoRA の基準強度を導出する場合の正式アルゴリズム、provenance schema、および Civitai の単一 weight を `strengthModel` / `strengthClip` へどう初期展開するか。
