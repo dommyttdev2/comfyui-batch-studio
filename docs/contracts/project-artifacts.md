@@ -17,7 +17,7 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 ├─ story.md
 ├─ models.json
 ├─ prompt_plan.json
-├─ LoRA_{project_name}.json
+├─ LoRA_{project.id}.json
 └─ ._batch_studio/
    ├─ drafts/
    └─ history/
@@ -35,7 +35,7 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 | `story.md` | Grok + User | Brief / reference | 作品・場面設計の人間可読正本 |
 | `models.json` | Grok selection + Batch Studio validation + User | `story.md`, `model_catalog.json` | 使用モデルの固定結果と Civitai 由来のモデル基準情報 |
 | `prompt_plan.json` | Grok + Batch Studio validation + User approval | `story.md`, `models.json` | Workflow Compiler が読む確定済みの機械可読 Prompt Plan。実際の LoRA 適用強度も保持する |
-| `LoRA_{project_name}.json` | Workflow Compiler | Template, Manifest, models, plan | 最終ComfyUI Workflow |
+| `LoRA_{project.id}.json` | Workflow Compiler | Template, Manifest, models, plan, `project.id` | 最終ComfyUI Workflow |
 | `project_meta.json` | Batch Studio | System | Artifact status、version、Workflow build provenance 等 |
 
 Legacy:
@@ -49,6 +49,10 @@ Legacy:
 詳細は `../ui/project-initialization.md` を正本とする。
 
 Brief は Story 全体の詳細 schema ではなく、Grok に最初の提案を依頼するための最小入力である。
+
+`project.id` は表示名とは独立したstable filesystem identityであり、Workflow filenameや生成物保存先の派生元として使用する。
+
+`generation.target_image_count` はPrompt設計の目標値であり、実生成予定枚数の正本ではない。v1の実生成予定枚数は確定 `prompt_plan.json` のleaf総数からCompilerが算出する。
 
 ## 5. story.md
 
@@ -438,8 +442,28 @@ Legacy conversion の詳細 schema / parser は必要になった時点で別要
 新規確定時の標準名:
 
 ```text
-LoRA_{project_name}.json
+LoRA_{project.id}.json
 ```
+
+例:
+
+```text
+project.id = 15_example
+-> LoRA_15_example.json
+```
+
+Workflow filenameは `project.title` ではなくstable `project.id` から派生する。表示名変更だけで新規Workflow filenameを変更しない。
+
+Branchごとの生成物保存先とleaf output identityはWorkflow Compiler contractが次のように派生する。
+
+```text
+save path  = BatchStudio/{project.id}/{branch.id}
+row_id     = leaf.id
+path_label = leaf.id
+name       = leaf.name
+```
+
+実ファイルのextension・numeric sequence・timestamp・collision suffix等はSceneSaveImage custom nodeの責務とし、Batch Studioが再実装しない。
 
 既存プロジェクトには次のような旧形式があるため読込互換を持つ。
 
@@ -447,6 +471,8 @@ LoRA_{project_name}.json
 LoRA Character Batch - ...json
 LoRA_Character_Batch_...json
 ```
+
+旧形式を読み込めても、新規生成時の標準命名へ旧display nameを持ち込まない。
 
 最終 Workflow は Grok の成果物ではなく Compiler output である。
 
@@ -548,7 +574,7 @@ civit-model-viewer   prompt_plan.json
                   Workflow Compiler
                          |
                          v
-              LoRA_{project}.json
+              LoRA_{project.id}.json
 ```
 
 `prompt_tree.md` は Legacy Artifact であり、この新規 Artifact dependency graph には含めない。
