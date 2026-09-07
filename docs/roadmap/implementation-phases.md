@@ -8,13 +8,14 @@ Status: Draft roadmap
 
 Goal: 実装前に境界と schema の未決事項を減らす。
 
-- Workflow Template / Manifest schema。
 - Branch naming / save path / image count policy。
 - Artifact status state model。
 
 `models.json` Schema v1 は解決済みであり、機械可読正本は `schemas/models.schema.json` とする。
 
 `prompt_plan.json` Schema v1 も解決済みであり、機械可読正本は `schemas/prompt-plan.schema.json` とする。
+
+Workflow Template Manifest Schema v1 も解決済みであり、機械可読正本は `schemas/workflow-template-manifest.schema.json` とする。
 
 `prompt_tree.md` の正本関係も解決済みであり、標準 Artifact から外す。人間向け Prompt 表示・編集は Prompt Plan Web UI が担当する。
 
@@ -118,16 +119,26 @@ Legacy `prompt_tree.md` から `prompt_plan.json` への migration は、既存�
 
 Goal: 1本の Branch Prototype を正式な Compiler input にする。
 
-- Common area の role 定義。
-- Branch Prototype 1本。
-- Manifest role / boundary / layout 定義。
-- Template validation。
-- Template versioning。
+- Common Area + Branch Prototype 1本の Template 実体を確定。
+- Template stable ID / release version を決定。
+- Template UTF-8 file bytes の SHA-256 を計算。
+- `schemas/workflow-template-manifest.schema.json` に準拠する Manifest を作成。
+- Common roles `checkpoint` / `rootLoraStack` / `planCommonPrompt` / `promptOutput` を割当。
+- Branch roles と `nodeIds` / `groupIds` ownership を割当。
+- Common -> Branch boundaries を role + slot で宣言。
+- Branch layout offset を設定。
+- Template SHA-256 binding validation。
+- Manifest role / ownership / boundary semantic validation。
+- Prototype内部LinkをNode ownershipから自動導出するvalidation。
+- 未宣言cross-boundary Linkのblocking validation。
 
 Exit criteria:
 
-- Manifest だけで可変 node と prototype boundary を解決できる。
-- Compiler code に project-specific Node ID を散在させない。
+- Manifestだけで可変NodeとPrototype ownership/boundaryを解決できる。
+- Compiler code に project-specific Node ID / slot magic number を散在させない。
+- ManifestにPrototype内部Link ID一覧を重複保持しない。
+- Template hash不一致をCompile前に検出できる。
+- Branch専用Reroute等がGroup外でも `nodeIds` で明示所有できる。
 
 ## Phase 6: Workflow Compiler
 
@@ -138,13 +149,16 @@ Goal: Prompt Plan branch 数と一致する最終 Workflow を決定論的に生
 - plan-owned common prompt patch。
 - Prototype -> Branch 1 reuse。
 - Branch 2..N clone。
+- Prototype内部Link derivation / clone。
+- Common -> cloned Branch boundary link生成。
 - Node / Link / Group ID remap。
-- layout offset。
+- Manifest layout offset適用。
 - Branch LoRA Stack patch。
 - leaf -> SceneMatrix conversion。
 - title / save path policy。
 - `last_node_id` / `last_link_id` update。
 - compiled workflow validation。
+- Compiler version / Manifest hash / Template identity+hash を Workflow build provenance として `project_meta.json` に記録。
 
 Exit criteria:
 
@@ -154,6 +168,8 @@ unusedBranchCount == 0
 nodeIdCollision == 0
 linkIdCollision == 0
 danglingLink == 0
+undeclaredBoundaryLink == 0
+templateHashMismatch == 0
 ```
 
 ## Phase 7: Model Availability / R2 Handoff
