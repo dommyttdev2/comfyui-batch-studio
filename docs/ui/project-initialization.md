@@ -46,9 +46,9 @@ Status: Active
 | UI | 1行 text |
 | 保存キー | `project.title` |
 | 必須 | Yes |
-| 用途 | 表示名、Story title候補、project folder name元 |
+| 用途 | 人間向け表示名、Story title候補 |
 
-プロジェクト ID は表示名から候補を自動生成し、重複しない連番等を付ける。ユーザー入力を必須にしない。
+プロジェクト名は人間向け表示値であり、Workflow filename や生成物保存先の filesystem identity には直接使用しない。
 
 ### 3.2 版権キャラ
 
@@ -130,6 +130,54 @@ Story 全体の固定前提として扱う。
 | 必須 | No |
 
 キャラクター、衣装、時期、場所、構図、トーン等の除外条件。
+
+### 3.9 プロジェクト ID
+
+| 項目 | 値 |
+| --- | --- |
+| UI | 詳細設定の1行 text。通常は自動生成 |
+| 保存キー | `project.id` |
+| 必須 | Yes |
+| 用途 | Project内のstable filesystem identity、Workflow filename、生成物保存先 |
+
+`project.id` は `project.title` から候補を自動生成し、必要なら重複回避用の連番等を付ける。ユーザーに入力を必須要求しない。
+
+正式形式:
+
+```regex
+^[a-z0-9][a-z0-9._-]{0,63}$
+```
+
+原則:
+
+- 1〜64文字。
+- 先頭は小文字英数字。
+- 以降は小文字英数字、`.`、`_`、`-` を許可する。
+- `15_example` のような数字開始を許可する。
+- `project.title` の変更だけでは既存 `project.id` を自動変更しない。
+- Workflow filename・生成物保存先等の機械識別には `project.title` ではなく `project.id` を使用する。
+
+### 3.10 目標画像枚数
+
+| 項目 | 値 |
+| --- | --- |
+| UI | 詳細設定の正整数 input |
+| 保存キー | `generation.target_image_count` |
+| 必須 | No |
+| 用途 | Story / Prompt Planning で目標とする画像枚数 |
+
+`target_image_count` は厳密なCompile枚数指定ではなく、Grok が Story / Prompt Plan を展開するときの目標値である。
+
+v1 の実生成予定枚数は確定 `prompt_plan.json` の leaf 総数から Workflow Compiler が算出する。
+
+```text
+target_image_count = 500
+       -> Grokへ500 leaf程度を目標として提示
+       -> prompt_plan.json
+       -> actualImageCount = total leaf count
+```
+
+目標値と実leaf総数が異なる場合は差分をユーザーへ表示するが、その差分だけでは Prompt Plan の確定や Workflow Compile を blocking error にしない。
 
 ## 4. 初期画面では入力させないもの
 
@@ -224,15 +272,19 @@ Story 全体の固定前提として扱う。
 Blocking error:
 
 - プロジェクト名が空。
+- `project.id` が空、または `^[a-z0-9][a-z0-9._-]{0,63}$` を満たさない。
 - 版権キャラ状態が未確定。
 - 版権キャラ ON かつキャラクター名が空。
 - ターゲット読者の特徴が空。
 - 成人・合意確認が未チェック。
+- `generation.target_image_count` を指定する場合に正整数でない。
 
 その他の未指定項目はエラーにせず、Grok 用文脈で「未指定」と扱う。
 
 ## 8. Story への引き渡し
 
 初回 Grok 依頼では完成 Story を一度で要求せず、まず調査・Story 案・不足確認を行う。
+
+`generation.target_image_count` が指定されている場合は、Story / Prompt Planning が最終的にその規模へ展開できる目標値としてGrok用文脈へ含める。厳密な出力枚数のComfyUI内部設定はGrokへ要求しない。
 
 その後の具体的な Grok 契約は `../contracts/grok-contract.md` が正本である。
