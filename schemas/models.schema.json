@@ -51,10 +51,11 @@
         }
       }
     },
-    "civitaiIdentity": {
+    "checkpointSelection": {
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "ref",
         "modelId",
         "modelName",
         "versionId",
@@ -66,6 +67,9 @@
         "reason"
       ],
       "properties": {
+        "ref": {
+          "const": "checkpoint.main"
+        },
         "modelId": {
           "type": "integer",
           "minimum": 1
@@ -105,72 +109,6 @@
           "minLength": 1
         }
       }
-    },
-    "checkpointSelection": {
-      "allOf": [
-        {
-          "$ref": "#/$defs/civitaiIdentity"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "ref",
-            "modelId",
-            "modelName",
-            "versionId",
-            "versionName",
-            "fileId",
-            "fileName",
-            "modelUrl",
-            "trainedWords",
-            "reason"
-          ],
-          "properties": {
-            "ref": {
-              "const": "checkpoint.main"
-            },
-            "modelId": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "modelName": {
-              "type": "string",
-              "minLength": 1
-            },
-            "versionId": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "versionName": {
-              "type": "string",
-              "minLength": 1
-            },
-            "fileId": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "fileName": {
-              "type": "string",
-              "minLength": 1
-            },
-            "modelUrl": {
-              "type": "string",
-              "format": "uri"
-            },
-            "trainedWords": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "reason": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        }
-      ]
     },
     "loraSelection": {
       "type": "object",
