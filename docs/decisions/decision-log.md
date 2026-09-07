@@ -121,7 +121,7 @@ ComfyUI 内部情報は返させない。
 
 ### Artifact
 
-標準名 `prompt_plan.json` は現時点では Draft naming。意味構造は Accepted。
+標準ファイル名は `prompt_plan.json` とする。確定版の lifecycle は `DEC-015` で定義する。意味構造は本 Decision の Accepted 内容として維持する。
 
 ---
 
@@ -340,6 +340,54 @@ v1 では catalog 全体の content hash を必須としない。完全な内容
 
 ---
 
+## DEC-015: prompt_plan.json is the single confirmed Prompt Plan artifact
+
+Date: 2026-09-07
+Status: Accepted
+
+### Decision
+
+構造化 Prompt Plan の標準ファイル名を `prompt_plan.json` とする。
+
+プロジェクト直下には現在の確定版を1ファイルだけ置く。Workflow Compiler はこの確定済み `prompt_plan.json` を Prompt Plan の機械可読入力として使用する。
+
+確定までの lifecycle は次とする。
+
+```text
+Grok response
+   -> Draft
+   -> Batch Studio validation
+   -> User approval
+   -> prompt_plan.json
+   -> Workflow Compiler
+```
+
+### Draft / History policy
+
+- Grok の貼り戻し直後の内容は Draft であり、検証・承認前に `prompt_plan.json` を上書きしない。
+- 確定前の候補は `._batch_studio/drafts/` で管理する。
+- 確定版を更新する場合、更新前の版は `._batch_studio/history/` へ退避する。
+- `prompt_plan_v2.json`、`prompt_plan_final.json` 等のように version/status をファイル名へ埋め込んで正規運用しない。
+
+### Rationale
+
+- Compiler が読む正規入力の場所と名前を一意にできる。
+- `final` / `final2` のようなファイル増殖を避けられる。
+- Draft と確定版を分離し、ユーザー承認前の内容で Workflow を生成する事故を防げる。
+- schema version は JSON 本体、履歴は History 領域が担当し、ファイル名に責務を持たせすぎない。
+
+### Scope boundary
+
+本 Decision は `prompt_tree.md` の位置づけを決めない。
+
+`prompt_tree.md` を独立正本とするか `prompt_plan.json` からの派生成果物とするかは `OPEN-001` / `REQ-PLAN-004` のまま別途判断する。
+
+### Resolves
+
+`REQ-PLAN-003` を Decided とする。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
@@ -388,6 +436,8 @@ Date: 2026-09-07
 Status: Open
 
 意味構造は Accepted だが、正式 field name、ID uniqueness scope、将来 metadata の扱いを実装前に固定する。
+
+ファイル名、確定版の lifecycle、Workflow Compiler の正規入力であることは `DEC-015` で Accepted 済み。
 
 ---
 
