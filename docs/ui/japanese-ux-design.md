@@ -1,97 +1,127 @@
-# 日本語 UI/UX 実装設計
+# 日本語 UI/UX 要件
 
 Status: Draft
 
 ## 1. 目的
 
-ComfyUI Batch Studio を日本語 UI として実装する際の、画面構成、表示用語、工程別の操作フロー、主要コンポーネント、状態表示、Grok Web との手動連携 UX を整理する。
+ComfyUI Batch Studio を日本語 UI として実装する際に、ユーザーが各工程で達成できなければならないこと、表示すべき情報、操作上の制約、Grok Web との手動連携要件を定義する。
 
-本書は UI/UX の実装詳細を扱う Draft 文書であり、データ schema、Grok の責務、Workflow Compiler の内部契約を再定義しない。
+本書は **画面レイアウトやコンポーネント構成を固定する設計書ではない**。
 
-上位の Shell / 責務境界は次を正本とする。
+実際の画面構成、ペイン数、タブ、カード、一覧形式、モーダル、テーブル、ツリー、Inspector 等の具体的な UI 実装は、実装エージェントが本書と上位契約を満たす範囲で判断する。
+
+上位の責務・契約は次を正本とする。
 
 ```text
 docs/ui/application-shell.md
 docs/product/scope-and-flow.md
 docs/contracts/grok-contract.md
+docs/contracts/project-artifacts.md
+docs/contracts/prompt-plan.md
 ```
 
-本書では Grok に貼り付ける具体的な依頼文・プロンプト本文は定義しない。Workflow 生成用のプロンプトも扱わない。Workflow 工程は Batch Studio の Compiler 操作として設計する。
+本書では Grok に貼り付ける具体的な依頼文・プロンプト本文は定義しない。Workflow 生成用のプロンプトも扱わない。Workflow 工程は Batch Studio の Compiler 操作として扱う。
 
 ---
 
-## 2. UX の基本原則
+## 2. 実装エージェントの裁量
 
-### 2.1 Artifact 中心ではなく工程・次の行動を中心にする
+実装エージェントは、次を自由に決定してよい。
 
-内部では `story.md`、`models.json`、`prompt_plan.json` 等の Artifact を管理するが、通常 UI ではファイルそのものより次を優先する。
+- 画面レイアウト。
+- ペイン構成。
+- Navigation の視覚表現。
+- タブ / セクション / モーダル等の使い分け。
+- 一覧を Table / Tree / List / Card 等のどれで表現するか。
+- Editor / Inspector の配置。
+- Responsive / resize behavior。
+- 共通 Component の切り方。
+- loading / transition / animation の表現。
+- keyboard shortcut や詳細な操作補助。
+
+ただし、次は変更してはならない。
+
+- Grok と Batch Studio の責務境界。
+- Grok Web の手動操作原則。
+- Artifact の Draft / Validate / Confirm lifecycle。
+- `models.json` / `prompt_plan.json` 等の正式 schema。
+- Workflow Compiler の責務。
+- Civitai / R2 / ComfyUI の外部連携境界。
+- 本書に定義する必須 UX capability。
+
+UI 都合だけで domain schema や責務境界を変更しない。
+
+---
+
+## 3. UX 基本原則
+
+### 3.1 Artifact より工程と次の行動を優先する
+
+内部では `story.md`、`models.json`、`prompt_plan.json` 等の Artifact を管理するが、通常 UI ではユーザーが次を理解できることを優先する。
 
 ```text
 今どの工程か
 ↓
 次に何をすべきか
 ↓
-そのために必要な入力は揃っているか
+必要な入力は揃っているか
+↓
+何が未完了・要修正か
 ↓
 結果を確認・修正・確定できるか
 ```
 
-### 2.2 Grok 連携は共通基盤を持ち、工程ごとに UX を最適化する
+### 3.2 Grok 連携は工程ごとに最適化する
 
-Story / Models / Prompt Plan はすべて手動で Grok Web と往復するが、目的が異なるため UI を同一化しすぎない。
+Story / Models / Prompt Plan はすべてユーザーが Grok Web へ手動で入力し、回答を手動で Batch Studio へ戻す。
 
-```text
-Shared Infrastructure
-├─ 依頼内容生成
-├─ Clipboard copy
-├─ 添付候補表示
-├─ Folder open
-├─ Grok response paste
-├─ code block / JSON 抽出
-├─ Draft / History
-└─ validation result
+ただし目的が異なるため、同じ UI をそのまま使い回すことを要件としない。
 
-Stage-specific UX
-├─ Story
-│  └─ 会話 / 企画 / 完成 Story 取り込み
-├─ Models
-│  └─ 選定 / catalog 照合 / 不足モデル対応
-└─ Prompt Plan
-   └─ 大量構造データの生成 / 取り込み / レビュー / 修正
-```
+必要な共通 capability:
 
-### 2.3 Grok Web はユーザー操作
+- Grok へ渡す依頼内容を Batch Studio が生成できる。
+- 必要な添付ファイルをユーザーが把握できる。
+- 依頼内容を Clipboard へコピーできる。
+- 添付対象の場所を開ける。
+- Grok の回答全体を Batch Studio へ貼り付けられる。
+- 必要な Markdown / JSON code block 等を回答から抽出できる。
+- 工程固有 validation を行える。
+- valid / invalid にかかわらず貼り付けた原文を失わない。
+- 取り込み結果を Draft として扱える。
+- ユーザーが確認した後だけ Confirm できる。
+
+### 3.3 Grok Web はユーザー操作
 
 Batch Studio は次を行わない。
 
 - Grok への自動送信。
-- Grok DOM の操作。
+- Grok DOM 操作。
 - 自動ファイル添付。
-- 回答 scraping。
+- Grok 回答 scraping。
+- ログイン自動化。
 
 Batch Studio は「渡すものを準備する」「返ってきたものを取り込む」部分を支援する。
 
-### 2.4 Prompt Plan は Tree-only UI にしない
+### 3.4 大量データを現実的に扱えること
 
-数百〜数千の生成項目を扱う可能性があるため、単純な展開 Tree だけを主要 UI にしない。
+Prompt Plan は数百〜数千の生成項目を持つ可能性がある。
 
-標準構成は次を基本とする。
+実装方式はエージェントに任せるが、少なくとも次を満たすこと。
 
-```text
-Branch List
-+
-Leaf Table
-+
-Inspector
-```
+- 数百件規模でも実用的な速度で閲覧できる。
+- ブランチ単位で生成項目を把握できる。
+- 特定の生成項目を素早く探せる。
+- 生成項目の Positive / Negative を確認・編集できる。
+- validation error / warning の対象へ移動できる。
+- 大量件数を一度に展開することで著しく操作性が落ちない。
 
-Leaf Table は virtualized list / virtualized table を前提とする。
+Tree-only、Table-only 等の具体的な表示方式は固定しない。
 
 ---
 
-## 3. 日本語 UI 用語
+## 4. 日本語 UI 用語
 
-内部 schema / field name は既存の英語名称を維持する。UI 表示のみ日本語化する。
+内部 schema / field name は既存の英語名称を維持する。通常 UI の表示のみ日本語化する。
 
 | 内部概念 | 日本語 UI |
 | --- | --- |
@@ -116,20 +146,15 @@ Leaf Table は virtualized list / virtualized table を前提とする。
 | Validation | 検証 |
 | History | 履歴 |
 
-`Leaf` は内部用語として維持するが、通常 UI では「生成項目」と表示する。
+`Leaf` は内部用語として維持し、通常 UI では原則「生成項目」と表示する。
 
-v1 は `1 leaf = 1 image` なので、必要に応じて次のように件数と予定画像枚数を併記できる。
-
-```text
-ブランチ b01
-48件 / 48枚
-```
+v1 は `1 leaf = 1 image` なので、件数と予定画像枚数の関係をユーザーが確認できること。
 
 ---
 
-## 4. メインナビゲーション
+## 5. 主工程
 
-左側のプロジェクト工程 Navigation は次を基本とする。
+ユーザーが次の工程へアクセスできること。
 
 ```text
 概要
@@ -142,93 +167,47 @@ v1 は `1 leaf = 1 image` なので、必要に応じて次のように件数と
 実行前チェック
 ```
 
-### 4.1 名称方針
+名称方針:
 
-- `Project` はナビゲーション名として曖昧なため `基本設定` とする。
-- `R2 / Models` は手段名なので、目的を表す `モデル配置` とする。
-- `Prompt Tree` の独立 Navigation は設けない。
+- `Project` ではなく、初期入力工程は `基本設定` と表示する。
+- `R2 / Models` ではなく、ユーザー目的を表す `モデル配置` とする。
+- `Prompt Tree` を独立した通常工程として設けない。
 
----
-
-## 5. Application Shell
-
-基本レイアウト:
-
-```text
-┌──────────────────────────────────────────────────────────────────┐
-│ プロジェクト: {project.title}                 フォルダー   設定 │
-├────────────┬────────────────────────────┬────────────────────────┤
-│ 工程       │ Batch Studio              │ Grok                   │
-│            │                            │                        │
-│ 概要       │ 現在の作業                │ grok.com               │
-│ 基本設定   │                            │                        │
-│ ストーリー │ 次にすること              │                        │
-│ モデル選定 │                            │                        │
-│ プロンプト │ 編集 / 確認               │                        │
-│ ワークフロー│                           │                        │
-│ モデル配置 │ 検証結果                   │                        │
-│ 実行前確認 │                            │                        │
-└────────────┴────────────────────────────┴────────────────────────┘
-```
-
-Local UI / Grok Web の divider はリサイズ可能とする。
-
-Local UI は長い Prompt Plan や validation を確認するため、一時最大化できるようにする。
+Navigation の具体的な表示方法は実装エージェントに任せる。
 
 ---
 
-## 6. Grok Pane の工程別初期状態
+## 6. Grok Web 表示要件
 
-| 工程 | 初期表示 |
-| --- | --- |
-| 基本設定 | 非表示 |
-| ストーリー | 表示 |
-| モデル選定 | 表示 |
-| プロンプト設計 | 表示 |
-| ワークフロー | 非表示 |
-| モデル配置 | 非表示 |
-| 実行前チェック | 非表示 |
+Story / Models / Prompt Plan は Grok Web と往復する工程であるため、ユーザーが Batch Studio と Grok Web を効率よく行き来できること。
 
-初期表示は UX 上の default であり、ユーザーは任意に show / hide できる。
+Workflow / Model Availability / Preflight は Grok を必要としない。
 
-表示切替は Grok Web の内容を操作するものではない。
+Grok pane の初期表示、サイズ、配置、show/hide の具体的な UX は実装エージェントに任せる。
+
+ただし次を満たすこと。
+
+- Grok Web を必要なときに表示できる。
+- Local UI の作業領域を十分確保できる。
+- Grok Web を非表示にしても session を不必要に破棄しない。
+- 表示切替が Grok DOM の自動操作にならない。
 
 ---
 
-## 7. 「次にすること」カード
+## 7. 次に行う操作の提示
 
-各工程の上部では詳細 status より先に、ユーザーが今行うべき操作を表示する。
+各工程では、現在の status 一覧だけでなく、ユーザーが **次に何をすべきか** を判断できること。
 
-例:
+表示内容の例:
 
-```text
-次にすること
-────────────────────────────────
+- Grok でストーリーを検討する必要がある。
+- Grok のモデル選定結果を貼り付ける必要がある。
+- モデルが不足しているため catalog 更新が必要。
+- Prompt Plan の下書き確認が必要。
+- Workflow の再生成が必要。
+- Local に不足モデルがある。
 
-Grokでモデル選定を行ってください。
-
-必要なファイル
-✓ story.md
-✓ model_catalog.json
-
-[依頼内容を確認] [コピー] [ファイルの場所を開く]
-```
-
-別状態:
-
-```text
-次にすること
-────────────────────────────────
-
-モデル選定結果を確認して確定してください。
-
-✓ すべてのモデルを確認済み
-⚠ 1件の注意があります
-
-[選定内容を確認]
-```
-
-目的は status の羅列ではなく、次の action を一意に理解できること。
+具体的な Card / Banner / CTA の表現は固定しない。
 
 ---
 
@@ -236,7 +215,7 @@ Grokでモデル選定を行ってください。
 
 内部 status は既存値を維持する。
 
-| Internal | 詳細 UI |
+| Internal | 日本語表示 |
 | --- | --- |
 | MISSING | 未作成 |
 | DRAFT | 下書き |
@@ -249,69 +228,33 @@ Grokでモデル選定を行ってください。
 | READY | 準備完了 |
 | UNAVAILABLE | 利用できません |
 
-Overview 等の高レベル表示ではさらに簡略化できる。
+必要に応じて高レベル表示では簡略化してよい。
 
-```text
-未着手
-作業中
-要確認
-確定済み
-更新必要
-準備完了
-```
-
-色だけに依存せず、アイコン + ラベル + 必要に応じて説明文を使う。
+色だけに依存せず、文字・アイコン等でも状態を判別できること。
 
 ---
 
-## 9. 概要画面
+## 9. 概要 UX 要件
 
-Artifact file list ではなく Pipeline Dashboard とする。
+概要では Artifact のファイル一覧より、プロジェクトの進行状況を優先する。
 
-例:
+最低限確認できる情報:
 
-```text
-{project.title}
+- プロジェクト名。
+- 目標画像枚数 / 現在の予定画像枚数。
+- 各工程の進捗。
+- 現在対応すべき工程。
+- Blocking issue。
+- Warning。
+- 次に行うべき操作。
 
-予定画像枚数
-504枚
-
-
-次にすること
-────────────────────────────────
-プロンプト設計の下書きを確認してください。
-
-3件の注意があります。
-
-[プロンプト設計を確認]
-
-
-進行状況
-────────────────────────────────
-
-✓ 基本設定
-✓ ストーリー
-✓ モデル選定
-● プロンプト設計      504件
-○ ワークフロー
-○ モデル配置
-○ 実行前チェック
-
-
-注意
-────────────────────────────────
-
-⚠ 目標500枚 / 現在504枚
-⚠ 2件のLoRAにCivitai基準値がありません
-```
-
-Overview では「どのファイルが存在するか」より「プロジェクトがどこまで進んでいるか」を主役にする。
+各問題から該当工程へ移動できることが望ましい。
 
 ---
 
-## 10. 基本設定画面
+## 10. 基本設定 UX 要件
 
-新規プロジェクトでは詳細設計を要求しない。
+初期プロジェクト作成時に、細かな Story / Prompt / Model 設計をユーザーへ要求しない。
 
 主要入力:
 
@@ -324,7 +267,7 @@ Overview では「どのファイルが存在するか」より「プロジェ�
 - 出さないもの・避けたい方向性。
 - 固定前提の確認。
 
-詳細設定は collapsed section とする。
+追加設定:
 
 - プロジェクト ID。
 - Story 文書形式。
@@ -333,472 +276,177 @@ Overview では「どのファイルが存在するか」より「プロジェ�
 - 目標章数。
 - 参考ファイル。
 
-初期画面は可能な限り1画面で完結させる。
+詳細項目の見せ方は実装エージェントに任せるが、初回入力の負荷を過度に増やさないこと。
 
 ---
 
-## 11. ストーリー画面
+## 11. ストーリー工程 UX 要件
 
-Story は「会話・探索型」の UX とする。
+Story は会話・探索型の工程として扱う。
 
-### 11.1 基本構成
+ユーザーは最低限次を行えること。
 
-```text
-ストーリー
-────────────────────────────────────
+1. 現在の基本設定を確認する。
+2. Grok へ渡す初回依頼内容を生成する。
+3. 必要な参考ファイルを確認する。
+4. Grok と手動で会話を継続する。
+5. Story が決まった後、完成版作成用の依頼内容を生成する。
+6. Grok の最終回答を Batch Studio へ貼り付ける。
+7. `story.md` candidate を取り込む。
+8. 内容を確認・修正する。
+9. 下書き保存・履歴確認・確定を行う。
+10. 必要なら Story 修正用の依頼内容を再生成する。
 
-状態: 作業中
-
-■ 現在の基本設定
-
-キャラクター
-{character}
-
-ターゲット
-{audience}
-
-目標画像枚数
-{target}枚
-
-
-■ Grokでストーリーを検討
-
-[依頼内容を生成]
-[依頼内容をコピー]
-[参考ファイルの場所を開く]
-
-
-■ ストーリーが決まったら
-
-[完成版の作成依頼を生成]
-[コピー]
-
-
-■ 完成したストーリーを取り込む
-
-┌────────────────────────────────┐
-│ Grokの回答をここに貼り付け    │
-│                                │
-└────────────────────────────────┘
-
-[内容を取り込む]
-```
-
-### 11.2 取り込み後
-
-```text
-取り込み結果
-
-✓ story.md として読み込めます
-
-[ストーリーを確認]
-```
-
-レビュー後:
-
-```text
-[下書きとして保存]
-[確定]
-```
-
-Story 画面では parser / schema 等の技術語を通常 UI の主役にしない。
-
-### 11.3 再修正
-
-Story 専用 action:
-
-```text
-[ストーリーの修正依頼を作成]
-```
-
-Grok 用の具体的な依頼本文は本書では定義しない。
+通常 UI では JSON Schema / parser 等の技術用語を主役にしない。
 
 ---
 
-## 12. モデル選定画面
+## 12. モデル選定工程 UX 要件
 
-Models は「選定・照合型」の UX とする。
+Models は選定・照合型の工程として扱う。
 
-### 12.1 Grok 選定前
+ユーザーは最低限次を行えること。
 
-```text
-モデル選定
-────────────────────────────────────
+1. 使用中の `model_catalog.json` の generation / generatedAt を確認する。
+2. Grok へ渡すモデル選定依頼を生成する。
+3. `story.md` / `model_catalog.json` が必要添付であることを確認する。
+4. Grok の回答を貼り付ける。
+5. 選定結果を解析する。
+6. Checkpoint / LoRA ごとに Model / Version / File を確認する。
+7. catalog 実在性を確認する。
+8. `trainedWords` を確認する。
+9. Civitai 基準値が存在する場合、その値と根拠を確認する。
+10. 選定理由を確認する。
+11. missingRequirements がある場合、通常の確定フローとは分離して確認する。
+12. valid な選定だけを Draft / Confirm できる。
 
-カタログ
-Generation {n}
-最終更新: {datetime}
+### 12.1 Civitai 基準値表示
 
-状態: 選定待ち
+通常 UI では `observed-usage-derived` 等の内部 enum をそのまま主表示しない。
 
+ユーザーが最低限次を理解できる表示にする。
 
-■ Grokでモデルを選定
+- Civitai 基準値の有無。
+- 値。
+- observed data 由来の場合は投稿数。
+- 詳細を開けば provenance / method を確認可能。
 
-必要なファイル
+この値を作者推奨値として誤表示しない。
 
-✓ story.md
-✓ model_catalog.json
+### 12.2 不足モデル
 
-[選定依頼を生成]
-[コピー]
-[添付ファイルの場所を開く]
-
-
-■ Grokの選定結果
-
-┌────────────────────────────────┐
-│ Grokの回答を貼り付け          │
-└────────────────────────────────┘
-
-[選定結果を解析]
-```
-
-### 12.2 解析後のモデルカード
-
-Checkpoint:
+不足モデルがある場合、単なる `not found` error ではなく、次の解決工程を理解できること。
 
 ```text
-Checkpoint
-────────────────────
-モデル       {modelName}
-バージョン   {versionName}
-ファイル     {fileName}
-
-✓ カタログ確認済み
+Civitai collectionへ追加
+↓
+civit-model-viewerでSYNC
+↓
+model_catalog.json更新
+↓
+Grokで再選定
 ```
 
-LoRA:
-
-```text
-キャラクターLoRA
-────────────────────
-モデル       {modelName}
-バージョン   {versionName}
-ファイル     {fileName}
-
-トリガーワード
-{trainedWords}
-
-Civitai基準値
-0.70
-17投稿から算出
-
-✓ カタログ確認済み
-```
-
-通常 UI では `observed-usage-derived` 等の内部値をそのまま表示しない。
-
-詳細表示では provenance を確認できる。
-
-```text
-算出方法
-投稿単位中央値 → 全投稿中央値
-対象投稿数: 17
-```
-
-### 12.3 不足モデル
-
-単なる error list ではなく、解決手順を含む専用 UI とする。
-
-```text
-不足しているモデル
-────────────────────────────────
-
-ポーズ用LoRAが必要です。
-
-理由
-{reason}
-
-現在のモデルカタログには該当候補がありません。
-
-[不足内容をコピー]
-[モデルカタログを確認]
-```
-
-解決フロー:
-
-```text
-1. Civitaiコレクションへモデルを追加
-2. civit-model-viewerで同期
-3. モデル選定をやり直す
-```
-
-再選定 action:
-
-```text
-[モデルを再選定する]
-```
+未解決 `missingRequirements` がある状態では models.json を Confirm できないことを明示する。
 
 ---
 
-## 13. プロンプト設計画面
+## 13. プロンプト設計工程 UX 要件
 
-Prompt Plan は Grok から受け取る工程と、大量データをレビュー・修正する工程を分離する。
-
-上部モード:
+Prompt Plan は次の2種類の作業を区別して扱えること。
 
 ```text
-[Grokから取得] [確認・編集] [履歴]
+A. Grok から Prompt Plan を受け取る
+B. 受け取った大量の Prompt Plan をレビュー・修正する
 ```
 
-### 13.1 Grokから取得
+具体的にタブで分けるか、別画面にするか等は実装エージェントに任せる。
 
-```text
-プロンプト設計をGrokで作成
-────────────────────────────────
+### 13.1 Grok へ渡す前
 
-目標画像枚数
-500枚
+最低限確認できること。
 
-使用モデル
-✓ 確定済み
+- Story が確定済みか。
+- Models が確定済みか。
+- 目標画像枚数。
+- 必要添付ファイル。
+- Prompt Plan 作成依頼を生成できること。
 
-必要なファイル
-✓ story.md
-✓ models.json
+### 13.2 Grok 結果取り込み
 
-[作成依頼を生成]
-[コピー]
-[添付ファイルの場所を開く]
-```
+ユーザーは Grok の回答全体を貼り付けられること。
 
-### 13.2 結果取り込み
+Batch Studio は JSON code block 等から Prompt Plan candidate を抽出できること。
 
-```text
-Grokの結果を取り込む
-────────────────────────────────
+取り込み後に最低限次を表示する。
 
-┌──────────────────────────────────┐
-│ Grokの回答全体を貼り付け        │
-│                                  │
-└──────────────────────────────────┘
+- JSON として解析できたか。
+- Prompt Plan Schema validation 結果。
+- semantic validation 結果。
+- Branch 数。
+- 生成項目数。
+- 予定画像枚数。
+- target image count との差。
+- modelRef error / warning。
 
-[結果を解析]
-```
+解析成功だけで Confirm しない。
 
-Grok response が説明文 + JSON code block でも、Batch Studio が候補 JSON を抽出する。
+### 13.3 Prompt Plan レビュー
 
-解析例:
+ユーザーは最低限次を行えること。
 
-```text
-解析結果
-────────────────────────────────
+- common positive / negative の確認・編集。
+- Root LoRA の確認。
+- Branch の一覧把握。
+- Branch label の確認・編集。
+- Branch LoRA の確認。
+- Branch ごとの生成項目数確認。
+- 各生成項目の ID / name / positive / negative の確認。
+- 各生成項目の編集。
+- Branch / Leaf ordering の編集。
+- validation error / warning 対象の確認。
+- 大量の生成項目から目的の項目を検索・絞り込みできること。
+- Draft / Confirm lifecycle を維持すること。
 
-✓ JSONを検出
-✓ Prompt Plan Schema v1
-✓ モデル参照を確認
+具体的な Tree / Table / List / Inspector の採用は固定しない。
 
-ブランチ       12
-生成項目       504
-予定画像枚数   504
+### 13.4 Prompt Plan 再修正
 
-⚠ 目標500枚との差: +4枚
+Grok へ再度修正を依頼できること。
 
-[下書きとして取り込む]
-```
+Batch Studio は現在の validation result やユーザーの修正意図を利用して再依頼用内容を生成できること。
 
-解析成功だけでは Confirm しない。
-
-```text
-Grok response
-→ Parsed candidate
-→ Draft
-→ Review
-→ Confirm
-```
-
-### 13.3 確認・編集
-
-標準レイアウト:
-
-```text
-┌───────────────────────────────────────────────────────────────┐
-│ プロンプト設計                       504件 / 504枚   ✓ 有効 │
-├──────────────┬──────────────────────────────┬────────────────┤
-│ ブランチ     │ 生成項目                     │ 編集           │
-│              │                              │                │
-│ 共通Prompt   │ 検索 [________________]      │ ID             │
-│ 全体LoRA     │                              │ s1-01-c1       │
-│              │ ID        名前        状態   │                │
-│ ● b01   48   │ s1-01     座位...      ✓    │ 名前           │
-│   b02    8   │ s1-02     立位...      ✓    │ [___________]  │
-│   b03   92   │ s1-03     机...        ⚠    │                │
-│   b04   44   │ ...                          │ Positive       │
-│              │                              │ [            ] │
-│              │                              │                │
-│              │                              │ Negative       │
-│              │                              │ [            ] │
-└──────────────┴──────────────────────────────┴────────────────┘
-```
-
-構成:
-
-- 左: Branch List / Common / Root LoRAs。
-- 中央: Leaf Table。
-- 右: Inspector。
-
-### 13.4 Leaf Table
-
-要件:
-
-- virtualized rendering。
-- 検索。
-- Branch 単位 filter。
-- validation state 表示。
-- keyboard selection を考慮。
-- 数百〜数千件でも全行 DOM 展開しない。
-
-通常列候補:
-
-```text
-ID
-名前
-状態
-```
-
-Positive / Negative 全文は Inspector で編集する。
-
-### 13.5 Inspector
-
-選択した生成項目を編集する。
-
-```text
-ID
-s1-01-c1
-
-名前
-[____________________________]
-
-Positive
-┌────────────────────────────┐
-│                            │
-└────────────────────────────┘
-
-Negative
-┌────────────────────────────┐
-│                            │
-└────────────────────────────┘
-```
-
-`leaf.id` は stable output identity なので、通常編集と ID 編集は分離して扱うことを検討する。
-
-### 13.6 共通プロンプト
-
-```text
-共通プロンプト
-────────────────────────────────
-
-Positive
-┌─────────────────────────────────────┐
-│                                     │
-└─────────────────────────────────────┘
-
-Negative
-┌─────────────────────────────────────┐
-│                                     │
-└─────────────────────────────────────┘
-```
-
-### 13.7 Branch 操作
-
-Branch 一覧では最低限次を表示する。
-
-```text
-branch.id
-branch.label
-生成項目数
-validation state
-```
-
-操作候補:
-
-- 並べ替え。
-- label 編集。
-- Branch 選択。
-- Branch LoRA 編集。
-
-### 13.8 Prompt Plan 再修正
-
-専用 action:
-
-```text
-[プロンプト設計の修正依頼を作成]
-```
-
-Grok 用の具体的な本文は本書では定義しない。
+具体的なプロンプト本文は本書では定義しない。
 
 ---
 
-## 14. LoRA 強度 UI
+## 14. LoRA 強度 UX 要件
 
-Root / Branch で表示形式を統一する。
+Root / Branch LoRA の実適用強度を編集できること。
 
-### 14.1 Civitai 基準値あり
+Civitai baseline が存在する場合:
 
-```text
-キャラクターLoRA
-────────────────────────────
+- baseline value を確認できる。
+- baselineの根拠を確認できる。
+- `strengthModel` / `strengthClip` の現在値を確認・編集できる。
+- 現在値が baseline から変更されていることを判別できる。
+- baseline へ戻す操作を提供できる。
 
-character.safetensors
+Civitai baseline が存在しない場合:
 
-Civitai基準値
-0.70
-17投稿から算出
+- 「基準値なし」であることを明示する。
+- Batch Studio が `1.0 / 1.0` や `0.7 / 0.7` を暗黙補完しない。
+- 必須の実適用値が未入力なら validation で検出する。
 
-現在の適用値
-
-Model強度
-[ 0.70 ]
-
-CLIP強度
-[ 0.70 ]
-
-[基準値に戻す]
-```
-
-### 14.2 基準値から変更済み
-
-```text
-Civitai基準値
-0.70
-
-現在の適用値
-
-Model強度
-0.80
-
-CLIP強度
-0.65
-
-● 基準値から変更されています
-
-[基準値に戻す]
-```
-
-### 14.3 Civitai 基準値なし
-
-```text
-Civitai基準値
-取得できませんでした
-
-Model強度
-[      ]
-
-CLIP強度
-[      ]
-
-※ 使用する値を入力してください
-```
-
-Batch Studio は暗黙に `1.0 / 1.0` や `0.7 / 0.7` を補完しない。
+表示方法は実装エージェントに任せる。
 
 ---
 
-## 15. Grok Result Import の共通基盤
+## 15. Grok Result Import 共通要件
 
-Story / Models / Prompt Plan で内部部品として共通化する。
+Story / Models / Prompt Plan の内部実装では共通基盤を持ってよい。
 
-共通責務:
+概念フロー:
 
 ```text
 Paste
@@ -810,162 +458,90 @@ Parse
 Stage-specific validation
 ↓
 Draft
+↓
+User review
+↓
+Confirm
 ```
 
-ただし UI 文言と validation 表示は工程別に最適化する。
+重要要件:
 
-### 15.1 Story
-
-- Markdown / Story content 取り込み中心。
-- parser terminology は通常表示しない。
-
-### 15.2 Models
-
-- Model / Version / File identity 照合中心。
-- Missing Requirements を専用 UX で表示。
-
-### 15.3 Prompt Plan
-
-- JSON Schema / semantic validation。
-- Branch / Leaf 件数。
-- modelRef validation。
-- target count 差分。
-- 大量データレビューへの遷移。
+- Grok回答の説明文を含む全文を貼り付け可能。
+- candidate抽出失敗時も原文を保持する。
+- parse失敗時も原文を保持する。
+- invalid result を確定版 Artifact へ直接保存しない。
+- 再貼り付け・再解析できる。
+- 工程ごとに適切なエラー文言を表示する。
 
 ---
 
-## 16. ワークフロー画面
+## 16. ワークフロー工程 UX 要件
 
 Workflow は Grok 工程ではない。
 
-この画面には Grok 用の依頼生成・Prompt paste 機構を置かない。
+Grok 用の依頼生成・回答 paste を必須機能として置かない。
 
-### 16.1 生成前
+ユーザーが最低限確認・実行できること。
 
-```text
-ワークフロー
-────────────────────────────────
+- Models status。
+- Prompt Plan status。
+- Template status。
+- Manifest status。
+- planned branch count。
+- planned image count。
+- Workflow compile 実行。
+- compile validation result。
+- generated branch count。
+- unused branch count。
+- output Workflow path / filename。
+- generated artifact の folder open。
 
-入力
-
-✓ models.json        確定済み
-✓ prompt_plan.json   確定済み
-✓ Template           有効
-✓ Manifest           有効
-
-予定
-
-ブランチ数     12
-画像枚数       504
-
-[ワークフローを生成]
-```
-
-### 16.2 生成後
-
-```text
-生成結果
-────────────────────────────────
-
-✓ 12ブランチ
-✓ 504生成項目
-✓ 未使用ブランチ 0
-✓ Node ID衝突 0
-✓ Link ID衝突 0
-
-出力
-LoRA_{project.id}.json
-
-[フォルダーを開く]
-```
-
-詳細技術 validation は展開可能な詳細領域へ置く。
+技術的な validation 詳細は必要に応じて確認可能にするが、通常 UI では成功 / Blocking reason を優先する。
 
 ---
 
-## 17. モデル配置画面
+## 17. モデル配置工程 UX 要件
 
-目的は R2 操作ではなく、必要モデルが生成環境に揃っているか確認すること。
+目的は R2 を操作することではなく、`models.json` が要求するモデル実体が生成環境で利用可能か確認すること。
 
-```text
-モデル配置
-────────────────────────────────
+ユーザーは最低限次を確認できること。
 
-必要モデル       Local       R2        状態
+- 必要モデル一覧。
+- Local ComfyUI に存在するか。
+- R2 に存在するか。
+- 使用可能 / 転送必要 / 見つからない等の状態。
+- 対象ファイル名。
+- 必要なら R2 File Manager を開ける。
+- handoff に必要な識別情報をコピーできる。
 
-Checkpoint       ✓           ✓         使用可能
-Character LoRA   ✓           ✓         使用可能
-Pose LoRA        ✕           ✓         転送が必要
-Style LoRA       ✕           ✕         見つかりません
-```
+Batch Studio は v1 で destructive R2 operation を独自実装しない。
 
-選択したモデル詳細:
-
-```text
-Pose LoRA
-
-pose.safetensors
-
-Local
-見つかりません
-
-R2
-見つかりました
-
-[R2 File Managerを開く]
-[ファイル名をコピー]
-```
-
-Batch Studio は初期段階で destructive R2 operation を独自実装しない。
+具体的な一覧 UI は固定しない。
 
 ---
 
-## 18. 実行前チェック画面
+## 18. 実行前チェック UX 要件
 
-技術ログを最初に見せず、まず READY / BLOCKED の結論を示す。
+最初に技術ログではなく、Project が READY / BLOCKED のどちらかを明確に示す。
 
-### 18.1 READY
+最低限確認できること。
 
-```text
-実行準備ができました
+- READY / BLOCKED。
+- 予定画像枚数。
+- Blocking issue の件数と内容。
+- Warning の件数と内容。
+- 問題が属する工程。
+- 問題の工程へ移動する導線。
 
-✓ READY FOR COMFYUI
-
-504枚予定
-
-すべての必須項目を確認しました。
-```
-
-### 18.2 BLOCKED
-
-```text
-実行準備が完了していません
-
-3件の対応が必要です
-
-────────────────────────
-
-モデル配置
-✕ pose.safetensors がLocalにありません
-
-プロンプト設計
-✕ 未入力のLoRA強度があります
-
-ワークフロー
-✓ 問題ありません
-
-[問題のある項目を確認]
-```
-
-Blocking と Warning は明確に分ける。
+Blocking と Warning を明確に区別する。
 
 ---
 
-## 19. Button / Action 文言
+## 19. 日本語 Action 文言
 
-英語技術語をそのまま Button にしない。
+英語技術語を通常の主要 Button 文言としてそのまま使わない。
 
-推奨例:
+推奨用語:
 
 | Internal action | 日本語 UI |
 | --- | --- |
@@ -980,126 +556,60 @@ Blocking と Warning は明確に分ける。
 | Reset to Baseline | 基準値に戻す |
 | Compile Workflow | ワークフローを生成 |
 
-Button 単体で意味が曖昧な場合は、画面見出しや補足文と合わせて理解できるようにする。
+実装エージェントは文脈に応じてより自然な日本語へ変更してよいが、同じ意味の操作で用語が不必要に揺れないようにする。
 
 ---
 
-## 20. Empty / Error State
+## 20. Empty / Error State 要件
 
-単に「データがありません」ではなく、次の行動を含める。
+Empty / Error state は状態だけでなく、可能な限り次の行動を示す。
 
-悪い例:
+例:
+
+悪い表示:
 
 ```text
 モデルがありません
 ```
 
-推奨:
+期待する意味:
 
 ```text
-まだモデル選定結果がありません。
-
-Grokでモデル選定を行い、結果をこの画面へ取り込んでください。
-
-[選定依頼を生成]
+まだモデル選定結果がない
++ Grokでモデル選定が必要
++ 選定依頼を生成できる
 ```
 
-解析失敗時も pasted original text を破棄しない。
+解析失敗時:
 
-```text
-結果を解析できませんでした。
-
-貼り付けた内容は下書きとして保持されています。
-詳細を確認して再度取り込むか、Grokへ修正を依頼してください。
-```
+- 貼り付けた原文を消さない。
+- 何を解析できなかったかを示す。
+- 再試行または Grok 再修正への導線を持つ。
 
 ---
 
-## 21. 日本語 UI 実装上の注意
+## 21. 日本語 UI 実装上の品質要件
 
-### 21.1 ラベル幅
-
-日本語ラベルは英語より短く見えても入力説明が長くなるため、form は固定 narrow label column に依存しすぎない。
-
-### 21.2 技術用語
-
-通常表示:
-
-```text
-Civitai基準値
-生成項目
-確定済み
-更新が必要
-```
-
-詳細表示でのみ:
-
-```text
-strengthBaseline
-modelRef
-schemaVersion
-observed-usage-derived
-```
-
-### 21.3 Tooltip 依存を避ける
-
-重要な blocking reason や data provenance を tooltip だけに置かない。
-
-### 21.4 色だけに依存しない
-
-```text
-✓ 確定済み
-⚠ 注意あり
-✕ 続行できません
-```
-
-のように icon + text を使う。
+- 重要な Blocking reason を tooltip だけに置かない。
+- 色だけに状態判定を依存しない。
+- 日本語の長い説明文でも破綻しない。
+- 技術用語は必要な詳細表示で確認できるようにし、通常操作では人間向け名称を優先する。
+- `strengthBaseline`、`modelRef`、`schemaVersion` 等の内部用語を通常の主要操作ラベルへ露出しすぎない。
+- 数百件以上の Prompt Plan でも操作可能な性能を確保する。
+- destructive / confirm action は誤操作しにくくする。
+- Draft と Confirmed の違いをユーザーが認識できること。
 
 ---
 
-## 22. 実装コンポーネント候補
-
-共通実装部品として次を想定する。
-
-```text
-AppShell
-ProjectNavigation
-NextActionCard
-ArtifactStatusBadge
-GrokPaneControls
-AttachmentList
-GeneratedRequestPanel
-GrokResultPastePanel
-ValidationSummary
-DraftConfirmBar
-HistoryView
-
-StoryWorkspace
-ModelSelectionWorkspace
-MissingRequirementPanel
-ModelSelectionCard
-
-PromptPlanWorkspace
-PromptPlanModeTabs
-BranchList
-LeafVirtualTable
-LeafInspector
-CommonPromptEditor
-LoraStrengthEditor
-
-WorkflowCompilePanel
-ModelAvailabilityTable
-PreflightSummary
-```
-
-見た目を共通化しても、Story / Models / Prompt Plan の業務フローまで同じ Component に押し込まない。
-
----
-
-## 23. 本書で扱わないもの
+## 22. 本書で扱わないもの
 
 次は別文書が正本であり、本 UX 文書では詳細定義しない。
 
+- 個別画面のレイアウト。
+- Component hierarchy。
+- Table / Tree / List 等の具体的 UI 技法。
+- Modal / Drawer / Inspector 等の採否。
+- CSS / Design System / color / typography の詳細。
 - `models.json` schema。
 - `prompt_plan.json` schema。
 - Workflow Template Manifest schema。
@@ -1112,30 +622,19 @@ PreflightSummary
 
 ---
 
-## 24. 次の UX 詳細化対象
+## 23. 実装時の受入方針
 
-本 Draft を基礎として、次を個別に実装レベルまで詳細化する。
+実装エージェントが選んだ画面構成そのものではなく、各工程で本書の capability が満たされているかを評価する。
 
-```text
-1. Story UX
-   - component hierarchy
-   - state transition
-   - empty/error/history
+特に次を受入基準とする。
 
-2. Models UX
-   - selection result layout
-   - missing model flow
-   - catalog generation changes
-   - strength provenance display
-
-3. Prompt Plan UX
-   - Branch List
-   - Leaf Virtual Table
-   - Inspector
-   - bulk review
-   - validation navigation
-   - reordering
-   - strength editing
-```
-
-個別画面の詳細化で新しい domain requirement が必要になった場合は、UI 文書だけで暗黙に仕様化せず Requirements / Decision を更新する。
+1. ユーザーが次に何をすべきか判断できる。
+2. Grokとの手動往復がStory / Models / Prompt Planそれぞれで成立する。
+3. Grokから受け取った内容を直接確定せず Draft / Validation / Confirm を経由する。
+4. 不足モデル等のBlocking状態から解決方法を理解できる。
+5. 数百件規模のPrompt Planを実用的にレビュー・修正できる。
+6. Civitai baselineとProject実適用strengthを混同しない。
+7. Workflow工程でGrokにWorkflow JSONを生成させない。
+8. Model Availability / PreflightでREADY/BLOCKED理由を追跡できる。
+9. UI都合で正式schemaや責務境界を変更していない。
+10. 通常操作が日本語で理解できる。
