@@ -275,15 +275,15 @@ Compiler は label を Node / Group title の生成材料に使えるが、Comfy
 
 Branch LoRA が0件でも、Root LoRA + common prompt + leaf prompt で生成する有効 Branch であり得る。
 
-### 8.4 LoRA strength ownership
+### 8.4 LoRA strength ownership / initialization
 
 `prompt_plan.json` に保存する strength は、そのプロジェクトで **実際に Workflow へ適用する値** である。
 
-`models.json` に保存する Civitai 由来の推奨・基準強度とは責務が異なる。
+`models.json` に保存する Civitai 由来の基準強度とは責務が異なる。
 
 ```text
 models.json
-  = model/version に紐づく Civitai 由来の基準情報
+  = model/version に紐づく Civitai 由来の baseline
 
 prompt_plan.json
   = Root / Branch ごとに実際に使用する可変値
@@ -296,10 +296,47 @@ prompt_plan.json
 - 0..1 等の固定範囲を Schema v1 では設けない。
 - Root LoRA と Branch LoRA はそれぞれ実適用強度を持てる。
 - Batch Studio の Web UI から `prompt_plan.json` 側の強度を調整できる。
-- UI で実適用強度を変更しても `models.json` の推奨・基準値は変更しない。
+- UI で実適用強度を変更しても `models.json` の baseline は変更しない。
 - Compiler は `prompt_plan.json` の実適用強度を最終 Workflow の LoRA Stack へ反映する。
 
-Civitai 由来の基準値を `prompt_plan.json` の初期値へどう反映するかは別途決める。特に Civitai 側で得られる weight が単一値である場合、それを `strengthModel` / `strengthClip` へどのように展開するかは `OPEN-006` の責務とする。
+#### Civitai baselineからの初期化
+
+`models.json` の該当LoRAに、Civitai由来の
+
+```text
+strengthBaseline.value = w
+```
+
+が存在し、そのbaselineをPrompt Plan作成時の初期値として使用する場合、v1では次のように機械展開する。
+
+```text
+strengthModel = w
+strengthClip  = w
+```
+
+例:
+
+```text
+models.json strengthBaseline.value = 0.7
+
+-> initial strengthModel = 0.7
+-> initial strengthClip  = 0.7
+```
+
+これは「CivitaiがModelとCLIPを別々に0.7と推奨した」という意味ではない。Civitai由来sourceが1 scalarしか持たないため、そのscalarを情報損失なく2つのPrompt Plan fieldへ初期展開するmechanical ruleである。
+
+初期化後の `strengthModel` / `strengthClip` はProject実適用値であり、Grok / User / Web UIが別々の値へ変更できる。変更しても `models.json.strengthBaseline` は変更しない。
+
+#### Baseline absent
+
+`models.json` に `strengthBaseline` が存在しない場合、Batch Studioは次のような経験則defaultを自動補完しない。
+
+```text
+1.0 / 1.0
+0.7 / 0.7
+```
+
+Prompt Plan Schemaでは両strengthが必須なので、この場合はGrokまたはユーザーが実適用値を明示しなければならない。
 
 ## 9. leaves
 
@@ -318,17 +355,18 @@ Branch ごとに1件以上を必須とする。
 
 ### 9.1 id
 
-Compiler が `row_id` に変換できる stable ID。
+Compiler が `row_id` / `path_label` に変換する stable output ID。
 
 形式と Project-wide uniqueness は 4.2 に従う。
 
 ### 9.2 name
 
-人間向け識別名と `path_label` 等の派生元。
+人間向け識別名。
 
 - 必須 string。
 - 空文字不可。
 - stable ID の文字制約は適用しない。
+- filesystem output identityには使用しない。
 
 ### 9.3 positive / negative
 
@@ -382,13 +420,15 @@ scene_matrix_json
 
 | Prompt Plan | SceneMatrix |
 | --- | --- |
-| `leaf.id` | `row_id` |
-| `leaf.name` | `name`, `path_label` |
+| `leaf.id` | `row_id`, `path_label` |
+| `leaf.name` | `name` |
 | `leaf.positive` | `positive_base` |
 | `leaf.negative` | `negative_base` |
 | - | `enabled: true` |
 | - | `filename_enabled: true` |
 | - | empty category JSON / parts 等 |
+
+`leaf.id` をstable output identity、`leaf.name` を人間向け表示名として分離する。
 
 Custom node schema が変化した場合は Prompt Plan schema を変えず、Compiler adapter だけを更新できることを目標とする。
 
@@ -434,6 +474,7 @@ JSON Schemaだけでは表現しにくい次を Batch Studio が検証する。
 - Leaf ID の Project-wide uniqueness。
 - `modelRef` が `models.json` で解決可能。
 - 同じ Root / Branch 内の明らかな重複 LoRA reference を warning。
+- baseline initializationを行う場合、source `strengthBaseline.value` と初期展開ruleを追跡可能にする。
 - 必要に応じた cross-artifact validation。
 
 解決不能 `modelRef` は Workflow Compile を BLOCKED とする。
