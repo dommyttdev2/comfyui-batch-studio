@@ -1,6 +1,6 @@
 # Workflow Compiler Architecture
 
-Status: Active / Manifest Schema v1
+Status: Active / Manifest Schema v1 / Naming and Count Policy v1
 
 ## 1. 目的
 
@@ -104,9 +104,10 @@ Branch 専用 Reroute 等が視覚 Group 外に存在していても、Manifest 
 
 任意入力:
 
-- output naming policy
 - compiler configuration
 - compatibility/migration policy
+
+v1 の naming / save path / image count rule は Compiler contract として固定し、Grok の自由文や任意 naming policy input で上書きしない。
 
 ## 5. Workflow Template Manifest Schema v1
 
@@ -470,7 +471,7 @@ Node の `pos` と複製対象 Group の bounding へ同じ offset を適用す�
 
 `offset.x == 0 && offset.y == 0` 等、複数 Branch が重なる設定は semantic validation で検出して blocking error にできる。
 
-## 12. Branch Configuration
+## 12. Branch Configuration / Naming / Count Policy v1
 
 各 `prompt_plan.branches[]` について次を設定する。
 
@@ -487,7 +488,7 @@ Node の `pos` と複製対象 Group の bounding へ同じ offset を適用す�
 
 LoRA が0件でも Branch 自体に有効な leaf が存在するなら、その Branch は有効な生成枝である。Root LoRA と Prompt だけで生成できるためである。
 
-### 12.2 Main SceneMatrix
+### 12.2 Main SceneMatrix / Leaf identity
 
 Grok の leaf を `SCENE_MATRIX_LINE` へ変換する。
 
@@ -512,7 +513,7 @@ Compiler 側の概念出力:
   "node_id": "",
   "category": "",
   "name": "S1-01_C1_sitting_desk",
-  "path_label": "S1-01_C1_sitting_desk",
+  "path_label": "s1-01-c1",
   "enabled": true,
   "filename_enabled": true,
   "positive_base": "sitting, desk, looking at viewer",
@@ -527,27 +528,165 @@ Compiler 側の概念出力:
 }
 ```
 
+正式 mapping:
+
+```text
+leaf.id   -> row_id
+leaf.id   -> path_label
+leaf.name -> name
+```
+
+`leaf.id` は Project-wide unique かつ filesystem-safe stable ID なので、出力identityにも使用する。`leaf.name` は人間向け名称であり、filesystem identityには使用しない。
+
 内部形式は Template/custom node version に依存するため Compiler adapter が所有する。
 
-### 12.3 固定 Matrix / Prompter
+### 12.3 Fixed Matrix / Prompter cardinality
 
 Template が固定 camera matrix、追加 trigger node 等を含む場合、Template-owned default を維持する。
 
-Prompt Plan がその役割を明示的に所有するよう schema 拡張されるまで、Grok に内部設定を返させない。
+ただし v1 Template は **1 Prompt Plan leaf を複数generationへ暗黙増幅してはならない**。
 
-### 12.4 Counter / Latent / Sampler
+```text
+1 Prompt Plan leaf
+  -> 1 ScenePromptCounter item
+  -> 1 generation
+```
 
-原則 Template-owned generation defaults とする。
+`fixedMatrix` 等の Template-owned node が Cartesian product 等によりleafを2倍・4倍へ増幅する構成は v1 Template として無効とする。
 
-将来ユーザー要件により可変化する場合は Prompt Plan へ安易に追加せず、「プロジェクト生成設定」と「意味的 Prompt Plan」のどちらが所有するかを先に決める。
+Prompt Plan がその役割を明示的に所有するよう将来schema拡張されるまで、Grok に内部設定を返させない。
 
-### 12.5 Title / Save Path
+### 12.4 Counter / image count
 
-Node title、Group title、Save path は Grok の自由文ではなく Compiler の naming policy から生成する。
+v1 は次を固定する。
 
-Branch `id` / `label` を入力として派生させる。
+```text
+imagesPerLeaf = 1
+```
 
-正式 naming / count policy は `OPEN-005` で別途固定する。Manifest Schema v1 はこの責務を持たない。
+Compiler は各 Branch の `counter` role Nodeを **1 image per leaf** となるようpatchし、`count = 1` を設定する。Grok / Prompt Plan / Template default から別値を指定しない。
+
+したがって:
+
+```text
+branchImageCount(branch)
+  = branch.leaves.length
+
+projectImageCount
+  = sum(branch.leaves.length)
+```
+
+`project_brief.json.generation.target_image_count` は Prompt Planning の目標値であり、実枚数の正本ではない。
+
+```text
+targetImageCount = 500
+actualImageCount = 504
+Delta            = +4
+```
+
+この差分は UI / Preflight で warning / informational status として表示できるが、差分だけでは Compile をBlockしない。
+
+Latent / Sampler 等のその他generation defaultは原則 Template-owned とする。将来可変化する場合は Prompt Planへ安易に追加せず、「プロジェクト生成設定」と「意味的 Prompt Plan」のどちらが所有するかを先に決める。
+
+### 12.5 Human-readable titles
+
+`branch.label` は人間向け表示にのみ使用する。filesystem identityには使用しない。
+
+Compiler が動的に設定するtitleは次を標準とする。
+
+```text
+Group:
+Gen - {branch.id} - {displayLabel} ({branchImageCount})
+
+Branch LoRA Stack:
+LoRA - {branch.id} - {displayLabel}
+
+Main SceneMatrix:
+Prompt - {branch.id} - {displayLabel} ({branchImageCount})
+
+ScenePromptCounter:
+1 image per leaf
+
+SceneSaveImage:
+Save - {branch.id} - {displayLabel} ({branchImageCount})
+```
+
+`displayLabel` は表示時だけ次の正規化を行う。
+
+- 前後空白を除去。
+- CR/LFを空白へ置換。
+- 連続空白を1個へ圧縮。
+- UI / Workflow title用には最大80文字でtruncate可能。
+
+この正規化で `prompt_plan.json` の元 `branch.label` を変更しない。
+
+Sampler / Encode / VAE Decode / Prompter 等、上記以外の内部Node titleは原則 Template titleを維持する。
+
+### 12.6 Workflow filename / save path
+
+新規確定Workflow filename:
+
+```text
+LoRA_{project.id}.json
+```
+
+例:
+
+```text
+project.id = 15_office_boss
+-> LoRA_15_office_boss.json
+```
+
+BranchのSceneSaveImage保存先はCompilerが次から派生する。
+
+```text
+BatchStudio/{project.id}/{branch.id}
+```
+
+例:
+
+```text
+BatchStudio/15_office_boss/b01
+BatchStudio/15_office_boss/b02
+```
+
+原則:
+
+- `project.title` をfilesystem pathに使用しない。
+- `branch.label` をfilesystem pathに使用しない。
+- Grokに保存先を生成させない。
+- Templateに残った旧Projectの保存先をそのまま継承しない。
+
+`project.id` の形式はProject contractで次を要求する。
+
+```regex
+^[a-z0-9][a-z0-9._-]{0,63}$
+```
+
+### 12.7 Physical output filename boundary
+
+Batch Studio / Compiler が所有するのは次までとする。
+
+```text
+save directory
++ leaf path_label / output identity
++ filename_enabled = true
+```
+
+実ファイルの以下は `SceneSaveImage` custom node の保存実装に委ね、Batch Studioで重複実装しない。
+
+- extension
+- numeric sequence / collision suffix
+- timestamp suffix
+- seed等のcustom-node固有suffix
+
+```text
+Batch Studio
+  -> directory + path_label
+
+SceneSaveImage
+  -> final physical filename
+```
 
 ## 13. Branch Count
 
@@ -583,6 +722,7 @@ Template version/hash
 + Manifest schema/version/hash
 + models.json
 + prompt_plan.json
++ project.id
 + compiler version/config
 ```
 
@@ -633,6 +773,8 @@ Manifest hash は Manifest 自身へ埋め込まず、Compile時の外部 proven
 - 複数Branch時に layout offset が重複配置を発生させない。
 - `models.json` ref が解決可能。
 - Prompt Plan の枝・葉が有効。
+- `project.id` がfilesystem-safe ID規則を満たす。
+- Template-owned prompt transformが `1 leaf = 1 generation` cardinalityを破らない。
 
 ### 16.2 Compile後
 
@@ -643,9 +785,16 @@ Manifest hash は Manifest 自身へ埋め込まず、Compile時の外部 proven
 - Group ID 重複なし。
 - Branch count 一致。
 - 全 Branch の main Matrix が非空。
+- 全 Branch の `counter` が `count = 1`。
+- 各BranchのMain SceneMatrix row数が `branch.leaves.length` と一致。
+- Project予定枚数がPrompt Plan全leaf総数と一致。
+- `row_id` / `path_label` が対応する `leaf.id` と一致。
+- Save path が `BatchStudio/{project.id}/{branch.id}` と一致。
 - LoRA file が `models.json` に存在。
 - `filename_enabled` 等 Compiler-owned invariant が成立。
 - `last_node_id` / `last_link_id` 整合。
+
+`generation.target_image_count` とProject予定枚数の差分はblocking invariantではない。
 
 ## 17. Manifest Schema Evolution
 
@@ -660,15 +809,25 @@ Schema v1 が表現できない Template topology が必要になった場合は
 
 新しい意味が必要な場合は `schemaVersion` 更新と migration / compatibility policy を先に定義する。
 
-## 18. 今後確定する項目
+Naming / count ruleについても、将来 `imagesPerLeaf != 1`、Branch単位の個別枚数、別保存tree等が必要になった場合はGrok自由文や隠れTemplate設定で変更せず、正式Requirement / Decisionとしてversioned policyへ拡張する。
 
-Manifest Schema v1、role naming、Prototype ownership、Common/Branch boundary、layout、Template version/hash、Compiler build provenance の責務は確定済み。
+## 18. 確定済み v1 Compiler policy
 
-残る主な Workflow Compiler 未決事項:
+v1では次の主要境界を確定済みとする。
 
-- Branch / Node / Group title の naming policy。
-- Save path policy。
-- per-leaf image count / branch total image count の所有元。
-- output filename metadata policy。
+- Manifest Schema v1 / role naming。
+- Prototype Node / Group ownership。
+- Prototype内部Link自動導出。
+- Common -> Branch boundary。
+- layout policy。
+- Template version/hash binding。
+- Compiler build provenance。
+- `1 leaf = 1 image`。
+- Branch / Project image count derivation。
+- Branch / Group /主要Node title naming。
+- Workflow filename。
+- SceneSaveImage save path。
+- Leaf output identity / `path_label`。
+- Physical filename suffixをSceneSaveImageへ委譲する境界。
 
-これらは `OPEN-005` で扱う。
+これらをGrok outputやTemplateのコピー残りで上書きしない。
