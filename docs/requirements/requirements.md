@@ -53,8 +53,8 @@ Status: Active
 | REQ-WF-004 | Decided | 最終 Workflow に未使用枝、空の予約枝、未使用枝用 bypass ノード群を残さない。 | `architecture/workflow-compiler.md` |
 | REQ-WF-005 | Decided | Compiler は枝複製時に Node ID、Link ID、関連参照、Group、座標を衝突なく再生成する。 | `architecture/workflow-compiler.md` |
 | REQ-WF-006 | Decided | Root LoRA は全枝共通、Branch LoRA は当該枝だけに適用する。Root LoRA が不要なプロジェクトでは空 Stack を許容する。 | `architecture/workflow-compiler.md` |
-| REQ-WF-007 | Draft | Template の可変ノードを Node ID のコード埋め込みで特定せず、Manifest に role / boundary / prototype 情報を定義する。 | `architecture/workflow-compiler.md` |
-| REQ-WF-008 | Open | Prototype の正式な Manifest schema、枝間隔、Group 複製方式、Compiler version の記録形式を実装前に固定する。 | `architecture/workflow-compiler.md` |
+| REQ-WF-007 | Decided | Template の可変Nodeを Node ID のコード埋め込みで特定せず、`schemas/workflow-template-manifest.schema.json` に従う Manifest の semantic role、Prototype ownership、Common→Branch boundary から解決する。Prototype内部Linkは両端Nodeのownershipから自動導出し、ManifestへLink ID一覧を重複保持しない。 | `architecture/workflow-compiler.md` |
+| REQ-WF-008 | Decided | Manifest Schema v1 は Common/Branch role、`branchPrototype.nodeIds` / `groupIds`、Boundaryのrole+slot、2次元layout offset、`manifestVersion`、Template `id` / `version` / SHA-256 binding を定義する。Template hash不一致や未宣言cross-boundary LinkはCompileをBlockする。Compiler versionとManifest hashはManifest自身ではなくWorkflow build provenanceとして `project_meta.json` 側へ記録する。 | `architecture/workflow-compiler.md` |
 
 ## 6. External Tools
 
@@ -78,8 +78,7 @@ Status: Active
 
 未決事項は実装時に暗黙決定せず、Decision Log へ判断を追加してから `Open` / `Draft` を `Decided` へ変更する。
 
-1. Workflow Template Manifest の正式 schema。
-2. Workflow の保存パス・枝タイトル・画像枚数など、Grok 指定と Compiler 派生値の境界。
-3. R2 File Manager との将来の直接 API 統合。
-4. ComfyUI Queue / 進捗管理を将来スコープへ追加する条件。
-5. Civitai の投稿画像メタデータ等から LoRA の基準強度を導出する場合の正式アルゴリズム、provenance schema、および Civitai の単一 weight を `strengthModel` / `strengthClip` へどう初期展開するか。
+1. Workflow の保存パス・枝タイトル・画像枚数など、Grok 指定と Compiler 派生値の境界。
+2. R2 File Manager との将来の直接 API 統合。
+3. ComfyUI Queue / 進捗管理を将来スコープへ追加する条件。
+4. Civitai の投稿画像メタデータ等から LoRA の基準強度を導出する場合の正式アルゴリズム、provenance schema、および Civitai の単一 weight を `strengthModel` / `strengthClip` へどう初期展開するか。
