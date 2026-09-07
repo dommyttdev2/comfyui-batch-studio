@@ -378,9 +378,7 @@ Grok response
 
 ### Scope boundary
 
-本 Decision は `prompt_tree.md` の位置づけを決めない。
-
-`prompt_tree.md` を独立正本とするか `prompt_plan.json` からの派生成果物とするかは `OPEN-001` / `REQ-PLAN-004` のまま別途判断する。
+本 Decision の時点では `prompt_tree.md` の位置づけを決めなかった。その後 `DEC-016` で解決した。
 
 ### Resolves
 
@@ -388,22 +386,72 @@ Grok response
 
 ---
 
+## DEC-016: Prompt Plan Web UI replaces prompt_tree.md as the human-readable view
+
+Date: 2026-09-07
+Status: Accepted
+
+### Decision
+
+`prompt_plan.json` を Prompt 設計の機械可読な正本とし、人間向けの確認・編集は Batch Studio の Prompt Plan Web UI で提供する。
+
+新規プロジェクトでは `prompt_tree.md` を標準 Artifact として生成・維持しない。
+
+```text
+Grok
+  -> prompt_plan.json
+       |-> Prompt Plan Web UI
+       `-> Workflow Compiler
+```
+
+Prompt Plan Web UI は `prompt_plan.json` の common、Root LoRA、Branch、Branch LoRA、leaf prompt、実適用強度、validation state 等を人間が追跡できる形で表示・編集する。
+
+UI 上の編集は Prompt Plan の Draft / Confirm lifecycle に従い、別の Markdown 正本を作成しない。
+
+### Workflow boundary
+
+- Workflow Compiler の Prompt 入力は確定済み `prompt_plan.json`。
+- `prompt_tree.md` を Workflow Compiler の入力にしない。
+- `prompt_tree.md` を Grok に添付して Workflow JSON を作らせる方式にも戻さない。
+
+### Legacy policy
+
+既存プロジェクトに存在する `prompt_tree.md` は Legacy Artifact としてのみ扱う。
+
+必要な場合は Import / conversion candidate として解析できるが、その内容を自動的に正本へ昇格させない。
+
+```text
+Legacy prompt_tree.md
+  -> Import / conversion candidate
+  -> Batch Studio validation / review
+  -> User approval
+  -> prompt_plan.json
+```
+
+Legacy conversion の実装は v1 の必須条件ではなく、必要性が確認された場合に別要件として追加する。
+
+### Rationale
+
+- 人間向け表示のためだけに JSON と Markdown の二重正本を維持する必要がない。
+- Web UI なら Branch / Leaf の折りたたみ、強度編集、validation 表示、並べ替え等を直接提供できる。
+- Prompt 設計の source of truth を `prompt_plan.json` に一本化できる。
+- Markdown と JSON の drift を構造的に防げる。
+
+### Resolves
+
+- `REQ-PLAN-004` を Decided とする。
+- `OPEN-001` を Superseded とする。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
-Status: Open
+Status: Superseded
 
-### Question
+`DEC-016` により解決済み。
 
-`prompt_plan.json` と情報が重なる `prompt_tree.md` をどう扱うか。
-
-Options:
-
-1. Grok が両方を作り、両方正本。
-2. `prompt_plan.json` を機械可読正本とし、Batch Studio が `prompt_tree.md` を派生生成。
-3. 別の関係を定義。
-
-二重管理による drift を避ける観点では Option 2 が有力だが、未合意のため確定しない。
+`prompt_tree.md` は新規プロジェクトの正本・派生標準Artifactのどちらにもせず、Legacy Artifact としてのみ扱う。人間向け表示・編集は Prompt Plan Web UI が担当する。
 
 ---
 
@@ -438,6 +486,8 @@ Status: Open
 意味構造は Accepted だが、正式 field name、ID uniqueness scope、将来 metadata の扱いを実装前に固定する。
 
 ファイル名、確定版の lifecycle、Workflow Compiler の正規入力であることは `DEC-015` で Accepted 済み。
+
+人間向け表示・編集を Prompt Plan Web UI に統合し、`prompt_tree.md` を標準 Artifact としないことは `DEC-016` で Accepted 済み。
 
 ---
 
