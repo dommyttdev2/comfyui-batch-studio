@@ -247,6 +247,47 @@ ComfyUI Batch Studio の後続処理に必要な情報を自然に表現でき�
 
 ---
 
+## DEC-013: LoRA strength has model baseline and plan application layers
+
+Date: 2026-09-07
+Status: Accepted
+
+### Decision
+
+LoRA strength は用途の異なる2層で保持する。
+
+```text
+models.json
+  = Civitai を source とする model/version 側の推奨・基準強度
+
+prompt_plan.json
+  = 当該 Project の Root / Branch で実際に Workflow へ適用する強度
+```
+
+`models.json` の基準強度は Civitai 由来の根拠を取得できる場合のみ保存し、根拠がない場合は値を捏造しない。
+
+`prompt_plan.json` の実適用強度は Batch Studio の Web UI から調整可能とする。実適用強度を変更しても `models.json` の Civitai 由来基準値は変更しない。
+
+### Rationale
+
+- `models.json` の source of truth は Civitai であり、モデルに紐づく基準情報を保持する場所として自然である。
+- 同じ LoRA でも Scene / Branch によって実際の適用強度を変える必要がある。
+- Web UI から調整する値と、外部ソース由来の基準値を混同すると provenance が失われる。
+
+### Civitai API finding
+
+2026-09-07 時点では Model / Model Version API に汎用的な「推奨 LoRA 強度」フィールドは確認できない。
+
+Images API の `withMeta=true` では、投稿画像で使用された `meta.civitaiResources[].weight` を取得できる場合がある。これは observed usage であり、作者の明示的推奨値とは限らない。
+
+### Consequence
+
+投稿画像 weight から基準値を導出する場合は、source / basis / aggregation method 等の provenance を保持する。
+
+Batch Studio 自身は Civitai API を直接呼ばず、必要な Civitai 情報は `civit-model-viewer` -> `model_catalog.json` の境界を維持する。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
@@ -275,13 +316,16 @@ Status: Open
 
 - `models.json` は Batch Studio 専用 schema とする。
 - 既存形式との互換性は要件としない。
+- Civitai 由来の LoRA 推奨・基準強度は `models.json` が所有する。
+- Project で実際に適用する LoRA 強度は `prompt_plan.json` が所有する。
 
 ### Remaining Questions
 
 - stable model reference の正式 field name と命名規則。
 - catalog metadata をどこまで snapshot するか。
 - `missingRequirements` を同一ファイルに持つか selection draft と分離するか。
-- role、trained words、reason、LoRA strength 等をどこまで `models.json` が所有するか。
+- strength recommendation / provenance の正式 field names。
+- role、trained words、reason を正式 schema でどう表現するか。
 
 ---
 
@@ -323,3 +367,33 @@ Compiler が派生する以下の正式ルールを決める。
 - output filename metadata。
 
 Grok の自由文へ依存させない方針自体は維持する。
+
+---
+
+## OPEN-006: Civitai strength derivation and model/clip mapping
+
+Date: 2026-09-07
+Status: Open
+
+### Questions
+
+Civitai が model-level の明示推奨値を返さず、投稿画像 metadata の LoRA weight から基準値を導出する場合の正式ルールを決める。
+
+- 対象画像の選び方。
+- 最低 sample 数。
+- median / mode / trimmed mean 等の aggregation method。
+- 外れ値処理。
+- Civitai metadata の freshness。
+- observed usage と creator-declared recommendation の区別。
+
+また、Civitai の LoRA weight が単一値である一方、現在の AnimaLoraStack / Prompt Plan は `strengthModel` と `strengthClip` の2値を持つため、初期値への展開規則を決める。
+
+例:
+
+```text
+weight = 0.7
+  -> strengthModel = 0.7
+  -> strengthClip  = 0.7
+```
+
+と単純に同値へする案はあるが、未合意のため確定しない。
