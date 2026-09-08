@@ -10,7 +10,7 @@ Electron の主画面で、Batch Studio のローカル工程とユーザー操�
 
 ## 2. 主画面
 
-基本レイアウト:
+Projectを開いている場合の基本レイアウト:
 
 ```text
 ┌───────────────────────┬──────────────────────────────┐
@@ -30,7 +30,11 @@ Electron の主画面で、Batch Studio のローカル工程とユーザー操�
 
 Grokが必要な工程では初期比率45:55を目安とし、divider resizeを許可する。Grok不要工程ではLocal UIを全幅で使用する。
 
+Projectを閉じている場合はProject工程navigationを表示せず、Home / R2 File Manager / Civit ExplorerをLocal UI全幅で利用できること。
+
 ## 3. Global Navigation
+
+Projectを開いている場合:
 
 ```text
 概要
@@ -44,9 +48,32 @@ Grokが必要な工程では初期比率45:55を目安とし、divider resizeを
 実行前チェック
 ```
 
+Projectを閉じている場合:
+
+```text
+ホーム
+R2 File Manager
+Civit Explorer
+```
+
 `Prompt Tree` の独立navigationは設けない。Prompt構造の人間向け表示・編集はPrompt Planへ統合する。
 
-## 4. Overview
+## 4. Project Lifecycle / Home
+
+起動時は前回明示的に開いていたProjectが有効なら自動復元する。
+
+Projectを開いている間は「プロジェクトを閉じる」を提供する。閉じる操作はProject artifactを削除せず、現在Projectの選択と次回起動時の自動復元記録だけを解除する。
+
+Projectを閉じたHomeでは最低限次を提供する。
+
+- プロジェクトを新規作成。
+- プロジェクトを開く。
+- R2 File Manager。
+- Civit Explorer。
+
+R2 File Manager / Civit ExplorerはProjectに依存しないアプリ共通Toolとして利用できる。一方、Projectを開いた場合の既存「モデルカタログ」「モデル配置」工程もそのまま維持する。
+
+## 5. Overview
 
 最低表示:
 
@@ -60,7 +87,7 @@ Grokが必要な工程では初期比率45:55を目安とし、divider resizeを
 
 Artifact dependency更新時は下流Artifactをstaleとして表示する。
 
-## 5. Grok Work Card
+## 6. Grok Work Card
 
 Story / Models / Prompt Planで提供する。
 
@@ -74,7 +101,7 @@ Story / Models / Prompt Planで提供する。
 
 Model Catalog / Workflow / Model Availability / PreflightにはGrok Work Cardを置かない。
 
-## 6. Artifact Editor / Import
+## 7. Artifact Editor / Import
 
 Grokから貼り戻す工程では次を提供する。
 
@@ -87,9 +114,11 @@ Grokから貼り戻す工程では次を提供する。
 
 Grok回答をpasteしただけでfinal fileを更新しない。
 
-## 7. Model Catalog Screen
+## 8. Model Catalog / Civit Explorer
 
-旧 `civit-model-viewer` の機能をBatch Studio UIへ統合する正規画面。
+Project工程の「モデルカタログ」は旧 `civit-model-viewer` の機能をBatch Studio UIへ統合する正規画面。
+
+Projectなしの「Civit Explorer」は同じ統合CatalogをProjectに紐付けず閲覧・SYNCするStandalone Toolとする。
 
 Grok paneは既定非表示とし、Local UIを全幅で使う。
 
@@ -100,29 +129,19 @@ Grok paneは既定非表示とし、Local UIを全幅で使う。
 - sync state / phase / progress / message / error。
 - generation / model count / added・updated・removed件数。
 - 保存先catalog path。
-- 現Projectが統合Catalogを使用中か。
-- 「このCatalogを使用」による明示切替。
 - Public / Private Collection一覧。
-- Collection選択 / 全選択 / 解除。
-- モデル名・ファイル名による全Collection横断検索。
-- Model選択状態を検索・Collection切替をまたいで保持。
-- Version切替。
-- thumbnail。
-- files / primary file。
-- trained words。
-- Civitai observed `strengthBaseline` とsampleCount。
+- Collection選択。
+- モデル名・ファイル名による検索。
+- Version / files / trained words / thumbnail / strengthBaseline確認。
 - Civitai model pageを外部ブラウザで開く。
-- 選択結果JSONコピー。
-- 名前付きCollection / Model / Version選択テンプレートの保存・適用・削除。
-- 大量Modelの段階表示。
 
-検索語がある場合はCollection選択に関係なく全Collectionを検索する。
+Project工程側ではさらに「このCatalogを使用」、Project向け選択結果JSON、Collection / Model / Version選択template等を提供する。
 
 同期失敗時も保存済みCatalogを消さず、存在する場合は閲覧可能にする。
 
-初回起動で保存済みCatalogがなくAPI keyが設定済みの場合のみ自動SYNCを開始する。保存済みCatalogがある通常起動では自動SYNCせず、保存値を即表示する。
+初回起動で保存済みCatalogがなくAPI keyが設定済みの場合のみ自動SYNCを開始する。保存済みCatalogがある通常起動では保存値を即表示する。
 
-## 8. Story Screen
+## 9. Story Screen
 
 - Current Brief summary。
 - `story.md` status。
@@ -131,7 +150,7 @@ Grok paneは既定非表示とし、Local UIを全幅で使う。
 - Validation。
 - Confirm / history。
 
-## 9. Models Screen
+## 10. Models Screen
 
 モデル選定主体はGrok。
 
@@ -145,7 +164,7 @@ Grok paneは既定非表示とし、Local UIを全幅で使う。
 
 カタログの探索・Collection操作・Version比較は「モデルカタログ」工程へ分離し、Models Screenをカタログbrowserにしない。
 
-## 10. Prompt Plan Screen
+## 11. Prompt Plan Screen
 
 `prompt_plan.json` の人間向け正規UI。
 
@@ -161,7 +180,7 @@ Leafを主ツリーへ1件ずつ大量展開せず、Matrix内へ集約する。
 
 選択Nodeの詳細は画面下部へ固定表示せずpopup/modalで表示する。LoRA popupではPrompt Planの適用強度に加え、`models.json`から解決したmodel名、version、file名、trained words、Civitai baselineを確認できること。
 
-## 11. Workflow Screen
+## 12. Workflow Screen
 
 GrokではなくCompiler工程。
 
@@ -174,20 +193,25 @@ GrokではなくCompiler工程。
 - structure validation。
 - Workflow生成済みの場合の「フォルダを開く」。
 
-## 12. Model Availability / R2 Screen
+## 13. Model Availability / R2 File Manager
 
-`models.json` とLocal / integrated R2所在を一覧化し、旧 `r2-file-manager` の主要機能を同じ工程へ統合する。
+Project工程の「モデル配置」は `models.json` とLocal / integrated R2所在を一覧化し、同じ画面から統合R2 Managerを操作できる。
+
+Projectなしの「R2 File Manager」はProject設定への紐付け操作を除き、同じR2管理機能をStandalone Toolとして利用できる。
 
 Grok paneは非表示でLocal UIを全幅使用する。
 
 最低限提供するUX:
 
-- model availability再確認。
-- Local / R2 / state (`available` / `transfer-required` / `missing`)表示。
+- model availability再確認（Project工程のみ）。
+- Local / R2 / state (`available` / `transfer-required` / `missing`)表示（Project工程のみ）。
 - R2接続設定 / 接続テスト。
 - Bucket選択 / create / empty-bucket delete。
-- breadcrumb付きfolder navigation。
-- object list / paging / bucket-wide search。
+- file-explorer風folder navigation。
+- 現在pathを1本で表示。
+- root以外ではfile table先頭に `../` folder rowを表示し、クリックで親prefixへ移動する。独立した「親へ」buttonは置かない。
+- folderとfileを同じtableへ表示。
+- object list / paging。
 - size / modified time。
 - single object download info。
 - upload file picker / progress / pause / resume / cancel。
@@ -197,13 +221,19 @@ Grok paneは非表示でLocal UIを全幅使用する。
 - optional storage metrics。
 - 「一括DLのURL生成」から開く独立popup。
 
-一括DLpopupはmain listのdelete selectionと独立したselection stateを持つ。folder移動・検索を跨いで最大500件保持し、選択済み一覧、個別解除、全解除、名前付きtemplate、URL / curl / wget / aria2cの生成・一括copyを提供する。
+R2のObject metadataはアプリ起動時にR2から同期してLocal userDataへ永続化する。保存済みindexは同期処理中も検索に利用できる。
+
+検索はSearch buttonによるsubmit方式ではなく、入力値の変更に応じてLocal indexからリアルタイム表示する。文字入力ごとにR2 APIへ検索requestを送らない。
+
+一括DLpopupはmain listのdelete selectionと独立したselection stateを持つ。folder移動・検索を跨いで最大500件保持し、選択済み一覧、個別解除、全解除、URL / curl / wget / aria2cの生成・一括copyを提供する。
+
+一括DLpopupのtemplate UIはfile browserより上部に配置する。保存済みtemplateはカード一覧ではなくプルダウンから選択し、選択時に対象Objectをbatch selectionへ反映する。template保存・削除操作も同領域へまとめる。
 
 数GB fileをRendererへ全読込せず、Main Processがstream/multipart uploadする。
 
 R2-only modelはLocal転送完了まで`transfer-required` / Blockingのままとする。
 
-## 13. Preflight Screen
+## 14. Preflight Screen
 
 ```text
 Artifacts
@@ -215,7 +245,7 @@ Integrated service readiness
 
 Blocking / Warningを分離しREADY条件を明示する。
 
-## 14. Grok Pane Controls
+## 15. Grok Pane Controls
 
 | 工程 | Grok pane |
 | --- | --- |
@@ -228,6 +258,7 @@ Blocking / Warningを分離しREADY条件を明示する。
 | ワークフロー | 非表示 |
 | モデル配置 | 非表示 |
 | 実行前チェック | 非表示 |
+| ProjectなしHome / R2 File Manager / Civit Explorer | 非表示 |
 
 工程切替時はこの既定表示を再適用する。
 
@@ -235,7 +266,7 @@ Grok paneを非表示にしてもWebContents/persistent sessionは破棄しな�
 
 Grokを使用しない工程ではshow/hide control自体を表示しない。Grok使用工程では手動show/hide、reload、external browser、divider resizeを許可するが、DOM injection / automatic send / upload automationは行わない。
 
-## 15. Secret boundary in UI
+## 16. Secret boundary in UI
 
 - `CIVIT_API_KEY` の値自体をGrok paneやProject artifactへ表示/保存しない。
 - Catalog UIは「設定済み / 未設定」の状態だけを表示する。
@@ -244,7 +275,7 @@ Grokを使用しない工程ではshow/hide control自体を表示しない。Gr
 - model binaryをGrok添付候補にしない。
 - Grok Cookie / browser profileをLocal Artifactへ保存しない。
 
-## 16. File Attachment UX
+## 17. File Attachment UX
 
 各fileについてname / absolute path / purpose / existenceを表示できること。
 
