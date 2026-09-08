@@ -42,6 +42,18 @@ Grok answer
 - model binary (`.safetensors` 等)
 - アプリ内部の秘密情報
 
+### 2.4 Final artifact output envelope
+
+Grok が Batch Studio へ貼り戻す最終 Artifact を生成する工程では、出力境界を固定する。
+
+- 最終成果物は指定された code block **1個だけ**とする。
+- code block の前後に説明、挨拶、要約、注意書き、補足を付けない。
+- 指定された Markdown 見出しまたは JSON field 以外を追加しない。
+- JSON は厳密に parse 可能とし、コメント、末尾カンマ、擬似値を含めない。
+- 修正依頼の場合も同じ output envelope を維持する。
+
+この規則は `story.md`、`models.json`、`prompt_plan.json` 相当の最終出力すべてに適用する。
+
 ## 3. Prompt Composition
 
 工程別依頼は原則として次の順に組み立てる。
@@ -83,9 +95,49 @@ Grok answer
 
 版権キャラクターの場合は公開情報を調査し、不確かな設定を推測で確定しないよう要求する。
 
+検討回答は次の見出し順を基本とする。
+
+```markdown
+# 調査・前提
+# Story案
+## 案A: ...
+## 案B: ...
+# 確認事項
+```
+
+これは会話用回答であり、Project Artifact として直接取り込まない。
+
 ### 4.3 Final Story output
 
-ユーザーが案を選び調整した後、完成 `story.md` を Markdown code block で返すよう依頼する。
+ユーザーが案を選び調整した後、完成 `story.md` を Markdown code block 1個だけで返すよう依頼する。
+
+`story.md` の最上位構造を次で固定する。
+
+```markdown
+# <作品タイトル>
+
+## 作品コンセプト
+## 登場人物
+## 共通設定
+## 全体進行
+## シーン構成
+### Scene 1: <短い場面名>
+### Scene 2: <短い場面名>
+## 生成上の一貫性メモ
+```
+
+各 Scene は少なくとも次の観点を持つ。
+
+```text
+目的
+状況・場所
+登場人物の状態
+主な出来事
+視覚的に重要な要素
+次シーンへの変化
+```
+
+`story.md` には Prompt Plan、LoRA / Checkpoint 選定、ComfyUI node情報、個別画像の positive / negative prompt を含めない。
 
 Batch Studio は本文を取り込み、検証して Draft とする。
 
@@ -142,9 +194,11 @@ Story 実現に必要だが catalog に存在しない場合は、例として�
 
 ### 5.5 Output
 
-Grok の最終モデル選定は JSON code block で返す。
+Grok の最終モデル選定は JSON code block 1個だけで返す。
 
-選定結果は `schemas/models.schema.json` の確定構造を基礎とし、不足がある場合だけ Draft 用 `missingRequirements` を追加できる。
+選定結果は `schemas/models.schema.json` の確定構造を基礎とし、不足がある場合だけ Draft 用 `missingRequirements` を root に追加できる。
+
+追加説明を code block 外へ出力しない。定義されていない field を追加しない。
 
 Batch Studio が current `model_catalog.json` と照合した後に確定可能となる。
 
@@ -199,9 +253,11 @@ Grok は次を決める。
 
 ### 6.5 Output
 
-JSON code block で `prompt_plan.json` 相当を返す。
+JSON code block 1個だけで `prompt_plan.json` 相当を返す。
 
 意味 schema は `prompt-plan.md` および `schemas/prompt-plan.schema.json` を正本とする。
+
+追加説明を code block 外へ出力しない。未知 field を追加しない。
 
 ## 7. Manual Attachment Checklist
 
