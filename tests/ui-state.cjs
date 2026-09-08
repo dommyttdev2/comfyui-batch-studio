@@ -14,12 +14,25 @@ const load=relative=>import(pathToFileURL(path.join(runtime,'main',relative)).hr
 (async()=>{
   const {UiStateStore}=await load('ui-state.js');
   const userData=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-ui-state-'));
-  const project=path.join(userData,'project');
-  fs.mkdirSync(project,{recursive:true});
+  const projectA=path.join(userData,'project-a');
+  const projectB=path.join(userData,'project-b');
+  fs.mkdirSync(projectA,{recursive:true});
+  fs.mkdirSync(projectB,{recursive:true});
   const store=new UiStateStore(userData);
-  await store.rememberProject(project);
-  assert.equal(await store.lastProjectPath(),path.resolve(project));
+
+  await store.rememberProject(projectA);
+  assert.equal(await store.lastProjectPath(),path.resolve(projectA));
+  assert.deepEqual(await store.recentProjectPaths(),[path.resolve(projectA)]);
+
+  await store.rememberProject(projectB);
+  await store.rememberProject(projectA);
+  assert.deepEqual(await store.recentProjectPaths(),[path.resolve(projectA),path.resolve(projectB)]);
+
   await store.clearProject();
   assert.equal(await store.lastProjectPath(),null);
+  assert.deepEqual(await store.recentProjectPaths(),[path.resolve(projectA),path.resolve(projectB)]);
+
+  fs.rmSync(projectB,{recursive:true,force:true});
+  assert.deepEqual(await store.recentProjectPaths(),[path.resolve(projectA)]);
   console.log('UI state tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1});
