@@ -26,6 +26,12 @@ export class UiStateStore {
     });
   }
 
+  async clearProject(): Promise<void> {
+    const current = await this.read();
+    delete current.lastProjectPath;
+    await writeJsonAtomic(this.filePath, current);
+  }
+
   async lastProjectPath(): Promise<string | null> {
     const value = (await this.read()).lastProjectPath;
     if (!value || !path.isAbsolute(value) || !(await exists(value))) return null;
