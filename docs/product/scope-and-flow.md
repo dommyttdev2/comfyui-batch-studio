@@ -61,7 +61,10 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - ComfyUI Workflow JSON。
 - Node / Link / Group ID。
 - node/group position。
-- widgets / SceneMatrix boilerplate。
+- `mode`。
+- `widgets_values`。
+- `widgets_values_named`。
+- `scene_matrix_json`。
 - R2操作。
 - Civitai API keyやR2 secretの利用。
 
@@ -142,7 +145,7 @@ Template + Manifest + prompt_plan.json + models.json
 Workflow Compiler
         |
         v
-LoRA_{project.id}.json
+LoRA_{project-destination-folder}.json
         |
         v
 [7. Model Availability]
@@ -159,6 +162,23 @@ Batch Studio
         v
 READY FOR COMFYUI
 ```
+
+Workflow JSON名の `{project-destination-folder}` はProject実フォルダの1階層上のフォルダ名を使う。
+
+例:
+
+```text
+Project作成先:
+D:\Tools\ComfyUI\Project\15_damon-slayer_kocho-shinobu
+
+Project実フォルダ:
+D:\Tools\ComfyUI\Project\15_damon-slayer_kocho-shinobu\project-o6a4d6
+
+Workflow:
+LoRA_15_damon-slayer_kocho-shinobu.json
+```
+
+`project.id` はWorkflow内のSave path等のProject識別に引き続き使用し、Workflow JSONファイル名には使用しない。
 
 ## 5. 工程ごとの Gate
 
@@ -197,6 +217,8 @@ Grok pane既定表示:
 その他          非表示
 ```
 
+Grokを使用しない工程では `Grokを表示` / `Grokを隠す` 操作自体を表示しない。
+
 `prompt_tree.md` はLegacyのみ。Prompt構造の正本は`prompt_plan.json`。
 
 ## 7. Model Catalog ownership
@@ -214,7 +236,7 @@ Projectが`READY`になる最低条件:
 1. `story.md` Confirmed。
 2. `models.json` Confirmedかつcurrent catalogと整合。
 3. `prompt_plan.json` Confirmed。
-4. `LoRA_{project.id}.json` generatedかつTemplate/Manifest provenanceがstaleでない。
+4. `LoRA_{project-destination-folder}.json` generatedかつTemplate/Manifest provenanceがstaleでない。
 5. unused branch 0。
 6. Workflow参照Checkpoint/LoRAが`models.json`と一致。
 7. 必須モデル実体がLocal生成環境から利用可能。R2-onlyはtransfer完了までBlocking。
