@@ -31,7 +31,16 @@ execFileSync(process.execPath, [tscBin, '-p', path.join(repo, 'tsconfig.electron
     'OAuth redirect chains must remain HTTPS-only');
   assert.equal(navigation.isSecureWebUrl('javascript:alert(1)'), false);
 
-  console.log('Grok OAuth navigation tests passed.');
+  assert.equal(
+    navigation.canonicalGrokConversationUrl('https://grok.com/c/cb299d7e-9036-4d0f-abd7-299a70165fbd?rid=fb6b2d18-3388-4826-8b76-700b4a130131'),
+    'https://grok.com/c/cb299d7e-9036-4d0f-abd7-299a70165fbd',
+    'conversation restore state must not retain rid/query parameters'
+  );
+  assert.equal(navigation.canonicalGrokConversationUrl('https://grok.com/'), null);
+  assert.equal(navigation.canonicalGrokConversationUrl('https://grok.com/share/example'), null);
+  assert.equal(navigation.canonicalGrokConversationUrl('https://example.com/c/example'), null);
+
+  console.log('Grok OAuth/navigation tests passed.');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
