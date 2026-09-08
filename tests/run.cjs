@@ -3,35 +3,14 @@ const crypto=require('node:crypto');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
+const {pathToFileURL}=require('node:url');
 const {execFileSync}=require('node:child_process');
 
 const repo=path.resolve(__dirname,'..');
 const runtime=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-tests-runtime-'));
-const testTsconfig=path.join(runtime,'tsconfig.test.json');
-fs.writeFileSync(testTsconfig,JSON.stringify({
-  compilerOptions:{
-    target:'ES2022',
-    module:'CommonJS',
-    moduleResolution:'Node',
-    esModuleInterop:true,
-    skipLibCheck:true,
-    strict:false,
-    rootDir:path.join(repo,'src'),
-    outDir:runtime,
-    types:['node']
-  },
-  include:[path.join(repo,'src/main/**/*.ts'),path.join(repo,'src/shared/**/*.ts')]
-},null,2));
 const tscBin=path.join(repo,'node_modules','typescript','bin','tsc');
-execFileSync(process.execPath,[tscBin,'-p',testTsconfig],{cwd:repo,stdio:'inherit'});
-
-const validation=require(path.join(runtime,'main','validation.js'));
-const artifacts=require(path.join(runtime,'main','artifact-service.js'));
-const compiler=require(path.join(runtime,'main','compiler.js'));
-const scan=require(path.join(runtime,'main','project-scan.js'));
-const grok=require(path.join(runtime,'main','grok-context.js'));
-const availability=require(path.join(runtime,'main','availability.js'));
-const preflight=require(path.join(runtime,'main','preflight.js'));
+execFileSync(process.execPath,[tscBin,'-p',path.join(repo,'tsconfig.electron.json'),'--outDir',runtime],{cwd:repo,stdio:'inherit'});
+const load=relative=>import(pathToFileURL(path.join(runtime,'main',relative)).href);
 
 const writeJson=(p,v)=>{fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,JSON.stringify(v,null,2)+'\n')};
 const sha=s=>crypto.createHash('sha256').update(Buffer.from(s,'utf8')).digest('hex');
@@ -39,6 +18,9 @@ function models(){return {schemaVersion:1,catalog:{schemaVersion:1,generation:1,
 function plan(){return {schemaVersion:1,common:{positive:'quality',negative:'bad'},rootLoras:[{modelRef:'lora.character',strengthModel:0.7,strengthClip:0.7}],branches:[{id:'b01',label:'One',loras:[],leaves:[{id:'l01',name:'one',positive:'p1',negative:'n1'},{id:'l02',name:'two',positive:'p2',negative:'n2'}]},{id:'b02',label:'Two',loras:[],leaves:[{id:'l03',name:'three',positive:'p3',negative:'n3'}]}]};}
 
 (async()=>{
+  const [validation,artifacts,compiler,scan,grok,availability,preflight]=await Promise.all([
+    load('validation.js'),load('artifact-service.js'),load('compiler.js'),load('project-scan.js'),load('grok-context.js'),load('availability.js'),load('preflight.js')
+  ]);
   const brief={project:{id:'sample-project',title:'Sample'},subject:{copyrightedCharacter:false,characterName:'',series:''},audience:'visual focus',request:'',exclusions:'',assumptions:{adultCharacters:true,consensual:true},generation:{target_image_count:3,modelFamily:'Illustrious'},references:[]};
   assert.equal(validation.validateProjectBrief(brief).valid,true,'valid project brief must pass');
   assert.equal(validation.validateProjectBrief({...brief,audience:''}).valid,false,'audience is required');
