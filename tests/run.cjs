@@ -3,7 +3,8 @@ const crypto=require('node:crypto');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
-const ts=require('typescript');
+const tsImport=require('typescript');
+const ts=tsImport.default??tsImport;
 
 const repo=path.resolve(__dirname,'..');
 const runtime=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-tests-runtime-'));
