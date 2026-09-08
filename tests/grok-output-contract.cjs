@@ -12,6 +12,11 @@ assert.match(src,/code block の前後に説明/,'artifact outputs must prohibit
 assert.match(src,/JSONとしてparse可能な厳密な構文/,'JSON artifacts must require strict parseable JSON');
 assert.match(src,/missingRequirements/,'models draft output must define missingRequirements behavior');
 assert.match(src,/1 Leaf = 1 image/,'Prompt Plan output must preserve leaf cardinality');
+assert.match(src,/models\.json の trainedWords はトリガーワードとして扱い/,'Prompt Plan must treat trainedWords as trigger words');
+assert.match(src,/checkpoint\.main\.trainedWords と rootLoras[\s\S]*common\.positive/,'checkpoint and root LoRA trigger words must be applied to common positive');
+assert.match(src,/Branch の loras[\s\S]*すべての Leaf の positive/,'branch LoRA trigger words must be applied to every leaf positive');
+assert.match(src,/trainedWords が空配列ならトリガーワードを捏造しません/,'empty trainedWords must not be invented');
+assert.match(src,/trainedWords を negative prompt へ入れません/,'trigger words must not be applied to negative prompts');
 assert.match(src,/^const storyDiscussionShape=/m,'story discussion must have a defined response format');
 
 console.log('Grok output contract tests passed.');
