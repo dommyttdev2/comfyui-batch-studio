@@ -6,8 +6,9 @@ import './r2-manager.css';
 const fmt=(n:number)=>n<1024?`${n} B`:n<1024**2?`${(n/1024).toFixed(1)} KiB`:n<1024**3?`${(n/1024**2).toFixed(1)} MiB`:`${(n/1024**3).toFixed(2)} GiB`;
 const parentPrefix=(prefix:string)=>{const parts=prefix.split('/').filter(Boolean);parts.pop();return parts.length?`${parts.join('/')}/`:''};
 const displayPath=(prefix:string)=>prefix?`/${prefix.replace(/\/$/,'')}`:'/';
+const sameFileName=(a:string,b:string)=>a.normalize('NFKC').toLocaleLowerCase()===b.normalize('NFKC').toLocaleLowerCase();
 
-export function R2ManagerStage({run,readOnly=false,initialBucket='',onBucketChange}:{run:Runner;readOnly?:boolean;initialBucket?:string;onBucketChange?:(bucket:string)=>void}){
+export function R2ManagerStage({run,readOnly=false,initialBucket='',initialBatchFileNames=[],onBucketChange}:{run:Runner;readOnly?:boolean;initialBucket?:string;initialBatchFileNames?:string[];onBucketChange?:(bucket:string)=>void}){
   const [settings,setSettings]=useState<R2ConnectionStatus|null>(null),[settingsOpen,setSettingsOpen]=useState(false),[buckets,setBuckets]=useState<R2Bucket[]>([]),[bucket,setBucket]=useState(initialBucket),[prefix,setPrefix]=useState(''),[listing,setListing]=useState<R2ListResult|null>(null),[query,setQuery]=useState(''),[searchPage,setSearchPage]=useState<R2SearchResult|null>(null),[selected,setSelected]=useState<Set<string>>(new Set()),[downloads,setDownloads]=useState<R2DownloadInfo[]|null>(null),[batchOpen,setBatchOpen]=useState(false),[uploads,setUploads]=useState<R2UploadJob[]>([]),[templates,setTemplates]=useState<R2BatchDownloadTemplate[]>([]),[metrics,setMetrics]=useState<any>(null);
   const usable=Boolean(settings?.configured||settings?.secretConfigured);
   const refreshSettings=async()=>setSettings(await window.batchStudio.r2.settings());
@@ -51,7 +52,7 @@ export function R2ManagerStage({run,readOnly=false,initialBucket='',onBucketChan
     </>}
     {settingsOpen&&<SettingsModal status={settings} onClose={()=>setSettingsOpen(false)} onSaved={async()=>{await refreshSettings();setSettingsOpen(false)}} run={run}/>} 
     {downloads&&<DownloadModal downloads={downloads} onClose={()=>setDownloads(null)}/>} 
-    {batchOpen&&bucket&&<BatchDownloadModal bucket={bucket} initialPrefix={prefix} templates={templates} onClose={()=>setBatchOpen(false)} onGenerated={d=>{setBatchOpen(false);setDownloads(d)}} onTemplates={setTemplates} run={run}/>} 
+    {batchOpen&&bucket&&<BatchDownloadModal bucket={bucket} initialPrefix={prefix} initialFileNames={initialBatchFileNames} templates={templates} onClose={()=>setBatchOpen(false)} onGenerated={d=>{setBatchOpen(false);setDownloads(d)}} onTemplates={setTemplates} run={run}/>} 
   </section>;
 }
 
@@ -63,10 +64,11 @@ function UploadJobs({jobs,run,refresh}:{jobs:R2UploadJob[];run:Runner;refresh:()
 
 function DownloadModal({downloads,onClose}:{downloads:R2DownloadInfo[];onClose:()=>void}){const [tab,setTab]=useState<'url'|'curl'|'wget'|'aria2c'>('url');const text=downloads.map(d=>d.commands[tab]).join('\n');return <div className="modal"><div className="modalcard large"><div className="panelhead"><div><h2>ダウンロード情報</h2><small>{downloads.length}件 / {downloads[0]?.public?'Public URL':'署名URL'}</small></div><button onClick={onClose}>×</button></div><div className="tabs">{(['url','curl','wget','aria2c'] as const).map(t=><button key={t} className={tab===t?'active':''} onClick={()=>setTab(t)}>{t}</button>)}</div><textarea className="commandbox" readOnly value={text}/><div className="actions"><button className="primary" onClick={()=>window.batchStudio.clipboard.writeText(text)}>すべてコピー</button></div></div></div>}
 
-function BatchDownloadModal({bucket,initialPrefix,templates,onClose,onGenerated,onTemplates,run}:{bucket:string;initialPrefix:string;templates:R2BatchDownloadTemplate[];onClose:()=>void;onGenerated:(d:R2DownloadInfo[])=>void;onTemplates:(t:R2BatchDownloadTemplate[])=>void;run:Runner}){
+function BatchDownloadModal({bucket,initialPrefix,initialFileNames,templates,onClose,onGenerated,onTemplates,run}:{bucket:string;initialPrefix:string;initialFileNames:string[];templates:R2BatchDownloadTemplate[];onClose:()=>void;onGenerated:(d:R2DownloadInfo[])=>void;onTemplates:(t:R2BatchDownloadTemplate[])=>void;run:Runner}){
   const [prefix,setPrefix]=useState(initialPrefix),[listing,setListing]=useState<R2ListResult|null>(null),[query,setQuery]=useState(''),[searchPage,setSearchPage]=useState<R2SearchResult|null>(null),[selected,setSelected]=useState<Map<string,{key:string;name:string;size?:number}>>(new Map()),[templateName,setTemplateName]=useState(''),[templateId,setTemplateId]=useState('');
   const load=()=>run(async()=>{setSearchPage(null);setQuery('');setListing(await window.batchStudio.r2.list(bucket,prefix))});
   useEffect(()=>{void load()},[prefix]);
+  useEffect(()=>{let cancelled=false;if(!initialFileNames.length)return;void (async()=>{const seeded=new Map<string,{key:string;name:string;size?:number}>();for(const fileName of [...new Set(initialFileNames)].slice(0,500)){const page=await window.batchStudio.r2.search(bucket,fileName);const match=page.objects.find(o=>sameFileName(o.name,fileName));if(match)seeded.set(match.key,{key:match.key,name:match.name,size:match.size})}if(!cancelled)setSelected(seeded)})().catch(()=>{});return()=>{cancelled=true}},[bucket,initialFileNames.join('\u0000')]);
   useEffect(()=>{const q=query.trim();if(!q){setSearchPage(null);return}const id=window.setTimeout(()=>{void window.batchStudio.r2.search(bucket,q).then(setSearchPage).catch(()=>{})},120);return()=>window.clearTimeout(id)},[bucket,query]);
   const visible=searchPage?.objects??listing?.objects??[];
   const toggle=(o:R2Object)=>setSelected(prev=>{const n=new Map(prev);n.has(o.key)?n.delete(o.key):n.set(o.key,{key:o.key,name:o.name,size:o.size});return n});
