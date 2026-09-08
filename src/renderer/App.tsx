@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ProjectBriefInput, ProjectSummary } from '../shared/types';
-import { stages, statusDot, type Runner, type Stage } from './ui';
+import { stages, shouldShowGrok, statusDot, type Runner, type Stage } from './ui';
 import { Overview, Settings } from './ProjectStages';
 import { StoryStage, ModelsStage } from './GrokStages';
 import { PromptPlanStage } from './PromptPlanStage';
@@ -11,9 +11,10 @@ function hashId(value:string){let h=2166136261;for(const ch of value){h^=ch.code
 function suggestProjectId(title:string){const normalized=title.normalize('NFKD').toLowerCase().replace(/[^a-z0-9._-]+/g,'-').replace(/[-_.]{2,}/g,'-').replace(/^[-_.]+|[-_.]+$/g,'').slice(0,64);if(normalized)return normalized;return title.trim()?`project-${hashId(title).slice(0,8)}`:'';}
 
 function App(){
-  const [project,setProject]=useState<ProjectSummary|null>(null),[stage,setStage]=useState<Stage>('概要'),[error,setError]=useState(''),[grok,setGrok]=useState(true),[ratio,setRatio]=useState(.45),[createOpen,setCreateOpen]=useState(false);
+  const [project,setProject]=useState<ProjectSummary|null>(null),[stage,setStage]=useState<Stage>('概要'),[error,setError]=useState(''),[grok,setGrok]=useState(false),[ratio,setRatio]=useState(.45),[createOpen,setCreateOpen]=useState(false);
   const refresh=async()=>project&&setProject(await window.batchStudio.project.scan(project.rootPath));
   const run:Runner=async fn=>{setError('');try{return await fn()}catch(e){setError(e instanceof Error?e.message:String(e));return undefined}};
+  useEffect(()=>{let cancelled=false;void window.batchStudio.grok.setVisible(shouldShowGrok(stage)).then(s=>{if(!cancelled)setGrok(s.visible)}).catch(e=>{if(!cancelled)setError(e instanceof Error?e.message:String(e))});return()=>{cancelled=true}},[stage]);
   return <main className="shell"><header className="top"><div><span className="eyebrow">ComfyUI Batch Studio</span><h1>{project?.title??'プロジェクト未選択'}</h1><small>{project?.rootPath}</small></div><div className="actions"><button onClick={()=>run(async()=>{const p=await window.batchStudio.project.select();if(p)setProject(p)})}>開く</button><button onClick={()=>setCreateOpen(true)}>新規作成</button><button disabled={!project} onClick={()=>project&&window.batchStudio.project.openFolder(project.rootPath)}>フォルダー</button><button onClick={async()=>{const s=await window.batchStudio.grok.setVisible(!grok);setGrok(s.visible)}}>{grok?'Grokを隠す':'Grokを表示'}</button></div></header>{error&&<div className="errorbar">{error}</div>}<div className="body"><nav>{stages.map(s=><button key={s} className={stage===s?'active':''} onClick={()=>setStage(s)}>{s}{project&&statusDot(project,s)}</button>)}</nav><section className="workspace"><div className="stagehead"><h2>{stage}</h2><label>Local {Math.round(ratio*100)}% <input type="range" min={0.3} max={0.7} step={0.05} value={ratio} disabled={!grok} onChange={async e=>{const s=await window.batchStudio.grok.setRatio(+e.target.value);setRatio(s.ratio)}}/></label></div>{!project?<Empty onCreate={()=>setCreateOpen(true)}/>:<StageView project={project} stage={stage} refresh={refresh} setProject={setProject} run={run}/>}</section></div>{createOpen&&<CreateProject onClose={()=>setCreateOpen(false)} onCreated={p=>{setProject(p);setCreateOpen(false)}} run={run}/>}</main>;
 }
 function Empty({onCreate}:{onCreate:()=>void}){return <div className="empty"><div className="logo">BS</div><h3>プロジェクトを開くか新規作成してください</h3><button className="primary" onClick={onCreate}>新規プロジェクト</button></div>}
