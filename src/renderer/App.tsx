@@ -1,167 +1,23 @@
-import { useMemo, useState } from 'react';
-import type { ArtifactSummary, ProjectSummary } from '../shared/types';
-
-const stages = [
-  '概要',
-  '基本設定',
-  'ストーリー',
-  'モデル選定',
-  'プロンプト設計',
-  'ワークフロー',
-  'モデル配置',
-  '実行前チェック',
-];
-
-function statusLabel(artifact: ArtifactSummary): string {
-  if (artifact.state === 'legacy') return '旧形式';
-  if (artifact.state === 'present') return '検出済み';
-  return '未作成';
-}
-
-function App() {
-  const [project, setProject] = useState<ProjectSummary | null>(null);
-  const [activeStage, setActiveStage] = useState('概要');
-  const [grokVisible, setGrokVisible] = useState(true);
-  const [ratio, setRatio] = useState(0.45);
-  const [error, setError] = useState<string | null>(null);
-
-  const detectedCount = useMemo(
-    () => project?.artifacts.filter((artifact) => artifact.state === 'present').length ?? 0,
-    [project],
-  );
-
-  async function selectProject() {
-    setError(null);
-    try {
-      const selected = await window.batchStudio.project.select();
-      if (selected) setProject(selected);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }
-
-  async function toggleGrok() {
-    const state = await window.batchStudio.grok.setVisible(!grokVisible);
-    setGrokVisible(state.visible);
-  }
-
-  async function changeRatio(next: number) {
-    setRatio(next);
-    const state = await window.batchStudio.grok.setRatio(next);
-    setRatio(state.ratio);
-  }
-
-  return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <div className="eyebrow">ComfyUI Batch Studio</div>
-          <h1>{project?.title ?? 'プロジェクトを選択してください'}</h1>
-          {project && <div className="project-path">{project.rootPath}</div>}
-        </div>
-        <div className="toolbar">
-          <button onClick={selectProject}>プロジェクトを開く</button>
-          <button disabled={!project} onClick={() => project && window.batchStudio.project.openFolder(project.rootPath)}>
-            フォルダーを開く
-          </button>
-        </div>
-      </header>
-
-      <div className="content-grid">
-        <nav className="sidebar" aria-label="工程">
-          <div className="nav-title">工程</div>
-          {stages.map((stage) => (
-            <button
-              key={stage}
-              className={activeStage === stage ? 'nav-item active' : 'nav-item'}
-              onClick={() => setActiveStage(stage)}
-            >
-              {stage}
-            </button>
-          ))}
-        </nav>
-
-        <section className="workspace">
-          <div className="workspace-heading">
-            <div>
-              <div className="eyebrow">現在の工程</div>
-              <h2>{activeStage}</h2>
-            </div>
-            <div className="grok-controls">
-              <button onClick={toggleGrok}>{grokVisible ? 'Grokを隠す' : 'Grokを表示'}</button>
-              <button onClick={() => window.batchStudio.grok.reload()}>Grokを再読み込み</button>
-              <button onClick={() => window.batchStudio.grok.openExternal()}>ブラウザで開く</button>
-            </div>
-          </div>
-
-          <label className="ratio-control">
-            <span>ローカル作業領域</span>
-            <input
-              type="range"
-              min="0.3"
-              max="0.7"
-              step="0.05"
-              value={ratio}
-              onChange={(event) => void changeRatio(Number(event.target.value))}
-              disabled={!grokVisible}
-            />
-            <span>{Math.round(ratio * 100)}%</span>
-          </label>
-
-          {error && <div className="error-banner">{error}</div>}
-
-          {!project ? (
-            <section className="empty-state">
-              <div className="empty-icon">BS</div>
-              <h3>既存プロジェクトを読み取り専用で確認できます</h3>
-              <p>Phase 1ではプロジェクト内のファイルを変更しません。フォルダーを選択すると既存Artifactを走査します。</p>
-              <button className="primary" onClick={selectProject}>プロジェクトを選択</button>
-            </section>
-          ) : (
-            <>
-              <section className="next-action">
-                <div>
-                  <div className="eyebrow">次にすること</div>
-                  <h3>プロジェクトの現在状態を確認してください</h3>
-                  <p>{detectedCount}件の標準Artifactを検出しました。Phase 1では内容を変更せず状態だけ確認します。</p>
-                </div>
-              </section>
-
-              <section className="panel">
-                <div className="panel-header">
-                  <div>
-                    <div className="eyebrow">Project scan</div>
-                    <h3>Artifact</h3>
-                  </div>
-                  <button onClick={async () => setProject(await window.batchStudio.project.scan(project.rootPath))}>再読み込み</button>
-                </div>
-
-                <div className="artifact-list">
-                  {project.artifacts.map((artifact) => (
-                    <div className="artifact-row" key={artifact.key}>
-                      <div>
-                        <strong>{artifact.label}</strong>
-                        <div className="muted">{artifact.relativePath ?? '対象ファイルなし'}</div>
-                      </div>
-                      <span className={`badge ${artifact.state}`}>{statusLabel(artifact)}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="panel compact">
-                <div className="eyebrow">識別情報</div>
-                <dl className="facts">
-                  <div><dt>プロジェクト名</dt><dd>{project.title}</dd></div>
-                  <div><dt>プロジェクトID</dt><dd>{project.id ?? '未設定'}</dd></div>
-                </dl>
-              </section>
-            </>
-          )}
-        </section>
-      </div>
-    </main>
-  );
-}
-
+import { useEffect, useState } from 'react';
+import type { ArtifactReadResult, AvailabilityResult, CatalogStatus, GrokTask, ImportResult, PreflightResult, ProjectBriefInput, ProjectSettings, ProjectSummary, PromptPlanArtifact, ValidationIssue } from '../shared/types';
+const stages=['概要','基本設定','ストーリー','モデル選定','プロンプト設計','ワークフロー','モデル配置','実行前チェック'] as const; type Stage=typeof stages[number];
+const blankBrief:ProjectBriefInput={project:{id:'',title:''},subject:{copyrightedCharacter:true,characterName:'',series:''},audience:'',request:'',exclusions:'',assumptions:{adultCharacters:true,consensual:true},generation:{target_image_count:500,modelFamily:'Illustrious'},references:[]};
+function issuesView(issues:ValidationIssue[]){if(!issues.length)return <div className="ok">✓ 問題ありません</div>;return <div className="issues">{issues.map((i,n)=><div key={n} className={`issue ${i.severity}`}>{i.severity==='error'?'✕':i.severity==='warning'?'⚠':'ℹ'} {i.message}</div>)}</div>}
+function badge(s:string){return <span className={`badge ${s}`}>{({missing:'未作成',draft:'下書き',invalid:'要修正',warning:'注意あり',confirmed:'確定済み',generated:'生成済み',legacy:'旧形式',stale:'更新必要'} as any)[s]??s}</span>}
+function App(){const [project,setProject]=useState<ProjectSummary|null>(null),[stage,setStage]=useState<Stage>('概要'),[error,setError]=useState(''),[grok,setGrok]=useState(true),[ratio,setRatio]=useState(.45),[createOpen,setCreateOpen]=useState(false);const refresh=async()=>project&&setProject(await window.batchStudio.project.scan(project.rootPath));async function run<T>(fn:()=>Promise<T>){setError('');try{return await fn()}catch(e){setError(e instanceof Error?e.message:String(e));return undefined}}
+ return <main className="shell"><header className="top"><div><span className="eyebrow">ComfyUI Batch Studio</span><h1>{project?.title??'プロジェクト未選択'}</h1><small>{project?.rootPath}</small></div><div className="actions"><button onClick={()=>run(async()=>{const p=await window.batchStudio.project.select();if(p)setProject(p)})}>開く</button><button onClick={()=>setCreateOpen(true)}>新規作成</button><button disabled={!project} onClick={()=>project&&window.batchStudio.project.openFolder(project.rootPath)}>フォルダー</button><button onClick={async()=>{const s=await window.batchStudio.grok.setVisible(!grok);setGrok(s.visible)}}>{grok?'Grokを隠す':'Grokを表示'}</button></div></header>{error&&<div className="errorbar">{error}</div>}<div className="body"><nav>{stages.map(s=><button key={s} className={stage===s?'active':''} onClick={()=>setStage(s)}>{s}{project&&statusDot(project,s)}</button>)}</nav><section className="workspace"><div className="stagehead"><h2>{stage}</h2><label>Local {Math.round(ratio*100)}% <input type="range" min={0.3} max={0.7} step={0.05} value={ratio} disabled={!grok} onChange={async e=>{const s=await window.batchStudio.grok.setRatio(+e.target.value);setRatio(s.ratio)}}/></label></div>{!project?<Empty onCreate={()=>setCreateOpen(true)}/>:<StageView project={project} stage={stage} refresh={refresh} setProject={setProject} run={run}/>}</section></div>{createOpen&&<CreateProject onClose={()=>setCreateOpen(false)} onCreated={p=>{setProject(p);setCreateOpen(false)}} run={run}/>}</main>}
+function statusDot(p:ProjectSummary,s:Stage){const map:any={'基本設定':'projectBrief','ストーリー':'story','モデル選定':'models','プロンプト設計':'promptPlan','ワークフロー':'workflow'};const a=p.artifacts.find(x=>x.key===map[s]);return a?<span className={`dot ${a.state}`}/>:null}
+function Empty({onCreate}:{onCreate:()=>void}){return <div className="empty"><div className="logo">BS</div><h3>プロジェクトを開くか新規作成してください</h3><button className="primary" onClick={onCreate}>新規プロジェクト</button></div>}
+function CreateProject({onClose,onCreated,run}:{onClose:()=>void;onCreated:(p:ProjectSummary)=>void;run:any}){const [b,setB]=useState(blankBrief),[parent,setParent]=useState('');const set=(path:string,v:any)=>setB(prev=>{const n=structuredClone(prev) as any;const [a,c]=path.split('.');c?n[a][c]=v:n[a]=v;return n});return <div className="modal"><div className="modalcard"><h2>新規プロジェクト</h2><div className="formgrid"><label>作成先<input value={parent} readOnly/><button onClick={async()=>{const p=await window.batchStudio.project.selectParent();if(p)setParent(p)}}>選択</button></label><label>プロジェクト名<input value={b.project.title} onChange={e=>set('project.title',e.target.value)}/></label><label>プロジェクトID<input value={b.project.id} onChange={e=>set('project.id',e.target.value)}/></label><label>キャラクター<input value={b.subject.characterName} onChange={e=>set('subject.characterName',e.target.value)}/></label><label>作品<input value={b.subject.series} onChange={e=>set('subject.series',e.target.value)}/></label><label>目標画像枚数<input type="number" value={b.generation.target_image_count} onChange={e=>set('generation.target_image_count',+e.target.value)}/></label><label className="wide">ターゲット<textarea value={b.audience} onChange={e=>set('audience',e.target.value)}/></label><label className="wide">要望<textarea value={b.request} onChange={e=>set('request',e.target.value)}/></label><label className="wide">除外<textarea value={b.exclusions} onChange={e=>set('exclusions',e.target.value)}/></label></div><div className="actions"><button onClick={onClose}>キャンセル</button><button className="primary" disabled={!parent} onClick={()=>run(async()=>onCreated(await window.batchStudio.project.create(parent,b)))}>作成</button></div></div></div>}
+function StageView(props:{project:ProjectSummary;stage:Stage;refresh:()=>Promise<any>;setProject:(p:ProjectSummary)=>void;run:any}){switch(props.stage){case'概要':return <Overview {...props}/>;case'基本設定':return <Settings {...props}/>;case'ストーリー':return <ArtifactStage {...props} kind="story"/>;case'モデル選定':return <ModelsStage {...props}/>;case'プロンプト設計':return <PromptPlanStage {...props}/>;case'ワークフロー':return <WorkflowStage {...props}/>;case'モデル配置':return <AvailabilityStage {...props}/>;case'実行前チェック':return <PreflightStage {...props}/>}}
+function Overview({project}:{project:ProjectSummary}){const confirmed=project.artifacts.filter(a=>['confirmed','generated','warning'].includes(a.state)).length;return <><section className="next"><span className="eyebrow">次にすること</span><h3>{project.artifacts.find(a=>!['confirmed','generated','warning','legacy'].includes(a.state))?.label??'実行前チェックを確認してください'}</h3><p>{confirmed}工程が完了しています。</p></section><div className="cards">{project.artifacts.filter(a=>a.key!=='legacyPromptTree').map(a=><article key={a.key}><h3>{a.label}</h3>{badge(a.state)}<small>{a.relativePath??'未作成'}</small></article>)}</div></>}
+function Settings({project,setProject,run}:{project:ProjectSummary;setProject:any;run:any}){const [s,setS]=useState<ProjectSettings>(project.meta?.settings??{}),[brief,setBrief]=useState<ProjectBriefInput|null>(null);useEffect(()=>{setS(project.meta?.settings??{});void run(async()=>{const r=await window.batchStudio.artifact.read(project.rootPath,'projectBrief','confirmed');if(r.content){const p=JSON.parse(r.content);delete p.schemaVersion;setBrief(p)}})},[project.rootPath]);const field=(k:keyof ProjectSettings,label:string)=><label>{label}<input value={s[k]??''} onChange={e=>setS({...s,[k]:e.target.value})}/></label>;const mutate=(fn:(b:ProjectBriefInput)=>void)=>{if(!brief)return;const n=structuredClone(brief);fn(n);setBrief(n)};return <><section className="panel"><h3>基本設定</h3>{brief&&<div className="formgrid"><label>プロジェクト名<input value={brief.project.title} onChange={e=>mutate(b=>b.project.title=e.target.value)}/></label><label>プロジェクトID<input value={brief.project.id} disabled/></label><label>キャラクター<input value={brief.subject.characterName} onChange={e=>mutate(b=>b.subject.characterName=e.target.value)}/></label><label>作品<input value={brief.subject.series} onChange={e=>mutate(b=>b.subject.series=e.target.value)}/></label><label>目標画像枚数<input type="number" value={brief.generation.target_image_count} onChange={e=>mutate(b=>b.generation.target_image_count=+e.target.value)}/></label><label className="wide">ターゲット<textarea value={brief.audience} onChange={e=>mutate(b=>b.audience=e.target.value)}/></label><label className="wide">要望<textarea value={brief.request} onChange={e=>mutate(b=>b.request=e.target.value)}/></label><label className="wide">除外<textarea value={brief.exclusions} onChange={e=>mutate(b=>b.exclusions=e.target.value)}/></label></div>}<button className="primary" disabled={!brief} onClick={()=>brief&&run(async()=>setProject(await window.batchStudio.project.saveBrief(project.rootPath,brief)))}>基本設定を保存</button></section><section className="panel"><h3>連携・パス設定</h3><div className="formgrid">{field('catalogPath','model_catalog.json')}{field('comfyModelsRoot','ComfyUI modelsルート')}{field('r2IndexPath','R2ファイル一覧JSON')}{field('r2FileManagerUrl','R2 File Manager URL')}{field('templatePath','Workflow Template（空欄=内蔵）')}{field('manifestPath','Manifest（空欄=内蔵）')}</div><button className="primary" onClick={()=>run(async()=>setProject(await window.batchStudio.project.saveSettings(project.rootPath,s)))}>連携設定を保存</button></section></>}
+function GrokBridge({project,stage,title,onImport,run}:{project:ProjectSummary;stage:GrokTask['stage'];title:string;onImport:(raw:string)=>Promise<any>;run:any}){const [task,setTask]=useState<GrokTask|null>(null),[raw,setRaw]=useState(''),[result,setResult]=useState<ImportResult|null>(null);return <section className="panel"><h3>{title}</h3><div className="actions"><button onClick={()=>run(async()=>setTask(await window.batchStudio.grokTask.build(project.rootPath,stage)))}>依頼内容を生成</button>{task&&<button onClick={()=>window.batchStudio.clipboard.writeText(task.prompt)}>コピー</button>}</div>{task&&<><textarea className="promptbox" value={task.prompt} readOnly/><div className="attachments">{task.attachments.map(a=><div key={a.path}>{a.exists?'✓':'✕'} {a.name} — {a.purpose}</div>)}</div></>}<h4>Grokの回答を貼り付け</h4><textarea className="raw" value={raw} onChange={e=>setRaw(e.target.value)}/><button className="primary" disabled={!raw.trim()} onClick={()=>run(async()=>setResult(await onImport(raw)))}>結果を解析・取り込む</button>{result&&<div className="result">{issuesView(result.validation.issues)}{result.missingRequirements.map((m,n)=><div className="issue error" key={n}>✕ {m.role}: {m.requirement} — {m.reason}</div>)}</div>}</section>}
+function ArtifactStage({project,kind,setProject,run}:{project:ProjectSummary;kind:'story';setProject:any;run:any}){const [draft,setDraft]=useState<ArtifactReadResult|null>(null);const load=()=>run(async()=>setDraft(await window.batchStudio.artifact.read(project.rootPath,kind,'draft')));useEffect(()=>{void load()},[project.rootPath]);return <><GrokBridge project={project} stage="story-finalize" title="Grokでストーリーを作成" run={run} onImport={raw=>window.batchStudio.artifact.importGrok(project.rootPath,kind,raw)}/><section className="panel"><h3>下書き</h3><textarea className="editor" value={draft?.content??''} onChange={e=>setDraft(draft?{...draft,content:e.target.value}:null)}/><div className="actions"><button onClick={()=>draft?.content&&run(async()=>setDraft(await window.batchStudio.artifact.saveDraft(project.rootPath,kind,draft.content!)))}>下書き保存</button><button className="primary" onClick={()=>run(async()=>setProject(await window.batchStudio.artifact.confirm(project.rootPath,kind)))}>確定</button></div>{draft&&issuesView(draft.validation.issues)}</section></>}
+function ModelsStage({project,setProject,run}:{project:ProjectSummary;setProject:any;run:any}){const [cat,setCat]=useState<CatalogStatus|null>(null),[draft,setDraft]=useState<ArtifactReadResult|null>(null);useEffect(()=>{void run(async()=>{setCat(await window.batchStudio.catalog.status(project.rootPath));setDraft(await window.batchStudio.artifact.read(project.rootPath,'models','draft'))})},[project.rootPath]);return <><section className="panel"><h3>モデルカタログ</h3><p>{cat?.configured?`${cat.path} / generation ${cat.generation??'-'} / ${cat.itemCount} models`:'基本設定でmodel_catalog.jsonを指定してください。'}</p></section><GrokBridge project={project} stage="models" title="Grokでモデルを選定" run={run} onImport={async raw=>{const r=await window.batchStudio.artifact.importGrok(project.rootPath,'models',raw);setDraft(await window.batchStudio.artifact.read(project.rootPath,'models','draft'));return r}}/><section className="panel"><h3>models.json 下書き</h3><textarea className="editor code" value={draft?.content??''} onChange={e=>draft&&setDraft({...draft,content:e.target.value})}/><div className="actions"><button onClick={()=>draft?.content&&run(async()=>setDraft(await window.batchStudio.artifact.saveDraft(project.rootPath,'models',draft.content!)))}>保存・再検証</button><button className="primary" onClick={()=>run(async()=>setProject(await window.batchStudio.artifact.confirm(project.rootPath,'models')))}>確定</button></div>{draft&&issuesView(draft.validation.issues)}</section></>}
+function PromptPlanStage({project,setProject,run}:{project:ProjectSummary;setProject:any;run:any}){const [plan,setPlan]=useState<PromptPlanArtifact|null>(null),[validation,setValidation]=useState<ValidationIssue[]>([]),[selected,setSelected]=useState<{branch:number;leaf?:number}|null>(null);async function load(){const d=await window.batchStudio.artifact.read(project.rootPath,'promptPlan','draft');if(d.content){try{setPlan(JSON.parse(d.content));setValidation(d.validation.issues)}catch{setPlan(null)}}}useEffect(()=>{void run(load)},[project.rootPath]);const save=()=>plan&&run(async()=>{const r=await window.batchStudio.artifact.savePromptPlan(project.rootPath,plan);setValidation(r.validation.issues)});return <><GrokBridge project={project} stage="prompt-plan" title="GrokでPrompt Planを作成" run={run} onImport={async raw=>{const r=await window.batchStudio.artifact.importGrok(project.rootPath,'promptPlan',raw);await load();return r}}/>{plan&&<section className="panel treepanel"><div className="panelhead"><h3>Prompt Plan</h3><div className="actions"><button onClick={save}>下書き保存</button><button className="primary" onClick={()=>run(async()=>setProject(await window.batchStudio.artifact.confirm(project.rootPath,'promptPlan')))}>確定</button></div></div>{issuesView(validation)}<div className="flow"><div className="node common"><b>共通プロンプト</b><small>Positive / Negative</small></div><span className="arrow">→</span><div className="node root"><b>全体共通LoRA</b><small>{plan.rootLoras.length}件</small></div><span className="arrow">→</span><div className="branches">{plan.branches.map((b,bi)=><div className="branchrow" key={b.id}><div className="node branch" onClick={()=>setSelected({branch:bi})}><b>{b.label}</b><small>LoRA {b.loras.length}件</small></div><span className="arrow">→</span><div className="node matrix" onClick={()=>setSelected({branch:bi})}><b>Matrix</b><small>{b.leaves.length}件 / {b.leaves.length}枚</small></div></div>)}</div></div>{selected&&<PlanInspector plan={plan} setPlan={setPlan} selected={selected} setSelected={setSelected}/>}</section>}</>}
+function PlanInspector({plan,setPlan,selected,setSelected}:{plan:PromptPlanArtifact;setPlan:any;selected:any;setSelected:any}){const b=plan.branches[selected.branch],leaf=selected.leaf!=null?b.leaves[selected.leaf]:null;function mutate(fn:(p:PromptPlanArtifact)=>void){const n=structuredClone(plan);fn(n);setPlan(n)}return <div className="inspector"><h4>{b.label}</h4>{leaf?<><label>名前<input value={leaf.name} onChange={e=>mutate(p=>p.branches[selected.branch].leaves[selected.leaf].name=e.target.value)}/></label><label>Positive<textarea value={leaf.positive} onChange={e=>mutate(p=>p.branches[selected.branch].leaves[selected.leaf].positive=e.target.value)}/></label><label>Negative<textarea value={leaf.negative} onChange={e=>mutate(p=>p.branches[selected.branch].leaves[selected.leaf].negative=e.target.value)}/></label><button onClick={()=>setSelected({branch:selected.branch})}>Matrixへ戻る</button></>:<div className="leaflist">{b.leaves.map((l,i)=><button key={l.id} onClick={()=>setSelected({branch:selected.branch,leaf:i})}><code>{l.id}</code><span>{l.name}</span></button>)}</div>}</div>}
+function WorkflowStage({project,refresh,run}:{project:ProjectSummary;refresh:any;run:any}){const [r,setR]=useState<any>(null);return <section className="panel"><h3>Workflow Compiler</h3><p>確定済み models.json / prompt_plan.json と Template/Manifestから決定論的に生成します。</p><button className="primary" onClick={()=>run(async()=>{setR(await window.batchStudio.workflow.compile(project.rootPath));await refresh()})}>ワークフローを生成</button>{r&&<div className="facts"><div>Branches <b>{r.branchCount}</b></div><div>Images <b>{r.imageCount}</b></div><div>Nodes <b>{r.nodeCount}</b></div><div>Links <b>{r.linkCount}</b></div><div>Output <code>{r.outputPath}</code></div></div>}</section>}
+function AvailabilityStage({project,run}:{project:ProjectSummary;run:any}){const [r,setR]=useState<AvailabilityResult|null>(null);return <section className="panel"><div className="panelhead"><h3>モデル配置</h3><div className="actions"><button onClick={()=>run(async()=>setR(await window.batchStudio.availability.check(project.rootPath)))}>再確認</button><button onClick={()=>run(()=>window.batchStudio.availability.openR2(project.rootPath))}>R2 File Manager</button></div></div>{r&&<>{issuesView(r.validation.issues)}<div className="table">{r.rows.map(x=><div className="tablerow" key={x.ref}><code>{x.ref}</code><span>{x.fileName}</span><span>Local {x.local?'✓':'✕'}</span><span>R2 {x.r2?'✓':'✕'}</span><b>{x.state}</b></div>)}</div></>}</section>}
+function PreflightStage({project,run}:{project:ProjectSummary;run:any}){const [r,setR]=useState<PreflightResult|null>(null);return <section className="panel"><button className="primary" onClick={()=>run(async()=>setR(await window.batchStudio.preflight.run(project.rootPath)))}>実行前チェック</button>{r&&<><div className={`preflight ${r.state.toLowerCase()}`}><h2>{r.state}</h2><p>{r.plannedImages}枚予定 / 目標 {r.targetImages??'-'}枚</p></div>{r.sections.map(s=><div className="sectioncheck" key={s.name}><h4>{s.valid?'✓':'✕'} {s.name}</h4>{issuesView(s.issues)}</div>)}{r.warnings.length>0&&<><h3>注意</h3>{issuesView(r.warnings)}</>}</>}</section>}
 export default App;
