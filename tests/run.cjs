@@ -19,6 +19,7 @@ const validation=require(path.join(runtime,'main','validation.js'));
 const artifacts=require(path.join(runtime,'main','artifact-service.js'));
 const compiler=require(path.join(runtime,'main','compiler.js'));
 const scan=require(path.join(runtime,'main','project-scan.js'));
+const grok=require(path.join(runtime,'main','grok-context.js'));
 
 const writeJson=(p,v)=>{fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,JSON.stringify(v,null,2)+'\n')};
 const sha=s=>crypto.createHash('sha256').update(Buffer.from(s,'utf8')).digest('hex');
@@ -26,6 +27,12 @@ function models(){return {schemaVersion:1,catalog:{schemaVersion:1,generation:1,
 function plan(){return {schemaVersion:1,common:{positive:'quality',negative:'bad'},rootLoras:[{modelRef:'lora.character',strengthModel:0.7,strengthClip:0.7}],branches:[{id:'b01',label:'One',loras:[],leaves:[{id:'l01',name:'one',positive:'p1',negative:'n1'},{id:'l02',name:'two',positive:'p2',negative:'n2'}]},{id:'b02',label:'Two',loras:[],leaves:[{id:'l03',name:'three',positive:'p3',negative:'n3'}]}]};}
 
 (async()=>{
+  const brief={project:{id:'sample-project',title:'Sample'},subject:{copyrightedCharacter:false,characterName:'',series:''},audience:'visual focus',request:'',exclusions:'',assumptions:{adultCharacters:true,consensual:true},generation:{target_image_count:3,modelFamily:'Illustrious'},references:[]};
+  assert.equal(validation.validateProjectBrief(brief).valid,true,'valid project brief must pass');
+  assert.equal(validation.validateProjectBrief({...brief,audience:''}).valid,false,'audience is required');
+  assert.equal(validation.validateProjectBrief({...brief,subject:{...brief.subject,copyrightedCharacter:true,characterName:''}}).valid,false,'copyrighted character name is required');
+  assert.equal(validation.validateProjectBrief({...brief,assumptions:{adultCharacters:false,consensual:false}}).valid,false,'adult/consent confirmation is required');
+
   const manifest=JSON.parse(fs.readFileSync(path.join(repo,'templates/default-scene-batch/manifest.json'),'utf8'));
   const templateRaw=fs.readFileSync(path.join(repo,'templates/default-scene-batch/template.json'),'utf8');
   assert.equal(validation.validateWorkflowManifest(manifest).valid,true,'built-in manifest must be valid');
@@ -38,6 +45,8 @@ function plan(){return {schemaVersion:1,common:{positive:'quality',negative:'bad
   writeJson(path.join(root,'project_brief.json'),{schemaVersion:1,project:{id:'test',title:'Test'},subject:{copyrightedCharacter:true,characterName:'Character',series:'Series'},audience:'test',request:'test',exclusions:'',assumptions:{adultCharacters:true,consensual:true},generation:{target_image_count:3,modelFamily:'Illustrious'},references:[]});
   writeJson(path.join(root,'project_meta.json'),{schemaVersion:1,createdAt:new Date().toISOString(),settings:{templatePath:path.join(repo,'templates/default-scene-batch/template.json'),manifestPath:path.join(repo,'templates/default-scene-batch/manifest.json')}});
   fs.writeFileSync(path.join(root,'story.md'),'story\n');writeJson(path.join(root,'models.json'),models());writeJson(path.join(root,'prompt_plan.json'),plan());
+  const modelTask=await grok.buildGrokTask(root,'models');assert.match(modelTask.prompt,/missingRequirements/);assert.match(modelTask.prompt,/model_catalog\.json/);
+  const planTask=await grok.buildGrokTask(root,'prompt-plan');assert.match(planTask.prompt,/1 Leaf = 1 image/);assert.match(planTask.prompt,/3 枚/);
   const old=Date.now()-10000;for(const [idx,name] of ['project_brief.json','story.md','models.json','prompt_plan.json'].entries())fs.utimesSync(path.join(root,name),new Date(old+idx*1000),new Date(old+idx*1000));
 
   const result=await compiler.compileWorkflow(root);assert.equal(result.branchCount,2);assert.equal(result.imageCount,3);assert.equal(result.validation.valid,true);assert.equal(fs.existsSync(path.join(root,'LoRA_test.json')),true);
