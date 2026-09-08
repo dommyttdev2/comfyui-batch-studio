@@ -4,7 +4,7 @@ Status: Active
 
 ## 1. 目的
 
-ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、企画入力から Story、Civitaiモデルカタログ同期、モデル選定、プロンプト計画、Workflow生成、モデル所在確認、生成実行前Preflightまでを一つのデスクトップアプリで支援する。
+ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、企画入力から Story、Civitaiモデルカタログ同期、モデル選定、プロンプト計画、Workflow生成、モデル所在確認、Cloudflare R2管理、生成実行前Preflightまでを一つのデスクトップアプリで支援する。
 
 本製品は「AIに全部やらせるアプリ」ではない。意味的判断、機械処理、最終決定を明確に分離する。
 
@@ -33,6 +33,8 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - Grokが選定したModel / Version / Fileの実在確認。
 - Prompt Plan検証。
 - Workflow TemplateとPrompt PlanからComfyUI Workflowを決定論的に生成。
+- Cloudflare R2 credentialのMain Process内管理。
+- R2 bucket / object / upload / download / move / delete / URL生成。
 - Local / R2 / `models.json` の所在差分確認。
 - Preflight。
 
@@ -42,6 +44,7 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - Civitai Collectionの整理・必要モデル追加。
 - Grok Webでのログイン、送信、添付、会話継続。
 - Story案、モデル選定、Prompt Planの最終確認。
+- R2の接続設定と破壊操作の明示実行。
 - 警告・差分確認。
 - 成果物の明示確定。
 
@@ -148,12 +151,11 @@ Workflow Compiler
 LoRA_{project-destination-folder}.json
         |
         v
-[7. Model Availability]
+[7. Model Availability / R2]
 Batch Studio
-  -> Local / R2 / models.json diff
-        |
-        v
-R2 File Manager if transfer is required
+  -> Local / integrated R2 / models.json diff
+  -> R2 browser / upload / download / move / delete when needed
+  -> R2-only model remains BLOCKED until Local transfer is complete
         |
         v
 [8. Preflight]
@@ -190,7 +192,7 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 | モデル選定 | `story.md`, `model_catalog.json` | `models.json` | identity実在 / missing requirement解消 |
 | プロンプト設計 | story, models | `prompt_plan.json` | schema / refs / branch-leaf整合性有効 |
 | ワークフロー | Template, Manifest, models, plan | Workflow JSON | Compiler / structure validation成功 |
-| モデル配置 | models, Local, R2 | 所在状態 | 必須モデルがLocal生成環境から利用可能 |
+| モデル配置 | models, Local, integrated R2 | 所在状態 / R2操作 | 必須モデルがLocal生成環境から利用可能 |
 | 実行前チェック | 全成果物 | READY / BLOCKED | blocking errorなし |
 
 ## 6. UI工程ナビゲーション
@@ -221,13 +223,23 @@ Grokを使用しない工程では `Grokを表示` / `Grokを隠す` 操作自�
 
 `prompt_tree.md` はLegacyのみ。Prompt構造の正本は`prompt_plan.json`。
 
-## 7. Model Catalog ownership
+## 7. Integrated service ownership
+
+### 7.1 Model Catalog
 
 `civit-model-viewer` の機能はBatch Studioへ統合済み。新規フローでは別Flask processやlocalhost:5055を起動しない。
 
 Catalog標準保存先はElectron app data配下で、Projectは`project_meta.json.settings.catalogPath`から参照する。新規Projectは統合Catalogへ自動関連付けする。
 
 既存Projectで外部`catalogPath`が明示されている場合は互換性のため維持し、「モデルカタログ」工程の明示操作で統合Catalogへ切り替える。
+
+### 7.2 R2
+
+`r2-file-manager` の主要機能はBatch Studioへ統合済み。新規フローでは別Python/Flask processやlocalhost R2 UIを起動しない。
+
+R2 Secret / Cloudflare API TokenはElectron Main Processでのみ復号・利用し、Project artifactやGrokへ渡さない。`モデル配置`工程からbucket/folder閲覧、検索、upload、download情報生成、move/delete、一括DLを操作する。
+
+既存Projectの`r2IndexPath`は互換用fallbackとして残すが、標準のModel Availability / PreflightはProjectに設定されたR2 bucket/prefixを統合R2 Managerから直接照会する。
 
 ## 8. 完了状態の定義
 
