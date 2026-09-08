@@ -9,11 +9,11 @@ Batch Studio と外部サービス/ツールの責務境界を定義する。
 対象:
 
 - Civitai
-- R2 File Manager
+- Cloudflare R2
 - ComfyUI
 - Project filesystem
 
-`civit-model-viewer` は2026-09-08にBatch Studioへ機能統合された。Standalone repositoryは移行元/旧単体版として参照可能だが、新規Batch Studioフローの外部依存にはしない。
+`civit-model-viewer` と `r2-file-manager` の主要機能は2026-09-08にBatch Studioへ機能統合された。Standalone repositoriesは移行元/旧単体版として参照可能だが、新規Batch Studioフローの外部依存にはしない。
 
 ## 2. Civitai / Integrated Model Catalog
 
@@ -170,6 +170,8 @@ Collection一覧・item取得にはCivitai内部tRPC APIを利用する。非公
 
 成熟コンテンツを含むCollection item取得では設定されたmature endpointを使用する。Blocked contentを無条件に取得する設計にはしない。
 
+429 rate limitは同期失敗として即終了せず、`Retry-After`を優先し、未指定時はbackoff+jitterで待機して同一requestから自動再開する。通常時もrequest開始間隔を平準化する。
+
 ### 2.6 Missing model flow
 
 ```text
@@ -182,17 +184,101 @@ Grok
   -> Grok再選定
 ```
 
-## 3. R2 File Manager
+## 3. Cloudflare R2 / Integrated R2 Manager
 
-R2 File Managerは次を所有する。
+### 3.1 Ownership
+
+Batch Studio Electron Main Process がCloudflare R2の実体操作を所有する。
 
 - R2 credential / secret。
-- object listing。
-- upload / download。
-- delete / move等のobject operation。
-- signed/public URL。
+- bucket list / create / empty-bucket delete。
+- folder-like object listing / paging / bucket-wide search。
+- multipart upload / pause / resume / cancel / persisted upload state。
+- object move / rename / delete。
+- public URL / presigned URL。
+- URL / `curl` / `wget` / `aria2c` command生成。
+- 最大500件の一括download情報生成。
+- batch-download selection template。
+- optional Cloudflare account R2 metrics。
+- Model Availability / Preflight用のR2 object lookup。
 
-Batch Studioは`models.json`とLocal/R2所在差分を扱い、必要操作をR2 File Managerへ引き渡す。v1ではR2 credentialを共有して直接破壊操作を行わない。
+新規Batch Studioフローでは外部`r2-file-manager`のローカルHTTP serverを起動しない。Standalone repositoryは旧単体版としてのみ維持する。
+
+### 3.2 Secret boundary
+
+設定値はElectron `app.getPath('userData')/r2/` 配下に保持する。Secret Access KeyとCloudflare API TokenはElectron `safeStorage` で暗号化し、暗号化不能時に平文へfallback保存しない。
+
+Rendererへ返すconnection statusにはSecret本体を含めず、`secretConfigured` / `metricsTokenConfigured` のboolだけを返す。Grok Web、Project artifact、Grok attachment候補へSecretを渡さない。
+
+環境変数も利用可能:
+
+```text
+R2_ACCOUNT_ID
+R2_ACCESS_KEY
+R2_SECRET_ACCESS_KEY
+R2_PUBLIC_URL          optional
+CLOUDFLARE_API_TOKEN   optional
+```
+
+保存済みAccount ID / Access Key IDと同一identityの場合、Secret欄を空のまま接続テストや非Secret設定変更を許可する。identity変更時はSecret再入力を要求する。
+
+### 3.3 Object browser UX
+
+「モデル配置」工程内のR2 File Manager領域で最低限次を提供する。
+
+- Bucket選択。
+- breadcrumb付きfolder navigation。
+- filename / full object keyによるbucket-wide検索。
+- paging / 「さらに読み込む」。
+- file size / modified time表示。
+- upload file picker。
+- upload progress / pause / resume / cancel。
+- app再起動後のunfinished upload表示・再開。
+- move / rename。
+- main list checkboxによるdelete selection。
+- single object download info。
+- optional storage metrics。
+
+数GB fileをRendererへ全読込しない。Main ProcessがローカルfileをpartごとにstreamしR2へmultipart uploadする。
+
+### 3.4 Batch download UX
+
+一括download selectionはmain listのdelete checkbox stateと分離する。
+
+- 「一括DLのURL生成」は選択数に依存せず利用可能。
+- button押下後、専用popup内で対象objectを選ぶ。
+- 初期folderは現在のmain browser prefix。
+- folder移動を跨いでselectionを保持。
+- bucket-wide searchを利用可能。
+- search解除後もselectionを保持。
+- popup下部に「選択済みファイル」を表示し、個別解除 / 全解除可能。
+- 最大500 objects。501件目は追加しない。
+- final generate押下時だけpublic/presigned URLを生成する。
+- URL / curl / wget / aria2cをtab表示し、各tabで「すべてコピー」を提供する。
+- duplicate local filenamesは`name (2).ext`等で衝突回避する。
+- 名前付きbatch selection templateを保存・適用・削除できる。
+- cancel / popup close / generate完了後はsession selectionを残さない。
+
+### 3.5 Model Availability integration
+
+Projectごとに次を指定できる。
+
+```text
+project_meta.json.settings.r2Bucket
+project_meta.json.settings.r2ModelPrefix
+```
+
+`models.json`のcheckpoint / LoRA filenameをLocal ComfyUI models rootと統合R2の双方で照会する。
+
+```text
+Localあり              -> available
+Localなし / R2あり     -> transfer-required / BLOCKED
+Localなし / R2なし     -> missing / BLOCKED
+```
+
+R2に存在するだけでPreflightをREADYにしない。ComfyUI実行時点ではLocal配置が必要である。
+
+既存Projectの`r2IndexPath`は互換用fallbackとして読み取りを維持できるが、標準経路では統合R2を直接照会する。
 
 ## 4. ComfyUI
 
@@ -201,10 +287,12 @@ v1のBatch Studio責務:
 ```text
 Prompt Plan
   -> deterministic Workflow Compiler
-  -> LoRA_{project.id}.json
+  -> LoRA_{project-destination-folder}.json
   -> model availability
   -> Preflight READY / BLOCKED
 ```
+
+Workflow file名はProject実folderの親、すなわちユーザーが指定したProject作成先folder名を用いる。内部Save pathは`BatchStudio/{project.id}/{branch.id}`を維持する。
 
 現行必須scope外:
 
@@ -224,20 +312,23 @@ project_meta.json
 story.md
 models.json
 prompt_plan.json
-LoRA_{project.id}.json
+LoRA_{project-destination-folder}.json
 ._batch_studio/
 ```
 
 `model_catalog.json`はapp-wide sourceであり、各Projectへコピーすることを標準にはしない。
+
+R2 credential / upload state / batch download templateはProject artifactではなくapp-wide `userData/r2/` で管理する。
 
 ## 6. Secret boundary
 
 | Secret / Data | Owner | Batch Studio | Grok |
 | --- | --- | --- | --- |
 | Civitai API key | Batch Studio Main Process / environment | Civitai通信だけに使用・Projectへ保存しない | 渡さない |
-| R2 credential | R2 File Manager | 読まない | 渡さない |
+| R2 credential | Batch Studio Main Process / `safeStorage` | R2通信だけに使用・Projectへ保存しない | 渡さない |
+| Cloudflare API Token | Batch Studio Main Process / `safeStorage` | optional metrics取得だけに使用 | 渡さない |
 | Grok Cookie | Grok Web persistent session | Projectへ保存しない | Web session自身のみ |
-| model binary | Local/R2 | 所在確認 | 添付しない |
+| model binary | Local/R2 | 所在確認 / R2管理 | 添付しない |
 | model_catalog.json | Batch Studio app data | 生成・読む | Model選定時に添付可 |
 | project artifacts | Project filesystem | 読書き | 必要分だけ手動添付 |
 
@@ -247,7 +338,10 @@ fallbackで偽装成功させない。
 
 - Civitai API key未設定 -> SYNC不可。保存済みCatalogがあれば閲覧は可能。
 - tRPC/API failure -> 同期ERROR。保存済みCatalogを消さない。
+- Civitai 429 -> wait/retryして同一同期を継続。待機中をUI表示。
 - strength evidence不足 -> `strengthBaseline` absent。経験則で補完しない。
 - catalog未生成 -> Model Selection/validationを進行不能として明示。
-- R2 File Manager unavailable -> R2 transfer unavailable。
-- Grok未ログイン -> Grok工程不可。ただし既存Artifact/Catalog閲覧は可能。
+- R2未設定 / credential failure -> R2操作を利用不可として明示。Local availability判定を偽装しない。
+- R2 object lookup failure -> R2不存在とはみなさず、接続/設定errorとして扱う。
+- incomplete multipart upload -> persisted jobとして保持し、ユーザーが再開/キャンセル可能。
+- Grok未ログイン -> Grok工程不可。ただし既存Artifact/Catalog/R2閲覧は可能。
