@@ -111,7 +111,7 @@ Grok
   - 不足モデル要件の提示
         |
         v
-models.json
+models.json Draft
         |
         v
 Batch Studio
@@ -131,15 +131,18 @@ Grok
   - Matrix leaf prompts
         |
         v
-prompt_plan.json
+prompt_plan.json Draft
         |
         v
 Batch Studio
   - schema / model ref / branch整合性検証
+  - 左→右の擬似Workflowツリーで確認・編集
+  - ユーザー確定
         |
         v
 [5. Workflow Compile]
 Template(Common + Branch Prototype x1)
+        + Manifest
         + prompt_plan.json
         + models.json
         |
@@ -153,13 +156,13 @@ Workflow Compiler
   - タイトル/保存先等の派生値生成
         |
         v
-LoRA_{project}.json
+LoRA_{project.id}.json
         |
         v
 [6. Model Availability]
 Batch Studio
   - Local ComfyUI
-  - R2
+  - R2 index
   - models.json
     の差分確認
         |
@@ -179,40 +182,40 @@ READY FOR COMFYUI
 
 | 工程 | 入力 | 出力 | 次へ進む条件 |
 | --- | --- | --- | --- |
-| Project | ユーザー入力 | `project_brief.json` | 必須 Brief が有効 |
-| Story | Brief / 参考資料 | `story.md` | ユーザー確定、基本検証成功 |
-| Models | `story.md`, `model_catalog.json` | `models.json` | 選定項目が catalog に実在し不足必須モデルが解消 |
-| Prompt Plan | `story.md`, `models.json` | `prompt_plan.json` | schema、モデル参照、枝/葉整合性が有効 |
-| Workflow | Template, Manifest, models, plan | Workflow JSON | Compiler 完走、構造検証成功 |
-| Availability | models, Local, R2 | 所在状態 | 必須モデルが生成環境から利用可能 |
-| Preflight | 全成果物 | READY / BLOCKED | Blocking error なし |
+| 基本設定 | ユーザー入力 | `project_brief.json` | 必須 Brief が有効 |
+| ストーリー | Brief / 参考資料 | `story.md` | ユーザー確定、基本検証成功 |
+| モデル選定 | `story.md`, `model_catalog.json` | `models.json` | 選定項目が catalog に実在し不足必須モデルが解消 |
+| プロンプト設計 | `story.md`, `models.json` | `prompt_plan.json` | schema、モデル参照、枝/葉整合性が有効 |
+| ワークフロー | Template, Manifest, models, plan | Workflow JSON | Compiler 完走、構造検証成功 |
+| モデル配置 | models, Local, R2 | 所在状態 | 必須モデルがLocal生成環境から利用可能 |
+| 実行前チェック | 全成果物 | READY / BLOCKED | Blocking error なし |
 
 ## 6. UI の工程ナビゲーション
 
-左ペインの主要工程は次を基準とする。
+日本語 UI の主要工程は次を基準とする。
 
 ```text
 概要
-Project
-Story
-Models
-Prompt Plan
-Workflow
-R2 / Models
-Preflight
+基本設定
+ストーリー
+モデル選定
+プロンプト設計
+ワークフロー
+モデル配置
+実行前チェック
 ```
 
-旧 `Prompt Tree` 画面の扱いは `prompt_tree.md` の正本関係が確定してから決める。人間向け表示として残す場合でも、Workflow Compiler の入力契約とは分離する。
+`prompt_tree.md` は新規プロジェクトの標準 Artifact ではない。既存プロジェクトに存在する場合だけ Legacy Artifact として識別し、Workflow Compiler の入力には使用しない。人間向け Prompt 構造の確認・編集は `prompt_plan.json` を正本とする Prompt Plan UI が担当する。
 
 ## 7. 完了状態の定義
 
 プロジェクトが `READY` になる最低条件:
 
 1. `story.md` が確定済み。
-2. `models.json` が確定済みで、必須選定が catalog と整合する。
+2. `models.json` が確定済みで、必須選定が current catalog と整合する。
 3. `prompt_plan.json` が確定済み。
-4. Workflow Compiler により最終 Workflow が生成済み。
+4. Workflow Compiler により `LoRA_{project.id}.json` が生成済みで、Template / Manifest provenance を含め stale でない。
 5. 最終 Workflow に未使用枝が存在しない。
 6. Workflow が参照する Checkpoint / LoRA が `models.json` と一致する。
-7. 必須モデル実体が生成環境から利用可能。
+7. 必須モデル実体が Local の生成環境から利用可能。R2 にのみ存在するモデルは転送完了まで Blocking とする。
 8. Preflight に blocking error がない。
