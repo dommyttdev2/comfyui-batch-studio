@@ -13,8 +13,8 @@ Grok Web は通常の iframe としてローカル UI に埋め込まず、Elect
 │ Electron Main                                                        │
 │                                                                      │
 │  ┌──────────────────── Local Renderer ─────────────────────┐          │
-│  │ Project / Story / Models / Prompt Plan / Workflow /     │          │
-│  │ R2 / Preflight                                           │          │
+│  │ Project / Story / Catalog / Models / Prompt Plan /      │          │
+│  │ Workflow / Model Availability + R2 / Preflight          │          │
 │  └──────────────────────────────────────────────────────────┘          │
 │                                                                      │
 │  ┌──────────────────── Grok WebContentsView ────────────────┐          │
@@ -24,7 +24,7 @@ Grok Web は通常の iframe としてローカル UI に埋め込まず、Elect
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-初期レイアウトは左右分割を基本とし、境界のリサイズとローカル側最大化を許容する。
+Grokが必要な工程では左右分割を基本とし、境界dividerをマウスでresize可能とする。Grok不要工程ではLocal UIを全幅で使用する。
 
 ## 2. Main Process Services
 
@@ -37,31 +37,38 @@ Grok Web は通常の iframe としてローカル UI に埋め込まず、Elect
 - `project_meta.json` / `project_brief.json` の読み書き。
 - 既存プロジェクトとの互換読込。
 - 下書き・履歴・確定保存。
+- 最後に開いたProject pathのapp-wide UI state保存・起動時復元。
 
 ### 2.2 Artifact Service
 
 - `story.md`、`models.json`、`prompt_plan.json`、Workflow の読み書き。
 - Artifact status 管理。
 - 差分表示用データ生成。
-- Artifact hash / update detection の将来拡張点。
+- Artifact hash / dependency stale detection。
 
-### 2.3 Grok Context Builder
+### 2.3 Grok Context Builder / Grok Session State
 
 - 工程別プロンプトの組み立て。
 - 添付候補ファイルの列挙。
 - 秘密情報の除外。
 - Clipboard 用文字列生成。
+- Project × Grok工程ごとの最後のconversation URL保存・復元。
 
 Grok DOM への書込や回答取得は行わない。
 
-### 2.4 Model Catalog Adapter
+### 2.4 Integrated Civitai Catalog Service
 
-- `civit-model-viewer` の `model_catalog.json` を読取。
-- schemaVersion / generation / generatedAt の取得。
-- Model / Version / File の lookup index 構築。
-- `models.json` の参照検証。
+- Civitai Public / Private Model Collection同期。
+- Civitai API / internal tRPC通信。
+- API keyのMain Process内利用。
+- Model / Version / File / thumbnail / trained words取得。
+- observed LoRA strength evidence集計。
+- app-wide `model_catalog.json` のgeneration管理・永続化。
+- Collection / Model / Version selection template保存。
+- `models.json` のModel / Version / File identity検証。
+- 429 rate limitのwait / retry / resume。
 
-Civitai との HTTP 通信や API key 管理は担当しない。
+Civitai API keyをRenderer/Grok/Project fileへ渡さない。
 
 ### 2.5 Workflow Compiler
 
@@ -74,21 +81,33 @@ Civitai との HTTP 通信や API key 管理は担当しない。
 
 詳細は `workflow-compiler.md` を正本とする。
 
-### 2.6 Validation / Preflight Service
+### 2.6 Integrated R2 Manager
+
+- Cloudflare R2 S3-compatible API通信。
+- R2 credential / Cloudflare API TokenのMain Process内利用。
+- `safeStorage`によるSecret暗号化保存。暗号化不能時の平文fallback禁止。
+- Bucket list / create / empty-bucket delete。
+- Object list / folder navigation / paging / search。
+- Public / presigned URL生成。
+- URL / curl / wget / aria2c command生成。
+- Object move / rename / delete。
+- Main Process streaming multipart upload。
+- Upload pause / resume / cancel / persisted unfinished state。
+- Batch download selection template保存。
+- optional R2 account metrics。
+- Model Availability / Preflight用R2 lookup。
+
+旧 `r2-file-manager` のlocalhost serverは新規フローでは起動しない。
+
+### 2.7 Validation / Preflight Service
 
 - Artifact 単体検証。
 - Artifact 間参照検証。
 - Workflow 構造検証。
-- model availability の集約。
+- Local / integrated R2 model availability の集約。
 - READY / BLOCKED の判定。
 
-### 2.7 External Tool Adapter
-
-初期段階では疎結合な起動・引き渡しだけを担当する。
-
-- R2 File Manager を開く。
-- 対象 object key / file name を Clipboard へ渡す。
-- 将来の API 統合用境界を提供する。
+R2-only modelは`transfer-required`としてBlockingにする。
 
 ## 3. Renderer の責務
 
@@ -96,16 +115,19 @@ Renderer はユーザー操作と表示を担当し、ファイルシステム�
 
 主要画面:
 
-- Project list / Overview
-- Project initialization
+- Project / Overview
+- Project initialization / Settings
 - Story
+- Model Catalog
 - Models
 - Prompt Plan
 - Workflow compile result
-- R2 / Model availability
+- Model Availability / R2 file management
 - Preflight
 
 Renderer から Main process へは preload で許可した最小限の IPC だけを公開する。
+
+R2 Secret本体やCivitai API keyをRendererへ返さない。R2設定画面は保存済みSecretについてconfigured boolのみ受け取る。
 
 ## 4. Grok Web の信頼境界
 
@@ -129,9 +151,11 @@ Grok ログイン session はアプリ専用の永続 partition に保存可能�
 - `model_catalog.json`
 - R2 configuration
 
+Project × Grok工程の復帰用conversation URLはapp-wide stateに保存してよいが、conversation本文やCookieをProjectへ保存しない。
+
 ### 4.3 Navigation
 
-Grok ログインに必要な正規認証先は許可し、それ以外の外部遷移・新規ウィンドウは allowlist または既定ブラウザへの引き渡しを基本とする。
+Grokログインに必要なOAuth popupはGrokと同じpersistent partitionを使用する。認証flow内のsecure redirect chainは同じElectron sessionに保持し、通常の非Grok外部navigationは既定ブラウザへ引き渡す。
 
 ## 5. データフロー
 
@@ -142,24 +166,24 @@ User Brief
 Project Service
    |
    +--> Grok Context Builder --> Clipboard --> User --> Grok Web
-                                                   |
-                                                   v
-                                              story.md text
-                                                   |
-                                                   v
-Artifact Service <---------------------------------+
+   |                                               |
+   |                                               v
+   |                                          story/models/plan text
+   |                                               |
+   +<---------------- Artifact Service <-----------+
    |
-   +--> Model Catalog Adapter ---- model_catalog.json
-   |          ^
-   |          |
-   |     models.json from Grok
-   |
-   +--> prompt_plan.json from Grok
+   +--> Civitai Catalog Service --> app-wide model_catalog.json
+   |             |
+   |             +--> models identity validation
    |
    +--> Workflow Compiler <---- Template + Manifest
    |          |
    |          v
    |      Workflow JSON
+   |
+   +--> R2 Manager <---- Cloudflare R2
+   |       |
+   |       +--> model existence / upload / file operations
    |
    +--> Validation / Preflight
               |
@@ -174,13 +198,37 @@ Artifact Service <---------------------------------+
 - 検証結果を表示する。
 - ユーザーの明示操作で確定する。
 - 既存確定ファイルを更新する前に履歴へ退避する。
+- Civitai/R2のapp-wide stateやcredentialをProject artifactへコピーしない。
 
-## 7. 既存プロジェクト互換
+## 7. App-wide data
+
+Electron `app.getPath('userData')` 配下にProject外の状態を保持する。
+
+例:
+
+```text
+userData/
+  ui-state.json
+  grok-chat-state.json
+  civitai/
+    model_catalog.json
+    selection_templates.json
+  r2/
+    config.json
+    uploads.json
+    batch-download-templates.json
+```
+
+`r2/config.json` にSecret平文を保存しない。暗号化blobだけを保持する。
+
+## 8. 既存プロジェクト互換
 
 既存プロジェクトには Batch Studio 固有 metadata が存在しない可能性がある。
 
 - `project_meta.json` は既存プロジェクト読込時に必須としない。
 - 旧 Workflow ファイル名を検出できる互換層を持つ。
 - 新しい Artifact を追加しても、既存の `story.md` や Workflow を無断変換・上書きしない。
+- 明示的な外部`catalogPath`は互換用に維持する。
+- `r2IndexPath`は統合R2未設定の既存Project向け互換fallbackとして維持できる。
 
 互換対象の具体的なファイル名と migration policy は `contracts/project-artifacts.md` で管理する。
