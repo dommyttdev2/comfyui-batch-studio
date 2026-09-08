@@ -1,6 +1,6 @@
 export const GROK_PARTITION = 'persist:batch-studio-grok';
 
-const GROK_HOSTS = ['grok.com', 'x.com', 'twitter.com'];
+const GROK_HOSTS = ['grok.com', 'x.ai', 'x.com', 'twitter.com'];
 const AUTH_ENTRY_HOSTS = ['accounts.google.com'];
 
 function hostMatches(hostname: string, allowed: string) {
