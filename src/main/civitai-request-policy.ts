@@ -26,6 +26,7 @@ export class CivitaiRequestPolicy {
   private readonly originalFetch:typeof fetch;
   private readonly hosts:Set<string>;
   private readonly minIntervalMs:number;
+  private readonly minRetryMs:number;
   private readonly timeoutMs:number;
   private nextRequestAt=0;
   private blockedUntil=0;
@@ -37,6 +38,7 @@ export class CivitaiRequestPolicy {
     this.originalFetch=originalFetch;
     this.hosts=normalizedHosts();
     this.minIntervalMs=Math.max(0,Number(process.env.CIVITAI_REQUEST_INTERVAL_MS??350));
+    this.minRetryMs=Math.max(1,Number(process.env.CIVITAI_MIN_RETRY_MS??1000));
     this.timeoutMs=Math.max(1000,Number(process.env.CIVITAI_TIMEOUT??20)*1000);
   }
 
@@ -68,9 +70,9 @@ export class CivitaiRequestPolicy {
 
   private retryDelay(response:Response){
     const fromHeader=parseRetryAfter(response.headers.get('Retry-After'));
-    if(fromHeader!=null)return Math.max(1000,fromHeader);
+    if(fromHeader!=null)return Math.max(this.minRetryMs,fromHeader);
     const exponential=Math.min(60_000,2_000*(2**Math.min(this.consecutive429,5)));
-    return exponential+Math.floor(Math.random()*1000);
+    return Math.max(this.minRetryMs,exponential+Math.floor(Math.random()*1000));
   }
 
   private async fetch(input:RequestInfo|URL,init?:RequestInit):Promise<Response>{
@@ -80,14 +82,12 @@ export class CivitaiRequestPolicy {
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),this.timeoutMs);
       let response:Response;
       try{
-        // The catalog service's outer timeout must not abort a deliberate rate-limit pause.
         response=await this.originalFetch(input,{...init,signal:controller.signal});
       }finally{clearTimeout(timer)}
       if(response.status!==429){this.consecutive429=0;return response}
       this.consecutive429+=1;
       const delay=this.retryDelay(response);
       this.blockedUntil=Math.max(this.blockedUntil,Date.now()+delay);
-      // Do not return 429 to the catalog service. Wait, then resume this exact request.
     }
   }
 }
