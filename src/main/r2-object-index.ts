@@ -45,10 +45,12 @@ export class R2ObjectIndex {
 
   private async doSync(): Promise<void> {
     const c = await this.config.credentials();
+    const secretAccessKey = c.secretAccessKey?.trim();
+    if (!secretAccessKey) throw new Error('Secret Access Keyが必要です。');
     const client = new S3Client({
       endpoint: `https://${c.accountId}.r2.cloudflarestorage.com`,
       region: 'auto',
-      credentials: { accessKeyId: c.accessKeyId, secretAccessKey: c.secretAccessKey },
+      credentials: { accessKeyId: c.accessKeyId, secretAccessKey },
       maxAttempts: 5,
     });
     const listed = await client.send(new ListBucketsCommand({}));
