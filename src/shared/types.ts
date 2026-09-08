@@ -43,11 +43,16 @@ export interface PromptLeaf { id: string; name: string; positive: string; negati
 export interface PromptBranch { id: string; label: string; loras: LoraUsage[]; leaves: PromptLeaf[]; }
 export interface PromptPlanArtifact { schemaVersion: 1; common: { positive: string; negative: string; }; rootLoras: LoraUsage[]; branches: PromptBranch[]; }
 
-export interface CatalogFile { id: number; name: string; primary?: boolean; }
-export interface CatalogVersion { versionId: number; versionName: string; files: CatalogFile[]; trainedWords?: string[]; strengthBaseline?: StrengthBaseline; }
-export interface CatalogItem { modelId: number; modelName: string; versionId: number; versionName: string; files: CatalogFile[]; trainedWords?: string[]; versions?: CatalogVersion[]; strengthBaseline?: StrengthBaseline; modelUrl?: string; }
-export interface ModelCatalog { schemaVersion: number; generation: number; generatedAt: string; collections: Array<{id:number;name:string;items:CatalogItem[]}>; }
+export interface CatalogFile { id: number; name: string; primary?: boolean; sizeKB?: number; format?: string; precision?: string; }
+export interface CatalogVersion { versionId: number; versionName: string; files: CatalogFile[]; trainedWords?: string[]; strengthBaseline?: StrengthBaseline; modelUrl?: string; thumbnailUrl?: string; thumbnailWidth?: number; thumbnailHeight?: number; }
+export interface CatalogItem { modelId: number; modelName: string; versionId: number; versionName: string; files: CatalogFile[]; trainedWords?: string[]; versions?: CatalogVersion[]; strengthBaseline?: StrengthBaseline; modelUrl?: string; thumbnailUrl?: string; thumbnailWidth?: number; thumbnailHeight?: number; error?: string; }
+export interface CatalogCollection { id:number; name:string; description?:string; read?:string; type?:string; imageId?:number; thumbnailUrl?:string; items:CatalogItem[]; }
+export interface ModelCatalog { schemaVersion: number; generation: number; generatedAt: string; collections: CatalogCollection[]; }
 export interface CatalogStatus { configured: boolean; path: string | null; exists: boolean; schemaVersion?: number; generation?: number; generatedAt?: string; itemCount: number; error?: string; }
+export interface CivitaiCatalogStatus { state:'idle'|'running'|'ready'|'error'; phase:string; completed:number; total:number; message:string; generation:number; changes:{added:number;updated:number;removed:number}; error:string|null; apiKeyConfigured:boolean; catalogPath:string; }
+export interface CatalogSelectionEntry { collectionId:number; modelId:number; versionId:number; }
+export interface CatalogSelectionTemplate { id:string; name:string; createdAt:string; updatedAt:string; selection:CatalogSelectionEntry[]; }
+export interface CatalogSelectionTemplateInput { id?:string; name:string; selection:CatalogSelectionEntry[]; }
 
 export interface GrokTask { stage: 'story-initial'|'story-finalize'|'story-fix'|'models'|'models-fix'|'prompt-plan'|'prompt-plan-fix'; title: string; prompt: string; attachments: Array<{name:string;path:string;purpose:string;exists:boolean}>; }
 
@@ -84,7 +89,17 @@ export interface BatchStudioApi {
   };
   grokTask: { build: (root:string,stage:GrokTask['stage'],extra?:string)=>Promise<GrokTask>; };
   file: { showInFolder:(filePath:string)=>Promise<void>; };
-  catalog: { status:(root:string)=>Promise<CatalogStatus>; };
+  catalog: {
+    status:(root:string)=>Promise<CatalogStatus>;
+    integratedStatus:()=>Promise<CivitaiCatalogStatus>;
+    snapshot:()=>Promise<ModelCatalog|null>;
+    sync:()=>Promise<CivitaiCatalogStatus>;
+    linkProject:(root:string)=>Promise<ProjectSummary>;
+    templates:()=>Promise<CatalogSelectionTemplate[]>;
+    saveTemplate:(input:CatalogSelectionTemplateInput)=>Promise<CatalogSelectionTemplate[]>;
+    deleteTemplate:(id:string)=>Promise<CatalogSelectionTemplate[]>;
+    openModel:(url:string)=>Promise<void>;
+  };
   workflow: { compile:(root:string)=>Promise<CompileResult>; };
   availability: { check:(root:string)=>Promise<AvailabilityResult>; openR2:(root:string)=>Promise<void>; };
   preflight: { run:(root:string)=>Promise<PreflightResult>; };
