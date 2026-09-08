@@ -74,11 +74,13 @@ function BatchDownloadModal({bucket,initialPrefix,templates,onClose,onGenerated,
   const more=()=>run(async()=>{if(!searchPage?.nextToken)return;const next=await window.batchStudio.r2.search(bucket,query,searchPage.nextToken);setSearchPage({...next,objects:[...searchPage.objects,...next.objects],scanned:searchPage.scanned+next.scanned})});
   const applyTemplate=(id:string)=>{setTemplateId(id);const t=templates.find(x=>x.id===id);if(t)setSelected(new Map(t.objects.map(o=>[o.key,o])))};
   return <div className="modal"><div className="modalcard xlarge batch-download-modal">
-    <div className="panelhead batch-modal-head"><div><h2>一括DLのURL生成</h2><small>メイン一覧とは独立した選択です。最大500件。</small></div><button onClick={onClose}>×</button></div>
+    <div className="batch-modal-head"><div><h2>一括DLのURL生成</h2><small>メイン一覧とは独立した選択です。最大500件。</small></div><button onClick={onClose}>×</button></div>
     <section className="batchtemplates top">
       <div className="batch-template-heading"><h3>テンプレート</h3><small>保存済みテンプレートを選択するとファイル選択へ反映します。</small></div>
-      <div className="batch-template-row"><select value={templateId} onChange={e=>applyTemplate(e.target.value)}><option value="">テンプレートを選択</option>{templates.map(t=><option key={t.id} value={t.id}>{t.name}（{t.objects.length}件）</option>)}</select><button disabled={!templateId} onClick={()=>run(async()=>{onTemplates(await window.batchStudio.r2.deleteTemplate(templateId));setTemplateId('')})}>削除</button></div>
-      <div className="batch-template-row"><input placeholder="新しいテンプレート名" value={templateName} onChange={e=>setTemplateName(e.target.value)}/><button disabled={!templateName||!selected.size} onClick={()=>run(async()=>{onTemplates(await window.batchStudio.r2.saveTemplate({name:templateName,bucket,objects:[...selected.values()]}));setTemplateName('')})}>現在の選択を保存</button></div>
+      <div className="batch-template-controls">
+        <div className="batch-template-row"><select value={templateId} onChange={e=>applyTemplate(e.target.value)}><option value="">テンプレートを選択</option>{templates.map(t=><option key={t.id} value={t.id}>{t.name}（{t.objects.length}件）</option>)}</select><button disabled={!templateId} onClick={()=>run(async()=>{onTemplates(await window.batchStudio.r2.deleteTemplate(templateId));setTemplateId('')})}>削除</button></div>
+        <div className="batch-template-row"><input placeholder="新しいテンプレート名" value={templateName} onChange={e=>setTemplateName(e.target.value)}/><button disabled={!templateName||!selected.size} onClick={()=>run(async()=>{onTemplates(await window.batchStudio.r2.saveTemplate({name:templateName,bucket,objects:[...selected.values()]}));setTemplateName('')})}>現在の選択を保存</button></div>
+      </div>
     </section>
     <section className="batchbrowser">
       <PathBar prefix={prefix}/>
