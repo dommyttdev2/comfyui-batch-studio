@@ -4,9 +4,9 @@ Status: Active
 
 ## 1. 目的
 
-ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、企画入力から Story、モデル選定、プロンプト計画、Workflow 生成、モデル所在確認、生成実行前 Preflight までを一つのデスクトップアプリで支援する。
+ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、企画入力から Story、Civitaiモデルカタログ同期、モデル選定、プロンプト計画、Workflow生成、モデル所在確認、生成実行前Preflightまでを一つのデスクトップアプリで支援する。
 
-本製品は「AI に全部やらせるアプリ」ではない。意味的判断、機械処理、最終決定を明確に分離する。
+本製品は「AIに全部やらせるアプリ」ではない。意味的判断、機械処理、最終決定を明確に分離する。
 
 ## 2. 最上位の責務原則
 
@@ -15,163 +15,145 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 ### 2.1 Grok の責務
 
 - 版権キャラクター等の公開情報の調査・整理。
-- Story 案の生成とユーザーとの会話による調整。
+- Story案の生成とユーザーとの会話による調整。
 - `story.md` の作成。
 - `model_catalog.json` を根拠にした使用モデルの選定。
-- 共通プロンプトの設計。
-- 全枝共通で使用する LoRA の判断。
-- 枝分けの意味的設計。
-- 各枝で使用する LoRA の判断。
-- 各枝の SceneMatrix に入れる葉プロンプト群の設計。
+- 共通プロンプト、Root LoRA、Branch、Leaf promptsの意味設計。
 
 ### 2.2 Batch Studio の責務
 
-- プロジェクト状態と成果物の管理。
+- プロジェクト状態と成果物管理。
 - Brief、下書き、履歴、確定保存。
-- Grok に渡す文脈と添付対象の準備。
-- `model_catalog.json` の読取。
-- Grok が選定した Model / Version / File の実在確認。
-- Grok の構造化 Prompt Plan の検証。
-- Workflow Template と Prompt Plan から ComfyUI Workflow を決定論的に生成。
+- Grokに渡す文脈と添付対象の準備。
+- Civitai Model Collectionの同期。
+- app-wide `model_catalog.json` の生成・generation管理。
+- Model / Version / File / thumbnail / trained words取得。
+- Civitai observed LoRA strength baseline集計。
+- Collection / Model / Version選択テンプレート管理。
+- Grokが選定したModel / Version / Fileの実在確認。
+- Prompt Plan検証。
+- Workflow TemplateとPrompt PlanからComfyUI Workflowを決定論的に生成。
 - Local / R2 / `models.json` の所在差分確認。
 - Preflight。
 
 ### 2.3 ユーザーの責務
 
-- プロジェクト Brief の入力。
-- Grok Web でのログイン、送信、添付、会話継続。
-- Story 案の選択・修正。
-- Grok が選定したモデルと Prompt Plan の最終確認。
-- 警告・差分の確認。
+- Project Brief入力。
+- Civitai Collectionの整理・必要モデル追加。
+- Grok Webでのログイン、送信、添付、会話継続。
+- Story案、モデル選定、Prompt Planの最終確認。
+- 警告・差分確認。
 - 成果物の明示確定。
 
 ## 3. やらないこと
 
-v1 の非責務を明示する。
+### 3.1 Grok操作の自動化
 
-### 3.1 Grok 操作の自動化
-
-Batch Studio は次を行わない。
-
-- Grok 入力欄の DOM 操作。
+- Grok入力欄DOM操作。
 - 自動送信。
 - 自動ファイル添付。
-- Grok 回答のスクレイピング。
+- Grok回答scraping。
 - ログイン自動化。
-- Grok Cookie や認証情報のプロジェクト保存。
+- Grok CookieのProject保存。
 
-### 3.2 Grok に任せないこと
-
-Grok に次を生成・操作させない。
+### 3.2 Grokに任せないこと
 
 - ComfyUI Workflow JSON。
-- Node ID / Link ID。
-- ノード座標・Group 座標。
-- `widgets_values` / `widgets_values_named`。
-- `scene_matrix_json`。
-- bypass / mode。
-- SaveImage、KSampler、VAE Decode 等の機械的ノード設定。
-- R2 操作。
-- Civitai API key や R2 secret の利用。
+- Node / Link / Group ID。
+- node/group position。
+- widgets / SceneMatrix boilerplate。
+- R2操作。
+- Civitai API keyやR2 secretの利用。
 
-### 3.3 v1 の生成実行範囲
+### 3.3 v1生成実行範囲
 
-v1 の責務終端は「生成可能な Workflow と必要モデルが揃い、Preflight が完了した状態」とする。
-
-ComfyUI API への Queue 投入、生成進捗管理、結果画像取得は将来追加可能だが、現時点の必須スコープには含めない。
+v1の責務終端は「生成可能なWorkflowと必要モデルが揃い、Preflightが完了した状態」。ComfyUI Queue / progress / output collectionは将来scope。
 
 ## 4. 全体工程
 
 ```text
 [1. Project Brief]
 Batch Studio
-  - 新規/既存プロジェクト
-  - project_brief.json
+  -> project_brief.json
         |
         v
 [2. Story]
-Grok
-  - 調査
-  - Story案
-  - ユーザーとの調整
-  - story.md
+Grok + User
+  -> story.md Draft
         |
         v
 Batch Studio
-  - 検証
-  - ユーザー確定
+  -> Validate / Confirm
         |
         v
-[3. Model Selection]
+[3. Model Catalog]
+Batch Studio Main Process
+  -> Civitai Public/Private Model Collections
+  -> Model / Version / File / thumbnail / trained words
+  -> observed LoRA strength evidence
+  -> app-wide model_catalog.json
+  -> generation increment
+        |
+        v
+Batch Studio Local UI
+  -> Collection selection / cross-search
+  -> Version inspection
+  -> selection templates / JSON copy
+        |
+        v
+[4. Model Selection]
 story.md + model_catalog.json
         |
         v
 Grok
-  - Checkpoint / LoRA / Version / File 選定
-  - 不足モデル要件の提示
+  -> Checkpoint / LoRA / Version / File selection
+  -> missingRequirements when needed
         |
         v
 models.json Draft
         |
         v
 Batch Studio
-  - catalog照合
-  - ユーザー確定
+  -> catalog identity validation
+  -> User Confirm
         |
         v
-[4. Prompt Planning]
+[5. Prompt Planning]
 story.md + models.json
         |
         v
 Grok
-  - 共通Prompt
-  - Root LoRA
-  - Branch設計
-  - Branch LoRA
-  - Matrix leaf prompts
+  -> Common Prompt / Root LoRA / Branch / Leaf prompts
         |
         v
 prompt_plan.json Draft
         |
         v
 Batch Studio
-  - schema / model ref / branch整合性検証
-  - 左→右の擬似Workflowツリーで確認・編集
-  - ユーザー確定
+  -> schema / refs validation
+  -> left-to-right pseudo Workflow tree review/edit
+  -> User Confirm
         |
         v
-[5. Workflow Compile]
-Template(Common + Branch Prototype x1)
-        + Manifest
-        + prompt_plan.json
-        + models.json
+[6. Workflow Compile]
+Template + Manifest + prompt_plan.json + models.json
         |
         v
 Workflow Compiler
-  - 共通部設定
-  - 枝Prototype複製
-  - Node/Link/Group再採番
-  - LoRA Stack設定
-  - SceneMatrix生成
-  - タイトル/保存先等の派生値生成
         |
         v
 LoRA_{project.id}.json
         |
         v
-[6. Model Availability]
+[7. Model Availability]
 Batch Studio
-  - Local ComfyUI
-  - R2 index
-  - models.json
-    の差分確認
+  -> Local / R2 / models.json diff
         |
         v
-R2 File Manager
-  - 必要なら実体転送
+R2 File Manager if transfer is required
         |
         v
-[7. Preflight]
+[8. Preflight]
 Batch Studio
         |
         v
@@ -182,22 +164,22 @@ READY FOR COMFYUI
 
 | 工程 | 入力 | 出力 | 次へ進む条件 |
 | --- | --- | --- | --- |
-| 基本設定 | ユーザー入力 | `project_brief.json` | 必須 Brief が有効 |
-| ストーリー | Brief / 参考資料 | `story.md` | ユーザー確定、基本検証成功 |
-| モデル選定 | `story.md`, `model_catalog.json` | `models.json` | 選定項目が catalog に実在し不足必須モデルが解消 |
-| プロンプト設計 | `story.md`, `models.json` | `prompt_plan.json` | schema、モデル参照、枝/葉整合性が有効 |
-| ワークフロー | Template, Manifest, models, plan | Workflow JSON | Compiler 完走、構造検証成功 |
+| 基本設定 | ユーザー入力 | `project_brief.json` | 必須Brief有効 |
+| ストーリー | Brief / 参考資料 | `story.md` | User Confirm / validation成功 |
+| モデルカタログ | Civitai Collection | app-wide `model_catalog.json` | Catalog生成済み。必要モデルがCollectionに含まれることをユーザーが確認可能 |
+| モデル選定 | `story.md`, `model_catalog.json` | `models.json` | identity実在 / missing requirement解消 |
+| プロンプト設計 | story, models | `prompt_plan.json` | schema / refs / branch-leaf整合性有効 |
+| ワークフロー | Template, Manifest, models, plan | Workflow JSON | Compiler / structure validation成功 |
 | モデル配置 | models, Local, R2 | 所在状態 | 必須モデルがLocal生成環境から利用可能 |
-| 実行前チェック | 全成果物 | READY / BLOCKED | Blocking error なし |
+| 実行前チェック | 全成果物 | READY / BLOCKED | blocking errorなし |
 
-## 6. UI の工程ナビゲーション
-
-日本語 UI の主要工程は次を基準とする。
+## 6. UI工程ナビゲーション
 
 ```text
 概要
 基本設定
 ストーリー
+モデルカタログ
 モデル選定
 プロンプト設計
 ワークフロー
@@ -205,17 +187,35 @@ READY FOR COMFYUI
 実行前チェック
 ```
 
-`prompt_tree.md` は新規プロジェクトの標準 Artifact ではない。既存プロジェクトに存在する場合だけ Legacy Artifact として識別し、Workflow Compiler の入力には使用しない。人間向け Prompt 構造の確認・編集は `prompt_plan.json` を正本とする Prompt Plan UI が担当する。
+Grok pane既定表示:
 
-## 7. 完了状態の定義
+```text
+ストーリー      表示
+モデルカタログ  非表示
+モデル選定      表示
+プロンプト設計  表示
+その他          非表示
+```
 
-プロジェクトが `READY` になる最低条件:
+`prompt_tree.md` はLegacyのみ。Prompt構造の正本は`prompt_plan.json`。
 
-1. `story.md` が確定済み。
-2. `models.json` が確定済みで、必須選定が current catalog と整合する。
-3. `prompt_plan.json` が確定済み。
-4. Workflow Compiler により `LoRA_{project.id}.json` が生成済みで、Template / Manifest provenance を含め stale でない。
-5. 最終 Workflow に未使用枝が存在しない。
-6. Workflow が参照する Checkpoint / LoRA が `models.json` と一致する。
-7. 必須モデル実体が Local の生成環境から利用可能。R2 にのみ存在するモデルは転送完了まで Blocking とする。
-8. Preflight に blocking error がない。
+## 7. Model Catalog ownership
+
+`civit-model-viewer` の機能はBatch Studioへ統合済み。新規フローでは別Flask processやlocalhost:5055を起動しない。
+
+Catalog標準保存先はElectron app data配下で、Projectは`project_meta.json.settings.catalogPath`から参照する。新規Projectは統合Catalogへ自動関連付けする。
+
+既存Projectで外部`catalogPath`が明示されている場合は互換性のため維持し、「モデルカタログ」工程の明示操作で統合Catalogへ切り替える。
+
+## 8. 完了状態の定義
+
+Projectが`READY`になる最低条件:
+
+1. `story.md` Confirmed。
+2. `models.json` Confirmedかつcurrent catalogと整合。
+3. `prompt_plan.json` Confirmed。
+4. `LoRA_{project.id}.json` generatedかつTemplate/Manifest provenanceがstaleでない。
+5. unused branch 0。
+6. Workflow参照Checkpoint/LoRAが`models.json`と一致。
+7. 必須モデル実体がLocal生成環境から利用可能。R2-onlyはtransfer完了までBlocking。
+8. Preflight blocking errorなし。
