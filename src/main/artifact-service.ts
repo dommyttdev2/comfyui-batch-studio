@@ -15,4 +15,13 @@ export async function importGrok(root:string,key:'story'|'models'|'promptPlan',r
 export async function confirmArtifact(root:string,key:'story'|'models'|'promptPlan'){const d=await readArtifact(root,key,'draft');if(!d.exists||!d.content)throw new Error('確定する下書きがありません。');if(!d.validation.valid)throw new Error('検証エラーがあるため確定できません。');const target=confirmedPath(root,key);await backupIfExists(target,path.join(internalDir(root),'history',key));await writeTextAtomic(target,d.content);}
 export async function createProject(parent:string,brief:ProjectBriefInput){const v=validateProjectBrief(brief);if(!v.valid)throw new Error(v.issues.map(i=>i.message).join('\n'));const root=path.join(parent,brief.project.id);if(await exists(root)){const es=await readdir(root);if(es.length)throw new Error('同名のプロジェクトフォルダーが既に存在します。');}await mkdir(path.join(root,'._batch_studio','drafts'),{recursive:true});await mkdir(path.join(root,'._batch_studio','history'),{recursive:true});await writeJsonAtomic(path.join(root,'project_brief.json'),{schemaVersion:1,...brief});await writeJsonAtomic(path.join(root,'project_meta.json'),{schemaVersion:1,createdAt:new Date().toISOString(),settings:{}});return root;}
 export async function savePromptPlan(root:string,plan:PromptPlanArtifact){return saveDraft(root,'promptPlan',JSON.stringify(plan,null,2));}
+
+export async function beginEditArtifact(root:string,key:'story'|'models'|'promptPlan'){
+  const currentDraft=await readArtifact(root,key,'draft');
+  if(currentDraft.exists) return currentDraft;
+  const confirmed=await readArtifact(root,key,'confirmed');
+  if(!confirmed.exists||confirmed.content==null) return currentDraft;
+  return saveDraft(root,key,confirmed.content);
+}
+
 export async function saveProjectBrief(root:string,brief:ProjectBriefInput){const v=validateProjectBrief(brief);if(!v.valid)throw new Error(v.issues.map(i=>i.message).join('\n'));const current=await readText(path.join(root,'project_brief.json'));let currentId:string|null=null;if(current){try{currentId=JSON.parse(current)?.project?.id??null}catch{}}if(currentId&&currentId!==brief.project.id)throw new Error('既存プロジェクトのproject.idは変更できません。');await backupIfExists(path.join(root,'project_brief.json'),path.join(internalDir(root),'history','projectBrief'));await writeJsonAtomic(path.join(root,'project_brief.json'),{schemaVersion:1,...brief});}

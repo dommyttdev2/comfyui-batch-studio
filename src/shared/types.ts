@@ -76,6 +76,7 @@ export interface BatchStudioApi {
   };
   artifact: {
     read: (root:string,key:ArtifactKey,source:'confirmed'|'draft')=>Promise<ArtifactReadResult>;
+    beginEdit: (root:string,key:'story'|'models'|'promptPlan')=>Promise<ArtifactReadResult>;
     saveDraft: (root:string,key:'story'|'models'|'promptPlan',content:string)=>Promise<ArtifactReadResult>;
     importGrok: (root:string,key:'story'|'models'|'promptPlan',raw:string)=>Promise<ImportResult>;
     confirm: (root:string,key:'story'|'models'|'promptPlan')=>Promise<ProjectSummary>;
