@@ -83,6 +83,7 @@ export interface BatchStudioApi {
     savePromptPlan: (root:string,plan:PromptPlanArtifact)=>Promise<ArtifactReadResult>;
   };
   grokTask: { build: (root:string,stage:GrokTask['stage'],extra?:string)=>Promise<GrokTask>; };
+  file: { showInFolder:(filePath:string)=>Promise<void>; };
   catalog: { status:(root:string)=>Promise<CatalogStatus>; };
   workflow: { compile:(root:string)=>Promise<CompileResult>; };
   availability: { check:(root:string)=>Promise<AvailabilityResult>; openR2:(root:string)=>Promise<void>; };
