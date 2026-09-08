@@ -5,13 +5,13 @@ import type { ArtifactKey, ArtifactState, ArtifactSummary, ProjectBriefInput, Pr
 import { exists, readJson, readText } from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
 import { readArtifact } from './artifact-service.js';
+import { resolveWorkflowTemplatePaths } from './workflow-template-paths.js';
 const defs:Array<[ArtifactKey,string,string]>=[['projectBrief','基本設定','project_brief.json'],['story','ストーリー','story.md'],['models','モデル選定','models.json'],['promptPlan','プロンプト設計','prompt_plan.json']];
 async function mtime(p:string){try{return (await stat(p)).mtimeMs}catch{return 0}}
 function sha256(text:string){return createHash('sha256').update(Buffer.from(text,'utf8')).digest('hex');}
 async function workflowInputsChanged(root:string,meta:any){
  const build=meta?.workflowBuild as any;if(!build)return true;
- const templatePath=meta?.settings?.templatePath?.trim()||path.resolve(process.cwd(),'templates/default-scene-batch/template.json');
- const manifestPath=meta?.settings?.manifestPath?.trim()||path.resolve(process.cwd(),'templates/default-scene-batch/manifest.json');
+ const {templatePath,manifestPath}=resolveWorkflowTemplatePaths(meta?.settings);
  if(!(await exists(templatePath))||!(await exists(manifestPath)))return true;
  const templateRaw=await readText(templatePath),manifest=await readJson<any>(manifestPath);if(!templateRaw||!manifest)return true;
  if(build.template?.sha256!==sha256(templateRaw)||build.template?.id!==manifest.template?.id||build.template?.version!==manifest.template?.version)return true;
