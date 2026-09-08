@@ -17,7 +17,7 @@ Status: Active
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-PROJ-001 | Decided | 初期画面は細かなストーリー設計を要求せず、プロジェクト名・対象キャラクター・ターゲット読者・固定前提・大まかな要望を Brief として保存する。 | `ui/project-initialization.md` |
-| REQ-PROJ-002 | Decided | `project.id` は表示名とは独立した filesystem-safe stable ID とし、`^[a-z0-9][a-z0-9._-]{0,63}$` を満たす。Workflow filename・生成物保存先等の機械識別には `project.title` ではなく `project.id` を使用し、表示名変更だけで ID を変更しない。 | `ui/project-initialization.md` |
+| REQ-PROJ-002 | Decided | `project.id` は表示名とは独立した filesystem-safe stable ID とし、`^[a-z0-9][a-z0-9._-]{0,63}$` を満たす。ComfyUI内の生成物保存先等の機械識別には `project.id` を使用する。Workflow JSONのファイル名だけはProject実フォルダの1階層上にある作成先フォルダ名を使用し、`LoRA_{作成先フォルダ名}.json` とする。 | `ui/project-initialization.md` / `architecture/workflow-compiler.md` |
 | REQ-STORY-001 | Decided | Story の調査・案出し・詳細化は Grok に担当させ、ユーザーとの会話後に `story.md` を確定する。 | `contracts/grok-contract.md` |
 
 ## 3. Model Selection
@@ -25,7 +25,7 @@ Status: Active
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-MODEL-001 | Decided | 使用モデルの選定主体は Grok とする。Batch Studio の UI でユーザーがモデルを一件ずつ手動選択する方式を主経路にしない。 | `product/scope-and-flow.md` |
-| REQ-MODEL-002 | Decided | Grok は `civit-model-viewer` が出力する `model_catalog.json` を根拠にモデル・バージョン・ファイルを選定する。 | `integrations/external-tools.md` |
+| REQ-MODEL-002 | Decided | Grok は Batch Studio がアプリ内で同期・生成する `model_catalog.json` を根拠にモデル・バージョン・ファイルを選定する。 | `integrations/external-tools.md` |
 | REQ-MODEL-003 | Decided | Batch Studio は Grok の選定結果を `model_catalog.json` と照合し、存在しない Model / Version / File を確定させない。 | `quality/validation-and-security.md` |
 | REQ-MODEL-004 | Decided | カタログ内に必要モデルがない場合、Grok は架空のファイル名を作らず不足要件として返す。 | `contracts/grok-contract.md` |
 | REQ-MODEL-005 | Decided | `models.json` はモデル選定時に使用した `model_catalog.json` の provenance として少なくとも `schemaVersion`、`generation`、`generatedAt` を記録する。現在の catalog の `generation` が異なる場合は選定済み Model / Version / File を現在の catalog に対して再検証し、generation の不一致だけでは `models.json` を無効化しない。 | `contracts/project-artifacts.md` |
@@ -58,29 +58,24 @@ Status: Active
 | REQ-WF-006 | Decided | Root LoRA は全枝共通、Branch LoRA は当該枝だけに適用する。Root LoRA が不要なプロジェクトでは空 Stack を許容する。 | `architecture/workflow-compiler.md` |
 | REQ-WF-007 | Decided | Template の可変Nodeを Node ID のコード埋め込みで特定せず、`schemas/workflow-template-manifest.schema.json` に従う Manifest の semantic role、Prototype ownership、Common→Branch boundary から解決する。Prototype内部Linkは両端Nodeのownershipから自動導出し、ManifestへLink ID一覧を重複保持しない。 | `architecture/workflow-compiler.md` |
 | REQ-WF-008 | Decided | Manifest Schema v1 は Common/Branch role、`branchPrototype.nodeIds` / `groupIds`、Boundaryのrole+slot、2次元layout offset、`manifestVersion`、Template `id` / `version` / SHA-256 binding を定義する。Template hash不一致や未宣言cross-boundary LinkはCompileをBlockする。Compiler versionとManifest hashはManifest自身ではなくWorkflow build provenanceとして `project_meta.json` 側へ記録する。 | `architecture/workflow-compiler.md` |
-| REQ-WF-009 | Decided | v1 の生成枚数は `1 leaf = 1 image` とし、Branch枚数は `branch.leaves.length`、Project実枚数は全leaf総数からCompilerが算出する。`project_brief.json` の `generation.target_image_count` はPrompt設計の目標値であり差分だけではCompileをBlockしない。Workflow名は `LoRA_{project.id}.json`、保存先は `BatchStudio/{project.id}/{branch.id}`、SceneMatrix `row_id` / `path_label` は `leaf.id`、人間向け `name` は `leaf.name` とする。Branch/Groupの表示titleには `branch.label` を使用するがfilesystem identityには使用しない。 | `architecture/workflow-compiler.md` |
+| REQ-WF-009 | Decided | v1 の生成枚数は `1 leaf = 1 image` とし、Branch枚数は `branch.leaves.length`、Project実枚数は全leaf総数からCompilerが算出する。`project_brief.json` の `generation.target_image_count` はPrompt設計の目標値であり差分だけではCompileをBlockしない。Workflow名は `LoRA_{Project実フォルダの親フォルダ名}.json`、ComfyUI保存先は `BatchStudio/{project.id}/{branch.id}`、SceneMatrix `row_id` / `path_label` は `leaf.id`、人間向け `name` は `leaf.name` とする。 | `architecture/workflow-compiler.md` |
 
-## 6. External Tools
+## 6. Integrations
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
-| REQ-INT-001 | Decided | Civitai との同期・API key 管理は `civit-model-viewer` の責務とし、Batch Studio は保存済み `model_catalog.json` を読む。 | `integrations/external-tools.md` |
-| REQ-INT-002 | Decided | R2 の実体ファイル操作は初期段階では既存 R2 File Manager へ委譲する。 | `integrations/external-tools.md` |
-| REQ-INT-003 | Decided | Batch Studio は Civitai API key と R2 secret を Grok へ渡さない。 | `quality/validation-and-security.md` |
-| REQ-INT-004 | Decided | Civitai 由来 LoRA strength evidence の取得・集計は `civit-model-viewer` が担当し、Batch Studio は Civitai API を直接呼ばない。viewer は exact version の投稿metadataから決定済みpolicyで optional `strengthBaseline` と provenance を生成し、`model_catalog.json` 経由で Batch Studio へ渡す。説明文解析や経験則による値を Civitai provenance として捏造しない。 | `integrations/external-tools.md` |
+| REQ-INT-001 | Decided | Civitai Collection同期、API key管理、`model_catalog.json`生成は Batch Studio Electron Main Process が担当し、Renderer/GrokへAPI keyを渡さない。旧 `civit-model-viewer` はStandalone/Legacyとする。 | `integrations/external-tools.md` |
+| REQ-INT-002 | Decided | Cloudflare R2のバケット・object・upload・download・delete・move・signed/public URL操作は Batch Studio Electron Main Process が担当する。旧 `r2-file-manager` はStandalone/Legacyとする。 | `integrations/external-tools.md` |
+| REQ-INT-003 | Decided | Batch Studio は Civitai API key と R2 secret を Grok へ渡さない。R2 Secret/API TokenはProjectファイルやRendererへ平文保存せず、Electron Main ProcessのOS暗号化ストレージで保護する。 | `quality/validation-and-security.md` |
+| REQ-INT-004 | Decided | Civitai 由来 LoRA strength evidence は Batch Studio が exact version の投稿metadataから決定済みpolicyで optional `strengthBaseline` と provenance を生成する。説明文解析や経験則による値を Civitai provenance として捏造しない。 | `integrations/external-tools.md` |
+| REQ-INT-005 | Decided | R2一括DLはメイン一覧の削除選択と独立した選択状態を持ち、フォルダ移動・バケット内検索を跨いで最大500件を保持する。URLは最終生成時だけ発行し、URL/curl/wget/aria2cを提供する。 | `integrations/external-tools.md` |
+| REQ-INT-006 | Decided | 大容量R2 uploadはMain Processからmultipartで実行し、進捗・pause/resume/cancelを提供する。未完了upload stateはapp dataへ永続化し、再起動後に再開可能とする。 | `integrations/external-tools.md` |
 
 ## 7. Validation / Security
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-VAL-001 | Decided | `story.md`、`models.json`、`prompt_plan.json`、最終 Workflow を工程ごとに検証する。 | `quality/validation-and-security.md` |
-| REQ-VAL-002 | Decided | Preflight では成果物相互のモデル参照、Workflow の構造、必要な実モデルの所在を確認する。 | `quality/validation-and-security.md` |
+| REQ-VAL-002 | Decided | Preflight では成果物相互のモデル参照、Workflow の構造、必要な実モデルのLocal/R2所在を確認する。 | `quality/validation-and-security.md` |
 | REQ-SEC-001 | Decided | Grok 用 WebContents とローカル UI を権限・session 境界で分離する。 | `architecture/system-architecture.md` |
 | REQ-SEC-002 | Decided | `.env`、credential、R2 設定、ブラウザデータ、`.safetensors` 本体を Grok 添付候補へ出さない。 | `quality/validation-and-security.md` |
-
-## 8. Open Questions
-
-未決事項は実装時に暗黙決定せず、Decision Log へ判断を追加してから `Open` / `Draft` を `Decided` へ変更する。
-
-1. R2 File Manager との将来の直接 API 統合。
-2. ComfyUI Queue / 進捗管理を将来スコープへ追加する条件。
