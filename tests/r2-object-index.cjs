@@ -1,0 +1,32 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const os=require('node:os');
+const path=require('node:path');
+const {pathToFileURL}=require('node:url');
+const {execFileSync}=require('node:child_process');
+
+const repo=path.resolve(__dirname,'..');
+const runtime=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-r2-index-runtime-'));
+const tscBin=path.join(repo,'node_modules','typescript','bin','tsc');
+execFileSync(process.execPath,[tscBin,'-p',path.join(repo,'tsconfig.electron.json'),'--outDir',runtime],{cwd:repo,stdio:'inherit'});
+const load=relative=>import(pathToFileURL(path.join(runtime,'main',relative)).href);
+
+(async()=>{
+  const {R2ObjectIndex}=await load('r2-object-index.js');
+  const userData=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-r2-index-'));
+  const file=path.join(userData,'r2','object-index.json');
+  fs.mkdirSync(path.dirname(file),{recursive:true});
+  fs.writeFileSync(file,JSON.stringify({schemaVersion:1,syncedAt:'2026-09-08T00:00:00Z',buckets:{models:[
+    {key:'models/checkpoints/base.safetensors',name:'base.safetensors',size:100,etag:'a',lastModified:null,storageClass:'STANDARD'},
+    {key:'models/loras/deep/character.safetensors',name:'character.safetensors',size:200,etag:'b',lastModified:null,storageClass:'STANDARD'},
+    {key:'archive/other.bin',name:'other.bin',size:300,etag:'c',lastModified:null,storageClass:'STANDARD'}
+  ]}},null,2));
+  const fakeConfig={credentials:async()=>{throw new Error('search must not access R2')}};
+  const index=new R2ObjectIndex(fakeConfig,userData);
+  const result=await index.search('models','character');
+  assert.equal(result.objects.length,1);
+  assert.equal(result.objects[0].key,'models/loras/deep/character.safetensors');
+  assert.equal(await index.containsFile('models','character.safetensors','models/'),true);
+  assert.equal(await index.containsFile('models','character.safetensors','models/checkpoints/'),false);
+  console.log('R2 object index tests passed.');
+})().catch(error=>{console.error(error);process.exitCode=1});
