@@ -47,10 +47,10 @@ docs/
 | `contracts/project-artifacts.md` | プロジェクト内ファイル、正本関係、依存関係、互換性 |
 | `contracts/grok-contract.md` | Grok Web への入力、Grok の責務、Grok から受け取る成果物 |
 | `contracts/prompt-plan.md` | `prompt_plan.json` の意味構造と Draft schema |
-| `ui/application-shell.md` | 主画面、工程 navigation、Grok pane、Artifact editor 等の上位 Shell / 共通 interaction |
+| `ui/application-shell.md` | 主画面、工程 navigation、Grok pane、Artifact editor、Model Catalog、Model Availability/R2 等の上位 Shell / 共通 interaction |
 | `ui/japanese-ux-design.md` | 日本語 UI の工程別 UX 要件、Grok 手動連携 capability、表示用語、状態・操作要件、受入基準。個別画面レイアウトや Component 構成は固定しない |
 | `ui/project-initialization.md` | 新規プロジェクト画面と `project_brief.json` |
-| `integrations/external-tools.md` | civit-model-viewer、R2 File Manager、ComfyUI、Project filesystem との境界 |
+| `integrations/external-tools.md` | Batch Studio内蔵Civitai Catalog、Cloudflare R2、ComfyUI、Project filesystemとの境界。旧Standalone reposの位置づけ |
 | `quality/validation-and-security.md` | 検証、Preflight、秘密情報、Grok Web 隔離、failure policy |
 | `roadmap/implementation-phases.md` | 依存関係に沿った実装順序。要件の正本ではない |
 | `decisions/decision-log.md` | 合意済み設計判断、置換された判断、未決判断の履歴 |
@@ -67,6 +67,7 @@ docs/
 - Workflow の Node ID / Link ID 再採番は `architecture/workflow-compiler.md` が所有する。
 - Grok が Workflow JSON を生成しないという責務境界は `product/scope-and-flow.md` と Decision Log で宣言し、具体的な Grok 返却形式は `contracts/grok-contract.md` が所有する。
 - 主画面の UI 共通構造は `ui/application-shell.md` が所有する。
+- Civitai / R2のサービス責務・secret境界は`integrations/external-tools.md`が所有する。
 - 日本語 UI で各工程が満たすべき UX capability と受入基準は `ui/japanese-ux-design.md` が Draft として所有し、具体的な画面レイアウト・Component hierarchy は実装エージェントへ委ねる。
 - 個別 Artifact schema は UI 文書へコピーしない。
 
@@ -103,7 +104,9 @@ docs/
 
 特に Workflow については、Grok に ComfyUI Workflow JSON を生成させない。Grok から受け取るのは共通プロンプト、使用 LoRA、枝と葉のプロンプトを表す構造化 JSON であり、最終 Workflow は Batch Studio の Workflow Compiler が生成する。
 
-使用モデルの選定は Grok が `civit-model-viewer` の `model_catalog.json` を根拠に行い、Batch Studio はその結果を検証・保存する。
+使用モデルの選定は Grok が Batch Studio 内蔵 `model_catalog.json` を根拠に行い、Batch Studio はCivitai同期・Catalog生成・選定結果検証・保存を担当する。
+
+Cloudflare R2もBatch Studio Main Processが直接管理する。旧 `civit-model-viewer` / `r2-file-manager` はStandalone/Legacyであり、新規Batch Studioフローの外部依存にはしない。
 
 ## 6. 要件追加時の流れ
 
