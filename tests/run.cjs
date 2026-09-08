@@ -3,21 +3,28 @@ const crypto=require('node:crypto');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
-const tsImport=require('typescript');
-const ts=tsImport.default??tsImport;
-const MODULE_COMMONJS=ts.ModuleKind?.CommonJS??1;
-const TARGET_ES2022=ts.ScriptTarget?.ES2022??9;
+const {execFileSync}=require('node:child_process');
 
 const repo=path.resolve(__dirname,'..');
 const runtime=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-tests-runtime-'));
-for(const sub of ['main','shared']){
-  const input=path.join(repo,'src',sub),output=path.join(runtime,sub);fs.mkdirSync(output,{recursive:true});
-  for(const name of fs.readdirSync(input).filter(n=>n.endsWith('.ts'))){
-    const source=fs.readFileSync(path.join(input,name),'utf8');
-    const result=ts.transpileModule(source,{compilerOptions:{module:MODULE_COMMONJS,target:TARGET_ES2022,esModuleInterop:true}});
-    fs.writeFileSync(path.join(output,name.replace(/\.ts$/,'.js')),result.outputText);
-  }
-}
+const testTsconfig=path.join(runtime,'tsconfig.test.json');
+fs.writeFileSync(testTsconfig,JSON.stringify({
+  compilerOptions:{
+    target:'ES2022',
+    module:'CommonJS',
+    moduleResolution:'Node',
+    esModuleInterop:true,
+    skipLibCheck:true,
+    strict:false,
+    rootDir:path.join(repo,'src'),
+    outDir:runtime,
+    types:['node']
+  },
+  include:[path.join(repo,'src/main/**/*.ts'),path.join(repo,'src/shared/**/*.ts')]
+},null,2));
+const tscBin=path.join(repo,'node_modules','typescript','bin','tsc');
+execFileSync(process.execPath,[tscBin,'-p',testTsconfig],{cwd:repo,stdio:'inherit'});
+
 const validation=require(path.join(runtime,'main','validation.js'));
 const artifacts=require(path.join(runtime,'main','artifact-service.js'));
 const compiler=require(path.join(runtime,'main','compiler.js'));
