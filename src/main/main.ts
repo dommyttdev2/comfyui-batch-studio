@@ -2,198 +2,25 @@ import { app, BaseWindow, clipboard, dialog, ipcMain, shell, WebContentsView } f
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC } from '../shared/ipc.js';
-import type { GrokPaneState } from '../shared/types.js';
+import type { GrokPaneState, ProjectBriefInput, ProjectSettings, PromptPlanArtifact, GrokTask } from '../shared/types.js';
+import { createProject, confirmArtifact, importGrok, readArtifact, saveDraft, savePromptPlan, saveProjectBrief } from './artifact-service.js';
 import { scanProject } from './project-scan.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const GROK_URL = 'https://grok.com/';
-const GROK_PARTITION = 'persist:batch-studio-grok';
-const MIN_LOCAL_WIDTH = 420;
-const MIN_GROK_WIDTH = 420;
-
-let mainWindow: BaseWindow | null = null;
-let localView: WebContentsView | null = null;
-let grokView: WebContentsView | null = null;
-let grokVisible = true;
-let localRatio = 0.45;
-
-function isSafeExternalUrl(target: string): boolean {
-  try {
-    const url = new URL(target);
-    return url.protocol === 'https:' || url.protocol === 'http:';
-  } catch {
-    return false;
-  }
-}
-
-function isAllowedGrokNavigation(target: string): boolean {
-  try {
-    const url = new URL(target);
-    const host = url.hostname.toLowerCase();
-    return (
-      url.protocol === 'https:' &&
-      (host === 'grok.com' ||
-        host.endsWith('.grok.com') ||
-        host === 'x.com' ||
-        host.endsWith('.x.com') ||
-        host === 'twitter.com' ||
-        host.endsWith('.twitter.com'))
-    );
-  } catch {
-    return false;
-  }
-}
-
-function paneState(): GrokPaneState {
-  return { visible: grokVisible, ratio: localRatio };
-}
-
-function applyLayout(): void {
-  if (!mainWindow || !localView || !grokView) return;
-
-  const { width, height } = mainWindow.getContentBounds();
-  if (!grokVisible || width < MIN_LOCAL_WIDTH + MIN_GROK_WIDTH) {
-    localView.setBounds({ x: 0, y: 0, width, height });
-    grokView.setBounds({ x: width, y: 0, width: 0, height });
-    return;
-  }
-
-  const desiredLocal = Math.round(width * localRatio);
-  const localWidth = Math.max(MIN_LOCAL_WIDTH, Math.min(width - MIN_GROK_WIDTH, desiredLocal));
-  localView.setBounds({ x: 0, y: 0, width: localWidth, height });
-  grokView.setBounds({ x: localWidth, y: 0, width: width - localWidth, height });
-}
-
-async function loadLocalRenderer(view: WebContentsView): Promise<void> {
-  const devUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devUrl) {
-    await view.webContents.loadURL(devUrl);
-    return;
-  }
-
-  await view.webContents.loadFile(path.resolve(__dirname, '../../dist-renderer/index.html'));
-}
-
-function createWindow(): void {
-  mainWindow = new BaseWindow({
-    width: 1500,
-    height: 900,
-    minWidth: 900,
-    minHeight: 640,
-    title: 'ComfyUI Batch Studio',
-  });
-
-  localView = new WebContentsView({
-    webPreferences: {
-      preload: path.resolve(__dirname, '../../src/preload/index.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-
-  grokView = new WebContentsView({
-    webPreferences: {
-      partition: GROK_PARTITION,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-
-  mainWindow.contentView.addChildView(localView);
-  mainWindow.contentView.addChildView(grokView);
-
-  grokView.webContents.setWindowOpenHandler(({ url }) => {
-    if (isSafeExternalUrl(url)) void shell.openExternal(url);
-    return { action: 'deny' };
-  });
-
-  grokView.webContents.on('will-navigate', (event, url) => {
-    if (!isAllowedGrokNavigation(url)) {
-      event.preventDefault();
-      if (isSafeExternalUrl(url)) void shell.openExternal(url);
-    }
-  });
-
-  mainWindow.on('resize', applyLayout);
-  mainWindow.on('closed', () => {
-    localView?.webContents.close();
-    grokView?.webContents.close();
-    localView = null;
-    grokView = null;
-    mainWindow = null;
-  });
-
-  applyLayout();
-  void loadLocalRenderer(localView);
-  void grokView.webContents.loadURL(GROK_URL);
-}
-
-function registerIpc(): void {
-  ipcMain.handle(IPC.PROJECT_SELECT, async () => {
-    const result = await dialog.showOpenDialog({
-      title: 'プロジェクトフォルダーを選択',
-      properties: ['openDirectory'],
-    });
-    if (result.canceled || result.filePaths.length === 0) return null;
-    return scanProject(result.filePaths[0]);
-  });
-
-  ipcMain.handle(IPC.PROJECT_SCAN, async (_event, rootPath: unknown) => {
-    if (typeof rootPath !== 'string' || rootPath.length === 0) {
-      throw new Error('Invalid project root path.');
-    }
-    return scanProject(rootPath);
-  });
-
-  ipcMain.handle(IPC.PROJECT_OPEN_FOLDER, async (_event, rootPath: unknown) => {
-    if (typeof rootPath !== 'string' || rootPath.length === 0) {
-      throw new Error('Invalid project root path.');
-    }
-    const error = await shell.openPath(rootPath);
-    if (error) throw new Error(error);
-  });
-
-  ipcMain.handle(IPC.CLIPBOARD_WRITE_TEXT, (_event, text: unknown) => {
-    if (typeof text !== 'string') throw new Error('Clipboard text must be a string.');
-    clipboard.writeText(text);
-  });
-
-  ipcMain.handle(IPC.GROK_SET_VISIBLE, (_event, visible: unknown) => {
-    grokVisible = visible === true;
-    applyLayout();
-    return paneState();
-  });
-
-  ipcMain.handle(IPC.GROK_SET_RATIO, (_event, ratio: unknown) => {
-    if (typeof ratio !== 'number' || !Number.isFinite(ratio)) {
-      throw new Error('Invalid pane ratio.');
-    }
-    localRatio = Math.max(0.3, Math.min(0.7, ratio));
-    applyLayout();
-    return paneState();
-  });
-
-  ipcMain.handle(IPC.GROK_RELOAD, () => {
-    grokView?.webContents.reload();
-  });
-
-  ipcMain.handle(IPC.GROK_OPEN_EXTERNAL, async () => {
-    await shell.openExternal(GROK_URL);
-  });
-}
-
-app.whenReady().then(() => {
-  registerIpc();
-  createWindow();
-
-  app.on('activate', () => {
-    if (!mainWindow) createWindow();
-  });
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+import { saveProjectSettings } from './project-meta.js';
+import { buildGrokTask } from './grok-context.js';
+import { catalogStatus } from './model-catalog.js';
+import { compileWorkflow } from './compiler.js';
+import { checkAvailability } from './availability.js';
+import { runPreflight } from './preflight.js';
+const __filename=fileURLToPath(import.meta.url),__dirname=path.dirname(__filename);const GROK_URL='https://grok.com/',GROK_PARTITION='persist:batch-studio-grok';let mainWindow:BaseWindow|null=null,localView:WebContentsView|null=null,grokView:WebContentsView|null=null,grokVisible=true,localRatio=.45;
+function safeExternal(target:string){try{const u=new URL(target);return u.protocol==='https:'||u.protocol==='http:'}catch{return false}}
+function allowedGrok(target:string){try{const u=new URL(target),h=u.hostname.toLowerCase();return u.protocol==='https:'&&(h==='grok.com'||h.endsWith('.grok.com')||h==='x.com'||h.endsWith('.x.com')||h==='twitter.com'||h.endsWith('.twitter.com'))}catch{return false}}
+function state():GrokPaneState{return {visible:grokVisible,ratio:localRatio}}
+function layout(){if(!mainWindow||!localView||!grokView)return;const {width,height}=mainWindow.getContentBounds();if(!grokVisible||width<840){localView.setBounds({x:0,y:0,width,height});grokView.setBounds({x:width,y:0,width:0,height});return;}const lw=Math.max(420,Math.min(width-420,Math.round(width*localRatio)));localView.setBounds({x:0,y:0,width:lw,height});grokView.setBounds({x:lw,y:0,width:width-lw,height});}
+async function loadRenderer(v:WebContentsView){const dev=process.env.VITE_DEV_SERVER_URL;if(dev)await v.webContents.loadURL(dev);else await v.webContents.loadFile(path.resolve(__dirname,'../../dist-renderer/index.html'));}
+function createWindow(){mainWindow=new BaseWindow({width:1540,height:920,minWidth:900,minHeight:640,title:'ComfyUI Batch Studio'});localView=new WebContentsView({webPreferences:{preload:path.resolve(__dirname,'../preload/index.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});grokView=new WebContentsView({webPreferences:{partition:GROK_PARTITION,contextIsolation:true,nodeIntegration:false,sandbox:true}});mainWindow.contentView.addChildView(localView);mainWindow.contentView.addChildView(grokView);grokView.webContents.setWindowOpenHandler(({url})=>{if(safeExternal(url))void shell.openExternal(url);return {action:'deny'}});grokView.webContents.on('will-navigate',(e,url)=>{if(!allowedGrok(url)){e.preventDefault();if(safeExternal(url))void shell.openExternal(url);}});mainWindow.on('resize',layout);mainWindow.on('closed',()=>{localView?.webContents.close();grokView?.webContents.close();mainWindow=null;localView=null;grokView=null});layout();void loadRenderer(localView);void grokView.webContents.loadURL(GROK_URL);}
+function validRoot(x:unknown):asserts x is string{if(typeof x!=='string'||!x.trim())throw new Error('Invalid project root.');}
+function register(){ipcMain.handle(IPC.PROJECT_SELECT,async()=>{const r=await dialog.showOpenDialog({title:'プロジェクトフォルダーを選択',properties:['openDirectory']});return r.canceled?null:scanProject(r.filePaths[0]);});ipcMain.handle(IPC.PROJECT_SELECT_PARENT,async()=>{const r=await dialog.showOpenDialog({title:'作成先フォルダーを選択',properties:['openDirectory','createDirectory']});return r.canceled?null:r.filePaths[0]});ipcMain.handle(IPC.PROJECT_CREATE,async(_e,parent:unknown,brief:ProjectBriefInput)=>{if(typeof parent!=='string')throw new Error('Invalid parent path');return scanProject(await createProject(parent,brief));});ipcMain.handle(IPC.PROJECT_SCAN,(_e,root:unknown)=>{validRoot(root);return scanProject(root)});ipcMain.handle(IPC.PROJECT_OPEN_FOLDER,async(_e,root:unknown)=>{validRoot(root);const err=await shell.openPath(root);if(err)throw new Error(err)});ipcMain.handle(IPC.PROJECT_SAVE_SETTINGS,async(_e,root:unknown,settings:ProjectSettings)=>{validRoot(root);await saveProjectSettings(root,settings);return scanProject(root)});ipcMain.handle(IPC.PROJECT_SAVE_BRIEF,async(_e,root:unknown,brief:ProjectBriefInput)=>{validRoot(root);await saveProjectBrief(root,brief);return scanProject(root)});
+ ipcMain.handle(IPC.ARTIFACT_READ,(_e,root:unknown,key:any,source:any)=>{validRoot(root);return readArtifact(root,key,source)});ipcMain.handle(IPC.ARTIFACT_SAVE_DRAFT,(_e,root:unknown,key:any,content:unknown)=>{validRoot(root);if(typeof content!=='string')throw new Error('Invalid content');return saveDraft(root,key,content)});ipcMain.handle(IPC.ARTIFACT_IMPORT_GROK,(_e,root:unknown,key:any,raw:unknown)=>{validRoot(root);if(typeof raw!=='string')throw new Error('Invalid Grok response');return importGrok(root,key,raw)});ipcMain.handle(IPC.ARTIFACT_CONFIRM,async(_e,root:unknown,key:any)=>{validRoot(root);await confirmArtifact(root,key);return scanProject(root)});ipcMain.handle(IPC.PROMPT_PLAN_SAVE,(_e,root:unknown,plan:PromptPlanArtifact)=>{validRoot(root);return savePromptPlan(root,plan)});
+ ipcMain.handle(IPC.GROK_TASK_BUILD,(_e,root:unknown,stage:GrokTask['stage'],extra:unknown)=>{validRoot(root);return buildGrokTask(root,stage,typeof extra==='string'?extra:'')});ipcMain.handle(IPC.CATALOG_STATUS,(_e,root:unknown)=>{validRoot(root);return catalogStatus(root)});ipcMain.handle(IPC.WORKFLOW_COMPILE,(_e,root:unknown)=>{validRoot(root);return compileWorkflow(root)});ipcMain.handle(IPC.AVAILABILITY_CHECK,(_e,root:unknown)=>{validRoot(root);return checkAvailability(root)});ipcMain.handle(IPC.AVAILABILITY_OPEN_R2,async(_e,root:unknown)=>{validRoot(root);const p=(await scanProject(root)).meta?.settings.r2FileManagerUrl;if(!p)throw new Error('R2 File Manager URLが設定されていません。');if(!safeExternal(p))throw new Error('R2 File Manager URLが不正です。');await shell.openExternal(p)});ipcMain.handle(IPC.PREFLIGHT_RUN,(_e,root:unknown)=>{validRoot(root);return runPreflight(root)});
+ ipcMain.handle(IPC.CLIPBOARD_WRITE_TEXT,(_e,text:unknown)=>{if(typeof text!=='string')throw new Error('Clipboard text must be string');clipboard.writeText(text)});ipcMain.handle(IPC.GROK_SET_VISIBLE,(_e,v:unknown)=>{grokVisible=v===true;layout();return state()});ipcMain.handle(IPC.GROK_SET_RATIO,(_e,r:unknown)=>{if(typeof r!=='number'||!Number.isFinite(r))throw new Error('Invalid ratio');localRatio=Math.max(.3,Math.min(.7,r));layout();return state()});ipcMain.handle(IPC.GROK_RELOAD,()=>grokView?.webContents.reload());ipcMain.handle(IPC.GROK_OPEN_EXTERNAL,()=>shell.openExternal(GROK_URL));}
+app.whenReady().then(()=>{register();createWindow();app.on('activate',()=>{if(!mainWindow)createWindow()})});app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit()});
