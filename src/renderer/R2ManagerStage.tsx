@@ -20,8 +20,8 @@ export function R2ManagerStage({run,onProjectR2}:{run:Runner;onProjectR2?:(bucke
   useEffect(()=>{if(bucket)void run(loadList)},[bucket,prefix]);
   useEffect(()=>{if(bucket)void window.batchStudio.r2.templates(bucket).then(setTemplates)},[bucket]);
   useEffect(()=>{const id=setInterval(()=>{void loadUploads()},1200);return()=>clearInterval(id)},[]);
+  useEffect(()=>{if(!bucket)return;const q=query.trim();if(!q){setSearchPage(null);return}const id=window.setTimeout(()=>{void window.batchStudio.r2.search(bucket,q).then(setSearchPage).catch(()=>{})},120);return()=>window.clearTimeout(id)},[bucket,query]);
   const current=searchPage?.objects??listing?.objects??[];
-  const doSearch=()=>run(async()=>{if(!query.trim()){await loadList();return;}setSearchPage(await window.batchStudio.r2.search(bucket,query))});
   const moreSearch=()=>run(async()=>{if(!searchPage?.nextToken)return;const next=await window.batchStudio.r2.search(bucket,query,searchPage.nextToken);setSearchPage({...next,objects:[...searchPage.objects,...next.objects],scanned:searchPage.scanned+next.scanned})});
   const toggle=(key:string)=>setSelected(prev=>{const n=new Set(prev);n.has(key)?n.delete(key):n.add(key);return n});
   const deleteSelected=()=>run(async()=>{if(!selected.size||!confirm(`${selected.size}件をR2から削除しますか？`))return;await window.batchStudio.r2.deleteObjects(bucket,[...selected]);setSelected(new Set());await loadList()});
@@ -33,7 +33,7 @@ export function R2ManagerStage({run,onProjectR2}:{run:Runner;onProjectR2?:(bucke
       {metrics&&<div className="facts r2metrics"><div>Stored <b>{fmt(Number(metrics.stored_bytes??0))}</b></div><div>Objects <b>{Number(metrics.objects??0).toLocaleString()}</b></div><div>Uploading <b>{fmt(Number(metrics.uploading_bytes??0))}</b></div></div>}
       <div className="r2toolbar"><select value={bucket} onChange={e=>{setBucket(e.target.value);setPrefix('');setSelected(new Set())}}>{buckets.map(b=><option key={b.name}>{b.name}</option>)}</select><button onClick={()=>run(async()=>{const name=prompt('新しいバケット名');if(name){await window.batchStudio.r2.createBucket(name);await loadBuckets()}})}>バケット作成</button><button disabled={!bucket} onClick={()=>run(async()=>{if(confirm(`${bucket} を削除しますか？ 空のバケットのみ削除できます。`)){await window.batchStudio.r2.deleteBucket(bucket);setBucket('');await loadBuckets()}})}>バケット削除</button><span className="spacer"/>{onProjectR2&&<button disabled={!bucket} onClick={()=>onProjectR2(bucket,prefix)}>この場所をモデル保管先に設定</button>}<button disabled={!bucket} onClick={chooseUpload}>アップロード</button><button disabled={!bucket} className="primary" onClick={()=>setBatchOpen(true)}>一括DLのURL生成</button></div>
       <PathBar prefix={prefix}/>
-      <div className="r2search"><input placeholder="バケット全体をファイル名/パスで検索" value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&void doSearch()}/><button onClick={()=>void doSearch()}>検索</button>{searchPage&&<button onClick={()=>void loadList()}>検索解除</button>}</div>
+      <div className="r2search"><input placeholder="バケット全体をファイル名/パスでリアルタイム検索" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<small>ローカル同期済み索引から検索</small>}</div>
       <div className="r2table">
         <div className="r2row head"><span/><b>名前</b><b>サイズ</b><b>更新</b><b>操作</b></div>
         {!searchPage&&prefix&&<div className="r2row folder parent"><span/><button className="r2namebutton" title={parentPrefix(prefix)||'/'} onClick={()=>setPrefix(parentPrefix(prefix))}>📁 ../</button><span>—</span><span>—</span><span/></div>}
@@ -43,7 +43,7 @@ export function R2ManagerStage({run,onProjectR2}:{run:Runner;onProjectR2?:(bucke
         {searchPage&&current.length===0&&<div className="r2empty">検索結果がありません。</div>}
       </div>
       {!searchPage&&listing?.nextToken&&<button onClick={()=>run(async()=>{const next=await window.batchStudio.r2.list(bucket,prefix,listing.nextToken);setListing({...next,folders:[...listing.folders,...next.folders],objects:[...listing.objects,...next.objects]})})}>さらに読み込む</button>}
-      {searchPage?.nextToken&&<button onClick={moreSearch}>検索結果をさらに読み込む</button>}
+      {searchPage?.nextToken&&<button onClick={moreSearch}>検索結果をさらに表示</button>}
       {selected.size>0&&<div className="selectionbar"><b>{selected.size}件選択</b><button className="danger" onClick={deleteSelected}>選択したファイルを削除</button></div>}
       <UploadJobs jobs={uploads} run={run} refresh={loadUploads}/>
     </>}
@@ -65,31 +65,16 @@ function BatchDownloadModal({bucket,initialPrefix,templates,onClose,onGenerated,
   const [prefix,setPrefix]=useState(initialPrefix),[listing,setListing]=useState<R2ListResult|null>(null),[query,setQuery]=useState(''),[searchPage,setSearchPage]=useState<R2SearchResult|null>(null),[selected,setSelected]=useState<Map<string,{key:string;name:string;size?:number}>>(new Map()),[templateName,setTemplateName]=useState(''),[templateId,setTemplateId]=useState('');
   const load=()=>run(async()=>{setSearchPage(null);setQuery('');setListing(await window.batchStudio.r2.list(bucket,prefix))});
   useEffect(()=>{void load()},[prefix]);
+  useEffect(()=>{const q=query.trim();if(!q){setSearchPage(null);return}const id=window.setTimeout(()=>{void window.batchStudio.r2.search(bucket,q).then(setSearchPage).catch(()=>{})},120);return()=>window.clearTimeout(id)},[bucket,query]);
   const visible=searchPage?.objects??listing?.objects??[];
   const toggle=(o:R2Object)=>setSelected(prev=>{const n=new Map(prev);n.has(o.key)?n.delete(o.key):n.set(o.key,{key:o.key,name:o.name,size:o.size});return n});
   const addVisible=()=>setSelected(prev=>{const n=new Map(prev);for(const o of visible){if(n.size>=500)break;n.set(o.key,{key:o.key,name:o.name,size:o.size})}return n});
-  const search=()=>run(async()=>{if(!query.trim()){await load();return;}setSearchPage(await window.batchStudio.r2.search(bucket,query))});
   const more=()=>run(async()=>{if(!searchPage?.nextToken)return;const next=await window.batchStudio.r2.search(bucket,query,searchPage.nextToken);setSearchPage({...next,objects:[...searchPage.objects,...next.objects],scanned:searchPage.scanned+next.scanned})});
   const applyTemplate=(id:string)=>{setTemplateId(id);const t=templates.find(x=>x.id===id);if(t)setSelected(new Map(t.objects.map(o=>[o.key,o])))};
   return <div className="modal"><div className="modalcard xlarge">
     <div className="panelhead"><div><h2>一括DLのURL生成</h2><small>メイン一覧とは独立した選択です。最大500件。</small></div><button onClick={onClose}>×</button></div>
-    <section className="batchtemplates top">
-      <div className="panelhead"><div><h3>テンプレート</h3><small>保存済みテンプレートを選択するとファイル選択へ反映します。</small></div></div>
-      <div className="actions">
-        <select value={templateId} onChange={e=>applyTemplate(e.target.value)}><option value="">テンプレートを選択</option>{templates.map(t=><option key={t.id} value={t.id}>{t.name}（{t.objects.length}件）</option>)}</select>
-        <button disabled={!templateId} onClick={()=>run(async()=>{onTemplates(await window.batchStudio.r2.deleteTemplate(templateId));setTemplateId('')})}>削除</button>
-      </div>
-      <div className="actions"><input placeholder="新しいテンプレート名" value={templateName} onChange={e=>setTemplateName(e.target.value)}/><button disabled={!templateName||!selected.size} onClick={()=>run(async()=>{onTemplates(await window.batchStudio.r2.saveTemplate({name:templateName,bucket,objects:[...selected.values()]}));setTemplateName('')})}>現在の選択を保存</button></div>
-    </section>
-    <div className="batchbrowser">
-      <PathBar prefix={prefix}/>
-      <div className="r2search"><input value={query} placeholder="バケット全体を検索" onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&void search()}/><button onClick={()=>void search()}>検索</button>{searchPage&&<button onClick={()=>void load()}>検索解除</button>}<button onClick={addVisible}>表示中をすべて選択</button></div>
-      <div className="r2table compact"><div className="r2row head"><span/><b>名前</b><b>サイズ</b></div>
-        {!searchPage&&prefix&&<div className="r2row folder parent"><span/><button className="r2namebutton" onClick={()=>setPrefix(parentPrefix(prefix))}>📁 ../</button><span>—</span></div>}
-        {!searchPage&&listing?.folders.map(f=><div className="r2row folder" key={f.prefix}><span/><button className="r2namebutton" onClick={()=>setPrefix(f.prefix)}>📁 {f.name}</button><span>—</span></div>)}
-        {visible.map(o=><label className="r2row" key={o.key}><input type="checkbox" checked={selected.has(o.key)} disabled={!selected.has(o.key)&&selected.size>=500} onChange={()=>toggle(o)}/><span>{searchPage?o.key:o.name}</span><span>{fmt(o.size)}</span></label>)}
-      </div>{searchPage?.nextToken&&<button onClick={more}>検索結果をさらに読み込む</button>}
-    </div>
+    <section className="batchtemplates top"><div className="panelhead"><div><h3>テンプレート</h3><small>保存済みテンプレートを選択するとファイル選択へ反映します。</small></div></div><div className="actions"><select value={templateId} onChange={e=>applyTemplate(e.target.value)}><option value="">テンプレートを選択</option>{templates.map(t=><option key={t.id} value={t.id}>{t.name}（{t.objects.length}件）</option>)}</select><button disabled={!templateId} onClick={()=>run(async()=>{onTemplates(await window.batchStudio.r2.deleteTemplate(templateId));setTemplateId('')})}>削除</button></div><div className="actions"><input placeholder="新しいテンプレート名" value={templateName} onChange={e=>setTemplateName(e.target.value)}/><button disabled={!templateName||!selected.size} onClick={()=>run(async()=>{onTemplates(await window.batchStudio.r2.saveTemplate({name:templateName,bucket,objects:[...selected.values()]}));setTemplateName('')})}>現在の選択を保存</button></div></section>
+    <div className="batchbrowser"><PathBar prefix={prefix}/><div className="r2search"><input value={query} placeholder="バケット全体をリアルタイム検索" onChange={e=>setQuery(e.target.value)}/><button onClick={addVisible}>表示中をすべて選択</button></div><div className="r2table compact"><div className="r2row head"><span/><b>名前</b><b>サイズ</b></div>{!searchPage&&prefix&&<div className="r2row folder parent"><span/><button className="r2namebutton" onClick={()=>setPrefix(parentPrefix(prefix))}>📁 ../</button><span>—</span></div>}{!searchPage&&listing?.folders.map(f=><div className="r2row folder" key={f.prefix}><span/><button className="r2namebutton" onClick={()=>setPrefix(f.prefix)}>📁 {f.name}</button><span>—</span></div>)}{visible.map(o=><label className="r2row" key={o.key}><input type="checkbox" checked={selected.has(o.key)} disabled={!selected.has(o.key)&&selected.size>=500} onChange={()=>toggle(o)}/><span>{searchPage?o.key:o.name}</span><span>{fmt(o.size)}</span></label>)}</div>{searchPage?.nextToken&&<button onClick={more}>検索結果をさらに表示</button>}</div>
     <div className="batchselected"><div className="panelhead"><h3>選択済みファイル {selected.size} / 500件</h3><button onClick={()=>setSelected(new Map())}>すべて解除</button></div>{[...selected.values()].map(o=><div className="selecteditem" key={o.key}><span><b>{o.name}</b><small>{o.key}</small></span><span>{o.size!=null?fmt(o.size):''}</span><button onClick={()=>setSelected(p=>{const n=new Map(p);n.delete(o.key);return n})}>×</button></div>)}</div>
     <div className="actions"><button onClick={onClose}>キャンセル</button><button className="primary" disabled={!selected.size} onClick={()=>run(async()=>{onGenerated(await window.batchStudio.r2.batchDownloadInfo(bucket,[...selected.keys()]))})}>選択した{selected.size}件を生成</button></div>
   </div></div>;
