@@ -35,6 +35,11 @@ export class UiStateStore {
 
   async clearProject(): Promise<void> {
     const current = await this.read();
+    const last = current.lastProjectPath;
+    if (last) {
+      const recent = Array.isArray(current.recentProjectPaths) ? current.recentProjectPaths : [];
+      current.recentProjectPaths = [last, ...recent.filter(item => item !== last)].slice(0, RECENT_PROJECT_LIMIT);
+    }
     delete current.lastProjectPath;
     await writeJsonAtomic(this.filePath, current);
   }
