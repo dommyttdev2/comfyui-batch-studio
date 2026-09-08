@@ -7,7 +7,10 @@ export type ArtifactState = 'missing' | 'draft' | 'invalid' | 'warning' | 'confi
 export interface ArtifactSummary { key: ArtifactKey; label: string; relativePath: string | null; state: ArtifactState; validation?: ValidationResult; }
 
 export interface ProjectBriefInput { project:{id:string;title:string}; subject:{copyrightedCharacter:boolean;characterName:string;series:string}; audience:string; request:string; exclusions:string; assumptions:{adultCharacters:boolean;consensual:boolean}; generation:{target_image_count:number;modelFamily?:string;targetChapterCount?:number}; references?:string[]; }
-export interface ProjectSettings { catalogPath?:string; comfyModelsRoot?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; r2FileManagerUrl?:string; r2Bucket?:string; r2ModelPrefix?:string; }
+export type ExecutionTarget = 'local' | 'remote';
+export interface AppSettings { comfyUiInstallPath:string; }
+export interface AppSettingsStatus extends AppSettings { configured:boolean; modelsPath:string|null; installExists:boolean; modelsExists:boolean; }
+export interface ProjectSettings { catalogPath?:string; comfyModelsRoot?:string; executionTarget?:ExecutionTarget; r2IndexPath?:string; templatePath?:string; manifestPath?:string; r2FileManagerUrl?:string; r2Bucket?:string; r2ModelPrefix?:string; }
 export interface ProjectMeta { schemaVersion:1; createdAt:string; updatedAt?:string; settings:ProjectSettings; workflowBuild?:Record<string,unknown>; }
 export interface ProjectSummary { rootPath:string; title:string; id:string|null; targetImageCount:number|null; artifacts:ArtifactSummary[]; meta:ProjectMeta|null; }
 export interface ArtifactReadResult { key:ArtifactKey; source:'confirmed'|'draft'; content:string|null; exists:boolean; validation:ValidationResult; }
@@ -39,7 +42,7 @@ export interface GrokTask { stage:'story-initial'|'story-finalize'|'story-fix'|'
 export interface WorkflowManifest { schemaVersion:1; manifestVersion:string; template:{id:string;version:string;sha256:string}; common:{roles:Record<string,{nodeId:number}>}; branchPrototype:{nodeIds:number[];groupIds:number[];roles:Record<string,{nodeId:number}>;boundaries:Array<{id:string;source:{role:string;slot:number};target:{role:string;slot:number}}>;layout:{offset:{x:number;y:number}}}; }
 export interface CompileResult { outputPath:string; branchCount:number; imageCount:number; nodeCount:number; linkCount:number; validation:ValidationResult; }
 export interface ModelAvailabilityRow { ref:string; fileName:string; kind:'checkpoint'|'lora'; local:boolean; r2:boolean; state:'available'|'transfer-required'|'missing'; localPath?:string; }
-export interface AvailabilityResult { rows:ModelAvailabilityRow[]; validation:ValidationResult; }
+export interface AvailabilityResult { rows:ModelAvailabilityRow[]; validation:ValidationResult; executionTarget:ExecutionTarget; localModelsRoot:string|null; }
 export interface PreflightResult { state:'READY'|'BLOCKED'; plannedImages:number; targetImages:number|null; blocking:ValidationIssue[]; warnings:ValidationIssue[]; sections:Array<{name:string;valid:boolean;issues:ValidationIssue[]}>; }
 
 export interface R2ConnectionInput { name?:string; accountId:string; accessKeyId:string; secretAccessKey?:string; publicUrl?:string; cloudflareApiToken?:string; }
@@ -56,6 +59,7 @@ export interface R2Metrics { configured:boolean; payload?:unknown; }
 export type GrokContextStage='story'|'models'|'prompt-plan';
 export interface GrokPaneState { visible:boolean; ratio:number; }
 export interface BatchStudioApi {
+  appSettings:{get:()=>Promise<AppSettingsStatus>;selectComfyUiDirectory:()=>Promise<string|null>;save:(settings:AppSettings)=>Promise<AppSettingsStatus>};
   project:{select:()=>Promise<ProjectSummary|null>;last:()=>Promise<ProjectSummary|null>;recent:()=>Promise<ProjectSummary[]>;open:(root:string)=>Promise<ProjectSummary>;close:()=>Promise<void>;selectParent:()=>Promise<string|null>;create:(parent:string,brief:ProjectBriefInput)=>Promise<ProjectSummary>;scan:(root:string)=>Promise<ProjectSummary>;openFolder:(root:string)=>Promise<void>;saveSettings:(root:string,settings:ProjectSettings)=>Promise<ProjectSummary>;saveBrief:(root:string,brief:ProjectBriefInput)=>Promise<ProjectSummary>};
   artifact:{read:(root:string,key:ArtifactKey,source:'confirmed'|'draft')=>Promise<ArtifactReadResult>;beginEdit:(root:string,key:'story'|'models'|'promptPlan')=>Promise<ArtifactReadResult>;saveDraft:(root:string,key:'story'|'models'|'promptPlan',content:string)=>Promise<ArtifactReadResult>;importGrok:(root:string,key:'story'|'models'|'promptPlan',raw:string)=>Promise<ImportResult>;confirm:(root:string,key:'story'|'models'|'promptPlan')=>Promise<ProjectSummary>;savePromptPlan:(root:string,plan:PromptPlanArtifact)=>Promise<ArtifactReadResult>};
   grokTask:{build:(root:string,stage:GrokTask['stage'],extra?:string)=>Promise<GrokTask>}; file:{showInFolder:(filePath:string)=>Promise<void>};

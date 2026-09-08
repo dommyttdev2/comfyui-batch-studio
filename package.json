@@ -14,7 +14,7 @@
     "build:electron": "tsc -p tsconfig.electron.json && node scripts/copy-runtime.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "start": "electron .",
-    "test": "node tests/run.cjs && node tests/compiler-lora-mode.cjs && node tests/navigation.cjs && node tests/grok-chat-state.cjs && node tests/grok-output-contract.cjs && node tests/civitai-catalog.cjs && node tests/civitai-rate-limit.cjs && node tests/r2-template-migration.cjs && node tests/r2-object-index.cjs && node tests/ui-state.cjs"
+    "test": "node tests/run.cjs && node tests/model-placement.cjs && node tests/compiler-lora-mode.cjs && node tests/navigation.cjs && node tests/grok-chat-state.cjs && node tests/grok-output-contract.cjs && node tests/civitai-catalog.cjs && node tests/civitai-rate-limit.cjs && node tests/r2-template-migration.cjs && node tests/r2-object-index.cjs && node tests/ui-state.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
