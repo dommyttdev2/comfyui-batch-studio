@@ -195,16 +195,33 @@ GrokではなくCompiler工程。
 
 ## 13. Model Availability / R2 File Manager
 
-Project工程の「モデル配置」は `models.json` とLocal / integrated R2所在を一覧化し、同じ画面から統合R2 Managerを操作できる。
+Project工程の「モデル配置」は `models.json` とLocal / integrated R2所在を確認する工程であり、R2 Explorerは読み取り専用とする。
 
-Projectなしの「R2 File Manager」はProject設定への紐付け操作を除き、同じR2管理機能をStandalone Toolとして利用できる。
+ProjectなしHomeから開く「R2 File Manager」はR2管理用Standalone Toolとし、Bucket作成/削除、upload、move/rename、複数delete等の変更操作はここへ集約する。
 
 Grok paneは非表示でLocal UIを全幅使用する。
 
+### Project工程「モデル配置」
+
 最低限提供するUX:
 
-- model availability再確認（Project工程のみ）。
-- Local / R2 / state (`available` / `transfer-required` / `missing`)表示（Project工程のみ）。
+- model availability再確認。
+- Local / R2 / state (`available` / `transfer-required` / `missing`)表示。
+- R2接続設定 / 接続テスト。
+- モデル参照先Bucketのプルダウン選択。
+- Bucket選択時点でProjectの `r2Bucket` を保存し、そのBucket全体をモデル検索対象とする。
+- 「この場所をモデル補完先に設定」のような追加確定buttonは設けない。
+- R2 Explorerでのfolder navigation / object閲覧 / paging / realtime search。
+- single object download info。
+- 「一括DLのURL生成」。
+- Bucket作成/削除、upload、move/rename、R2 object deleteは提供しない。
+
+Explorer内のfolder移動は閲覧位置であり、モデル検索対象prefixを変更する操作ではない。
+
+### Standalone「R2 File Manager」
+
+Projectに依存せず、次を提供する。
+
 - R2接続設定 / 接続テスト。
 - Bucket選択 / create / empty-bucket delete。
 - file-explorer風folder navigation。
@@ -228,6 +245,8 @@ R2のObject metadataはアプリ起動時にR2から同期してLocal userData�
 一括DLpopupはmain listのdelete selectionと独立したselection stateを持つ。folder移動・検索を跨いで最大500件保持し、選択済み一覧、個別解除、全解除、URL / curl / wget / aria2cの生成・一括copyを提供する。
 
 一括DLpopupのtemplate UIはfile browserより上部に配置する。保存済みtemplateはカード一覧ではなくプルダウンから選択し、選択時に対象Objectをbatch selectionへ反映する。template保存・削除操作も同領域へまとめる。
+
+一括DLpopupはheader、template領域、browser、選択済み一覧、footerの各領域に十分なmargin / paddingを確保し、隣接要素が密着・重なりしないこと。
 
 数GB fileをRendererへ全読込せず、Main Processがstream/multipart uploadする。
 
