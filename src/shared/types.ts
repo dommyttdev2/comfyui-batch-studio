@@ -68,6 +68,7 @@ export interface ModelAvailabilityRow { ref:string; fileName:string; kind:'check
 export interface AvailabilityResult { rows:ModelAvailabilityRow[]; validation:ValidationResult; }
 export interface PreflightResult { state:'READY'|'BLOCKED'; plannedImages:number; targetImages:number|null; blocking:ValidationIssue[]; warnings:ValidationIssue[]; sections:Array<{name:string;valid:boolean;issues:ValidationIssue[]}>; }
 
+export type GrokContextStage = 'story'|'models'|'prompt-plan';
 export interface GrokPaneState { visible:boolean; ratio:number; }
 export interface BatchStudioApi {
   project: {
@@ -105,5 +106,5 @@ export interface BatchStudioApi {
   availability: { check:(root:string)=>Promise<AvailabilityResult>; openR2:(root:string)=>Promise<void>; };
   preflight: { run:(root:string)=>Promise<PreflightResult>; };
   clipboard: { writeText:(text:string)=>Promise<void>; };
-  grok: { setVisible:(visible:boolean)=>Promise<GrokPaneState>; setRatio:(ratio:number)=>Promise<GrokPaneState>; setDividerScreenX:(screenX:number)=>Promise<GrokPaneState>; reload:()=>Promise<void>; openExternal:()=>Promise<void>; };
+  grok: { setVisible:(visible:boolean)=>Promise<GrokPaneState>; setContext:(root:string,stage:GrokContextStage)=>Promise<GrokPaneState>; setRatio:(ratio:number)=>Promise<GrokPaneState>; setDividerScreenX:(screenX:number)=>Promise<GrokPaneState>; reload:()=>Promise<void>; openExternal:()=>Promise<void>; };
 }
