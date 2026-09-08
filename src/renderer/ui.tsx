@@ -1,8 +1,8 @@
 import type { ProjectSummary, ValidationIssue } from '../shared/types';
 
-export type Stage='概要'|'基本設定'|'ストーリー'|'モデル選定'|'プロンプト設計'|'ワークフロー'|'モデル配置'|'実行前チェック';
+export type Stage='概要'|'基本設定'|'ストーリー'|'モデルカタログ'|'モデル選定'|'プロンプト設計'|'ワークフロー'|'モデル配置'|'実行前チェック';
 export type Runner=<T>(fn:()=>Promise<T>)=>Promise<T|undefined>;
-export const stages:Stage[]=['概要','基本設定','ストーリー','モデル選定','プロンプト設計','ワークフロー','モデル配置','実行前チェック'];
+export const stages:Stage[]=['概要','基本設定','ストーリー','モデルカタログ','モデル選定','プロンプト設計','ワークフロー','モデル配置','実行前チェック'];
 const GROK_STAGES:ReadonlySet<Stage>=new Set(['ストーリー','モデル選定','プロンプト設計']);
 export function shouldShowGrok(stage:Stage){return GROK_STAGES.has(stage)}
 export function issuesView(issues:ValidationIssue[]){if(!issues.length)return <div className="ok">✓ 問題ありません</div>;return <div className="issues">{issues.map((i,n)=><div key={n} className={`issue ${i.severity}`}>{i.severity==='error'?'✕':i.severity==='warning'?'⚠':'ℹ'} {i.message}</div>)}</div>}
