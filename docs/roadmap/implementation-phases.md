@@ -1,6 +1,6 @@
 # Implementation Phases
 
-Status: Draft roadmap
+Status: Active implementation record
 
 この文書は実装順序を管理する。要件の正本ではない。要件変更時は `requirements/requirements.md` を先に更新し、この文書は依存関係に合わせて調整する。
 
@@ -66,12 +66,13 @@ Exit criteria:
 - display name変更だけで既存 `project.id` を自動変更しない。
 - final overwrite 前に history が残る。
 
-## Phase 3: Model Catalog / Grok Model Selection
+## Phase 3: Integrated Model Catalog / Grok Model Selection
 
-Goal: `civit-model-viewer` catalog を使った Grok 選定と検証を実装する。
+Goal: Batch Studio内蔵のCivitai Catalogを使った Grok 選定と検証を実装する。
 
-External dependency (`civit-model-viewer`):
+Batch Studio Main Process:
 
+- Civitai Public / Private Model Collection同期。
 - exact `modelVersionId` のImages API metadata取得。
 - `sort=Newest` / `limit=200` / `withMeta=true` sampling。
 - `meta.civitaiResources` から exact LoRA version weight抽出。
@@ -81,12 +82,15 @@ External dependency (`civit-model-viewer`):
 - `method = median-of-post-medians:newest-200` / distinct-post `sampleCount` provenance。
 - optional version-level `strengthBaseline` を `model_catalog.json` へexport。
 - evidence不足時はbaseline absentのままSYNC成功。
+- 429は待機後に同じrequestから自動再開。
+- app-wide catalog / selection template persistence。
 
 Batch Studio:
 
-- catalog path configuration。
+- integrated catalog path association。
 - `model_catalog.json` reader/index。
 - generation / generatedAt display。
+- Collection / Model / Version browsing / search / template UX。
 - Grok Model Selection prompt preparation。
 - Models Draft / import。
 - `schemas/models.schema.json` を使った Schema v1 validation。
@@ -109,6 +113,8 @@ Exit criteria:
 - 未解決 `missingRequirements` がある状態で `models.json` を Confirm できない。
 - catalog generation が変化しても、それだけで `models.json` を invalid にしない。
 - strength evidenceが不足しているLoRAに経験則baselineを捏造しない。
+
+旧 `civit-model-viewer` はStandalone/Legacyとして維持するが、新規フローの外部依存にはしない。
 
 ## Phase 4: Prompt Plan
 
@@ -192,7 +198,7 @@ Goal: Prompt Plan branch 数と一致し、leaf総数と一致する予定画像
 - 全Branch `ScenePromptCounter.count = 1` patch。
 - Branch / Project image count derivation。
 - Branch human-readable title derivation from `branch.id` / `branch.label`。
-- Workflow filename `LoRA_{project.id}.json`。
+- Workflow filename `LoRA_{project-destination-folder}.json`。
 - Save path `BatchStudio/{project.id}/{branch.id}`。
 - SceneSaveImageのphysical filename suffix/indexはcustom nodeへ委譲。
 - `last_node_id` / `last_link_id` update。
@@ -217,17 +223,34 @@ leafPathLabelMismatch == 0
 
 `generation.target_image_count` とactualImageCountの差分はinformational / warningであり、それだけではCompile failureにしない。
 
-## Phase 7: Model Availability / R2 Handoff
+## Phase 7: Model Availability / Integrated R2 Manager
 
-Goal: 必要モデルの実体配置を確認する。
+Goal: 必要モデルの実体配置を確認し、同じ工程からR2を管理する。
 
 - `models.json` file list。
 - Local ComfyUI models lookup。
-- R2 existence view。
-- difference status。
-- R2 File Manager launch / handoff。
+- Project指定R2 bucket / prefixの直接lookup。
+- `available` / `transfer-required` / `missing` status。
+- R2 connection settings / safe secret storage。
+- bucket list / create / empty-bucket delete。
+- folder browsing / paging / bucket-wide search。
+- multipart upload / pause / resume / cancel / restart-resume state。
+- object move / rename / multi-delete。
+- public / presigned URL generation。
+- URL / curl / wget / aria2c output。
+- batch download popup with independent selection, cross-folder persistence, max 500 items and named templates。
+- optional storage metrics。
 
-初期実装では destructive R2 operation を Batch Studio へ複製しない。
+Exit criteria:
+
+- R2-only modelは`transfer-required`としてPreflightをBlockする。
+- R2未設定/接続失敗を「R2に存在しない」と誤判定しない。
+- credential / API tokenをProject artifactやGrokへ渡さない。
+- 数GB fileをRendererへ全読込せずMain Processでstream uploadできる。
+- upload interruption後にstateを再読込し再開/キャンセルできる。
+- batch download selectionはmain delete selectionと独立する。
+
+旧 `r2-file-manager` はStandalone/Legacyとして維持するが、新規フローの外部依存にはしない。
 
 ## Phase 8: Preflight
 
@@ -238,13 +261,13 @@ Goal: Project を `READY` / `BLOCKED` に判定する。
 - Prompt Plan refs。
 - Workflow refs / structure。
 - planned image count / target delta。
-- model availability。
-- external tool availability。
+- Local / integrated R2 model availability。
 - Blocking / Warning summary。
 
 Exit criteria:
 
 - READY の理由と BLOCKED の理由をユーザーが追跡できる。
+- R2にあるだけのmodelをREADY扱いしない。
 
 ## Future: ComfyUI Runtime Integration
 
@@ -259,15 +282,3 @@ Phase 8 までとは別 scope とする。
 - generation history。
 
 追加前に別 Requirement / Decision を作成する。
-
-## Future: Direct R2 API Integration
-
-R2 File Manager の認証境界を壊さない方式が決まった場合だけ追加する。
-
-必要な事前設計:
-
-- authentication ownership。
-- token lifetime。
-- concurrent processes。
-- destructive confirmation。
-- retry / resume。
