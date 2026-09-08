@@ -1,74 +1,15 @@
-import { access, readFile, readdir } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import type { ArtifactSummary, ProjectSummary } from '../shared/types.js';
+import type { ArtifactSummary, ArtifactState, ProjectSummary } from '../shared/types.js';
+import { exists, fileMtime, readJson, readText } from './fs-utils.js';
+import { draftPath } from './artifact-service.js';
+import { readProjectSettings } from './project-meta.js';
+import { parseModels, parsePromptPlan, validateModels, validatePromptPlan } from './validation.js';
 
-async function exists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
+async function artifactState(root:string,key:ArtifactSummary['key'],file:string,legacy=false):Promise<ArtifactSummary>{const confirmed=path.join(root,file);const has=await exists(confirmed);let draft:string|null=null;try{draft=draftPath(root,key);}catch{/* no draft */}const hasDraft=draft?await exists(draft):false;let state:ArtifactState=legacy&&has?'LEGACY':has?'CONFIRMED':hasDraft?'DRAFT':'MISSING';let validation;
+ if(has){const text=await readText(confirmed); if(key==='models'&&text){const parsed=parseModels(text);validation=parsed?validateModels(parsed):{valid:false,issues:[{severity:'error' as const,code:'PARSE',message:'JSONを解析できません。'}]}; if(!validation.valid)state='INVALID';} if(key==='promptPlan'&&text){const parsed=parsePromptPlan(text);const mt=await readText(path.join(root,'models.json'));const models=mt?parseModels(mt):null;validation=parsed?validatePromptPlan(parsed,models):{valid:false,issues:[{severity:'error' as const,code:'PARSE',message:'JSONを解析できません。'}]};if(!validation.valid)state='INVALID';}}
+ return {key,label:'',relativePath:has?file:null,state,draftPath:hasDraft?path.relative(root,draft!):null,updatedAt:has?await fileMtime(confirmed):hasDraft?await fileMtime(draft!):null,validation};}
 
-async function readProjectIdentity(rootPath: string): Promise<{ title: string; id: string | null }> {
-  const briefPath = path.join(rootPath, 'project_brief.json');
-
-  if (await exists(briefPath)) {
-    try {
-      const parsed = JSON.parse(await readFile(briefPath, 'utf8')) as {
-        project?: { title?: unknown; id?: unknown };
-      };
-      const title = typeof parsed.project?.title === 'string' && parsed.project.title.trim()
-        ? parsed.project.title.trim()
-        : path.basename(rootPath);
-      const id = typeof parsed.project?.id === 'string' && parsed.project.id.trim()
-        ? parsed.project.id.trim()
-        : null;
-      return { title, id };
-    } catch {
-      // Phase 1 is read-only: malformed artifacts are surfaced as present, never rewritten.
-    }
-  }
-
-  return { title: path.basename(rootPath), id: null };
-}
-
-export async function scanProject(rootPath: string): Promise<ProjectSummary> {
-  const entries = await readdir(rootPath, { withFileTypes: true });
-  const fileNames = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name));
-  const workflowName = [...fileNames].find((name) => /^LoRA_.+\.json$/i.test(name)) ?? null;
-
-  const artifact = (
-    key: ArtifactSummary['key'],
-    label: string,
-    relativePath: string,
-    legacy = false,
-  ): ArtifactSummary => ({
-    key,
-    label,
-    relativePath: fileNames.has(relativePath) ? relativePath : null,
-    state: fileNames.has(relativePath) ? (legacy ? 'legacy' : 'present') : 'missing',
-  });
-
-  const identity = await readProjectIdentity(rootPath);
-
-  return {
-    rootPath,
-    title: identity.title,
-    id: identity.id,
-    artifacts: [
-      artifact('projectBrief', '基本設定', 'project_brief.json'),
-      artifact('story', 'ストーリー', 'story.md'),
-      artifact('models', 'モデル選定', 'models.json'),
-      artifact('promptPlan', 'プロンプト設計', 'prompt_plan.json'),
-      {
-        key: 'workflow',
-        label: 'ワークフロー',
-        relativePath: workflowName,
-        state: workflowName ? 'present' : 'missing',
-      },
-      artifact('legacyPromptTree', '旧 Prompt Tree', 'prompt_tree.md', true),
-    ],
-  };
-}
+export async function scanProject(rootPath:string):Promise<ProjectSummary>{const entries=await readdir(rootPath,{withFileTypes:true});const files=entries.filter(e=>e.isFile()).map(e=>e.name);const brief=await readJson<{project?:{title?:string;id?:string};generation?:{target_image_count?:number|null}}>(path.join(rootPath,'project_brief.json'));const planText=await readText(path.join(rootPath,'prompt_plan.json'));const plan=planText?parsePromptPlan(planText):null;const workflow=files.find(n=>/^LoRA_.+\.json$/i.test(n))??`LoRA_${brief?.project?.id??''}.json`;
+ const defs:Array<[ArtifactSummary['key'],string,string,boolean?]>=[['projectBrief','基本設定','project_brief.json'],['story','ストーリー','story.md'],['models','モデル選定','models.json'],['promptPlan','プロンプト設計','prompt_plan.json'],['workflow','ワークフロー',workflow],['legacyPromptTree','旧 Prompt Tree','prompt_tree.md',true]];
+ const artifacts:ArtifactSummary[]=[];for(const [key,label,file,legacy] of defs){const a=await artifactState(rootPath,key,file,legacy);a.label=label;if(key==='workflow'&&a.state==='CONFIRMED')a.state='GENERATED';artifacts.push(a);}return {rootPath,title:brief?.project?.title?.trim()||path.basename(rootPath),id:brief?.project?.id?.trim()||null,targetImageCount:brief?.generation?.target_image_count??null,actualImageCount:plan?plan.branches.reduce((n,b)=>n+b.leaves.length,0):null,artifacts,settings:await readProjectSettings(rootPath)};}
