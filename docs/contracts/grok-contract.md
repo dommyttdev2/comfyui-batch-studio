@@ -61,7 +61,7 @@ Grok answer
 
 ### 4.1 Input
 
-- `project_brief.json` 相当の入力
+- `project_brief.json`
 - プロジェクト名
 - 版権キャラか
 - キャラクター名
@@ -138,13 +138,13 @@ Story 実現に必要だが catalog に存在しない場合は、例として�
 }
 ```
 
-不足モデルはユーザーが Civitai collection 側へ追加し、`civit-model-viewer` を SYNC してから再選定できる。
+`missingRequirements` は Draft / UI state 専用であり、確定版 `models.json` には含めない。不足モデルはユーザーが Civitai collection 側へ追加し、`civit-model-viewer` を SYNC してから再選定できる。
 
 ### 5.5 Output
 
 Grok の最終モデル選定は JSON code block で返す。
 
-保存形式は `project-artifacts.md` の `models.json` Draft schema に従う。
+選定結果は `schemas/models.schema.json` の確定構造を基礎とし、不足がある場合だけ Draft 用 `missingRequirements` を追加できる。
 
 Batch Studio が current `model_catalog.json` と照合した後に確定可能となる。
 
@@ -160,11 +160,11 @@ Grok が作るのは Workflow Compiler に必要な**意味情報**である。
 
 - 確定 `story.md`
 - 確定 `models.json`
+- `project_brief.json` の目標画像枚数等の計画条件
 - Prompt 設計上のルール
-- 任意の参考 Prompt Tree
 - ユーザーの追加入力
 
-Workflow Template JSON 自体は原則 Grok へ渡さない。Grok に Template の内部構造を理解させる必要がないためである。
+新規プロジェクトの `prompt_tree.md` は入力にしない。Workflow Template JSON 自体も原則 Grok へ渡さない。Grok に Template の内部構造を理解させる必要がないためである。
 
 ### 6.3 Grok duties
 
@@ -177,6 +177,10 @@ Grok は次を決める。
 - 各 Branch で使用する LoRA。
 - 各 Branch に属する leaf prompts。
 - leaf ごとの positive / negative 差分。
+- `1 leaf = 1 image` を前提とした、目標画像枚数に近い leaf 数。
+- Root / Branch LoRA の実適用 `strengthModel` / `strengthClip`。
+
+`models.json` に `strengthBaseline.value = w` があり、その値を初期値として採用する場合は `strengthModel=w` / `strengthClip=w` と機械的に同値展開する。baseline が存在しない場合は経験則の暗黙defaultで埋めず、Grokまたはユーザーが実適用値を明示する。
 
 ### 6.4 Grok must not output
 
@@ -191,20 +195,21 @@ Grok は次を決める。
 - `SCENE_MATRIX_LINE` の Compiler-owned boilerplate
 - Save node path widget
 - KSampler internal values
+- v1 schema に存在しない汎用 metadata / extension field
 
 ### 6.5 Output
 
 JSON code block で `prompt_plan.json` 相当を返す。
 
-意味 schema は `prompt-plan.md` を正本とする。
+意味 schema は `prompt-plan.md` および `schemas/prompt-plan.schema.json` を正本とする。
 
 ## 7. Manual Attachment Checklist
 
-左ペインには工程別に次のようなチェックを表示できる。
+Local UI では工程別に次の操作を支援する。
 
 ```text
 [ ] 添付対象を確認
-[ ] フォルダを開く
+[ ] 添付ファイルの場所を開く
 [ ] Grok Web で必要ファイルを添付
 [ ] プロンプトをコピーして貼り付け
 [ ] Grok との会話を完了
