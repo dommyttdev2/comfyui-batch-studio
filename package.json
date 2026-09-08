@@ -14,7 +14,7 @@
     "build:electron": "tsc -p tsconfig.electron.json && node scripts/copy-runtime.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "start": "electron .",
-    "test": "node tests/run.cjs && node tests/navigation.cjs && node tests/grok-output-contract.cjs && node tests/civitai-catalog.cjs"
+    "test": "node tests/run.cjs && node tests/navigation.cjs && node tests/grok-output-contract.cjs && node tests/civitai-catalog.cjs && node tests/civitai-rate-limit.cjs"
   },
   "dependencies": {
     "react": "19.2.8",
