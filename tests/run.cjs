@@ -64,6 +64,8 @@ function plan(){return {schemaVersion:1,common:{positive:'quality',negative:'bad
   const draftRoot=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-drafts-'));fs.mkdirSync(path.join(draftRoot,'._batch_studio','drafts'),{recursive:true});fs.mkdirSync(path.join(draftRoot,'._batch_studio','history'),{recursive:true});
   fs.writeFileSync(path.join(draftRoot,'._batch_studio','drafts','story.md'),'new story\n');await artifacts.confirmArtifact(draftRoot,'story');assert.equal(fs.existsSync(path.join(draftRoot,'._batch_studio','drafts','story.md')),false,'confirmed draft must be cleared');
   const unresolved={...models(),missingRequirements:[{role:'pose',requirement:'pose LoRA',reason:'not found'}]};await artifacts.saveDraft(draftRoot,'models',JSON.stringify(unresolved));await assert.rejects(()=>artifacts.confirmArtifact(draftRoot,'models'),/検証エラー/);
+  const emptyMissing={...models(),missingRequirements:[]};const emptyDraft=await artifacts.saveDraft(draftRoot,'models',JSON.stringify(emptyMissing));assert.equal(emptyDraft.validation.valid,false,'draft-only missingRequirements must not enter confirmed schema');await assert.rejects(()=>artifacts.confirmArtifact(draftRoot,'models'),/検証エラー/);
+  assert.equal(validation.validateModels(emptyMissing).valid,false,'formal models validator must reject missingRequirements');
 
   console.log('All Batch Studio tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1});
