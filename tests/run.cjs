@@ -18,9 +18,15 @@ function models(){return {schemaVersion:1,catalog:{schemaVersion:1,generation:1,
 function plan(){return {schemaVersion:1,common:{positive:'quality',negative:'bad'},rootLoras:[{modelRef:'lora.character',strengthModel:0.7,strengthClip:0.7}],branches:[{id:'b01',label:'One',loras:[],leaves:[{id:'l01',name:'one',positive:'p1',negative:'n1'},{id:'l02',name:'two',positive:'p2',negative:'n2'}]},{id:'b02',label:'Two',loras:[],leaves:[{id:'l03',name:'three',positive:'p3',negative:'n3'}]}]};}
 
 (async()=>{
-  const [validation,artifacts,compiler,scan,grok,availability,preflight]=await Promise.all([
-    load('validation.js'),load('artifact-service.js'),load('compiler.js'),load('project-scan.js'),load('grok-context.js'),load('availability.js'),load('preflight.js')
+  const [validation,artifacts,compiler,scan,grok,availability,preflight,navigation]=await Promise.all([
+    load('validation.js'),load('artifact-service.js'),load('compiler.js'),load('project-scan.js'),load('grok-context.js'),load('availability.js'),load('preflight.js'),load('grok-navigation.js')
   ]);
+  assert.equal(navigation.isGrokNavigationUrl('https://grok.com/'),true,'Grok must stay in app');
+  assert.equal(navigation.isGrokNavigationUrl('https://accounts.google.com/o/oauth2/v2/auth'),true,'Google OAuth must stay in app');
+  assert.equal(navigation.isOAuthPopupUrl('https://accounts.google.com/o/oauth2/v2/auth'),true,'Google OAuth popup must use Grok session');
+  assert.equal(navigation.isGrokNavigationUrl('https://example.com/'),false,'unrelated sites must not navigate inside Grok pane');
+  assert.equal(navigation.isSafeExternalUrl('javascript:alert(1)'),false,'non-http URLs must not be opened externally');
+
   const brief={project:{id:'sample-project',title:'Sample'},subject:{copyrightedCharacter:false,characterName:'',series:''},audience:'visual focus',request:'',exclusions:'',assumptions:{adultCharacters:true,consensual:true},generation:{target_image_count:3,modelFamily:'Illustrious'},references:[]};
   assert.equal(validation.validateProjectBrief(brief).valid,true,'valid project brief must pass');
   assert.equal(validation.validateProjectBrief({...brief,audience:''}).valid,false,'audience is required');
