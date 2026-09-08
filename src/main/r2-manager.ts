@@ -23,6 +23,24 @@ function quote(value:string){return `"${value.replace(/(["\\$`])/g,'\\$1')}"`;}
 function uniqueNames(keys:string[]){const used=new Map<string,number>();return keys.map(key=>{const raw=objectName(key),lower=raw.toLowerCase(),count=(used.get(lower)??0)+1;used.set(lower,count);if(count===1)return raw;const dot=raw.lastIndexOf('.');return dot>0?`${raw.slice(0,dot)} (${count})${raw.slice(dot)}`:`${raw} (${count})`;});}
 function serializeObject(item:any,prefix=''):R2Object{const key=String(item.Key??'');return {key,name:prefix&&key.startsWith(prefix)?key.slice(prefix.length):objectName(key),size:Number(item.Size??0),etag:String(item.ETag??'').replace(/^"|"$/g,''),lastModified:item.LastModified?.toISOString?.()??null,storageClass:String(item.StorageClass??'STANDARD')};}
 function statusCode(error:any){return Number(error?.$metadata?.httpStatusCode??0);}
+function legacyTemplate(value:unknown,fallbackId:string):R2BatchDownloadTemplate|null{
+  if(!value||typeof value!=='object'||Array.isArray(value))return null;
+  const v=value as Record<string,unknown>,bucket=String(v.bucket??'').trim(),name=String(v.name??'').trim();
+  if(!bucket||!name||!Array.isArray(v.objects)||v.objects.length<1||v.objects.length>500)return null;
+  const objects:Array<{key:string;name:string;size?:number}>=[];
+  const seen=new Set<string>();
+  for(const raw of v.objects){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))continue;
+    const item=raw as Record<string,unknown>,key=String(item.key??'').trim();
+    if(!key||seen.has(key)||Buffer.byteLength(key)>1024)continue;
+    seen.add(key);
+    const size=Number(item.size??0);
+    objects.push({key,name:objectName(key),size:Number.isFinite(size)&&size>=0?size:0});
+  }
+  if(!objects.length)return null;
+  const now=new Date().toISOString(),created=String(v.created_at??v.createdAt??now),updated=String(v.updated_at??v.updatedAt??created);
+  return {id:String(v.id??fallbackId||randomUUID()),name,bucket,createdAt:created,updatedAt:updated,objects};
+}
 
 interface UploadState {schemaVersion:1;jobs:R2UploadJob[]}
 interface TemplateState {schemaVersion:1;templates:R2BatchDownloadTemplate[]}
@@ -31,8 +49,33 @@ export class R2Manager {
   private clientCache:{key:string;client:S3Client}|null=null;
   private readonly uploadsPath:string;
   private readonly templatesPath:string;
+  private readonly templateMigration:Promise<void>;
   private controls=new Map<string,{paused:boolean;cancelled:boolean}>();
-  constructor(private readonly config:R2ConfigStore,private readonly userData:string){this.uploadsPath=path.join(userData,'r2','uploads.json');this.templatesPath=path.join(userData,'r2','batch-download-templates.json');}
+  constructor(private readonly config:R2ConfigStore,private readonly userData:string){
+    this.uploadsPath=path.join(userData,'r2','uploads.json');
+    this.templatesPath=path.join(userData,'r2','batch-download-templates.json');
+    this.templateMigration=this.migrateLegacyTemplates().catch(error=>{console.warn('Legacy R2 template migration failed:',error);});
+  }
+  private async migrateLegacyTemplates(){
+    const localAppData=process.env.LOCALAPPDATA?.trim();
+    if(!localAppData)return;
+    const legacyPath=path.join(localAppData,'R2 File Manager','batch_download_templates.json');
+    if(!(await exists(legacyPath)))return;
+    const raw=await readJson<Record<string,unknown>>(legacyPath);
+    if(!raw||Array.isArray(raw)||typeof raw!=='object')return;
+    const current=(await readJson<TemplateState>(this.templatesPath))??{schemaVersion:1 as const,templates:[]};
+    const ids=new Set(current.templates.map(x=>x.id));
+    const names=new Set(current.templates.map(x=>`${x.bucket}\u0000${x.name.toLocaleLowerCase()}`));
+    let changed=false;
+    for(const [fallbackId,value] of Object.entries(raw)){
+      const converted=legacyTemplate(value,fallbackId);
+      if(!converted)continue;
+      const nameKey=`${converted.bucket}\u0000${converted.name.toLocaleLowerCase()}`;
+      if(ids.has(converted.id)||names.has(nameKey))continue;
+      current.templates.push(converted);ids.add(converted.id);names.add(nameKey);changed=true;
+    }
+    if(changed)await writeJsonAtomic(this.templatesPath,current);
+  }
   async settings(){return this.config.status();}
   environment(){return this.config.environmentDefaults();}
   async saveSettings(input:R2ConnectionInput){await this.test(input);this.clientCache=null;return this.config.save(input);}
@@ -63,7 +106,7 @@ export class R2Manager {
   private async runUpload(job:R2UploadJob,control:{paused:boolean;cancelled:boolean}){try{const client=await this.clientFor();if(job.size===0){await client.send(new PutObjectCommand({Bucket:job.bucket,Key:job.key,Body:new Uint8Array(0),ContentType:job.contentType}));job.status='complete';await this.saveUpload(job);return;}if(!job.uploadId)throw new Error('Upload IDがありません。');const count=Math.ceil(job.size/job.partSize);for(let n=1;n<=count;n++){if(control.cancelled)return;if(control.paused){job.status='paused';await this.saveUpload(job);return;}if(job.completedParts[String(n)])continue;const start=(n-1)*job.partSize,end=Math.min(job.size-1,start+job.partSize-1),length=end-start+1;const r=await client.send(new UploadPartCommand({Bucket:job.bucket,Key:job.key,UploadId:job.uploadId,PartNumber:n,Body:createReadStream(job.filePath,{start,end}),ContentLength:length}));if(!r.ETag)throw new Error(`Part ${n} のETagを取得できませんでした。`);job.completedParts[String(n)]=r.ETag;job.transferredBytes=Math.min(job.size,job.transferredBytes+length);await this.saveUpload(job);}const parts=Array.from({length:count},(_,i)=>({PartNumber:i+1,ETag:job.completedParts[String(i+1)]}));await client.send(new CompleteMultipartUploadCommand({Bucket:job.bucket,Key:job.key,UploadId:job.uploadId,MultipartUpload:{Parts:parts}}));job.status='complete';job.transferredBytes=job.size;await this.saveUpload(job);}catch(e){job.status='failed';job.error=e instanceof Error?e.message:String(e);await this.saveUpload(job);}finally{this.controls.delete(job.id);}}
   async pauseUpload(id:string){const c=this.controls.get(id);if(c)c.paused=true;const s=await this.uploadState(),job=s.jobs.find(x=>x.id===id);if(!job)throw new Error('アップロードセッションが見つかりません。');job.status='paused';await this.saveUpload(job);return job;}
   async cancelUpload(id:string){const c=this.controls.get(id);if(c)c.cancelled=true;const s=await this.uploadState(),job=s.jobs.find(x=>x.id===id);if(!job)return;if(job.uploadId)await (await this.clientFor()).send(new AbortMultipartUploadCommand({Bucket:job.bucket,Key:job.key,UploadId:job.uploadId})).catch(()=>{});job.status='cancelled';await this.saveUpload(job);}
-  private async templateState(){return (await readJson<TemplateState>(this.templatesPath))??{schemaVersion:1 as const,templates:[]};}
+  private async templateState(){await this.templateMigration;return (await readJson<TemplateState>(this.templatesPath))??{schemaVersion:1 as const,templates:[]};}
   async templates(bucket?:string){const s=await this.templateState();return bucket?s.templates.filter(x=>x.bucket===bucket):s.templates;}
   async saveTemplate(input:{id?:string;name:string;bucket:string;objects:Array<{key:string;name:string;size?:number}>}){if(!input.name.trim()||!input.bucket||!input.objects.length||input.objects.length>500)throw new Error('テンプレート名・バケット・1～500件の対象が必要です。');const s=await this.templateState(),now=new Date().toISOString(),i=input.id?s.templates.findIndex(x=>x.id===input.id):-1;const t:R2BatchDownloadTemplate={id:input.id||randomUUID(),name:input.name.trim(),bucket:input.bucket,createdAt:i>=0?s.templates[i].createdAt:now,updatedAt:now,objects:input.objects};if(i>=0)s.templates[i]=t;else s.templates.push(t);await writeJsonAtomic(this.templatesPath,s);return s.templates;}
   async deleteTemplate(id:string){const s=await this.templateState();s.templates=s.templates.filter(x=>x.id!==id);await writeJsonAtomic(this.templatesPath,s);return s.templates;}
