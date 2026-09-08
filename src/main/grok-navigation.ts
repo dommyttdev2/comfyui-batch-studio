@@ -35,6 +35,18 @@ export function isGrokNavigationUrl(target: string) {
   }
 }
 
+export function canonicalGrokConversationUrl(target: string): string | null {
+  try {
+    const url = new URL(target);
+    const host = url.hostname.toLowerCase();
+    if (url.protocol !== 'https:' || !hostMatches(host, 'grok.com')) return null;
+    const match = url.pathname.match(/^\/c\/([^/?#]+)/);
+    return match ? `https://grok.com/c/${encodeURIComponent(decodeURIComponent(match[1]))}` : null;
+  } catch {
+    return null;
+  }
+}
+
 export function isOAuthPopupUrl(target: string) {
   try {
     const url = new URL(target);
