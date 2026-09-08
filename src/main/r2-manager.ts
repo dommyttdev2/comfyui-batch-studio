@@ -39,7 +39,8 @@ function legacyTemplate(value:unknown,fallbackId:string):R2BatchDownloadTemplate
   }
   if(!objects.length)return null;
   const now=new Date().toISOString(),created=String(v.created_at??v.createdAt??now),updated=String(v.updated_at??v.updatedAt??created);
-  return {id:String(v.id??fallbackId||randomUUID()),name,bucket,createdAt:created,updatedAt:updated,objects};
+  const id=String(v.id??fallbackId).trim()||randomUUID();
+  return {id,name,bucket,createdAt:created,updatedAt:updated,objects};
 }
 
 interface UploadState {schemaVersion:1;jobs:R2UploadJob[]}
