@@ -13,7 +13,7 @@ import { compileWorkflow } from './compiler.js';
 import { checkAvailability } from './availability.js';
 import { runPreflight } from './preflight.js';
 import { GROK_PARTITION, isGrokNavigationUrl, isOAuthPopupUrl, isSafeExternalUrl, isSecureWebUrl } from './grok-navigation.js';
-const __filename=fileURLToPath(import.meta.url),__dirname=path.dirname(__filename);const GROK_URL='https://grok.com/';let mainWindow:BaseWindow|null=null,localView:WebContentsView|null=null,grokView:WebContentsView|null=null,grokVisible=true,localRatio=.45;
+const __filename=fileURLToPath(import.meta.url),__dirname=path.dirname(__filename);const GROK_URL='https://grok.com/';let mainWindow:BaseWindow|null=null,localView:WebContentsView|null=null,grokView:WebContentsView|null=null,grokVisible=false,localRatio=.45;
 function state():GrokPaneState{return {visible:grokVisible,ratio:localRatio}}
 function layout(){if(!mainWindow||!localView||!grokView)return;const {width,height}=mainWindow.getContentBounds();if(!grokVisible||width<840){localView.setBounds({x:0,y:0,width,height});grokView.setBounds({x:width,y:0,width:0,height});return;}const lw=Math.max(420,Math.min(width-420,Math.round(width*localRatio)));localView.setBounds({x:0,y:0,width:lw,height});grokView.setBounds({x:lw,y:0,width:width-lw,height});}
 async function loadRenderer(v:WebContentsView){const dev=process.env.VITE_DEV_SERVER_URL;if(dev)await v.webContents.loadURL(dev);else await v.webContents.loadFile(path.resolve(__dirname,'../../dist-renderer/index.html'));}
