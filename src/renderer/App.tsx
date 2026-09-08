@@ -6,6 +6,7 @@ import { StoryStage, ModelsStage } from './GrokStages';
 import { CatalogStage } from './CatalogStage';
 import { PromptPlanStage } from './PromptPlanStage';
 import { WorkflowStage, AvailabilityStage, PreflightStage } from './ExecutionStages';
+import './divider.css';
 
 const blankBrief:ProjectBriefInput={project:{id:'',title:''},subject:{copyrightedCharacter:false,characterName:'',series:''},audience:'',request:'',exclusions:'',assumptions:{adultCharacters:false,consensual:false},generation:{target_image_count:500,modelFamily:'Illustrious'},references:[]};
 function hashId(value:string){let h=2166136261;for(const ch of value){h^=ch.codePointAt(0)??0;h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
