@@ -84,7 +84,7 @@ export class CivitaiRequestPolicy {
       try{
         response=await this.originalFetch(input,{...init,signal:controller.signal});
       }finally{clearTimeout(timer)}
-      if(response.status!==429){this.consecutive429=0;return response}
+      if(response.status!==429){this.consecutive429=0;this.blockedUntil=0;return response}
       this.consecutive429+=1;
       const delay=this.retryDelay(response);
       this.blockedUntil=Math.max(this.blockedUntil,Date.now()+delay);
