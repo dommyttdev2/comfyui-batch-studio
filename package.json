@@ -17,6 +17,8 @@
     "test": "node tests/run.cjs && node tests/navigation.cjs && node tests/grok-chat-state.cjs && node tests/grok-output-contract.cjs && node tests/civitai-catalog.cjs && node tests/civitai-rate-limit.cjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
