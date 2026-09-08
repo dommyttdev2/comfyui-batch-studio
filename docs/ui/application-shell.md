@@ -251,7 +251,24 @@ Blocking と Warning を分離し、READY 条件を明示する。
 
 ## 14. Grok Pane Controls
 
-Local UI から Grok DOM を操作しない範囲で、shell control を提供できる。
+Grok pane の工程ごとの既定表示は次で固定する。
+
+| 工程 | Grok pane |
+| --- | --- |
+| Overview / 概要 | 非表示 |
+| Project / 基本設定 | 非表示 |
+| Story / ストーリー | 表示 |
+| Models / モデル選定 | 表示 |
+| Prompt Plan / プロンプト設計 | 表示 |
+| Workflow / ワークフロー | 非表示 |
+| R2 / Models / モデル配置 | 非表示 |
+| Preflight / 実行前チェック | 非表示 |
+
+工程を切り替えた時点ではこの既定表示へ自動的に戻す。
+
+Grok pane を非表示にしても `WebContents` / persistent session を破棄せず、ログイン状態やユーザー操作中のセッションを維持する。
+
+Local UI から Grok DOM を操作しない範囲で、手動 shell control も提供できる。
 
 候補:
 
@@ -259,6 +276,8 @@ Local UI から Grok DOM を操作しない範囲で、shell control を提供�
 - reload Grok pane。
 - open Grok in external browser。
 - resize divider。
+
+手動 show / hide は現在工程内での一時 override とし、別工程へ移動した場合は上表の既定表示を再適用する。
 
 Grok text injection、automatic send、file picker automation は含めない。
 
