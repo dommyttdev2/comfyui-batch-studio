@@ -159,6 +159,8 @@ Leafを主ツリーへ1件ずつ大量展開せず、Matrix内へ集約する。
 
 共通Prompt、Root/Branch LoRA strength、Leaf name/positive/negative、順序、validationを確認・編集できること。
 
+選択Nodeの詳細は画面下部へ固定表示せずpopup/modalで表示する。LoRA popupではPrompt Planの適用強度に加え、`models.json`から解決したmodel名、version、file名、trained words、Civitai baselineを確認できること。
+
 ## 11. Workflow Screen
 
 GrokではなくCompiler工程。
@@ -170,10 +172,36 @@ GrokではなくCompiler工程。
 - generated branch / node / link summary。
 - output path。
 - structure validation。
+- Workflow生成済みの場合の「フォルダを開く」。
 
-## 12. Model Availability Screen
+## 12. Model Availability / R2 Screen
 
-`models.json` とLocal/R2所在を一覧化する。destructive R2 operationは独自実装せずR2 File Managerへ引き渡す。
+`models.json` とLocal / integrated R2所在を一覧化し、旧 `r2-file-manager` の主要機能を同じ工程へ統合する。
+
+Grok paneは非表示でLocal UIを全幅使用する。
+
+最低限提供するUX:
+
+- model availability再確認。
+- Local / R2 / state (`available` / `transfer-required` / `missing`)表示。
+- R2接続設定 / 接続テスト。
+- Bucket選択 / create / empty-bucket delete。
+- breadcrumb付きfolder navigation。
+- object list / paging / bucket-wide search。
+- size / modified time。
+- single object download info。
+- upload file picker / progress / pause / resume / cancel。
+- app再起動後のunfinished upload表示・再開。
+- move / rename。
+- main list checkboxによる複数delete。
+- optional storage metrics。
+- 「一括DLのURL生成」から開く独立popup。
+
+一括DLpopupはmain listのdelete selectionと独立したselection stateを持つ。folder移動・検索を跨いで最大500件保持し、選択済み一覧、個別解除、全解除、名前付きtemplate、URL / curl / wget / aria2cの生成・一括copyを提供する。
+
+数GB fileをRendererへ全読込せず、Main Processがstream/multipart uploadする。
+
+R2-only modelはLocal転送完了まで`transfer-required` / Blockingのままとする。
 
 ## 13. Preflight Screen
 
@@ -182,7 +210,7 @@ Artifacts
 References
 Workflow structure
 Model availability
-External dependencies
+Integrated service readiness
 ```
 
 Blocking / Warningを分離しREADY条件を明示する。
@@ -205,12 +233,14 @@ Blocking / Warningを分離しREADY条件を明示する。
 
 Grok paneを非表示にしてもWebContents/persistent sessionは破棄しない。
 
-手動show/hide、reload、external browser、divider resizeは許可するが、DOM injection / automatic send / upload automationは行わない。
+Grokを使用しない工程ではshow/hide control自体を表示しない。Grok使用工程では手動show/hide、reload、external browser、divider resizeを許可するが、DOM injection / automatic send / upload automationは行わない。
 
 ## 15. Secret boundary in UI
 
 - `CIVIT_API_KEY` の値自体をGrok paneやProject artifactへ表示/保存しない。
 - Catalog UIは「設定済み / 未設定」の状態だけを表示する。
+- R2 Secret Access Key / Cloudflare API Tokenの保存済み値をRendererへ再表示しない。configured状態だけを返す。
+- R2 credentialをProject artifactやGrok添付候補へ出さない。
 - model binaryをGrok添付候補にしない。
 - Grok Cookie / browser profileをLocal Artifactへ保存しない。
 
