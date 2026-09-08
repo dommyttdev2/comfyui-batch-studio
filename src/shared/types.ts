@@ -72,6 +72,7 @@ export interface GrokPaneState { visible:boolean; ratio:number; }
 export interface BatchStudioApi {
   project: {
     select: () => Promise<ProjectSummary|null>;
+    last: () => Promise<ProjectSummary|null>;
     selectParent: () => Promise<string|null>;
     create: (parent:string, brief:ProjectBriefInput) => Promise<ProjectSummary>;
     scan: (root:string) => Promise<ProjectSummary>;
@@ -104,5 +105,5 @@ export interface BatchStudioApi {
   availability: { check:(root:string)=>Promise<AvailabilityResult>; openR2:(root:string)=>Promise<void>; };
   preflight: { run:(root:string)=>Promise<PreflightResult>; };
   clipboard: { writeText:(text:string)=>Promise<void>; };
-  grok: { setVisible:(visible:boolean)=>Promise<GrokPaneState>; setRatio:(ratio:number)=>Promise<GrokPaneState>; reload:()=>Promise<void>; openExternal:()=>Promise<void>; };
+  grok: { setVisible:(visible:boolean)=>Promise<GrokPaneState>; setRatio:(ratio:number)=>Promise<GrokPaneState>; setDividerScreenX:(screenX:number)=>Promise<GrokPaneState>; reload:()=>Promise<void>; openExternal:()=>Promise<void>; };
 }
