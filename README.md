@@ -6,6 +6,8 @@ The v1 flow covers project setup, story planning, model selection, Prompt Plan r
 
 ## Development
 
+Requires Node.js 20.19+ or 22.12+.
+
 ```bash
 npm install
 npm run dev
@@ -16,6 +18,12 @@ Build:
 ```bash
 npm run build
 npm start
+```
+
+Regression tests:
+
+```bash
+npm test
 ```
 
 ## Core principles
