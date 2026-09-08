@@ -2,7 +2,16 @@
 
 ComfyUI Batch Studio is an Electron desktop application for managing a deterministic ComfyUI batch-generation project lifecycle around user-operated Grok Web.
 
-The v1 flow covers project setup, story planning, model selection, Prompt Plan review/editing, workflow compilation, model availability checks, and Preflight readiness.
+## v1 status
+
+The v1 implementation is complete for the currently accepted scope: project setup, story planning, model selection, Prompt Plan review/editing, deterministic workflow compilation, model availability checks, and Preflight readiness.
+
+The repository CI validates dependency installation, TypeScript type checking, the v1 regression suite, and the production build.
+
+The following remain intentionally outside v1 and require separate future requirements/decisions before implementation:
+
+- ComfyUI Queue / progress / cancel / output collection runtime integration.
+- Direct R2 API operations inside Batch Studio.
 
 ## Development
 
