@@ -9,31 +9,36 @@ Checkpoint と Prompt dialect を決める Model Family はユーザーが選択
 
 - `Illustrious`: ユーザーが Checkpoint を必須選択する。
 - `Anima`: ユーザーが Checkpoint / Text Encoder / CLIP をすべて必須選択する。
-- 各モデルは Batch Studio の Civitai Collection inventory から Model / Version / File を選択する。
-- 選択UIへ渡す候補は role ごとに事前filterする。検索結果から対象外モデルを見た目だけ隠す方式にはしない。
-- Role判定は Civitai catalog に保存した `modelType` を正本とし、ファイル名から推測する fallback を設けない。
-- Checkpoint / TextEncoder / CLIP の Version に `baseModel` が存在する場合、選択した Model Family と一致する候補だけを表示・受理する。
+- Checkpoint は Batch Studio の Civitai Collection inventory から Model / Version / File を選択する。
+- Anima の Text Encoder は ComfyUI インストール先の `models/text_encoders` から選択する。
+- Anima の CLIP は ComfyUI インストール先の `models/clip` から選択する。
+- R2連携済みProjectでは `r2ModelPrefix` を models root とみなし、同じ `text_encoders/` / `clip/` を候補へ統合する。
+- ローカルとR2で同じ相対ファイル名が存在する場合は1候補へ統合し、UIで `ローカル` / `R2` の両インジケーターを表示する。
+- Checkpoint選択UIへ渡す候補はCivitaiのCheckpointだけに事前filterする。LoRA等を候補へ混在させない。
+- Text Encoder / CLIP はファイル名から用途を推測せず、参照ディレクトリそのものを用途境界とする。
 - 基盤モデルを変更した場合は既存LoRA選定を破棄し、再選定する。
 
 ## Artifact contract
 
-新規選定は `models.json` schemaVersion 2 を使う。schemaVersion 1 は既存Projectの読み取り互換として維持する。
+新規選定は `models.json` schemaVersion 3 を使う。schemaVersion 1 / 2 は既存Projectの読み取り互換として維持する。
 
 ```text
 Illustrious:
   modelFamily
-  checkpoint
-  loras[]
+  checkpoint           # Civitai identity
+  loras[]              # Civitai identity
 
 Anima:
   modelFamily
-  checkpoint
-  textEncoder
-  clip
-  loras[]
+  checkpoint           # Civitai identity
+  textEncoder.fileName # models/text_encoders からの相対パス
+  clip.fileName        # models/clip からの相対パス
+  loras[]              # Civitai identity
 ```
 
-Animaで `textEncoder` / `clip` が欠けた状態は blocking error とする。Illustriousにそれらを保存することも許可しない。
+Text Encoder / CLIP のArtifactにはCivitai Model/Version/File IDを捏造しない。保存する `fileName` は各用途ディレクトリからの相対パスであり、Local/R2どちらに存在するかは環境依存のためArtifactへ固定しない。配置確認時に現在のLocal/R2状態を再評価する。
+
+Animaで `textEncoder` / `clip` が欠けた状態は blocking error とする。Illustriousにそれらを保存することも許可しない。schemaVersion 2 の既存Anima Projectは読み取り可能だが、新しい選定UIではText Encoder / CLIPをLocal/R2から再選択してschemaVersion 3へ移行する。
 
 ## Grok contract
 
@@ -46,6 +51,22 @@ Grok の Model工程は LoRA selection のみを担当する。返却ファイ�
 - `trainedWords` はModel Familyに関係なくcatalog文字列を完全一致で使用し、変換しない。
 
 Model Familyは `project_brief.json` にも保存し、Prompt Plan依頼時に明示的なdialect ruleへ変換する。モデル名からdialectを推測しない。
+
+## Placement lookup
+
+schemaVersion 3 のText Encoder / CLIPは選択時・実行前確認時ともに用途別ディレクトリを厳密に使用する。
+
+```text
+Local:
+  <ComfyUI>/models/text_encoders/<fileName>
+  <ComfyUI>/models/clip/<fileName>
+
+R2:
+  <r2ModelPrefix>/text_encoders/<fileName>
+  <r2ModelPrefix>/clip/<fileName>
+```
+
+`r2ModelPrefix` が空の場合はR2 bucket直下の `text_encoders/` / `clip/` を使用する。ローカル実行ではローカル配置必須・R2任意、リモート実行ではR2配置必須・ローカル任意、という既存配置ポリシーを維持する。
 
 ## Workflow boundary
 
