@@ -1,12 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ComfyUI Batch Studio Models",
-  "description": "Models artifact. v1-v3 are retained for legacy projects; v4 stores the corrected Anima Text Encoder and VAE file selections discovered from ComfyUI/R2.",
+  "description": "Models artifact. v1-v4 are retained for legacy projects; v5 separates the Anima diffusion model from Illustrious checkpoints and stores Anima Text Encoder/VAE file selections discovered from ComfyUI/R2.",
   "oneOf": [
     { "$ref": "#/$defs/v1" },
     { "$ref": "#/$defs/v2" },
     { "$ref": "#/$defs/v3" },
-    { "$ref": "#/$defs/v4" }
+    { "$ref": "#/$defs/v4" },
+    { "$ref": "#/$defs/v5" }
   ],
   "$defs": {
     "v1": {
@@ -74,6 +75,37 @@
         { "if": { "properties": { "modelFamily": { "const": "illustrious" } }, "required": ["modelFamily"] }, "then": { "not": { "anyOf": [ { "required": ["textEncoder"] }, { "required": ["vae"] } ] } } }
       ]
     },
+    "v5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "modelFamily", "catalog", "loras"],
+      "properties": {
+        "schemaVersion": { "const": 5 },
+        "modelFamily": { "enum": ["illustrious", "anima"] },
+        "catalog": { "$ref": "#/$defs/catalogProvenance" },
+        "checkpoint": { "$ref": "#/$defs/checkpointSelection" },
+        "diffusionModel": { "$ref": "#/$defs/diffusionModelSelection" },
+        "textEncoder": { "$ref": "#/$defs/textEncoderFileSelection" },
+        "vae": { "$ref": "#/$defs/vaeFileSelection" },
+        "loras": { "type": "array", "items": { "$ref": "#/$defs/loraSelection" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "modelFamily": { "const": "illustrious" } }, "required": ["modelFamily"] },
+          "then": {
+            "required": ["checkpoint"],
+            "not": { "anyOf": [ { "required": ["diffusionModel"] }, { "required": ["textEncoder"] }, { "required": ["vae"] } ] }
+          }
+        },
+        {
+          "if": { "properties": { "modelFamily": { "const": "anima" } }, "required": ["modelFamily"] },
+          "then": {
+            "required": ["diffusionModel", "textEncoder", "vae"],
+            "not": { "required": ["checkpoint"] }
+          }
+        }
+      ]
+    },
     "catalogProvenance": {
       "type": "object",
       "additionalProperties": false,
@@ -112,6 +144,7 @@
       }
     },
     "checkpointSelection": { "allOf": [ { "$ref": "#/$defs/baseSelection" }, { "properties": { "ref": { "const": "checkpoint.main" } } } ] },
+    "diffusionModelSelection": { "allOf": [ { "$ref": "#/$defs/baseSelection" }, { "properties": { "ref": { "const": "diffusion_model.main" } } } ] },
     "catalogTextEncoderSelection": { "allOf": [ { "$ref": "#/$defs/baseSelection" }, { "properties": { "ref": { "const": "text_encoder.main" } } } ] },
     "catalogClipSelection": { "allOf": [ { "$ref": "#/$defs/baseSelection" }, { "properties": { "ref": { "const": "clip.main" } } } ] },
     "textEncoderFileSelection": { "allOf": [ { "$ref": "#/$defs/fileSelection" }, { "properties": { "ref": { "const": "text_encoder.main" } } } ] },
@@ -153,5 +186,5 @@
       }
     }
   },
-  "$comment": "v4 corrects the Anima base-component contract: Checkpoint/LoRA remain catalog-backed while Text Encoder and VAE are role-relative files selected from ComfyUI models/text_encoders and models/vae plus optional R2 mirrors. v2/v3 remain legacy-readable."
+  "$comment": "v5 separates model-family loading contracts. Illustrious keeps a catalog-backed Checkpoint. Anima uses a catalog-backed Diffusion Model placed under models/diffusion_models, plus role-relative Text Encoder and VAE files under models/text_encoders and models/vae. v1-v4 remain legacy-readable."
 }
