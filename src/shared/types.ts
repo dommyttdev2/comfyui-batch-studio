@@ -1,11 +1,12 @@
 export type Severity = 'error' | 'warning' | 'info';
 export interface ValidationIssue { severity: Severity; code: string; message: string; path?: string; }
+export interface ValidationResult { valid:boolean; issues:ValidationIssue[]; }
 export type ArtifactKey = 'projectBrief' | 'story' | 'models' | 'promptPlan' | 'workflow' | 'legacyPromptTree';
 export type ArtifactState = 'missing' | 'draft' | 'invalid' | 'warning' | 'confirmed' | 'stale' | 'generated' | 'legacy';
 export interface ArtifactSummary { key: ArtifactKey; label: string; relativePath: string | null; state: ArtifactState; validation?: ValidationResult; }
 export type ModelFamily='illustrious'|'anima';
 export type ModelSelectionRole='checkpoint'|'text_encoder'|'clip'|'lora';
-export interface ProjectBriefInput { project:{id:string;title:string}; subject:{copyrightedCharacter:boolean;characterName:string;series:string}; audience:string; request:string; exclusions:string; assumptions:{adultCharacters:boolean;consensual:boolean}; generation:{target_image_count:number;modelFamily?:ModelFamily;targetChapterCount?:number}; references?:string[]; }
+export interface ProjectBriefInput { project:{id:string;title:string}; subject:{copyrightedCharacter:boolean;characterName:string;series:string}; audience:string; request:string; exclusions:string; assumptions:{adultCharacters:boolean;consensual:boolean}; generation:{target_image_count:number;modelFamily?:ModelFamily|'Illustrious';targetChapterCount?:number}; references?:string[]; }
 export type ExecutionTarget = 'local' | 'remote';
 export interface AppSettings { comfyUiInstallPath:string; }
 export interface AppSettingsStatus extends AppSettings { configured:boolean; modelsPath:string|null; installExists:boolean; modelsExists:boolean; }
