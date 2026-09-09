@@ -13,8 +13,16 @@ execFileSync(process.execPath, [tscBin, '-p', path.join(repo, 'tsconfig.electron
   stdio: 'inherit'
 });
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
 (async () => {
   const navigation = await import(pathToFileURL(path.join(runtime, 'main', 'grok-navigation.js')).href);
+  const queueModule = await import(pathToFileURL(path.join(runtime, 'main', 'grok-navigation-queue.js')).href);
 
   assert.equal(navigation.isGrokNavigationUrl('https://grok.com/'), true);
   assert.equal(navigation.isGrokNavigationUrl('https://accounts.google.com/o/oauth2/v2/auth'), true);
@@ -39,6 +47,121 @@ execFileSync(process.execPath, [tscBin, '-p', path.join(repo, 'tsconfig.electron
   assert.equal(navigation.canonicalGrokConversationUrl('https://grok.com/'), null);
   assert.equal(navigation.canonicalGrokConversationUrl('https://grok.com/share/example'), null);
   assert.equal(navigation.canonicalGrokConversationUrl('https://example.com/c/example'), null);
+
+  assert.equal(queueModule.isNavigationAbortedError(Object.assign(new Error('ERR_ABORTED'), { code: -3 })), true);
+  assert.equal(queueModule.isNavigationAbortedError(new Error("(-3) loading 'https://grok.com/c/example'")), true);
+  assert.equal(queueModule.isNavigationAbortedError(Object.assign(new Error('ERR_NAME_NOT_RESOLVED'), { code: -105 })), false);
+
+  {
+    const queue = new queueModule.GrokNavigationQueue();
+    let current = 'https://grok.com/';
+    let calls = 0;
+    const gate = deferred();
+    const contents = {
+      getURL: () => current,
+      loadURL: async target => {
+        calls += 1;
+        await gate.promise;
+        current = target;
+      }
+    };
+    const target = 'https://grok.com/c/38723657-88b2-4e2e-842b-ce0342d32fa3';
+    const first = queue.navigate(contents, target);
+    const duplicate = queue.navigate(contents, target);
+    assert.strictEqual(duplicate, first, 'duplicate navigation to the same conversation must share one pending request');
+    gate.resolve();
+    await Promise.all([first, duplicate]);
+    assert.equal(calls, 1, 'duplicate navigation must call loadURL only once');
+  }
+
+  {
+    const queue = new queueModule.GrokNavigationQueue();
+    let current = 'https://grok.com/';
+    const firstGate = deferred();
+    const calls = [];
+    const contents = {
+      getURL: () => current,
+      loadURL: async target => {
+        calls.push(target);
+        if (calls.length === 1) await firstGate.promise;
+        current = target;
+      }
+    };
+    const first = queue.navigate(contents, 'https://grok.com/c/story');
+    const second = queue.navigate(contents, 'https://grok.com/c/models');
+    await Promise.resolve();
+    assert.deepEqual(calls, ['https://grok.com/c/story'], 'different conversation loads must be serialized');
+    firstGate.resolve();
+    await Promise.all([first, second]);
+    assert.deepEqual(calls, ['https://grok.com/c/story', 'https://grok.com/c/models']);
+  }
+
+  {
+    const queue = new queueModule.GrokNavigationQueue();
+    let current = 'https://grok.com/';
+    const target = 'https://grok.com/c/arrived';
+    const contents = {
+      getURL: () => current,
+      loadURL: async () => {
+        current = `${target}?rid=redirected`;
+        throw Object.assign(new Error('ERR_ABORTED'), { code: -3 });
+      }
+    };
+    await queue.navigate(contents, target);
+  }
+
+  {
+    const queue = new queueModule.GrokNavigationQueue();
+    const contents = {
+      getURL: () => 'https://grok.com/',
+      loadURL: async () => { throw Object.assign(new Error('ERR_ABORTED'), { code: -3 }); }
+    };
+    await assert.rejects(
+      queue.navigate(contents, 'https://grok.com/c/not-arrived'),
+      error => error?.code === -3,
+      'ERR_ABORTED must remain visible when the requested destination was not reached'
+    );
+  }
+
+  {
+    const queue = new queueModule.LatestGrokContextQueue();
+    let calls = 0;
+    const gate = deferred();
+    const first = queue.run('project\0story', async isLatest => {
+      calls += 1;
+      await gate.promise;
+      return isLatest() ? 'story-current' : 'story-superseded';
+    });
+    const duplicate = queue.run('project\0story', async () => {
+      calls += 1;
+      return 'unexpected';
+    });
+    assert.strictEqual(duplicate, first, 'duplicate set-context requests must share the pending operation');
+    gate.resolve();
+    assert.equal(await first, 'story-current');
+    assert.equal(calls, 1);
+  }
+
+  {
+    const queue = new queueModule.LatestGrokContextQueue();
+    const gate = deferred();
+    const events = [];
+    const story = queue.run('project\0story', async isLatest => {
+      events.push('story-start');
+      await gate.promise;
+      events.push(isLatest() ? 'story-current' : 'story-superseded');
+      return 'story';
+    });
+    await Promise.resolve();
+    const models = queue.run('project\0models', async isLatest => {
+      events.push(isLatest() ? 'models-current' : 'models-superseded');
+      return 'models';
+    });
+    gate.resolve();
+    await Promise.all([story, models]);
+    assert.deepEqual(events, ['story-start', 'story-superseded', 'models-current'],
+      'a rapid stage switch must mark the older context request stale before the newer request runs');
+  }
 
   console.log('Grok OAuth/navigation tests passed.');
 })().catch(error => {
