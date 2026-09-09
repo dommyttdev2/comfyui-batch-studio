@@ -21,7 +21,7 @@ function App(){
   const [project,setProject]=useState<ProjectSummary|null>(null),[recent,setRecent]=useState<ProjectSummary[]>([]),[stage,setStage]=useState<Stage>('概要'),[error,setError]=useState(''),[grok,setGrok]=useState(false),[ratio,setRatio]=useState(.45),[createOpen,setCreateOpen]=useState(false),[environmentOpen,setEnvironmentOpen]=useState(false),[restoring,setRestoring]=useState(true),[tool,setTool]=useState<StandaloneTool>(null),[resetRevision,setResetRevision]=useState(0);
   const refresh=async()=>project&&setProject(await window.batchStudio.project.scan(project.rootPath));
   const run:Runner=async fn=>{setError('');try{return await fn()}catch(e){setError(e instanceof Error?e.message:String(e));return undefined}};
-  const resetFrom=async(scope:ResetScope)=>{if(!project)return;await run(async()=>{const next=await window.batchStudio.artifact.resetFrom(project.rootPath,scope);setProject(next);setResetRevision(x=>x+1)})};
+  const resetFrom=async(scope:ResetScope)=>{if(!project)return;setError('');try{const next=await window.batchStudio.artifact.resetFrom(project.rootPath,scope);setProject(next);setResetRevision(x=>x+1)}catch(e){setError(e instanceof Error?e.message:String(e));throw e}};
   const rememberRecent=(p:ProjectSummary)=>setRecent(prev=>[p,...prev.filter(item=>item.rootPath!==p.rootPath)].slice(0,8));
   const loadRecent=async()=>setRecent(await window.batchStudio.project.recent());
   const openProject=()=>run(async()=>{const p=await window.batchStudio.project.select();if(p){setProject(p);rememberRecent(p);setTool(null)}});
