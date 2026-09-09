@@ -1,0 +1,6 @@
+.environment-settings-card{width:min(1040px,94vw)}
+.environment-section{border:1px solid #2b333e;border-radius:12px;background:#141920;padding:16px;margin:16px 0}
+.environment-section h3{margin:0 0 4px}.environment-section .panelhead>span{white-space:nowrap}
+.environment-section .formgrid{margin-top:14px}.environment-section .actions input{min-width:0}
+.environment-actions{justify-content:flex-end;position:sticky;bottom:-22px;margin:18px -22px -22px;padding:14px 22px;background:#181d24;border-top:1px solid #343c47}
+@media(max-width:900px){.environment-settings-card{width:94vw}.environment-section .panelhead{gap:8px}.environment-actions{bottom:-22px}}
