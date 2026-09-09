@@ -4,6 +4,7 @@ const path=require('node:path');
 const stages=fs.readFileSync(path.resolve(__dirname,'../src/renderer/GrokStages.tsx'),'utf8');
 const historyUi=fs.readFileSync(path.resolve(__dirname,'../src/renderer/GrokLoraHistory.tsx'),'utf8');
 const historyService=fs.readFileSync(path.resolve(__dirname,'../src/main/grok-lora-history.ts'),'utf8');
+const artifactService=fs.readFileSync(path.resolve(__dirname,'../src/main/artifact-service.ts'),'utf8');
 const availability=fs.readFileSync(path.resolve(__dirname,'../src/main/availability.ts'),'utf8');
 const preload=fs.readFileSync(path.resolve(__dirname,'../src/preload/index.cjs'),'utf8');
 const main=fs.readFileSync(path.resolve(__dirname,'../src/main/main.ts'),'utf8');
@@ -11,6 +12,9 @@ const main=fs.readFileSync(path.resolve(__dirname,'../src/main/main.ts'),'utf8')
 assert.match(stages,/import \{ GrokLoraHistory \}/,'Models stage must use the persisted LoRA history component');
 assert.match(stages,/stage="models" title="GrokでLoRAを選定"[\s\S]*?<GrokLoraHistory project=\{project\} stage="models"/,'initial selection history must render directly below the initial Grok stage');
 assert.match(stages,/stage="models-fix" title="LoRAを再選定"[\s\S]*?<GrokLoraHistory project=\{project\} stage="models-fix"/,'reselection history must render directly below the reselection Grok stage');
+assert.match(stages,/onImport=\{raw=>importModels\(raw,'models'\)\}/,'initial import must explicitly persist to the initial selection stage');
+assert.match(stages,/onImport=\{raw=>importModels\(raw,'models-fix'\)\}/,'reselection import must explicitly persist to the reselection stage');
+assert.match(stages,/artifact\.importGrok\(project\.rootPath,'models',raw,stage\)/,'LoRA import must forward the explicit Grok stage');
 assert.match(stages,/setHistoryRevision\(x=>x\+1\)/,'history must refresh immediately after importing a Grok return file');
 assert.doesNotMatch(stages,/function SelectedLorasPanel/,'single current-selection panel must be removed');
 
@@ -32,8 +36,14 @@ assert.match(historyService,/grok-responses/,'history must use persisted Grok re
 assert.match(historyService,/readStage\(root,'models'\)/,'initial selections must be restored after restart');
 assert.match(historyService,/readStage\(root,'models-fix'\)/,'reselection history must be restored after restart');
 assert.match(historyService,/payload\.loras\.every\(validLora\)/,'invalid responses must not become selection history');
+assert.match(artifactService,/stageOverride\?:GrokResponseStage/,'artifact import must accept an explicit response stage');
+assert.match(artifactService,/stageMatchesKey\(key,stage\)/,'artifact import must reject a stage that belongs to another artifact');
+assert.match(artifactService,/stageOverride\?\?inferred/,'legacy imports must retain the existing inferred-stage fallback');
+assert.match(preload,/importGrok:\(r,k,x,s\)=>ipcRenderer\.invoke\(I\.ARTIFACT_IMPORT_GROK,r,k,x,s\)/,'preload must forward the explicit Grok stage');
 assert.match(preload,/ARTIFACT_GROK_LORA_HISTORY/,'preload must expose persisted history');
 assert.match(preload,/AVAILABILITY_CHECK_LORA_FILES/,'preload must expose historical placement checks');
+assert.match(main,/stage!==undefined&&stage!=='models'&&stage!=='models-fix'/,'main process must validate the explicit LoRA Grok stage');
+assert.match(main,/importGrok\(root,key,raw,stage\)/,'main process must forward the explicit LoRA Grok stage');
 assert.match(main,/readGrokLoraSelectionHistory/,'main process must serve persisted history');
 assert.match(main,/checkLoraFileAvailability/,'main process must serve current placement for historical LoRAs');
 assert.match(availability,/export async function checkLoraFileAvailability/,'availability service must support historical LoRA files');
