@@ -10,8 +10,16 @@ assert.match(src,/ダウンロード可能なファイルとして生成・添�
 assert.match(src,/ファイル内容をチャット本文、code block、引用、要約へ再掲しません/,'artifact file contents must not be repeated in chat');
 assert.match(src,/JSONとしてparse可能な厳密な構文/,'JSON artifacts must require strict parseable JSON');
 assert.match(src,/missingRequirements/,'models draft output must define missingRequirements behavior');
+assert.match(src,/promptFallbacks/,'models draft output must define resolved prompt fallback behavior');
 assert.match(src,/Checkpoint、Text Encoder、VAE、modelFamily は出力しません/,'Grok must not override user-selected base models');
 assert.match(src,/modelType が LoRA \/ LoCon \/ DoRA/,'Grok LoRA selection must be catalog-type constrained');
+assert.match(src,/civitai\.red/,'missing catalog LoRAs must be searched on civitai.red');
+assert.match(src,/civitai\.com/,'missing catalog LoRAs must be searched on civitai.com');
+assert.match(src,/複数LoRAを組み合わせて要件を分解・実現/,'Grok must investigate multi-LoRA composition after external alternatives fail');
+assert.match(src,/positive \/ negative prompt で十分に代替可能か判断/,'Grok must evaluate prompt-only fallback after multi-LoRA composition fails');
+assert.match(src,/Promptだけで十分に代替可能[\s\S]*missingRequirements へ入れません/,'prompt-resolved requirements must not remain blocking missing requirements');
+assert.match(src,/Civitai Collectionへ追加してカタログ再同期が必要/,'external models outside the catalog must remain explicit catalog-add requirements');
+assert.match(src,/model_prompt_fallbacks\.json/,'Prompt Plan must receive persisted prompt fallback decisions');
 assert.match(src,/Prompt記法 — Anima[\s\S]*looking at viewer/,'Anima prompts must use space-separated normal tags');
 assert.match(src,/Prompt記法 — Illustrious[\s\S]*looking_at_viewer/,'Illustrious prompts must use underscore normal tags');
 assert.match(src,/trainedWords は例外[\s\S]*1文字も変更せず/,'trainedWords must remain exact');
