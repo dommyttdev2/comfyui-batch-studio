@@ -8,6 +8,8 @@ Batch Studio と Grok Web の責務境界、各工程で Grok に渡す入力、
 
 本書における「送信」は、Batch Studio が用意した内容をユーザーが Grok Web へ貼り付け・添付して送る操作を指す。Batch Studio が Grok を自動操作する意味ではない。
 
+最終 Artifact は可能な限りチャット本文へ展開せずファイルとして受け取る。大きな JSON / Markdown を会話本文へ再掲しないことで、Grok 側の会話コンテキスト消費を抑える。
+
 ## 2. 共通原則
 
 ### 2.1 User-operated Web
@@ -16,14 +18,14 @@ Batch Studio と Grok Web の責務境界、各工程で Grok に渡す入力、
 - Batch Studio はプロンプトを Clipboard へ準備する。
 - ユーザーが必要ファイルを手動添付する。
 - ユーザーが送信・会話継続を行う。
-- 最終成果物をユーザーが Batch Studio へ貼り戻す。
+- 最終成果物ファイルを Grok から取得し、その内容を Batch Studio へ取り込む。
 
 ### 2.2 Grok output is Draft
 
 Grok の回答を自動的に正本へ保存しない。
 
 ```text
-Grok answer
+Grok artifact file
    -> Draft
    -> Batch Studio validation
    -> User review
@@ -42,17 +44,27 @@ Grok answer
 - model binary (`.safetensors` 等)
 - アプリ内部の秘密情報
 
-### 2.4 Final artifact output envelope
+### 2.4 Final artifact file envelope
 
-Grok が Batch Studio へ貼り戻す最終 Artifact を生成する工程では、出力境界を固定する。
+Grok が Batch Studio へ戻す最終 Artifact を生成する工程では、出力境界を固定する。
 
-- 最終成果物は指定された code block **1個だけ**とする。
-- code block の前後に説明、挨拶、要約、注意書き、補足を付けない。
+- 最終成果物は工程ごとに指定された名前の**ダウンロード可能なファイル**として生成・添付する。
+- 成果物の内容をチャット本文、code block、引用、要約へ再掲しない。
+- チャット本文には説明、挨拶、要約、注意書き、補足等の成果物外テキストを付けない。
+- ファイルは UTF-8 のプレーンテキストとする。
 - 指定された Markdown 見出しまたは JSON field 以外を追加しない。
 - JSON は厳密に parse 可能とし、コメント、末尾カンマ、擬似値を含めない。
-- 修正依頼の場合も同じ output envelope を維持する。
+- 修正依頼の場合も同じ file envelope と同じファイル名を維持する。
 
-この規則は `story.md`、`models.json`、`prompt_plan.json` 相当の最終出力すべてに適用する。
+この規則は次の最終出力に適用する。
+
+```text
+story.md
+models.json
+prompt_plan.json
+```
+
+Story の初回検討のような対話用回答は Project Artifact ではないため、この file envelope の対象外とする。
 
 ## 3. Prompt Composition
 
@@ -64,10 +76,10 @@ Grok が Batch Studio へ貼り戻す最終 Artifact を生成する工程では
 3. Project context
 4. User additions
 5. Attached files
-6. Output format
+6. Output format / output filename
 ```
 
-大きい入力は本文へ全展開せず添付を優先する。
+大きい入力は本文へ全展開せず添付を優先する。大きい最終出力も本文へ全展開せず、ファイル出力を優先する。
 
 ## 4. Story Contract
 
@@ -109,7 +121,7 @@ Grok が Batch Studio へ貼り戻す最終 Artifact を生成する工程では
 
 ### 4.3 Final Story output
 
-ユーザーが案を選び調整した後、完成 `story.md` を Markdown code block 1個だけで返すよう依頼する。
+ユーザーが案を選び調整した後、完成 `story.md` を **`story.md` という名前のダウンロード可能なファイル**として返すよう依頼する。本文へ `story.md` の内容を再掲しない。
 
 `story.md` の最上位構造を次で固定する。
 
@@ -139,7 +151,7 @@ Grok が Batch Studio へ貼り戻す最終 Artifact を生成する工程では
 
 `story.md` には Prompt Plan、LoRA / Checkpoint 選定、ComfyUI node情報、個別画像の positive / negative prompt を含めない。
 
-Batch Studio は本文を取り込み、検証して Draft とする。
+Batch Studio はファイル内容を取り込み、検証して Draft とする。
 
 ## 5. Model Selection Contract
 
@@ -194,11 +206,11 @@ Story 実現に必要だが catalog に存在しない場合は、例として�
 
 ### 5.5 Output
 
-Grok の最終モデル選定は JSON code block 1個だけで返す。
+Grok の最終モデル選定は **`models.json` という名前のダウンロード可能な JSON ファイル**として返す。JSON 本文をチャット本文や code block へ再掲しない。
 
 選定結果は `schemas/models.schema.json` の確定構造を基礎とし、不足がある場合だけ Draft 用 `missingRequirements` を root に追加できる。
 
-追加説明を code block 外へ出力しない。定義されていない field を追加しない。
+定義されていない field を追加しない。
 
 Batch Studio が current `model_catalog.json` と照合した後に確定可能となる。
 
@@ -253,11 +265,11 @@ Grok は次を決める。
 
 ### 6.5 Output
 
-JSON code block 1個だけで `prompt_plan.json` 相当を返す。
+**`prompt_plan.json` という名前のダウンロード可能な JSON ファイル**として Prompt Plan を返す。JSON 本文をチャット本文や code block へ再掲しない。
 
 意味 schema は `prompt-plan.md` および `schemas/prompt-plan.schema.json` を正本とする。
 
-追加説明を code block 外へ出力しない。未知 field を追加しない。
+未知 field を追加しない。
 
 ## 7. Manual Attachment Checklist
 
@@ -269,7 +281,8 @@ Local UI では工程別に次の操作を支援する。
 [ ] Grok Web で必要ファイルを添付
 [ ] プロンプトをコピーして貼り付け
 [ ] Grok との会話を完了
-[ ] 最終 code block を Batch Studio へ貼り戻す
+[ ] 最終成果物ファイルを Grok から取得
+[ ] ファイル内容を Batch Studio へ取り込む
 [ ] 検証結果を確認
 [ ] 成果物を確定
 ```
@@ -278,7 +291,7 @@ Local UI では工程別に次の操作を支援する。
 
 ### 8.1 Grok output parse failure
 
-JSON / Markdown を取り込めない場合、原文を消さず Draft として保持し、parse error を表示する。
+Grok が生成した JSON / Markdown ファイルの内容を取り込めない場合、原文を消さず Draft として保持し、parse error を表示する。
 
 ### 8.2 Unknown model selection
 
