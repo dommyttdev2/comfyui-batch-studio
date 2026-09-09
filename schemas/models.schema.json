@@ -1,241 +1,115 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ComfyUI Batch Studio Models",
-  "description": "Formal JSON Schema for models.json schemaVersion 1.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schemaVersion",
-    "catalog",
-    "checkpoint",
-    "loras"
+  "description": "Models artifact. v1 is retained for legacy projects; v2 makes the user-selected model family/base components explicit.",
+  "oneOf": [
+    { "$ref": "#/$defs/v1" },
+    { "$ref": "#/$defs/v2" }
   ],
-  "properties": {
-    "schemaVersion": {
-      "const": 1
-    },
-    "catalog": {
-      "$ref": "#/$defs/catalogProvenance"
-    },
-    "checkpoint": {
-      "$ref": "#/$defs/checkpointSelection"
-    },
-    "loras": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/loraSelection"
-      }
-    }
-  },
   "$defs": {
+    "v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "catalog", "checkpoint", "loras"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "catalog": { "$ref": "#/$defs/catalogProvenance" },
+        "checkpoint": { "$ref": "#/$defs/checkpointSelection" },
+        "loras": { "type": "array", "items": { "$ref": "#/$defs/loraSelection" } }
+      }
+    },
+    "v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "modelFamily", "catalog", "checkpoint", "loras"],
+      "properties": {
+        "schemaVersion": { "const": 2 },
+        "modelFamily": { "enum": ["illustrious", "anima"] },
+        "catalog": { "$ref": "#/$defs/catalogProvenance" },
+        "checkpoint": { "$ref": "#/$defs/checkpointSelection" },
+        "textEncoder": { "$ref": "#/$defs/textEncoderSelection" },
+        "clip": { "$ref": "#/$defs/clipSelection" },
+        "loras": { "type": "array", "items": { "$ref": "#/$defs/loraSelection" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "modelFamily": { "const": "anima" } }, "required": ["modelFamily"] },
+          "then": { "required": ["textEncoder", "clip"] }
+        },
+        {
+          "if": { "properties": { "modelFamily": { "const": "illustrious" } }, "required": ["modelFamily"] },
+          "then": { "not": { "anyOf": [ { "required": ["textEncoder"] }, { "required": ["clip"] } ] } }
+        }
+      ]
+    },
     "catalogProvenance": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schemaVersion",
-        "generation",
-        "generatedAt"
-      ],
+      "required": ["schemaVersion", "generation", "generatedAt"],
       "properties": {
-        "schemaVersion": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "generation": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "generatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "schemaVersion": { "type": "integer", "minimum": 1 },
+        "generation": { "type": "integer", "minimum": 0 },
+        "generatedAt": { "type": "string", "format": "date-time" }
       }
     },
-    "checkpointSelection": {
+    "baseSelection": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "ref",
-        "modelId",
-        "modelName",
-        "versionId",
-        "versionName",
-        "fileId",
-        "fileName",
-        "modelUrl",
-        "trainedWords",
-        "reason"
-      ],
+      "required": ["ref", "modelId", "modelName", "versionId", "versionName", "fileId", "fileName", "modelUrl", "trainedWords", "reason"],
       "properties": {
-        "ref": {
-          "const": "checkpoint.main"
-        },
-        "modelId": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "modelName": {
-          "type": "string",
-          "minLength": 1
-        },
-        "versionId": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "versionName": {
-          "type": "string",
-          "minLength": 1
-        },
-        "fileId": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "fileName": {
-          "type": "string",
-          "minLength": 1
-        },
-        "modelUrl": {
-          "type": "string",
-          "format": "uri"
-        },
-        "trainedWords": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 1
-        }
+        "ref": { "type": "string" },
+        "modelId": { "type": "integer", "minimum": 1 },
+        "modelName": { "type": "string", "minLength": 1 },
+        "versionId": { "type": "integer", "minimum": 1 },
+        "versionName": { "type": "string", "minLength": 1 },
+        "fileId": { "type": "integer", "minimum": 1 },
+        "fileName": { "type": "string", "minLength": 1 },
+        "modelUrl": { "type": "string", "format": "uri" },
+        "trainedWords": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": "string", "minLength": 1 }
       }
     },
+    "checkpointSelection": { "allOf": [ { "$ref": "#/$defs/baseSelection" }, { "properties": { "ref": { "const": "checkpoint.main" } } } ] },
+    "textEncoderSelection": { "allOf": [ { "$ref": "#/$defs/baseSelection" }, { "properties": { "ref": { "const": "text_encoder.main" } } } ] },
+    "clipSelection": { "allOf": [ { "$ref": "#/$defs/baseSelection" }, { "properties": { "ref": { "const": "clip.main" } } } ] },
     "loraSelection": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "ref",
-        "modelId",
-        "modelName",
-        "versionId",
-        "versionName",
-        "fileId",
-        "fileName",
-        "modelUrl",
-        "trainedWords",
-        "reason"
-      ],
+      "required": ["ref", "modelId", "modelName", "versionId", "versionName", "fileId", "fileName", "modelUrl", "trainedWords", "reason"],
       "properties": {
-        "ref": {
-          "type": "string",
-          "pattern": "^lora\\.[a-z][a-z0-9._-]{0,58}$"
-        },
-        "modelId": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "modelName": {
-          "type": "string",
-          "minLength": 1
-        },
-        "versionId": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "versionName": {
-          "type": "string",
-          "minLength": 1
-        },
-        "fileId": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "fileName": {
-          "type": "string",
-          "minLength": 1
-        },
-        "modelUrl": {
-          "type": "string",
-          "format": "uri"
-        },
-        "trainedWords": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 1
-        },
-        "strengthBaseline": {
-          "$ref": "#/$defs/strengthBaseline"
-        }
+        "ref": { "type": "string", "pattern": "^lora\\.[a-z][a-z0-9._-]{0,58}$" },
+        "modelId": { "type": "integer", "minimum": 1 },
+        "modelName": { "type": "string", "minLength": 1 },
+        "versionId": { "type": "integer", "minimum": 1 },
+        "versionName": { "type": "string", "minLength": 1 },
+        "fileId": { "type": "integer", "minimum": 1 },
+        "fileName": { "type": "string", "minLength": 1 },
+        "modelUrl": { "type": "string", "format": "uri" },
+        "trainedWords": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": "string", "minLength": 1 },
+        "strengthBaseline": { "$ref": "#/$defs/strengthBaseline" }
       }
     },
     "strengthBaseline": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "value",
-        "provenance"
-      ],
+      "required": ["value", "provenance"],
       "properties": {
-        "value": {
-          "type": "number"
-        },
-        "provenance": {
-          "$ref": "#/$defs/strengthProvenance"
-        }
+        "value": { "type": "number" },
+        "provenance": { "$ref": "#/$defs/strengthProvenance" }
       }
     },
     "strengthProvenance": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "source",
-        "basis"
-      ],
+      "required": ["source", "basis"],
       "properties": {
-        "source": {
-          "const": "civitai"
-        },
-        "basis": {
-          "enum": [
-            "creator-declared",
-            "observed-usage-derived"
-          ]
-        },
-        "method": {
-          "type": "string",
-          "minLength": 1
-        },
-        "sampleCount": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "basis": {
-                "const": "observed-usage-derived"
-              }
-            },
-            "required": [
-              "basis"
-            ]
-          },
-          "then": {
-            "required": [
-              "method",
-              "sampleCount"
-            ]
-          }
-        }
-      ]
+        "source": { "const": "civitai" },
+        "basis": { "enum": ["creator-declared", "observed-usage-derived"] },
+        "method": { "type": "string", "minLength": 1 },
+        "sampleCount": { "type": "integer", "minimum": 1 }
+      }
     }
   },
-  "$comment": "Batch Studio semantic validation additionally requires every ref to be unique within the project, validates Model/Version/File identity against model_catalog.json, and blocks confirmation while unresolved missingRequirements remain in the Models draft/UI state. missingRequirements is intentionally not part of confirmed models.json Schema v1."
+  "$comment": "v2 requires Anima textEncoder/clip and forbids them for Illustrious. Batch Studio semantic validation also verifies Model/Version/File identity and selection role against model_catalog.json."
 }
