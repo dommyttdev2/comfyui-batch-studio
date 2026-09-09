@@ -11,9 +11,12 @@ Batch Studio と外部サービス/ツールの責務境界を定義する。
 - Civitai
 - Cloudflare R2
 - ComfyUI
+- SSH / Remote host
 - Project filesystem
 
 `civit-model-viewer` と `r2-file-manager` の主要機能は2026-09-08にBatch Studioへ機能統合された。Standalone repositoriesは移行元/旧単体版として参照可能だが、新規Batch Studioフローの外部依存にはしない。
+
+Execution / Remote Execution の詳細は `../architecture/remote-execution.md` を正本とする。
 
 ## 2. Civitai / Integrated Model Catalog
 
@@ -195,12 +198,18 @@ Batch Studio Electron Main Process がCloudflare R2の実体操作を所有す�
 - folder-like object listing / paging / bucket-wide search。
 - multipart upload / pause / resume / cancel / persisted upload state。
 - object move / rename / delete。
-- public URL / presigned URL。
+- public URL / presigned GET URL。
+- Execution用presigned PUT URL。
+- caller-specified expiryでのGET signing。
 - URL / `curl` / `wget` / `aria2c` command生成。
 - 最大500件の一括download情報生成。
+- Main Process streaming download-to-local-file。
 - batch-download selection template。
 - optional Cloudflare account R2 metrics。
 - Model Availability / Preflight用のR2 object lookup。
+- Remote model staging用GET URL発行。
+- Remote artifact upload用PUT URL発行。
+- Remote artifactのLocal回収。
 
 新規Batch Studioフローでは外部`r2-file-manager`のローカルHTTP serverを起動しない。Standalone repositoryは旧単体版としてのみ維持する。
 
@@ -208,7 +217,7 @@ Batch Studio Electron Main Process がCloudflare R2の実体操作を所有す�
 
 設定値はElectron `app.getPath('userData')/r2/` 配下に保持する。Secret Access KeyとCloudflare API TokenはElectron `safeStorage` で暗号化し、暗号化不能時に平文へfallback保存しない。
 
-Rendererへ返すconnection statusにはSecret本体を含めず、`secretConfigured` / `metricsTokenConfigured` のboolだけを返す。Grok Web、Project artifact、Grok attachment候補へSecretを渡さない。
+Rendererへ返すconnection statusにはSecret本体を含めず、`secretConfigured` / `metricsTokenConfigured` のboolだけを返す。Grok Web、Project artifact、Grok attachment候補、Remote hostへSecretを渡さない。
 
 環境変数も利用可能:
 
@@ -221,6 +230,8 @@ CLOUDFLARE_API_TOKEN   optional
 ```
 
 保存済みAccount ID / Access Key IDと同一identityの場合、Secret欄を空のまま接続テストや非Secret設定変更を許可する。identity変更時はSecret再入力を要求する。
+
+Remote executionではRemoteへ渡すのは1 object / 1 operation / limited lifetimeのsigned URLだけとする。signed URLのfull query stringを通常logへ保存しない。
 
 ### 3.3 Object browser UX
 
@@ -266,41 +277,75 @@ Projectごとに次を指定できる。
 ```text
 project_meta.json.settings.r2Bucket
 project_meta.json.settings.r2ModelPrefix
+project_meta.json.settings.executionTarget
 ```
 
-`models.json`のcheckpoint / LoRA filenameをLocal ComfyUI models rootと統合R2の双方で照会する。
+`models.json`のrequired model filenameをLocal ComfyUI models rootと統合R2の双方で照会する。
+
+Local target:
 
 ```text
 Localあり              -> available
-Localなし / R2あり     -> transfer-required / BLOCKED
+Localなし / R2あり     -> local-transfer-required / BLOCKED
 Localなし / R2なし     -> missing / BLOCKED
 ```
 
-R2に存在するだけでPreflightをREADYにしない。ComfyUI実行時点ではLocal配置が必要である。
+Remote target:
+
+```text
+R2あり                 -> remote-stage-ready
+R2なし / Localあり     -> r2-transfer-required / BLOCKED
+R2なし / Localなし     -> missing / BLOCKED
+```
+
+Local targetではR2に存在するだけでREADYにしない。Remote targetではLocalに存在するだけでREADYにしない。
+
+Remote execution開始後、R2 objectはpublic/presigned GET URLでRemote hostが直接downloadする。model binaryをSSH/SCPでRemoteへ転送しない。
 
 既存Projectの`r2IndexPath`は互換用fallbackとして読み取りを維持できるが、標準経路では統合R2を直接照会する。
 
-## 4. ComfyUI
+## 4. ComfyUI / Remote SSH
 
-v1のBatch Studio責務:
+### 4.1 Local execution
 
 ```text
 Prompt Plan
   -> deterministic Workflow Compiler
-  -> LoRA_{project-destination-folder}.json
+  -> UI Workflow + API-format execution graph
   -> model availability
   -> Preflight READY / BLOCKED
+  -> Local ComfyUI API
+  -> Scene Prompt continuous execution
+  -> Local output confirmation
 ```
 
+Local ComfyUI install pathはfilesystem pathであり、API endpointとは分離する。
+
+### 4.2 Remote execution
+
+Remote hostはSSH endpointが外部公開され、private-key authenticationを利用できることを前提とする。
+
+```text
+Batch Studio
+  -> SSH / private key
+  -> Remote Worker
+  -> Remote localhost ComfyUI API
+```
+
+- SSH Tunnelは使用しない。
+- ComfyUI port 8188を外部公開する必要はない。
+- password authenticationを標準経路にしない。
+- Host Key verificationを無効化しない。
+- Remote Workerのみ小さいcontrol artifactとしてSSH転送可能。
+- multi-GB model / generated artifacts / ZIPをSSH/SCPで転送しない。
+
+Scene Prompt Tools `ScenePrompterExpand` の「連続生成」はfrontend buttonをremote controlするのではなく、標準ComfyUI APIとScene Prompt Tools custom run-context APIをRemote Workerがlocalhostから呼んで再現する。
+
+詳細は `../architecture/remote-execution.md` を正本とする。
+
+### 4.3 Workflow file name
+
 Workflow file名はProject実folderの親、すなわちユーザーが指定したProject作成先folder名を用いる。内部Save pathは`BatchStudio/{project.id}/{branch.id}`を維持する。
-
-現行必須scope外:
-
-- Queue API。
-- progress tracking。
-- generation cancellation。
-- output image collection。
-- ComfyUI process lifecycle management。
 
 ## 5. Local Project Filesystem
 
@@ -316,21 +361,26 @@ LoRA_{project-destination-folder}.json
 ._batch_studio/
 ```
 
+Execution Runの永続化先とLocal artifact rootの正確なcontractはProject Artifact文書で固定する。Remote Execution設計上はRun ID、phase、workflow/hash、prompt IDs、artifact manifest、R2 object key、Remote package SHA-256、Local verification結果等を復元可能にする。
+
 `model_catalog.json`はapp-wide sourceであり、各Projectへコピーすることを標準にはしない。
 
 R2 credential / upload state / batch download templateはProject artifactではなくapp-wide `userData/r2/` で管理する。
 
 ## 6. Secret boundary
 
-| Secret / Data | Owner | Batch Studio | Grok |
+| Secret / Data | Owner | Batch Studio | Remote / Grok |
 | --- | --- | --- | --- |
 | Civitai API key | Batch Studio Main Process / environment | Civitai通信だけに使用・Projectへ保存しない | 渡さない |
-| R2 credential | Batch Studio Main Process / `safeStorage` | R2通信だけに使用・Projectへ保存しない | 渡さない |
+| R2 credential | Batch Studio Main Process / `safeStorage` | R2通信・signed URL生成だけに使用 | Remote/Grokへ渡さない |
 | Cloudflare API Token | Batch Studio Main Process / `safeStorage` | optional metrics取得だけに使用 | 渡さない |
+| SSH private key contents | Local filesystem | SSH認証時だけ読む・Projectへコピーしない | Remote/Grokへ渡さない |
+| SSH private key path | app-wide settings | Remote接続設定として参照 | Grokへ渡さない |
+| R2 signed URL | Main Process | 必要直前に発行 | Remoteには対象operation用のみ渡す。Grokへ渡さない |
 | Grok Cookie | Grok Web persistent session | Projectへ保存しない | Web session自身のみ |
-| model binary | Local/R2 | 所在確認 / R2管理 | 添付しない |
-| model_catalog.json | Batch Studio app data | 生成・読む | Model選定時に添付可 |
-| project artifacts | Project filesystem | 読書き | 必要分だけ手動添付 |
+| model binary | Local/R2/Remote | 所在確認 / R2管理 / execution staging | Grokへ添付しない |
+| model_catalog.json | Batch Studio app data | 生成・読む | Model選定時にGrok添付可 |
+| project artifacts | Project filesystem | 読書き | Grokへ必要分だけ手動添付 |
 
 ## 7. Integration failure policy
 
@@ -341,7 +391,12 @@ fallbackで偽装成功させない。
 - Civitai 429 -> wait/retryして同一同期を継続。待機中をUI表示。
 - strength evidence不足 -> `strengthBaseline` absent。経験則で補完しない。
 - catalog未生成 -> Model Selection/validationを進行不能として明示。
-- R2未設定 / credential failure -> R2操作を利用不可として明示。Local availability判定を偽装しない。
+- R2未設定 / credential failure -> R2操作を利用不可として明示。availability判定を偽装しない。
 - R2 object lookup failure -> R2不存在とはみなさず、接続/設定errorとして扱う。
 - incomplete multipart upload -> persisted jobとして保持し、ユーザーが再開/キャンセル可能。
+- SSH auth failure -> public ComfyUI accessへfallbackしない。
+- Remote model GET failure -> SCP model transferへfallbackしない。
+- signed URL expiry -> Execution Serviceが新URLを発行してretryし、credentialをRemoteへ渡さない。
+- hash mismatch -> Run成功にしない。
+- prompt submit failure -> idempotency evidenceなしで自動重複submitしない。
 - Grok未ログイン -> Grok工程不可。ただし既存Artifact/Catalog/R2閲覧は可能。
