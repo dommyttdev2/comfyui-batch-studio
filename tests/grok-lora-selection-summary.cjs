@@ -19,8 +19,10 @@ assert.match(stages,/setHistoryRevision\(x=>x\+1\)/,'history must refresh immedi
 assert.doesNotMatch(stages,/function SelectedLorasPanel/,'single current-selection panel must be removed');
 
 assert.match(historyUi,/artifact\.grokLoraHistory\(project\.rootPath\)/,'history must reload from persisted project data');
-assert.match(historyUi,/filter\(x=>x\.stage===stage\)/,'history must stay separated by Grok stage');
+assert.match(historyUi,/function visibleStageEntries/,'history must have explicit stage visibility semantics');
+assert.match(historyUi,/stage==='models'&&matching\.length\?matching\.slice\(-1\):matching/,'initial selection must show the latest imported result as selection 1 while reselections keep their progression');
 assert.match(historyUi,/stage==='models'\?'選定':'再選定'/,'history must label initial and reselection progression separately');
+assert.match(historyUi,/再取り込み時はこの「選定 1」を更新します/,'initial selection copy must explain that repeated imports replace selection 1');
 assert.match(historyUi,/lora\.fileName/,'history must show each selected file name');
 assert.match(historyUi,/thumbnailUrl/,'history must resolve a Civitai thumbnail');
 assert.match(historyUi,/ローカル/,'history must expose local presence');
@@ -31,6 +33,8 @@ assert.match(historyUi,/item\.modelId!==lora\.modelId/,'Civitai presence must ma
 assert.match(historyUi,/v=>v\.versionId===lora\.versionId/,'Civitai presence must match the selected version identity');
 assert.match(historyUi,/f=>f\.id===lora\.fileId&&f\.name===lora\.fileName/,'Civitai presence must match the selected file identity');
 assert.match(historyUi,/availability\.checkLoraFiles\(project\.rootPath,fileNames\)/,'historical LoRAs must use current local/R2 availability');
+assert.match(historyUi,/catalog\?\.generation,catalog\?\.generatedAt/,'history must re-evaluate when a Civitai catalog sync changes the current catalog');
+assert.match(historyUi,/setPlacements\(null\)/,'history must mark placement state stale while re-evaluating after catalog refresh');
 
 assert.match(historyService,/grok-responses/,'history must use persisted Grok responses as its source');
 assert.match(historyService,/readStage\(root,'models'\)/,'initial selections must be restored after restart');
