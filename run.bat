@@ -63,7 +63,7 @@ if errorlevel 1 (
 )
 
 echo [INFO] npm:
-npm --version
+call npm --version
 if errorlevel 1 (
     echo.
     echo [ERROR] npm could not be executed.
