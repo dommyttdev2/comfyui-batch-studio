@@ -22,6 +22,7 @@ export interface ImportResult { extracted:string; validation:ValidationResult; s
 export interface StrengthBaseline { value:number; provenance:{source:'civitai';basis:'creator-declared'|'observed-usage-derived';method?:string;sampleCount?:number}; }
 export interface ModelSelectionBase { ref:string; modelId:number; modelName:string; versionId:number; versionName:string; fileId:number; fileName:string; modelUrl:string; trainedWords:string[]; reason:string; }
 export interface CheckpointSelection extends ModelSelectionBase { ref:'checkpoint.main'; }
+export interface DiffusionModelSelection extends ModelSelectionBase { ref:'diffusion_model.main'; }
 export interface CatalogTextEncoderSelection extends ModelSelectionBase { ref:'text_encoder.main'; }
 export interface CatalogClipSelection extends ModelSelectionBase { ref:'clip.main'; }
 export interface ModelFileSelectionBase { ref:string; fileName:string; reason:string; }
@@ -29,7 +30,7 @@ export interface TextEncoderSelection extends ModelFileSelectionBase { ref:'text
 export interface ClipSelection extends ModelFileSelectionBase { ref:'clip.main'; }
 export interface VaeSelection extends ModelFileSelectionBase { ref:'vae.main'; }
 export interface LoraSelection extends ModelSelectionBase { ref:string; strengthBaseline?:StrengthBaseline; }
-export interface ModelsArtifact { schemaVersion:1|2|3|4; modelFamily?:ModelFamily; catalog:{schemaVersion:number;generation:number;generatedAt:string}; checkpoint:CheckpointSelection; textEncoder?:CatalogTextEncoderSelection|TextEncoderSelection; clip?:CatalogClipSelection|ClipSelection; vae?:VaeSelection; loras:LoraSelection[]; }
+export interface ModelsArtifact { schemaVersion:1|2|3|4|5; modelFamily?:ModelFamily; catalog:{schemaVersion:number;generation:number;generatedAt:string}; checkpoint?:CheckpointSelection; diffusionModel?:DiffusionModelSelection; textEncoder?:CatalogTextEncoderSelection|TextEncoderSelection; clip?:CatalogClipSelection|ClipSelection; vae?:VaeSelection; loras:LoraSelection[]; }
 export type GrokLoraSelectionStage='models'|'models-fix';
 export interface GrokLoraSelectionHistoryEntry { id:string; stage:GrokLoraSelectionStage; createdAt:string; loras:LoraSelection[]; }
 export interface LoraFileAvailability { fileName:string; local:boolean; r2:boolean; }
@@ -53,7 +54,7 @@ export interface CatalogSelectionTemplateInput { id?:string; name:string; select
 export interface GrokTask { stage:'story-initial'|'story-finalize'|'story-fix'|'models'|'models-fix'|'prompt-plan'|'prompt-plan-fix'; title:string; prompt:string; attachments:Array<{name:string;path:string;purpose:string;exists:boolean}>; }
 export interface WorkflowManifest { schemaVersion:1; manifestVersion:string; template:{id:string;version:string;sha256:string}; common:{roles:Record<string,{nodeId:number}>}; branchPrototype:{nodeIds:number[];groupIds:number[];roles:Record<string,{nodeId:number}>;boundaries:Array<{id:string;source:{role:string;slot:number};target:{role:string;slot:number}}>;layout:{offset:{x:number;y:number}}}; }
 export interface CompileResult { outputPath:string; branchCount:number; imageCount:number; nodeCount:number; linkCount:number; validation:ValidationResult; }
-export interface ModelAvailabilityRow { ref:string; fileName:string; kind:'checkpoint'|'text_encoder'|'clip'|'vae'|'lora'; local:boolean; r2:boolean; state:'available'|'transfer-required'|'missing'; localPath?:string; }
+export interface ModelAvailabilityRow { ref:string; fileName:string; kind:'checkpoint'|'diffusion_model'|'text_encoder'|'clip'|'vae'|'lora'; local:boolean; r2:boolean; state:'available'|'transfer-required'|'missing'; localPath?:string; }
 export interface AvailabilityResult { rows:ModelAvailabilityRow[]; validation:ValidationResult; executionTarget:ExecutionTarget; localModelsRoot:string|null; }
 export interface PreflightResult { state:'READY'|'BLOCKED'; plannedImages:number; targetImages:number|null; blocking:ValidationIssue[]; warnings:ValidationIssue[]; sections:Array<{name:string;valid:boolean;issues:ValidationIssue[]}>; }
 export interface R2ConnectionInput { name?:string; accountId:string; accessKeyId:string; secretAccessKey?:string; publicUrl?:string; cloudflareApiToken?:string; }
