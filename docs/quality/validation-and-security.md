@@ -4,12 +4,14 @@ Status: Active
 
 ## 1. 方針
 
-Batch Studio は Grok の意味判断を自動修正しない。一方、形式・参照・構造・所在のように機械判定できるものは積極的に検証する。
+Batch Studio は Grok の意味判断を自動修正しない。一方、形式・参照・構造・所在・実行環境 capability のように機械判定できるものは積極的に検証する。
 
 検証結果は次の二段階を基本とする。
 
 - `WARNING`: ユーザー確認で継続可能。
 - `BLOCKING`: 次工程または READY への遷移不可。
+
+Execution / Remote Execution の運用詳細は `../architecture/remote-execution.md` を正本とする。
 
 ## 2. project_brief.json
 
@@ -73,7 +75,7 @@ Grok が選定した各項目を current catalog と照合する。
 
 選定時 catalog generation と current generation が違うだけなら WARNING。
 
-current catalog から選定 identity が消えた場合は強い WARNING または BLOCKING とし、正式 severity は schema 確定時に決める。
+current catalog から選定 identity が消えた場合は BLOCKING とする。
 
 ### 5.3 Missing requirements
 
@@ -111,7 +113,7 @@ Compile 前 Blocking:
 
 Template が壊れている場合、過去 Workflow から推測して fallback compile しない。
 
-## 8. Compiled Workflow
+## 8. Compiled Workflow / API Graph
 
 Blocking:
 
@@ -124,7 +126,8 @@ Blocking:
 - `last_node_id` / `last_link_id` 不整合。
 - final branch count と Prompt Plan branch count の不一致。
 - main SceneMatrix が空の branch。
-- Workflow が `models.json` にない LoRA / Checkpoint を参照。
+- Workflow が `models.json` にない Model を参照。
+- Execution用API-format graphが生成不能またはUI Workflowと整合しない。
 
 Invariant:
 
@@ -140,17 +143,28 @@ Preflight では少なくとも `models.json` の必須実ファイルについ�
 Selected
 Local ComfyUI
 R2
+executionTarget
 ```
 
-例:
+Local target:
 
-| File | Local | R2 | State |
-| --- | --- | --- | --- |
-| checkpoint A | yes | yes | ready |
-| LoRA B | no | yes | transfer needed |
-| LoRA C | no | no | blocking |
+| Local | R2 | State |
+| --- | --- | --- |
+| yes | any | ready |
+| no | yes | local-transfer-required / BLOCKING |
+| no | no | missing / BLOCKING |
 
-R2 に存在するだけで Local ComfyUI が利用できない場合、自動的に READY としない。実行環境への配置条件は今後の generation environment 要件と合わせて確定する。
+Remote target:
+
+| Local | R2 | State |
+| --- | --- | --- |
+| any | yes | remote-stage-ready |
+| yes | no | r2-transfer-required / BLOCKING |
+| no | no | missing / BLOCKING |
+
+Local targetではR2-onlyをREADYにしない。Remote targetではLocal-onlyをREADYにしない。
+
+Remote targetでREADYとなっても、Remote host上に実体が既にあることを要求する意味ではない。Execution開始時にR2からRemoteへ直接stagingできる状態であることを意味する。
 
 ## 10. Preflight
 
@@ -162,17 +176,19 @@ READY 判定前に次をまとめて表示する。
 - Models confirmed。
 - Prompt Plan confirmed。
 - Workflow compiled / validated。
+- API-format execution graph valid。
 
 ### References
 
 - model selections -> catalog。
 - Prompt Plan LoRA refs -> models。
 - Workflow file names -> models。
+- API graph model refs -> models。
 
 ### Availability
 
-- Checkpoint availability。
-- LoRA availability。
+- required model availability。
+- `executionTarget` に応じたLocal / R2 placement requirement。
 
 ### Structure
 
@@ -180,6 +196,36 @@ READY 判定前に次をまとめて表示する。
 - leaf count。
 - unused branch = 0。
 - dangling links = 0。
+
+### Local operational checks
+
+`executionTarget=local` では最低限:
+
+- Local ComfyUI API reachable。
+- `ScenePrompterExpand` registered。
+- Scene Prompt Tools custom APIs available。
+- required custom nodes available。
+- Local output path writable。
+
+### Remote operational checks
+
+`executionTarget=remote` では最低限:
+
+- SSH Host / Port / User / private key path configured。
+- private key path readable。
+- private-key authentication succeeds。
+- Host Key verification succeeds。
+- Remote ComfyUI directory exists。
+- Remote temp / output directory writable。
+- Remote Worker runtime available。
+- Remote disk capacity sufficient。
+- Remote host内からComfyUI localhost API reachable。
+- `ScenePrompterExpand` registered。
+- Scene Prompt Tools custom APIs available。
+- required custom nodes available。
+- required R2 model objects exist。
+- R2 connection / bucket valid。
+- Remote model destination mapping valid。
 
 Blocking が1件でもあれば `BLOCKED`。
 
@@ -210,6 +256,7 @@ Grok へ添付できる候補は明示 allowlist 方式を基本とする。
 - `.env`
 - credential file
 - R2 config
+- SSH private key
 - browser profile
 - secret/token
 - `.safetensors`
@@ -219,25 +266,50 @@ Grok へ添付できる候補は明示 allowlist 方式を基本とする。
 
 ## 12. Secret ownership
 
-Batch Studio は既存ツールの secret をコピーしない。
+Secretの正本はMain Processまたは専用Web sessionに限定する。
 
-- Civitai key -> civit-model-viewer。
-- R2 secret -> R2 File Manager。
-- Grok auth -> Grok Web session。
+- Civitai API key -> Batch Studio Main Process / environment。
+- R2 credential -> Batch Studio Main Process / `safeStorage`。
+- SSH private key contents -> Local filesystem。Batch Studioは認証時のみ読み、Projectへコピーしない。
+- SSH private key path -> app-wide settingsに保存可能。
+- Grok auth -> Grok Web persistent session。
+
+Remote hostへR2 credentialを渡さない。Remoteへ渡せるのは、対象object / operation / lifetimeを限定したsigned URLのみとする。
+
+Signed URLは bearer credential として扱う。
+
+- full query stringを通常logへ保存しない。
+- Project artifactへ保存しない。
+- retry時は必要に応じて再発行する。
 
 Project metadata / log に secret を保存しない。
 
-## 13. Destructive Operations
+## 13. Remote Path Safety
 
-初期設計では Project artifact の確定更新以外の破壊操作を最小限にする。
+Remote Workerは操作可能rootを固定し、path traversalとsymlink escapeを拒否する。
+
+```text
+model operation    -> configured ComfyUI models root
+artifact operation -> configured ComfyUI output root
+worker temp        -> Batch Studio run temp root
+```
+
+model downloadはfinal filenameへ直接書かず `.part` へ保存し、size/hash verification成功後にatomic renameする。
+
+## 14. Destructive Operations
+
+Project artifact の確定更新以外の破壊操作は明示操作とする。
 
 - final artifact overwrite 前に history 作成。
-- R2 delete / move は R2 File Manager の既存確認フローへ委譲。
+- R2 delete / move はIntegrated R2 Managerの確認フローを使う。
 - catalog は read-only。
+- Executionの通常StopとForce Interruptを分離する。
+- current Run以外のComfyUI pending queueを削除しない。
+- cancelled Runのpartial artifactをCompleted成果物として扱わない。
 
-## 14. Error transparency
+## 15. Error transparency
 
-外部 tool failure、parse failure、validation failure を「代替データで成功」に見せない。
+外部 tool failure、parse failure、validation failure、transport failure を「代替データで成功」に見せない。
 
 ユーザーへ次を区別して表示する。
 
@@ -248,6 +320,16 @@ Stale
 Warning
 Blocked
 Ready
+Running
+Failed
+Completed
 ```
+
+Silent fallback禁止例:
+
+- SSH failure -> public ComfyUI endpointへfallbackしない。
+- R2 model GET failure -> SCP model transferへfallbackしない。
+- hash mismatch -> successにしない。
+- R2 lookup failure -> object missingとみなさない。
 
 これにより fallback が正本を曖昧にすることを防ぐ。
