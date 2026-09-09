@@ -11,7 +11,8 @@ export async function checkAvailability(root:string,r2Lookup?:((fileName:string)
   const meta=await readProjectMeta(root),executionTarget:ExecutionTarget=meta?.settings.executionTarget==='remote'?'remote':'local';
   const legacyLocalRoot=meta?.settings.comfyModelsRoot?.trim()||'';
   const localRoot=(localModelsRoot===undefined?legacyLocalRoot:(localModelsRoot??'')).trim();
-  const models=await readJson<ModelsArtifact>(path.join(root,'models.json'));
+  const draftModels=await readJson<ModelsArtifact>(path.join(root,'._batch_studio','drafts','models.json'));
+  const models=draftModels??await readJson<ModelsArtifact>(path.join(root,'models.json'));
   if(!models)return {rows:[],executionTarget,localModelsRoot:localRoot||null,validation:{valid:false,issues:[{severity:'error',code:'MODELS_MISSING',message:'models.jsonがありません。'}]}};
   const r2Index=(process.env.BATCH_STUDIO_R2_INDEX_PATH??'').trim()||meta?.settings.r2IndexPath?.trim()||'';let r2Names=new Set<string>();if(!r2Lookup&&r2Index){const raw=await readJson<any>(r2Index);const arr=Array.isArray(raw)?raw:Array.isArray(raw?.files)?raw.files:[];for(const x of arr){const name=typeof x==='string'?path.basename(x):typeof x?.name==='string'?path.basename(x.name):typeof x?.key==='string'?path.basename(x.key):'';if(name)r2Names.add(name);}}
   const localRootExists=Boolean(localRoot&&await exists(localRoot));

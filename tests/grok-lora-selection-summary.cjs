@@ -1,0 +1,22 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const ui=fs.readFileSync(path.resolve(__dirname,'../src/renderer/GrokStages.tsx'),'utf8');
+const availability=fs.readFileSync(path.resolve(__dirname,'../src/main/availability.ts'),'utf8');
+
+assert.match(ui,/function SelectedLorasPanel/,'Models stage must render a selected LoRA summary');
+assert.match(ui,/Grok選定LoRA/,'selected LoRA summary must have a visible heading');
+assert.match(ui,/lora\.fileName/,'selected LoRA summary must show the selected file name');
+assert.match(ui,/thumbnailUrl/,'selected LoRA summary must resolve a Civitai thumbnail');
+assert.match(ui,/ローカル/,'selected LoRA summary must expose local presence');
+assert.match(ui,/\bR2\b/,'selected LoRA summary must expose R2 presence');
+assert.match(ui,/Civitai Collection/,'selected LoRA summary must expose Civitai Collection presence');
+assert.match(ui,/いずれにもない/,'selected LoRA summary must expose the nowhere indicator');
+assert.match(ui,/item\.modelId!==lora\.modelId/,'Civitai presence must match the selected model identity');
+assert.match(ui,/v=>v\.versionId===lora\.versionId/,'Civitai presence must match the selected version identity');
+assert.match(ui,/f=>f\.id===lora\.fileId&&f\.name===lora\.fileName/,'Civitai presence must match the selected file identity');
+assert.match(ui,/setAvailability\(await window\.batchStudio\.availability\.check\(project\.rootPath\)\)/,'availability must refresh after Grok import');
+assert.match(availability,/\._batch_studio/,'availability checks must inspect the draft models artifact');
+assert.match(availability,/drafts/,'availability checks must inspect the draft models artifact');
+assert.match(availability,/draftModels\?\?/,'draft models must take precedence over confirmed models');
+console.log('Grok LoRA selection summary tests passed.');
