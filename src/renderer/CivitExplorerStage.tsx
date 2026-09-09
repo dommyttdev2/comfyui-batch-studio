@@ -4,7 +4,7 @@ import type { Runner } from './ui';
 import './civit-explorer.css';
 
 const norm=(value:string)=>value.normalize('NFKC').toLocaleLowerCase('ja');
-function searchable(item:CatalogItem){return norm([item.modelName,item.versionName,...(item.trainedWords??[]),...(item.versions??[]).flatMap(v=>[v.versionName,...v.files.map(f=>f.name),...(v.trainedWords??[])]),...item.files.map(f=>f.name)].join('\n'))}
+function searchable(item:CatalogItem){return norm([item.modelName,item.versionName,item.baseModel??'',...(item.trainedWords??[]),...(item.versions??[]).flatMap(v=>[v.versionName,v.baseModel??'',...v.files.map(f=>f.name),...(v.trainedWords??[])]),...item.files.map(f=>f.name)].join('\n'))}
 function versionFor(item:CatalogItem,versionId?:number):CatalogVersion|undefined{return item.versions?.find(v=>v.versionId===versionId)??item.versions?.find(v=>v.versionId===item.versionId)??item.versions?.[0]}
 
 export function CivitExplorerStage({run}:{run:Runner}){
@@ -26,7 +26,7 @@ export function CivitExplorerStage({run}:{run:Runner}){
     {status?.state==='error'&&<div className="issue error">✕ {status.error??status.message}</div>}
     {!status?.apiKeyConfigured&&<div className="issue warning">CIVIT_API_KEY が設定されていません。</div>}
     <div className="civit-explorer-toolbar">
-      <label><span>MODEL / FILE / TRIGGER</span><input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="モデル名・ファイル名・トリガーワードを検索"/></label>
+      <label><span>MODEL / BASE MODEL / FILE / TRIGGER</span><input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="モデル名・Base Model・ファイル名・トリガーワードを検索"/></label>
       <div className="civit-explorer-stats"><div><b>{collections.length}</b><small>Collections</small></div><div><b>{totalModels}</b><small>Models</small></div><div><b>{models.length}</b><small>Shown</small></div></div>
     </div>
     <div className="civit-explorer-layout">
@@ -37,10 +37,11 @@ export function CivitExplorerStage({run}:{run:Runner}){
       </aside>
       <main className="civit-model-pane">
         <div className="civit-pane-title"><div><span className="eyebrow">MODEL SHELF</span><h3>{active?.name??'すべてのモデル'}</h3></div><b>{models.length}</b></div>
-        {models.length===0?<div className="empty-inline">一致するモデルがありません。</div>:<div className="civit-model-grid">{models.map(({collection,item})=>{const selectedVersionId=versionIds[item.modelId]??item.versionId;const v=versionFor(item,selectedVersionId);const files=v?.files??item.files;const trained=v?.trainedWords??item.trainedWords??[];const image=v?.thumbnailUrl??item.thumbnailUrl;const baseline=v?.strengthBaseline??item.strengthBaseline;const modelUrl=v?.modelUrl??item.modelUrl;return <article className="civit-model-card" key={`${collection.id}:${item.modelId}`}>
+        {models.length===0?<div className="empty-inline">一致するモデルがありません。</div>:<div className="civit-model-grid">{models.map(({collection,item})=>{const selectedVersionId=versionIds[item.modelId]??item.versionId;const v=versionFor(item,selectedVersionId);const files=v?.files??item.files;const trained=v?.trainedWords??item.trainedWords??[];const image=v?.thumbnailUrl??item.thumbnailUrl;const baseline=v?.strengthBaseline??item.strengthBaseline;const modelUrl=v?.modelUrl??item.modelUrl;const baseModel=v?.baseModel??item.baseModel;return <article className="civit-model-card" key={`${collection.id}:${item.modelId}`}>
           <div className="civit-model-image">{image?<img src={image} alt="" loading="lazy"/>:<div className="civit-model-placeholder">MODEL</div>}<span>{collection.name}</span></div>
           <div className="civit-model-content"><div className="civit-model-title"><div><strong>{item.modelName}</strong><small>Model ID {item.modelId}</small></div>{modelUrl&&<button onClick={()=>window.batchStudio.catalog.openModel(modelUrl)}>Civitai</button>}</div>
           {(item.versions?.length??0)>1?<label className="civit-version-select"><span>Version</span><select value={v?.versionId??item.versionId} onChange={e=>setVersionIds(p=>({...p,[item.modelId]:Number(e.target.value)}))}>{item.versions!.map(x=><option key={x.versionId} value={x.versionId}>{x.versionName}</option>)}</select></label>:<div className="civit-version-static"><span>Version</span><b>{v?.versionName??item.versionName}</b></div>}
+          <div className="civit-version-static"><span>Base Model</span><b>{baseModel??'—'}</b></div>
           <div className="civit-meta-block"><span>FILES</span>{files.length?<div className="civit-chips">{files.map(f=><code key={f.id} title={f.name}>{f.name}</code>)}</div>:<small>—</small>}</div>
           <div className="civit-meta-block"><span>TRIGGER WORDS</span>{trained.length?<div className="civit-chips words">{trained.map(w=><code key={w}>{w}</code>)}</div>:<small>—</small>}</div>
           <div className="civit-card-footer"><span>Version ID {v?.versionId??item.versionId}</span>{baseline?<b>Baseline {baseline.value}</b>:<span>Baseline —</span>}</div></div>
