@@ -14,7 +14,8 @@ Grok Web は通常の iframe としてローカル UI に埋め込まず、Elect
 │                                                                      │
 │  ┌──────────────────── Local Renderer ─────────────────────┐          │
 │  │ Project / Story / Catalog / Models / Prompt Plan /      │          │
-│  │ Workflow / Model Availability + R2 / Preflight          │          │
+│  │ Workflow / Model Availability + R2 / Preflight /        │          │
+│  │ Execution                                                │          │
 │  └──────────────────────────────────────────────────────────┘          │
 │                                                                      │
 │  ┌──────────────────── Grok WebContentsView ────────────────┐          │
@@ -78,8 +79,9 @@ Civitai API keyをRenderer/Grok/Project fileへ渡さない。
 - Node / Link / Group の再構成。
 - 可変ノードの設定。
 - 最終 Workflow の構造検証。
+- Execution用API-format graphをdeterministicに生成またはTemplate contractから解決。
 
-詳細は `workflow-compiler.md` を正本とする。
+詳細は `workflow-compiler.md` を正本とする。Execution用API graphとの境界は `remote-execution.md` も参照する。
 
 ### 2.6 Integrated R2 Manager
 
@@ -88,14 +90,17 @@ Civitai API keyをRenderer/Grok/Project fileへ渡さない。
 - `safeStorage`によるSecret暗号化保存。暗号化不能時の平文fallback禁止。
 - Bucket list / create / empty-bucket delete。
 - Object list / folder navigation / paging / search。
-- Public / presigned URL生成。
+- Public / presigned GET URL生成。
+- Execution用presigned PUT URL生成。
 - URL / curl / wget / aria2c command生成。
 - Object move / rename / delete。
 - Main Process streaming multipart upload。
+- Main Process streaming download-to-local-file。
 - Upload pause / resume / cancel / persisted unfinished state。
 - Batch download selection template保存。
 - optional R2 account metrics。
 - Model Availability / Preflight用R2 lookup。
+- Remote model staging / artifact delivery用のsigned URL発行。
 
 旧 `r2-file-manager` のlocalhost serverは新規フローでは起動しない。
 
@@ -105,9 +110,41 @@ Civitai API keyをRenderer/Grok/Project fileへ渡さない。
 - Artifact 間参照検証。
 - Workflow 構造検証。
 - Local / integrated R2 model availability の集約。
+- `executionTarget` に応じた operational check。
 - READY / BLOCKED の判定。
 
-R2-only modelは`transfer-required`としてBlockingにする。
+Local targetでは必須モデルのLocal配置を要求する。Remote targetでは必須モデルのR2配置を要求する。
+
+### 2.8 Execution Service
+
+Local / Remote の生成実行を Main Process serviceとして所有する。
+
+```text
+ExecutionService
+|
++-- LocalExecutionService
+|
++-- RemoteExecutionService
+    +-- SshService
+    +-- RemoteWorkerClient
+    +-- RemoteModelStager
+    +-- ScenePromptExecutionCoordinator
+    +-- RemoteArtifactService
+    +-- R2TransferService
+    +-- ExecutionStateStore
+```
+
+原則:
+
+- Local targetはLocal ComfyUI APIを使用。
+- Remote targetは外部公開されたSSH endpointへ秘密鍵認証。
+- SSH Tunnelは使用しない。
+- Remote WorkerがRemote host内の `127.0.0.1:<comfy-port>` へComfyUI API requestを送る。
+- SSHはcontrol plane、R2はlarge binary transfer plane。
+- Scene Prompt Expand連続生成はfrontend button操作ではなくAPI orchestrationで再現。
+- Remote RunはR2 upload、Local download、hash verificationまで成功して完了。
+
+詳細は `remote-execution.md` を正本とする。
 
 ## 3. Renderer の責務
 
@@ -124,10 +161,13 @@ Renderer はユーザー操作と表示を担当し、ファイルシステム�
 - Workflow compile result
 - Model Availability / R2 file management
 - Preflight
+- Execution
+
+Execution画面ではtarget、phase、connection、model preparation、overall/branch generation progress、artifact package、R2 upload、Local download、verificationを表示し、Start / Stop scheduling / Force interrupt / Resume等の明示操作を提供する。
 
 Renderer から Main process へは preload で許可した最小限の IPC だけを公開する。
 
-R2 Secret本体やCivitai API keyをRendererへ返さない。R2設定画面は保存済みSecretについてconfigured boolのみ受け取る。
+R2 Secret本体、SSH秘密鍵本文、Civitai API keyをRendererへ返さない。R2設定画面は保存済みSecretについてconfigured boolのみ受け取る。
 
 ## 4. Grok Web の信頼境界
 
@@ -150,6 +190,7 @@ Grok ログイン session はアプリ専用の永続 partition に保存可能�
 - Application log
 - `model_catalog.json`
 - R2 configuration
+- SSH private key contents
 
 Project × Grok工程の復帰用conversation URLはapp-wide stateに保存してよいが、conversation本文やCookieをProjectへ保存しない。
 
@@ -178,17 +219,32 @@ Project Service
    |
    +--> Workflow Compiler <---- Template + Manifest
    |          |
-   |          v
-   |      Workflow JSON
+   |          +--> UI Workflow JSON
+   |          +--> API-format execution graph
    |
    +--> R2 Manager <---- Cloudflare R2
    |       |
-   |       +--> model existence / upload / file operations
+   |       +--> model existence / upload / signed GET/PUT
    |
    +--> Validation / Preflight
+   |          |
+   |          v
+   |      READY/BLOCKED
+   |          |
+   |          v
+   +--> Execution Service
+              |
+              +--> Local ComfyUI
+              |
+              +--> SSH --> Remote Worker --> Remote localhost ComfyUI
+              |                 |
+              |                 +--> R2 GET model staging
+              |                 +--> R2 PUT artifact upload
+              |
+              +<-- R2 GET final artifact
               |
               v
-          READY/BLOCKED
+          COMPLETED
 ```
 
 ## 6. ファイル書込原則
@@ -199,6 +255,8 @@ Project Service
 - ユーザーの明示操作で確定する。
 - 既存確定ファイルを更新する前に履歴へ退避する。
 - Civitai/R2のapp-wide stateやcredentialをProject artifactへコピーしない。
+- SSH private key contentsをProject artifactへコピーしない。
+- Execution Run stateへsigned URLやsecretを不要に永続化しない。
 
 ## 7. App-wide data
 
@@ -210,6 +268,7 @@ Electron `app.getPath('userData')` 配下にProject外の状態を保持する�
 userData/
   ui-state.json
   grok-chat-state.json
+  app-settings.json
   civitai/
     model_catalog.json
     selection_templates.json
@@ -219,16 +278,4 @@ userData/
     batch-download-templates.json
 ```
 
-`r2/config.json` にSecret平文を保存しない。暗号化blobだけを保持する。
-
-## 8. 既存プロジェクト互換
-
-既存プロジェクトには Batch Studio 固有 metadata が存在しない可能性がある。
-
-- `project_meta.json` は既存プロジェクト読込時に必須としない。
-- 旧 Workflow ファイル名を検出できる互換層を持つ。
-- 新しい Artifact を追加しても、既存の `story.md` や Workflow を無断変換・上書きしない。
-- 明示的な外部`catalogPath`は互換用に維持する。
-- `r2IndexPath`は統合R2未設定の既存Project向け互換fallbackとして維持できる。
-
-互換対象の具体的なファイル名と migration policy は `contracts/project-artifacts.md` で管理する。
+SSH Host / Port / User / private key path等のRemote接続設定はapp-wide settingsに保持できるが、秘密鍵本文はコピーしない。
