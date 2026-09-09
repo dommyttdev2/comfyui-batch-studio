@@ -10,19 +10,28 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { R2BatchDownloadTemplate, R2DownloadInfo, R2ListResult, R2Object, R2SearchResult, R2UploadJob } from '../shared/types.js';
+import {
+  MAX_BATCH_TEMPLATES_PER_BUCKET,
+  normalizeBatchTemplateName,
+  normalizeBatchTemplateObjects,
+  normalizeR2ObjectKey,
+  objectName,
+} from '../shared/r2-manager-utils.js';
 import { exists, readJson, writeJsonAtomic } from './fs-utils.js';
 import { R2ConfigStore, type R2ConnectionInput } from './r2-config.js';
+import { R2ObjectIndex } from './r2-object-index.js';
 
 const MIB=1024*1024, DEFAULT_PART=16*MIB, MAX_PARTS=10000, FIVE_GIB=5*1024*1024*1024;
+const UPLOAD_CONCURRENCY=3, UPLOAD_RETRIES=3;
 const BUCKET=/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/;
 function partSize(size:number){const required=Math.max(DEFAULT_PART,Math.ceil(Math.max(size,1)/MAX_PARTS));return Math.ceil(required/MIB)*MIB;}
-function objectName(key:string){return key.split('/').pop()||'download';}
 function encodeKey(key:string){return key.split('/').map(encodeURIComponent).join('/');}
 function publicObjectUrl(base:string,key:string){return `${base.replace(/\/+$/,'')}/${encodeKey(key)}`;}
 function quote(value:string){return `"${value.replace(/(["\\$`])/g,'\\$1')}"`;}
 function uniqueNames(keys:string[]){const used=new Map<string,number>();return keys.map(key=>{const raw=objectName(key),lower=raw.toLowerCase(),count=(used.get(lower)??0)+1;used.set(lower,count);if(count===1)return raw;const dot=raw.lastIndexOf('.');return dot>0?`${raw.slice(0,dot)} (${count})${raw.slice(dot)}`:`${raw} (${count})`;});}
 function serializeObject(item:any,prefix=''):R2Object{const key=String(item.Key??'');return {key,name:prefix&&key.startsWith(prefix)?key.slice(prefix.length):objectName(key),size:Number(item.Size??0),etag:String(item.ETag??'').replace(/^"|"$/g,''),lastModified:item.LastModified?.toISOString?.()??null,storageClass:String(item.StorageClass??'STANDARD')};}
 function statusCode(error:any){return Number(error?.$metadata?.httpStatusCode??0);}
+function delay(ms:number){return new Promise(resolve=>setTimeout(resolve,ms));}
 function legacyTemplate(value:unknown,fallbackId:string):R2BatchDownloadTemplate|null{
   if(!value||typeof value!=='object'||Array.isArray(value))return null;
   const v=value as Record<string,unknown>,bucket=String(v.bucket??'').trim(),name=String(v.name??'').trim();
@@ -51,12 +60,17 @@ export class R2Manager {
   private readonly uploadsPath:string;
   private readonly templatesPath:string;
   private readonly templateMigration:Promise<void>;
+  private readonly objectIndex:R2ObjectIndex;
   private controls=new Map<string,{paused:boolean;cancelled:boolean}>();
+  private activeMoveJobs=new Set<string>();
+  private saveQueue:Promise<void>=Promise.resolve();
   constructor(private readonly config:R2ConfigStore,private readonly userData:string){
     this.uploadsPath=path.join(userData,'r2','uploads.json');
     this.templatesPath=path.join(userData,'r2','batch-download-templates.json');
+    this.objectIndex=new R2ObjectIndex(config,userData);
     this.templateMigration=this.migrateLegacyTemplates().catch(error=>{console.warn('Legacy R2 template migration failed:',error);});
   }
+  private syncIndex(){void this.objectIndex.sync().catch(error=>console.warn('R2 index sync failed:',error));}
   private async migrateLegacyTemplates(){
     const localAppData=process.env.LOCALAPPDATA?.trim();
     if(!localAppData)return;
@@ -92,24 +106,109 @@ export class R2Manager {
   async downloadInfo(bucket:string,key:string,expiresIn=3600){const d=await this.signed(bucket,key,expiresIn);return this.info(key,d.url,d.public,d.expiresIn);}
   async batchDownloadInfo(bucket:string,keys:string[],expiresIn=3600){if(!keys.length||keys.length>500)throw new Error('一度に生成できるダウンロードURLは1～500件です。');const names=uniqueNames(keys);return Promise.all(keys.map(async(key,i)=>{const d=await this.signed(bucket,key,expiresIn);return this.info(key,d.url,d.public,d.expiresIn,names[i]);}));}
   async deleteObjects(bucket:string,keys:string[]){if(!keys.length)throw new Error('削除するファイルを選択してください。');if(keys.length>1000)throw new Error('一度に削除できるのは1,000件までです。');const r=await (await this.clientFor()).send(new DeleteObjectsCommand({Bucket:bucket,Delete:{Objects:keys.map(Key=>({Key})),Quiet:false}}));return {deleted:(r.Deleted??[]).map(x=>x.Key??'').filter(Boolean),errors:r.Errors??[]};}
-  async move(bucket:string,sourceKey:string,destinationKey:string,overwrite=false){if(!sourceKey||!destinationKey||sourceKey===destinationKey)throw new Error('移動元と異なる移動先を指定してください。');const client=await this.clientFor();if(!overwrite){try{await client.send(new HeadObjectCommand({Bucket:bucket,Key:destinationKey}));throw new Error('移動先に同名のファイルが存在します。');}catch(e:any){if(e instanceof Error&&e.message.includes('同名'))throw e;if(statusCode(e)!==404&&e?.name!=='NotFound')throw e;}}
-    const head=await client.send(new HeadObjectCommand({Bucket:bucket,Key:sourceKey})),size=Number(head.ContentLength??0),copySource=`${bucket}/${encodeKey(sourceKey)}`;
-    if(size<=FIVE_GIB){await client.send(new CopyObjectCommand({Bucket:bucket,Key:destinationKey,CopySource:copySource}));}
-    else {const chunk=Math.max(64*MIB,partSize(size));const create=await client.send(new CreateMultipartUploadCommand({Bucket:bucket,Key:destinationKey}));if(!create.UploadId)throw new Error('Multipart copyを開始できませんでした。');try{const parts=[] as Array<{ETag?:string;PartNumber:number}>;for(let start=0,n=1;start<size;start+=chunk,n++){const end=Math.min(size-1,start+chunk-1);const p=await client.send(new UploadPartCopyCommand({Bucket:bucket,Key:destinationKey,UploadId:create.UploadId,PartNumber:n,CopySource:copySource,CopySourceRange:`bytes=${start}-${end}`}));parts.push({PartNumber:n,ETag:p.CopyPartResult?.ETag});}await client.send(new CompleteMultipartUploadCommand({Bucket:bucket,Key:destinationKey,UploadId:create.UploadId,MultipartUpload:{Parts:parts}}));}catch(e){await client.send(new AbortMultipartUploadCommand({Bucket:bucket,Key:destinationKey,UploadId:create.UploadId})).catch(()=>{});throw e;}}
-    await client.send(new DeleteObjectCommand({Bucket:bucket,Key:sourceKey}));}
+  async move(bucket:string,sourceKey:string,destinationKey:string,overwrite=false){
+    const destination=normalizeR2ObjectKey(destinationKey);
+    if(!sourceKey||sourceKey===destination)throw new Error('移動元と異なる移動先を指定してください。');
+    const client=await this.clientFor();
+    if(!overwrite){try{await client.send(new HeadObjectCommand({Bucket:bucket,Key:destination}));throw new Error('移動先に同名のファイルが存在します。');}catch(e:any){if(e instanceof Error&&e.message.includes('同名'))throw e;if(statusCode(e)!==404&&e?.name!=='NotFound')throw e;}}
+    const head=await client.send(new HeadObjectCommand({Bucket:bucket,Key:sourceKey}));
+    const size=Number(head.ContentLength??0),now=new Date().toISOString();
+    const job:any={id:randomUUID(),kind:'move',bucket,key:destination,filePath:'',fileName:objectName(destination),sourceKey,destinationKey:destination,size,contentType:'application/octet-stream',uploadId:null,partSize:0,completedParts:{},status:'uploading',transferredBytes:0,error:'',createdAt:now,startedAt:now,initialTransferredBytes:0};
+    await this.saveUpload(job);
+    this.activeMoveJobs.add(job.id);
+    void this.runMove(job,sourceKey,destination,size);
+    return job;
+  }
+  private async runMove(job:any,sourceKey:string,destinationKey:string,size:number){
+    const client=await this.clientFor(),copySource=`${job.bucket}/${encodeKey(sourceKey)}`;
+    let multipartUploadId:string|null=null;
+    try{
+      if(size<=FIVE_GIB){
+        await client.send(new CopyObjectCommand({Bucket:job.bucket,Key:destinationKey,CopySource:copySource}));
+        job.transferredBytes=size;
+        await this.saveUpload(job);
+      }else{
+        const chunk=Math.max(64*MIB,partSize(size));
+        const create=await client.send(new CreateMultipartUploadCommand({Bucket:job.bucket,Key:destinationKey}));
+        multipartUploadId=create.UploadId??null;
+        if(!multipartUploadId)throw new Error('Multipart copyを開始できませんでした。');
+        const parts=[] as Array<{ETag?:string;PartNumber:number}>;
+        for(let start=0,n=1;start<size;start+=chunk,n++){
+          const end=Math.min(size-1,start+chunk-1);
+          const p=await client.send(new UploadPartCopyCommand({Bucket:job.bucket,Key:destinationKey,UploadId:multipartUploadId,PartNumber:n,CopySource:copySource,CopySourceRange:`bytes=${start}-${end}`}));
+          parts.push({PartNumber:n,ETag:p.CopyPartResult?.ETag});
+          job.transferredBytes=Math.min(size,end+1);
+          await this.saveUpload(job);
+        }
+        await client.send(new CompleteMultipartUploadCommand({Bucket:job.bucket,Key:destinationKey,UploadId:multipartUploadId,MultipartUpload:{Parts:parts}}));
+      }
+      await client.send(new DeleteObjectCommand({Bucket:job.bucket,Key:sourceKey}));
+      job.status='complete';job.transferredBytes=size;job.completedAt=new Date().toISOString();
+      await this.saveUpload(job);this.syncIndex();
+    }catch(e){
+      if(multipartUploadId)await client.send(new AbortMultipartUploadCommand({Bucket:job.bucket,Key:destinationKey,UploadId:multipartUploadId})).catch(()=>{});
+      job.status='failed';job.error=e instanceof Error?e.message:String(e);job.completedAt=new Date().toISOString();
+      await this.saveUpload(job);
+    }finally{this.activeMoveJobs.delete(job.id);}
+  }
   private async uploadState(){return (await readJson<UploadState>(this.uploadsPath))??{schemaVersion:1 as const,jobs:[]};}
-  private async saveUpload(job:R2UploadJob){const s=await this.uploadState(),i=s.jobs.findIndex(x=>x.id===job.id);if(i>=0)s.jobs[i]=job;else s.jobs.push(job);await writeJsonAtomic(this.uploadsPath,s);}
-  async uploads(){const s=await this.uploadState();return s.jobs.map(j=>j.status==='uploading'?{...j,status:'paused' as const}:j);}
+  private async saveUploadNow(job:R2UploadJob){const s=await this.uploadState(),i=s.jobs.findIndex(x=>x.id===job.id);if(i>=0)s.jobs[i]={...job};else s.jobs.push({...job});await writeJsonAtomic(this.uploadsPath,s);}
+  private async saveUpload(job:R2UploadJob){const task=this.saveQueue.then(()=>this.saveUploadNow(job));this.saveQueue=task.catch(()=>{});return task;}
+  async uploads(){const s=await this.uploadState();return s.jobs.map((j:any)=>j.kind==='move'&&j.status==='uploading'&&!this.activeMoveJobs.has(j.id)?{...j,status:'failed' as const,error:'アプリ再起動により移動処理が中断されました。状態を確認して再実行してください。'}:j.kind!=='move'&&j.status==='uploading'&&!this.controls.has(j.id)?{...j,status:'paused' as const}:j);}
   async beginUpload(bucket:string,prefix:string,filePath:string,overwrite=false){if(!(await exists(filePath)))throw new Error('アップロード元ファイルが見つかりません。');const st=await stat(filePath),name=path.basename(filePath),key=`${prefix.replace(/^\/+|\/+$/g,'')}${prefix?'/' : ''}${name}`;if(Buffer.byteLength(key)>1024)throw new Error('オブジェクト名が1,024バイトを超えています。');const client=await this.clientFor();if(!overwrite){try{await client.send(new HeadObjectCommand({Bucket:bucket,Key:key}));throw new Error('同名のファイルが存在します。');}catch(e:any){if(e instanceof Error&&e.message.includes('同名'))throw e;if(statusCode(e)!==404&&e?.name!=='NotFound')throw e;}}
     let uploadId:string|null=null;if(st.size>0){const r=await client.send(new CreateMultipartUploadCommand({Bucket:bucket,Key:key,ContentType:'application/octet-stream'}));uploadId=r.UploadId??null;if(!uploadId)throw new Error('Multipart uploadを開始できませんでした。');}
-    const job:R2UploadJob={id:randomUUID(),bucket,key,filePath,fileName:name,size:st.size,contentType:'application/octet-stream',uploadId,partSize:partSize(st.size),completedParts:{},status:'paused',transferredBytes:0,error:'',createdAt:new Date().toISOString()};await this.saveUpload(job);void this.resumeUpload(job.id);return job;}
-  async resumeUpload(id:string){const state=await this.uploadState(),job=state.jobs.find(x=>x.id===id);if(!job)throw new Error('アップロードセッションが見つかりません。');if(job.status==='complete'||job.status==='cancelled')return job;if(!(await exists(job.filePath)))throw new Error('元ファイルが見つかりません。');const control={paused:false,cancelled:false};this.controls.set(id,control);job.status='uploading';job.error='';await this.saveUpload(job);void this.runUpload(job,control);return job;}
-  private async runUpload(job:R2UploadJob,control:{paused:boolean;cancelled:boolean}){try{const client=await this.clientFor();if(job.size===0){await client.send(new PutObjectCommand({Bucket:job.bucket,Key:job.key,Body:new Uint8Array(0),ContentType:job.contentType}));job.status='complete';await this.saveUpload(job);return;}if(!job.uploadId)throw new Error('Upload IDがありません。');const count=Math.ceil(job.size/job.partSize);for(let n=1;n<=count;n++){if(control.cancelled)return;if(control.paused){job.status='paused';await this.saveUpload(job);return;}if(job.completedParts[String(n)])continue;const start=(n-1)*job.partSize,end=Math.min(job.size-1,start+job.partSize-1),length=end-start+1;const r=await client.send(new UploadPartCommand({Bucket:job.bucket,Key:job.key,UploadId:job.uploadId,PartNumber:n,Body:createReadStream(job.filePath,{start,end}),ContentLength:length}));if(!r.ETag)throw new Error(`Part ${n} のETagを取得できませんでした。`);job.completedParts[String(n)]=r.ETag;job.transferredBytes=Math.min(job.size,job.transferredBytes+length);await this.saveUpload(job);}const parts=Array.from({length:count},(_,i)=>({PartNumber:i+1,ETag:job.completedParts[String(i+1)]}));await client.send(new CompleteMultipartUploadCommand({Bucket:job.bucket,Key:job.key,UploadId:job.uploadId,MultipartUpload:{Parts:parts}}));job.status='complete';job.transferredBytes=job.size;await this.saveUpload(job);}catch(e){job.status='failed';job.error=e instanceof Error?e.message:String(e);await this.saveUpload(job);}finally{this.controls.delete(job.id);}}
-  async pauseUpload(id:string){const c=this.controls.get(id);if(c)c.paused=true;const s=await this.uploadState(),job=s.jobs.find(x=>x.id===id);if(!job)throw new Error('アップロードセッションが見つかりません。');job.status='paused';await this.saveUpload(job);return job;}
-  async cancelUpload(id:string){const c=this.controls.get(id);if(c)c.cancelled=true;const s=await this.uploadState(),job=s.jobs.find(x=>x.id===id);if(!job)return;if(job.uploadId)await (await this.clientFor()).send(new AbortMultipartUploadCommand({Bucket:job.bucket,Key:job.key,UploadId:job.uploadId})).catch(()=>{});job.status='cancelled';await this.saveUpload(job);}
+    const job:any={id:randomUUID(),kind:'upload',bucket,key,filePath,fileName:name,size:st.size,contentType:'application/octet-stream',uploadId,partSize:partSize(st.size),completedParts:{},status:'paused',transferredBytes:0,error:'',createdAt:new Date().toISOString()};await this.saveUpload(job);void this.resumeUpload(job.id);return job;}
+  async resumeUpload(id:string){const state=await this.uploadState(),job:any=state.jobs.find(x=>x.id===id);if(!job)throw new Error('アップロードセッションが見つかりません。');if(job.kind==='move')throw new Error('移動ジョブは再開操作できません。');if(job.status==='complete'||job.status==='cancelled')return job;if(!(await exists(job.filePath)))throw new Error('元ファイルが見つかりません。');const control={paused:false,cancelled:false};this.controls.set(id,control);job.status='uploading';job.error='';job.startedAt=new Date().toISOString();job.initialTransferredBytes=job.transferredBytes;await this.saveUpload(job);void this.runUpload(job,control);return job;}
+  private async uploadPartWithRetry(job:any,number:number,client:S3Client,control:{paused:boolean;cancelled:boolean}){
+    const start=(number-1)*job.partSize,end=Math.min(job.size-1,start+job.partSize-1),length=end-start+1;
+    let lastError:unknown;
+    for(let attempt=1;attempt<=UPLOAD_RETRIES;attempt++){
+      if(control.cancelled||control.paused)return false;
+      try{
+        const r=await client.send(new UploadPartCommand({Bucket:job.bucket,Key:job.key,UploadId:job.uploadId??undefined,PartNumber:number,Body:createReadStream(job.filePath,{start,end}),ContentLength:length}));
+        if(!r.ETag)throw new Error(`Part ${number} のETagを取得できませんでした。`);
+        job.completedParts[String(number)]=r.ETag;
+        job.transferredBytes=Math.min(job.size,Object.keys(job.completedParts).reduce((total,key)=>{const n=Number(key),partStart=(n-1)*job.partSize,partEnd=Math.min(job.size,partStart+job.partSize);return total+Math.max(0,partEnd-partStart);},0));
+        await this.saveUpload(job);
+        return true;
+      }catch(e){lastError=e;if(attempt<UPLOAD_RETRIES)await delay(700*(2**(attempt-1)));}
+    }
+    throw lastError;
+  }
+  private async runUpload(job:any,control:{paused:boolean;cancelled:boolean}){
+    try{
+      const client=await this.clientFor();
+      if(job.size===0){await client.send(new PutObjectCommand({Bucket:job.bucket,Key:job.key,Body:new Uint8Array(0),ContentType:job.contentType}));job.status='complete';job.completedAt=new Date().toISOString();await this.saveUpload(job);this.syncIndex();return;}
+      if(!job.uploadId)throw new Error('Upload IDがありません。');
+      const count=Math.ceil(job.size/job.partSize),queue:number[]=[];
+      for(let n=1;n<=count;n++)if(!job.completedParts[String(n)])queue.push(n);
+      let cursor=0,failure:unknown=null;
+      const worker=async()=>{while(cursor<queue.length&&!failure&&!control.cancelled&&!control.paused){const number=queue[cursor++];try{await this.uploadPartWithRetry(job,number,client,control);}catch(e){failure=e;}}};
+      await Promise.all(Array.from({length:Math.min(UPLOAD_CONCURRENCY,Math.max(queue.length,1))},()=>worker()));
+      if(control.cancelled)return;
+      if(control.paused){job.status='paused';await this.saveUpload(job);return;}
+      if(failure)throw failure;
+      const parts=Array.from({length:count},(_,i)=>({PartNumber:i+1,ETag:job.completedParts[String(i+1)]}));
+      await client.send(new CompleteMultipartUploadCommand({Bucket:job.bucket,Key:job.key,UploadId:job.uploadId,MultipartUpload:{Parts:parts}}));
+      job.status='complete';job.transferredBytes=job.size;job.completedAt=new Date().toISOString();await this.saveUpload(job);this.syncIndex();
+    }catch(e){if(control.cancelled)return;job.status='failed';job.error=e instanceof Error?e.message:String(e);job.completedAt=new Date().toISOString();await this.saveUpload(job);}finally{this.controls.delete(job.id);}
+  }
+  async pauseUpload(id:string){const c=this.controls.get(id);if(c)c.paused=true;const s=await this.uploadState(),job:any=s.jobs.find(x=>x.id===id);if(!job)throw new Error('アップロードセッションが見つかりません。');if(job.kind==='move')throw new Error('移動ジョブは一時停止できません。');job.status='paused';await this.saveUpload(job);return job;}
+  async cancelUpload(id:string){const c=this.controls.get(id);if(c)c.cancelled=true;const s=await this.uploadState(),job:any=s.jobs.find(x=>x.id===id);if(!job)return;if(job.kind==='move')throw new Error('移動ジョブはキャンセルできません。');if(job.uploadId)await (await this.clientFor()).send(new AbortMultipartUploadCommand({Bucket:job.bucket,Key:job.key,UploadId:job.uploadId})).catch(()=>{});job.status='cancelled';job.completedAt=new Date().toISOString();await this.saveUpload(job);}
   private async templateState(){await this.templateMigration;return (await readJson<TemplateState>(this.templatesPath))??{schemaVersion:1 as const,templates:[]};}
   async templates(bucket?:string){const s=await this.templateState();return bucket?s.templates.filter(x=>x.bucket===bucket):s.templates;}
-  async saveTemplate(input:{id?:string;name:string;bucket:string;objects:Array<{key:string;name:string;size?:number}>}){if(!input.name.trim()||!input.bucket||!input.objects.length||input.objects.length>500)throw new Error('テンプレート名・バケット・1～500件の対象が必要です。');const s=await this.templateState(),now=new Date().toISOString(),i=input.id?s.templates.findIndex(x=>x.id===input.id):-1;const t:R2BatchDownloadTemplate={id:input.id||randomUUID(),name:input.name.trim(),bucket:input.bucket,createdAt:i>=0?s.templates[i].createdAt:now,updatedAt:now,objects:input.objects};if(i>=0)s.templates[i]=t;else s.templates.push(t);await writeJsonAtomic(this.templatesPath,s);return s.templates;}
+  async saveTemplate(input:{id?:string;name:string;bucket:string;objects:Array<{key:string;name:string;size?:number}>}){
+    const name=normalizeBatchTemplateName(input.name),bucket=String(input.bucket??'').trim(),objects=normalizeBatchTemplateObjects(input.objects);
+    if(!bucket)throw new Error('バケットを指定してください。');
+    const s=await this.templateState(),now=new Date().toISOString(),i=input.id?s.templates.findIndex(x=>x.id===input.id):-1;
+    if(input.id&&i<0)throw new Error('テンプレートが見つかりません。');
+    if(s.templates.some((x,index)=>index!==i&&x.bucket===bucket&&x.name.toLocaleLowerCase()===name.toLocaleLowerCase()))throw new Error('同名のテンプレートがすでに存在します。');
+    if(i<0&&s.templates.filter(x=>x.bucket===bucket).length>=MAX_BATCH_TEMPLATES_PER_BUCKET)throw new Error('1つのバケットに保存できるテンプレートは100件までです。');
+    if(i>=0&&s.templates[i].bucket!==bucket)throw new Error('テンプレートのバケットが一致しません。');
+    const t:R2BatchDownloadTemplate={id:input.id||randomUUID(),name,bucket,createdAt:i>=0?s.templates[i].createdAt:now,updatedAt:now,objects};
+    if(i>=0)s.templates[i]=t;else s.templates.push(t);
+    await writeJsonAtomic(this.templatesPath,s);return s.templates;
+  }
   async deleteTemplate(id:string){const s=await this.templateState();s.templates=s.templates.filter(x=>x.id!==id);await writeJsonAtomic(this.templatesPath,s);return s.templates;}
   async metrics(){const c=await this.config.credentials();if(!c.cloudflareApiToken)return {configured:false};const res=await fetch(`https://api.cloudflare.com/client/v4/accounts/${c.accountId}/r2/metrics`,{headers:{Authorization:`Bearer ${c.cloudflareApiToken}`,Accept:'application/json','Cache-Control':'no-cache'}});if(!res.ok)throw new Error(res.status===401||res.status===403?'Cloudflare API Tokenが無効か、R2読み取り権限がありません。':`使用量APIがエラーを返しました（HTTP ${res.status}）。`);const payload:any=await res.json();if(!payload?.success||typeof payload?.result!=='object')throw new Error(payload?.errors?.[0]?.message||'Cloudflare使用量APIから正常な応答がありません。');const result=payload.result;const value=(group:any,state:string,field:string)=>Number(group?.[state]?.[field]??0);const classes={standard:result.standard??{},infrequent_access:result.infrequentAccess??{}};const breakdown=Object.fromEntries(Object.entries(classes).map(([name,g]:any)=>{const payload=value(g,'published','payloadSize'),metadata=value(g,'published','metadataSize');return [name,{stored_bytes:payload+metadata,payload_bytes:payload,metadata_bytes:metadata,objects:value(g,'published','objects'),uploading_bytes:value(g,'uploaded','payloadSize')+value(g,'uploaded','metadataSize')}];}));const rows=Object.values(breakdown) as any[];return {configured:true,payload:{stored_bytes:rows.reduce((n,x)=>n+x.stored_bytes,0),payload_bytes:rows.reduce((n,x)=>n+x.payload_bytes,0),metadata_bytes:rows.reduce((n,x)=>n+x.metadata_bytes,0),objects:rows.reduce((n,x)=>n+x.objects,0),uploading_bytes:rows.reduce((n,x)=>n+x.uploading_bytes,0),storage_classes:breakdown}};}
 }
