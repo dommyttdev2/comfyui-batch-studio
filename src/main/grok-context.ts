@@ -88,7 +88,7 @@ model_loras.json は次の形だけにしてください。
     }
   ]
 }
-- Checkpoint、Text Encoder、CLIP、modelFamily は出力しません。添付された選択済み models.json の基盤モデルはユーザー確定値であり変更禁止です。
+- Checkpoint、Text Encoder、VAE、modelFamily は出力しません。添付された選択済み models.json の基盤モデルはユーザー確定値であり変更禁止です。
 - model_catalog.json の modelType が LoRA / LoCon / DoRA の候補だけから選定してください。
 - JSONとしてparse可能な厳密な構文にしてください。コメント、末尾カンマ、擬似値は出力しません。
 - ref は project 全体で一意にしてください。LoRA ref は ^lora\\.[a-z][a-z0-9._-]{0,58}$ に従います。
@@ -114,7 +114,7 @@ prompt_plan.json は次の形だけにしてください。
 - Branch / Leaf id は ^[a-z][a-z0-9._-]{0,63}$ に従い、各々project全体で一意にしてください。
 - 配列順が生成順です。order field は追加しません。
 - 1 Leaf = 1 image です。目標画像枚数に近づくようLeaf数を設計してください。ただし意味上必要なら目標と完全一致しなくても構いません。
-- modelRef は models.json に存在する LoRA ref だけを使ってください。checkpoint.main / text_encoder.main / clip.main はLoRA適用に使いません。
+- modelRef は models.json に存在する LoRA ref だけを使ってください。checkpoint.main / text_encoder.main / vae.main / 旧schemaのclip.main はLoRA適用に使いません。
 - models.json の trainedWords はトリガーワードとして扱い、文字列を変更・翻訳・正規化せず positive prompt に含めてください。
 - checkpoint.main.trainedWords と rootLoras で参照する LoRA の trainedWords は common.positive に含めてください。
 - Branch の loras で参照する LoRA の trainedWords は、その Branch 配下のすべての Leaf の positive に含めてください。
@@ -130,7 +130,7 @@ export async function buildGrokTask(root:string,stage:GrokTask['stage'],extra=''
   const catalog=await catalogPathFor(root);
   if(stage==='story-initial')return {stage,title:'ストーリー検討',prompt:`${common}\n\n## Task\n添付した project_brief.json を基に、まだ story.md を確定せず、ユーザーとの対話用に検討材料を提示してください。\n1. 公開情報を調査して前提を整理する。版権キャラクターの不確かな設定は推測で確定しない。\n2. 大まかなStory案を複数提示する。\n3. 各案について画像化しやすさ・展開上の特徴を示す。\n4. ユーザーが決めるべき点や不足情報を質問する。\n\n${storyDiscussionShape}${extra?`\n\nユーザー追加入力:\n${extra}`:''}`,attachments:[await attachment('project_brief.json',brief,'基本設定')]};
   if(stage==='story-finalize'||stage==='story-fix')return {stage,title:stage==='story-finalize'?'ストーリー完成版':'ストーリー修正',prompt:`${common}\n\n## Task\nこれまでのGrok上の会話と添付された基本設定${stage==='story-fix'?'・現在の story.md':''}を基に、画像生成計画へ展開可能な完成 story.md を作成してください。章・場面・進行が追える構造にし、Prompt PlanそのものやComfyUI内部情報は書かないでください。\n\n${storyShape}${extra?`\n\n修正意図:\n${extra}`:''}`,attachments:[await attachment('project_brief.json',brief,'基本設定'),...(stage==='story-fix'?[await attachment('story.md',story,'現在の確定ストーリー')]:[])]};
-  if(stage==='models'||stage==='models-fix'){const basePath=await exists(modelsDraft)?modelsDraft:models;return {stage,title:stage==='models'?'LoRA選定':'LoRA再選定',prompt:`${common}\n\n## Task\n確定済み story.md と、ユーザーが選択済みの基盤モデルを記録した models.json を前提に、添付 model_catalog.json の中だけから必要なLoRAを Model / Version / Fileまで選定してください。Checkpoint、Text Encoder、CLIP、modelFamily はユーザーの責務であり、変更・再選定・代替提案をしません。trained words、採用理由、用途を考慮してください。\n\n${lorasShape}${extra?`\n\n再選定条件:\n${extra}`:''}`,attachments:[await attachment('story.md',story,'確定ストーリー'),await attachment('models.json',basePath,'ユーザー選択済み基盤モデル（変更禁止）'),...(catalog?[await attachment('model_catalog.json',path.resolve(catalog),'モデルカタログ')]:[])]};}
+  if(stage==='models'||stage==='models-fix'){const basePath=await exists(modelsDraft)?modelsDraft:models;return {stage,title:stage==='models'?'LoRA選定':'LoRA再選定',prompt:`${common}\n\n## Task\n確定済み story.md と、ユーザーが選択済みの基盤モデルを記録した models.json を前提に、添付 model_catalog.json の中だけから必要なLoRAを Model / Version / Fileまで選定してください。Checkpoint、Text Encoder、VAE、modelFamily はユーザーの責務であり、変更・再選定・代替提案をしません。trained words、採用理由、用途を考慮してください。\n\n${lorasShape}${extra?`\n\n再選定条件:\n${extra}`:''}`,attachments:[await attachment('story.md',story,'確定ストーリー'),await attachment('models.json',basePath,'ユーザー選択済み基盤モデル（変更禁止）'),...(catalog?[await attachment('model_catalog.json',path.resolve(catalog),'モデルカタログ')]:[])]};}
   const briefData=await readJson<any>(brief);const target=briefData?.generation?.target_image_count,family=briefData?.generation?.modelFamily as ModelFamily|undefined;
   return {stage,title:stage==='prompt-plan'?'プロンプト設計':'プロンプト設計修正',prompt:`${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan を作成してください。共通Prompt、全体共通LoRA、意味的なBranch分割、Branch LoRA、各Leafのpositive/negative差分を設計してください。models.json の trainedWords はトリガーワードとして、適用される positive prompt に必ず含めてください。${Number.isInteger(target)?`\n計画上の目標画像枚数は ${target} 枚です。`:''}\n\n${dialectRule(family)}\n\n${planShape}${extra?`\n\n修正条件:\n${extra}`:''}`,attachments:[await attachment('project_brief.json',brief,'画像枚数・Model系統などの計画条件'),await attachment('story.md',story,'確定ストーリー'),await attachment('models.json',models,'確定モデル・trainedWords（トリガーワード）')]};
 }

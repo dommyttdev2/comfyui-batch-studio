@@ -1,11 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ComfyUI Batch Studio Models",
-  "description": "Models artifact. v1/v2 are retained for legacy projects; v3 stores Anima Text Encoder and CLIP as model files discovered from ComfyUI/R2.",
+  "description": "Models artifact. v1-v3 are retained for legacy projects; v4 stores the corrected Anima Text Encoder and VAE file selections discovered from ComfyUI/R2.",
   "oneOf": [
     { "$ref": "#/$defs/v1" },
     { "$ref": "#/$defs/v2" },
-    { "$ref": "#/$defs/v3" }
+    { "$ref": "#/$defs/v3" },
+    { "$ref": "#/$defs/v4" }
   ],
   "$defs": {
     "v1": {
@@ -55,6 +56,24 @@
         { "if": { "properties": { "modelFamily": { "const": "illustrious" } }, "required": ["modelFamily"] }, "then": { "not": { "anyOf": [ { "required": ["textEncoder"] }, { "required": ["clip"] } ] } } }
       ]
     },
+    "v4": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "modelFamily", "catalog", "checkpoint", "loras"],
+      "properties": {
+        "schemaVersion": { "const": 4 },
+        "modelFamily": { "enum": ["illustrious", "anima"] },
+        "catalog": { "$ref": "#/$defs/catalogProvenance" },
+        "checkpoint": { "$ref": "#/$defs/checkpointSelection" },
+        "textEncoder": { "$ref": "#/$defs/textEncoderFileSelection" },
+        "vae": { "$ref": "#/$defs/vaeFileSelection" },
+        "loras": { "type": "array", "items": { "$ref": "#/$defs/loraSelection" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "modelFamily": { "const": "anima" } }, "required": ["modelFamily"] }, "then": { "required": ["textEncoder", "vae"] } },
+        { "if": { "properties": { "modelFamily": { "const": "illustrious" } }, "required": ["modelFamily"] }, "then": { "not": { "anyOf": [ { "required": ["textEncoder"] }, { "required": ["vae"] } ] } } }
+      ]
+    },
     "catalogProvenance": {
       "type": "object",
       "additionalProperties": false,
@@ -97,6 +116,7 @@
     "catalogClipSelection": { "allOf": [ { "$ref": "#/$defs/baseSelection" }, { "properties": { "ref": { "const": "clip.main" } } } ] },
     "textEncoderFileSelection": { "allOf": [ { "$ref": "#/$defs/fileSelection" }, { "properties": { "ref": { "const": "text_encoder.main" } } } ] },
     "clipFileSelection": { "allOf": [ { "$ref": "#/$defs/fileSelection" }, { "properties": { "ref": { "const": "clip.main" } } } ] },
+    "vaeFileSelection": { "allOf": [ { "$ref": "#/$defs/fileSelection" }, { "properties": { "ref": { "const": "vae.main" } } } ] },
     "loraSelection": {
       "type": "object",
       "additionalProperties": false,
@@ -133,5 +153,5 @@
       }
     }
   },
-  "$comment": "v3 keeps Checkpoint/LoRA catalog-backed while Anima Text Encoder and CLIP are role-relative files selected from ComfyUI models directories and optional R2 mirrors."
+  "$comment": "v4 corrects the Anima base-component contract: Checkpoint/LoRA remain catalog-backed while Text Encoder and VAE are role-relative files selected from ComfyUI models/text_encoders and models/vae plus optional R2 mirrors. v2/v3 remain legacy-readable."
 }

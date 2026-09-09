@@ -17,22 +17,22 @@ const load=relative=>import(pathToFileURL(path.join(runtime,relative)).href);
   ]);
 
   assert.equal(modelFileDirectory('text_encoder'),'text_encoders');
-  assert.equal(modelFileDirectory('clip'),'clip');
+  assert.equal(modelFileDirectory('vae'),'vae');
   assert.equal(r2ModelDirectoryPrefix('models','text_encoder'),'models/text_encoders/');
-  assert.equal(r2ModelDirectoryPrefix('models/','clip'),'models/clip/');
-  assert.equal(r2ModelDirectoryPrefix('','clip'),'clip/');
+  assert.equal(r2ModelDirectoryPrefix('models/','vae'),'models/vae/');
+  assert.equal(r2ModelDirectoryPrefix('','vae'),'vae/');
 
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-comfyui-'));
   const textRoot=path.join(root,'models','text_encoders','vendor');
-  const clipRoot=path.join(root,'models','clip');
-  fs.mkdirSync(textRoot,{recursive:true});fs.mkdirSync(clipRoot,{recursive:true});
+  const vaeRoot=path.join(root,'models','vae');
+  fs.mkdirSync(textRoot,{recursive:true});fs.mkdirSync(vaeRoot,{recursive:true});
   fs.writeFileSync(path.join(textRoot,'t5xxl.safetensors'),'text');
-  fs.writeFileSync(path.join(clipRoot,'clip_l.safetensors'),'clip');
+  fs.writeFileSync(path.join(vaeRoot,'ae.safetensors'),'vae');
 
   const text=await listLocalModelFiles(path.join(root,'models'),'text_encoder');
   assert.equal(text.exists,true);assert.equal(text.files.length,1);assert.equal(text.files[0].fileName,'vendor/t5xxl.safetensors');
-  const clip=await listLocalModelFiles(path.join(root,'models'),'clip');
-  assert.equal(clip.exists,true);assert.equal(clip.files[0].fileName,'clip_l.safetensors');
+  const vae=await listLocalModelFiles(path.join(root,'models'),'vae');
+  assert.equal(vae.exists,true);assert.equal(vae.files[0].fileName,'ae.safetensors');
 
   const merged=mergeModelFileCandidates(
     [{fileName:'vendor/t5xxl.safetensors',path:'C:/ComfyUI/models/text_encoders/vendor/t5xxl.safetensors',size:100}],
@@ -45,7 +45,7 @@ const load=relative=>import(pathToFileURL(path.join(runtime,relative)).href);
   const store=new AppSettingsStore(userData);const status=await store.save({comfyUiInstallPath:root});
   assert.equal(status.modelsPath,path.join(root,'models'));
   assert.equal(status.modelFiles.text_encoders.files[0].fileName,'vendor/t5xxl.safetensors');
-  assert.equal(status.modelFiles.clip.files[0].fileName,'clip_l.safetensors');
+  assert.equal(status.modelFiles.vae.files[0].fileName,'ae.safetensors');
 
-  console.log('Anima local/R2 model file selection tests passed.');
+  console.log('Anima Text Encoder/VAE local/R2 model file selection tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1});
