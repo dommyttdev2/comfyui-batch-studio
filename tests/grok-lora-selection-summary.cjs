@@ -31,6 +31,8 @@ assert.match(historyUi,/item\.modelId!==lora\.modelId/,'Civitai presence must ma
 assert.match(historyUi,/v=>v\.versionId===lora\.versionId/,'Civitai presence must match the selected version identity');
 assert.match(historyUi,/f=>f\.id===lora\.fileId&&f\.name===lora\.fileName/,'Civitai presence must match the selected file identity');
 assert.match(historyUi,/availability\.checkLoraFiles\(project\.rootPath,fileNames\)/,'historical LoRAs must use current local/R2 availability');
+assert.match(historyUi,/catalog\?\.generation,catalog\?\.generatedAt/,'history must re-evaluate when a Civitai catalog sync changes the current catalog');
+assert.match(historyUi,/setPlacements\(null\)/,'history must mark placement state stale while re-evaluating after catalog refresh');
 
 assert.match(historyService,/grok-responses/,'history must use persisted Grok responses as its source');
 assert.match(historyService,/readStage\(root,'models'\)/,'initial selections must be restored after restart');
