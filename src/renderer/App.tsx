@@ -9,7 +9,7 @@ import { R2ManagerStage } from './R2ManagerStage';
 import { CivitExplorerStage } from './CivitExplorerStage';
 import './divider.css';
 
-const blankBrief:ProjectBriefInput={project:{id:'',title:''},subject:{copyrightedCharacter:false,characterName:'',series:''},audience:'',request:'',exclusions:'',assumptions:{adultCharacters:false,consensual:false},generation:{target_image_count:500,modelFamily:'Illustrious'},references:[]};
+const blankBrief:ProjectBriefInput={project:{id:'',title:''},subject:{copyrightedCharacter:false,characterName:'',series:''},audience:'',request:'',exclusions:'',assumptions:{adultCharacters:false,consensual:false},generation:{target_image_count:500,modelFamily:'illustrious'},references:[]};
 function hashId(value:string){let h=2166136261;for(const ch of value){h^=ch.codePointAt(0)??0;h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
 function suggestProjectId(title:string){const normalized=title.normalize('NFKD').toLowerCase().replace(/[^a-z0-9._-]+/g,'-').replace(/[-_.]{2,}/g,'-').replace(/^[-_.]+|[-_.]+$/g,'').slice(0,64);if(normalized)return normalized;return title.trim()?`project-${hashId(title).slice(0,8)}`:'';}
 type StandaloneTool='r2'|'civit'|null;
