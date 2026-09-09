@@ -17,7 +17,8 @@ docs/
 │  └─ scope-and-flow.md
 ├─ architecture/
 │  ├─ system-architecture.md
-│  └─ workflow-compiler.md
+│  ├─ workflow-compiler.md
+│  └─ remote-execution.md
 ├─ contracts/
 │  ├─ project-artifacts.md
 │  ├─ grok-contract.md
@@ -44,6 +45,7 @@ docs/
 | `product/scope-and-flow.md` | 製品目的、責務境界、対象範囲、全体工程、工程 Gate |
 | `architecture/system-architecture.md` | Electron 構成、サービス境界、信頼境界、データフロー |
 | `architecture/workflow-compiler.md` | 1枝 Template から最終 ComfyUI Workflow を機械生成する方式 |
+| `architecture/remote-execution.md` | Local / Remote Execution、SSH + Remote Worker、Scene Prompt連続生成、R2経由のモデル配置・成果物回収、Run State / Resume |
 | `contracts/project-artifacts.md` | プロジェクト内ファイル、正本関係、依存関係、互換性 |
 | `contracts/grok-contract.md` | Grok Web への入力、Grok の責務、Grok から受け取る成果物 |
 | `contracts/prompt-plan.md` | `prompt_plan.json` の意味構造と Draft schema |
@@ -65,6 +67,7 @@ docs/
 
 - `prompt_plan.json` のフィールド定義は `contracts/prompt-plan.md` が所有する。
 - Workflow の Node ID / Link ID 再採番は `architecture/workflow-compiler.md` が所有する。
+- Execution / Remote Execution の SSH、Remote Worker、Scene Prompt continuous run、R2 transfer、Run State詳細は `architecture/remote-execution.md` が所有する。
 - Grok が Workflow JSON を生成しないという責務境界は `product/scope-and-flow.md` と Decision Log で宣言し、具体的な Grok 返却形式は `contracts/grok-contract.md` が所有する。
 - 主画面の UI 共通構造は `ui/application-shell.md` が所有する。
 - Civitai / R2のサービス責務・secret境界は`integrations/external-tools.md`が所有する。
@@ -107,6 +110,8 @@ docs/
 使用モデルの選定は Grok が Batch Studio 内蔵 `model_catalog.json` を根拠に行い、Batch Studio はCivitai同期・Catalog生成・選定結果検証・保存を担当する。
 
 Cloudflare R2もBatch Studio Main Processが直接管理する。旧 `civit-model-viewer` / `r2-file-manager` はStandalone/Legacyであり、新規Batch Studioフローの外部依存にはしない。
+
+Execution では Local / Remote を同一 Project flow で扱う。Remote は公開 SSH + 秘密鍵認証を control plane、Cloudflare R2 を large binary transfer plane とし、SSH Tunnel は使用しない。詳細は `architecture/remote-execution.md` を正本とする。
 
 ## 6. 要件追加時の流れ
 
