@@ -10,11 +10,12 @@ Batch Studio と Grok の責務境界を守ってください。
 - ComfyUI Workflow JSON、node ID、link ID、group ID、node position、widgets_values は生成しません。
 - 添付ファイルに存在しない Model / Version / File identity を捏造しません。`;
 
-const artifactOutputRules=`## 出力契約
-- 最終成果物は指定された code block 1個だけを返してください。
-- code block の前後に説明、挨拶、注釈、要約、注意書きを付けません。
-- 指定された形式・見出し・field以外を追加しません。
-- 「以下です」「補足」等の成果物外テキストを出力しません。`;
+const artifactFileOutputRules=(fileName:string)=>`## 出力契約
+- 最終成果物はチャット本文へ展開せず、\`${fileName}\` という名前のダウンロード可能なファイルとして生成・添付してください。
+- ファイル内容をチャット本文、code block、引用、要約へ再掲しません。
+- チャット本文には説明、挨拶、注釈、要約、注意書き、「以下です」「補足」等の成果物外テキストを付けません。
+- ファイルは UTF-8 のプレーンテキストとして作成してください。
+- 指定された形式・見出し・field以外を追加しません。`;
 
 const storyDiscussionShape=`## 出力形式
 次の見出し順で回答してください。これは検討用回答であり code block には入れません。
@@ -40,8 +41,8 @@ const storyDiscussionShape=`## 出力形式
 # 確認事項
 - ユーザーが決めるべき点を箇条書きで示してください。`;
 
-const storyShape=`${artifactOutputRules}
-最終成果物は markdown code block 1個とし、story.md 本文を次の見出し順で記述してください。
+const storyShape=`${artifactFileOutputRules('story.md')}
+story.md 本文を次の見出し順で記述してください。
 
 # <作品タイトル>
 
@@ -78,8 +79,8 @@ const storyShape=`${artifactOutputRules}
 - Scene内で個別画像のpositive/negative promptは書きません。
 - 上記の最上位見出しを省略・改名・追加しません。`;
 
-const modelsShape=`${artifactOutputRules}
-最終成果物は json code block 1個で、次の形だけを返してください。
+const modelsShape=`${artifactFileOutputRules('models.json')}
+models.json は次の形だけにしてください。
 {
   "schemaVersion": 1,
   "catalog": { "schemaVersion": <catalogと同じ>, "generation": <catalogと同じ>, "generatedAt": <catalogと同じ> },
@@ -104,8 +105,8 @@ const modelsShape=`${artifactOutputRules}
 - 不足が無い場合は missingRequirements を出力しません。
 - 定義されていない追加フィールドを出力しません。`;
 
-const planShape=`${artifactOutputRules}
-最終成果物は json code block 1個で、次の形だけを返してください。
+const planShape=`${artifactFileOutputRules('prompt_plan.json')}
+prompt_plan.json は次の形だけにしてください。
 {
   "schemaVersion": 1,
   "common": { "positive": "...", "negative": "..." },
