@@ -6,6 +6,7 @@ const RECENT_PROJECT_LIMIT = 8;
 interface UiState {
   schemaVersion: 1;
   lastProjectPath?: string;
+  lastProjectDirectoryPath?: string;
   recentProjectPaths?: string[];
 }
 
@@ -29,6 +30,7 @@ export class UiStateStore {
       ...current,
       schemaVersion: 1,
       lastProjectPath: resolved,
+      lastProjectDirectoryPath: resolved,
       recentProjectPaths: [resolved, ...recent.filter(item => item !== resolved)].slice(0, RECENT_PROJECT_LIMIT),
     });
   }
@@ -44,8 +46,24 @@ export class UiStateStore {
     await writeJsonAtomic(this.filePath, current);
   }
 
+  async removeRecentProject(projectPath: string): Promise<void> {
+    const resolved = path.resolve(projectPath);
+    const current = await this.read();
+    const recent = Array.isArray(current.recentProjectPaths) ? current.recentProjectPaths : [];
+    await writeJsonAtomic(this.filePath, {
+      ...current,
+      recentProjectPaths: recent.filter(item => item !== resolved),
+    });
+  }
+
   async lastProjectPath(): Promise<string | null> {
     const value = (await this.read()).lastProjectPath;
+    if (!value || !path.isAbsolute(value) || !(await exists(value))) return null;
+    return value;
+  }
+
+  async lastProjectDirectoryPath(): Promise<string | null> {
+    const value = (await this.read()).lastProjectDirectoryPath;
     if (!value || !path.isAbsolute(value) || !(await exists(value))) return null;
     return value;
   }
