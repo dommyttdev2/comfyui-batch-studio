@@ -16,7 +16,7 @@ assert.match(ui,/item\.modelId!==lora\.modelId/,'Civitai presence must match the
 assert.match(ui,/v=>v\.versionId===lora\.versionId/,'Civitai presence must match the selected version identity');
 assert.match(ui,/f=>f\.id===lora\.fileId&&f\.name===lora\.fileName/,'Civitai presence must match the selected file identity');
 assert.match(ui,/setAvailability\(await window\.batchStudio\.availability\.check\(project\.rootPath\)\)/,'availability must refresh after Grok import');
-assert.match(availability,/\._batch_studio','availability checks must inspect the draft models artifact');
-assert.match(availability,/drafts','availability checks must inspect the draft models artifact');
+assert.match(availability,/\._batch_studio/,'availability checks must inspect the draft models artifact');
+assert.match(availability,/drafts/,'availability checks must inspect the draft models artifact');
 assert.match(availability,/draftModels\?\?/,'draft models must take precedence over confirmed models');
 console.log('Grok LoRA selection summary tests passed.');
