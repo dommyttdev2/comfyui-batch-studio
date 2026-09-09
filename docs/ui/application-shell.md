@@ -8,6 +8,8 @@ Electron の主画面で、Batch Studio のローカル工程とユーザー操�
 
 詳細な工程固有 UI は各契約・UI 文書が所有し、本書はアプリ全体の shell と共通 interaction を所有する。
 
+Execution / Remote Executionの詳細状態機械とtransport設計は `../architecture/remote-execution.md` を正本とする。
+
 ## 2. 主画面
 
 Projectを開いている場合の基本レイアウト:
@@ -25,6 +27,7 @@ Projectを開いている場合の基本レイアウト:
 │ Workflow              │                              │
 │ Model Availability    │                              │
 │ Preflight             │                              │
+│ Execution             │                              │
 └───────────────────────┴──────────────────────────────┘
 ```
 
@@ -46,6 +49,7 @@ Projectを開いている場合:
 ワークフロー
 モデル配置
 実行前チェック
+実行
 ```
 
 Projectを閉じている場合:
@@ -83,6 +87,7 @@ R2 File Manager / Civit ExplorerはProjectに依存しないアプリ共通Tool�
 - Prompt Plan status。
 - Workflow status。
 - Model availability / Preflight status。
+- Execution target / latest Run status。
 - 次に行うべき工程。
 
 Artifact dependency更新時は下流Artifactをstaleとして表示する。
@@ -99,7 +104,7 @@ Story / Models / Prompt Planで提供する。
 6. Open Folder。
 7. 手動作業checklist。
 
-Model Catalog / Workflow / Model Availability / PreflightにはGrok Work Cardを置かない。
+Model Catalog / Workflow / Model Availability / Preflight / ExecutionにはGrok Work Cardを置かない。
 
 ## 7. Artifact Editor / Import
 
@@ -189,7 +194,8 @@ GrokではなくCompiler工程。
 - planned branch count。
 - Compile。
 - generated branch / node / link summary。
-- output path。
+- UI Workflow output path。
+- Execution API graph availability / validation status。
 - structure validation。
 - Workflow生成済みの場合の「フォルダを開く」。
 
@@ -205,8 +211,11 @@ Grok paneは非表示でLocal UIを全幅使用する。
 
 最低限提供するUX:
 
+- `executionTarget` Local / Remoteの選択と現在値表示。
 - model availability再確認。
-- Local / R2 / state (`available` / `transfer-required` / `missing`)表示。
+- Local / R2 / target-specific state表示。
+- Local target: Local配置必須、R2配置任意。
+- Remote target: R2配置必須、Local配置任意。
 - R2接続設定 / 接続テスト。
 - モデル参照先Bucketのプルダウン選択。
 - Bucket選択時点でProjectの `r2Bucket` を保存し、そのBucket全体をモデル検索対象とする。
@@ -217,6 +226,10 @@ Grok paneは非表示でLocal UIを全幅使用する。
 - Bucket作成/削除、upload、move/rename、R2 object deleteは提供しない。
 
 Explorer内のfolder移動は閲覧位置であり、モデル検索対象prefixを変更する操作ではない。
+
+Local targetでLocal-missing modelはBlocking。Remote targetでR2-missing modelはBlockingとする。
+
+Remote targetでR2に存在するmodelは、Execution開始時にRemote hostがR2から直接取得するため `remote-stage-ready` として扱える。model binaryをSSH/SCPで送るUXは提供しない。
 
 ### Standalone「R2 File Manager」
 
@@ -250,21 +263,62 @@ R2のObject metadataはアプリ起動時にR2から同期してLocal userData�
 
 数GB fileをRendererへ全読込せず、Main Processがstream/multipart uploadする。
 
-R2-only modelはLocal転送完了まで`transfer-required` / Blockingのままとする。
-
 ## 14. Preflight Screen
+
+共通表示:
 
 ```text
 Artifacts
 References
-Workflow structure
+Workflow / API graph structure
 Model availability
+Execution target
 Integrated service readiness
 ```
 
+Local targetではLocal ComfyUI API、Scene Prompt Tools、required custom nodes、output pathを確認する。
+
+Remote targetではSSH設定/秘密鍵認証/Host Key、Remote filesystem/runtime/disk、Remote localhost ComfyUI API、Scene Prompt Tools、required R2 modelsを確認する。
+
 Blocking / Warningを分離しREADY条件を明示する。
 
-## 15. Grok Pane Controls
+## 15. Execution Screen
+
+Grok paneは非表示とし、Local UIを全幅使用する。
+
+最低表示:
+
+```text
+Execution target: Local / Remote
+Current Run ID
+Current phase
+Connection status
+Model preparation status
+Overall generation progress
+Current Scene Prompt branch
+Branch progress
+Current prompt ID
+Artifact packaging status
+R2 upload status
+Local download status
+Final verification status
+```
+
+Local targetでは不要なRemote/R2 transfer stateを隠すか`Not required`として明確に表示する。
+
+Remote targetでは `generation completed` と `artifact delivery completed` を別状態として表示し、ComfyUI生成終了時点でRun完了に見せない。
+
+操作:
+
+- `Start`。
+- `Stop scheduling`: 次のScene Prompt item投入を停止する。
+- `Force interrupt`: current ComfyUI promptを明示的にinterruptする。
+- `Resume`: persisted evidenceから安全に再開可能なRunにのみ表示。
+- `Open local output directory`: Local成果物確認後に提供。
+
+Stop / Force interrupt は見た目・確認文言を明確に分ける。
+
+## 16. Grok Pane Controls
 
 | 工程 | Grok pane |
 | --- | --- |
@@ -277,6 +331,7 @@ Blocking / Warningを分離しREADY条件を明示する。
 | ワークフロー | 非表示 |
 | モデル配置 | 非表示 |
 | 実行前チェック | 非表示 |
+| 実行 | 非表示 |
 | ProjectなしHome / R2 File Manager / Civit Explorer | 非表示 |
 
 工程切替時はこの既定表示を再適用する。
@@ -285,16 +340,18 @@ Grok paneを非表示にしてもWebContents/persistent sessionは破棄しな�
 
 Grokを使用しない工程ではshow/hide control自体を表示しない。Grok使用工程では手動show/hide、reload、external browser、divider resizeを許可するが、DOM injection / automatic send / upload automationは行わない。
 
-## 16. Secret boundary in UI
+## 17. Secret boundary in UI
 
 - `CIVIT_API_KEY` の値自体をGrok paneやProject artifactへ表示/保存しない。
 - Catalog UIは「設定済み / 未設定」の状態だけを表示する。
 - R2 Secret Access Key / Cloudflare API Tokenの保存済み値をRendererへ再表示しない。configured状態だけを返す。
-- R2 credentialをProject artifactやGrok添付候補へ出さない。
+- SSH private key本文をRendererへ返さない。設定画面ではpathとconfigured/readable statusのみ扱う。
+- R2 credential / SSH keyをProject artifactやGrok添付候補へ出さない。
+- signed URL full query stringをExecution画面の通常logへ出さない。
 - model binaryをGrok添付候補にしない。
 - Grok Cookie / browser profileをLocal Artifactへ保存しない。
 
-## 17. File Attachment UX
+## 18. File Attachment UX
 
 各fileについてname / absolute path / purpose / existenceを表示できること。
 
