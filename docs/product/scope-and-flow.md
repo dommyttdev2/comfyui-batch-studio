@@ -4,13 +4,13 @@ Status: Active
 
 ## 1. 目的
 
-ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、企画入力から Story、Civitaiモデルカタログ同期、モデル選定、プロンプト計画、Workflow生成、モデル所在確認、Cloudflare R2管理、生成実行前Preflightまでを一つのデスクトップアプリで支援する。
+ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、企画入力から Story、Civitaiモデルカタログ同期、モデル選定、プロンプト計画、Workflow生成、モデル所在確認、Cloudflare R2管理、生成実行前Preflight、Local / Remote ComfyUIでの実行、成果物回収までを一つのデスクトップアプリで支援する。
 
 本製品は「AIに全部やらせるアプリ」ではない。意味的判断、機械処理、最終決定を明確に分離する。
 
 ## 2. 最上位の責務原則
 
-> **Grok は「何を作るか・何を使うか」を考える。Batch Studio は「その決定を管理・検証・機械変換・保存する」。ユーザーが最終的に確定する。**
+> **Grok は「何を作るか・何を使うか」を考える。Batch Studio は「その決定を管理・検証・機械変換・保存・実行する」。ユーザーが最終的に確定する。**
 
 ### 2.1 Grok の責務
 
@@ -37,6 +37,10 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - R2 bucket / object / upload / download / move / delete / URL生成。
 - Local / R2 / `models.json` の所在差分確認。
 - Preflight。
+- `executionTarget` に応じた Local / Remote Execution。
+- Scene Prompt Tools `ScenePrompterExpand` の連続生成 orchestration。
+- Remote実行時のR2経由モデル配置、成果物upload、Local回収、完全性検証。
+- Execution Runのprogress / stop / resume状態管理。
 
 ### 2.3 ユーザーの責務
 
@@ -45,6 +49,7 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - Grok Webでのログイン、送信、添付、会話継続。
 - Story案、モデル選定、Prompt Planの最終確認。
 - R2の接続設定と破壊操作の明示実行。
+- Remote executionを使用する場合のSSH接続設定・秘密鍵path設定。
 - 警告・差分確認。
 - 成果物の明示確定。
 
@@ -70,10 +75,24 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - `scene_matrix_json`。
 - R2操作。
 - Civitai API keyやR2 secretの利用。
+- SSH / Remote Worker / ComfyUI API実行制御。
 
-### 3.3 v1生成実行範囲
+### 3.3 生成実行範囲
 
-v1の責務終端は「生成可能なWorkflowと必要モデルが揃い、Preflightが完了した状態」。ComfyUI Queue / progress / output collectionは将来scope。
+責務終端は Preflight ではなく `実行` 工程とする。
+
+Local executionではWorkflow実行とLocal成果物確認までを対象とする。
+
+Remote executionでは、Remote環境準備、必要モデル配置、Workflow実行、成果物package、R2 upload、R2からLocalへのdownload、完全性検証までを1つのExecution Runとして扱う。
+
+Remote executionの詳細設計は `../architecture/remote-execution.md` を正本とする。
+
+現時点で必須責務としないもの:
+
+- Vast.ai instanceの自動契約・作成。
+- Vast.ai instance start / stopをRemote executionの必須要件とすること。
+- SSH Tunnel。
+- ComfyUI API portの外部公開。
 
 ## 4. 全体工程
 
@@ -149,20 +168,44 @@ Workflow Compiler
         |
         v
 LoRA_{project-destination-folder}.json
++ API-format execution graph
         |
         v
 [7. Model Availability / R2]
 Batch Studio
-  -> Local / integrated R2 / models.json diff
-  -> R2 browser / upload / download / move / delete when needed
-  -> R2-only model remains BLOCKED until Local transfer is complete
+  -> models.json / Local / integrated R2 diff
+  -> Local target: Local配置必須、R2任意
+  -> Remote target: R2配置必須、Local任意
         |
         v
 [8. Preflight]
 Batch Studio
+  -> artifact / workflow / model validation
+  -> target-specific operational checks
         |
         v
-READY FOR COMFYUI
+READY TO EXECUTE
+        |
+        v
+[9. Execution]
+executionTarget == local
+  -> Local ComfyUI API
+  -> Scene Prompt continuous run
+  -> Local artifact confirmation
+
+executionTarget == remote
+  -> SSH private-key auth
+  -> Remote Worker
+  -> R2 GET model staging
+  -> Remote localhost ComfyUI API
+  -> Scene Prompt continuous run
+  -> Remote package/hash
+  -> presigned PUT -> R2
+  -> R2 GET -> Local
+  -> Local hash verification
+        |
+        v
+COMPLETED
 ```
 
 Workflow JSON名の `{project-destination-folder}` はProject実フォルダの1階層上のフォルダ名を使う。
@@ -191,9 +234,10 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 | モデルカタログ | Civitai Collection | app-wide `model_catalog.json` | Catalog生成済み。必要モデルがCollectionに含まれることをユーザーが確認可能 |
 | モデル選定 | `story.md`, `model_catalog.json` | `models.json` | identity実在 / missing requirement解消 |
 | プロンプト設計 | story, models | `prompt_plan.json` | schema / refs / branch-leaf整合性有効 |
-| ワークフロー | Template, Manifest, models, plan | Workflow JSON | Compiler / structure validation成功 |
-| モデル配置 | models, Local, integrated R2 | 所在状態 / R2操作 | 必須モデルがLocal生成環境から利用可能 |
-| 実行前チェック | 全成果物 | READY / BLOCKED | blocking errorなし |
+| ワークフロー | Template, Manifest, models, plan | UI Workflow + API execution graph | Compiler / structure validation成功 |
+| モデル配置 | models, Local, integrated R2, executionTarget | 所在状態 / R2操作 | Local targetはLocal配置済み。Remote targetはR2配置済み |
+| 実行前チェック | 全成果物 + target環境 | READY / BLOCKED | artifact/model validationとtarget-specific operational checkにblocking errorなし |
+| 実行 | READY Project + executionTarget | Execution Run / Local成果物 | Localは生成+成果物確認、Remoteは生成+R2経由Local回収+hash検証成功 |
 
 ## 6. UI工程ナビゲーション
 
@@ -207,6 +251,7 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 ワークフロー
 モデル配置
 実行前チェック
+実行
 ```
 
 Grok pane既定表示:
@@ -239,9 +284,24 @@ Catalog標準保存先はElectron app data配下で、Projectは`project_meta.js
 
 R2 Secret / Cloudflare API TokenはElectron Main Processでのみ復号・利用し、Project artifactやGrokへ渡さない。`モデル配置`工程からbucket/folder閲覧、検索、upload、download情報生成、move/delete、一括DLを操作する。
 
+Remote executionではIntegrated R2 Managerが model GET URL、artifact presigned PUT、Local artifact GETを所有する。RemoteへR2 credentialを渡さない。
+
 既存Projectの`r2IndexPath`は互換用fallbackとして残すが、標準のModel Availability / PreflightはProjectに設定されたR2 bucket/prefixを統合R2 Managerから直接照会する。
 
-## 8. 完了状態の定義
+### 7.3 Execution
+
+Executionの詳細責務は `../architecture/remote-execution.md` を正本とする。
+
+- Local targetはLocal ComfyUI APIを利用する。
+- Remote targetは公開SSH endpointへの秘密鍵認証を利用する。
+- SSH Tunnelは使用しない。
+- Remote WorkerがRemote host内のComfyUI localhost APIを利用する。
+- SSHはcontrol plane、R2はlarge binary transfer planeとする。
+- Scene Prompt Expand連続生成はfrontend button clickではなくAPI orchestrationで再現する。
+
+## 8. 状態定義
+
+### 8.1 READY
 
 Projectが`READY`になる最低条件:
 
@@ -249,7 +309,30 @@ Projectが`READY`になる最低条件:
 2. `models.json` Confirmedかつcurrent catalogと整合。
 3. `prompt_plan.json` Confirmed。
 4. `LoRA_{project-destination-folder}.json` generatedかつTemplate/Manifest provenanceがstaleでない。
-5. unused branch 0。
-6. Workflow参照Checkpoint/LoRAが`models.json`と一致。
-7. 必須モデル実体がLocal生成環境から利用可能。R2-onlyはtransfer完了までBlocking。
-8. Preflight blocking errorなし。
+5. API-format execution graphがWorkflowと整合。
+6. unused branch 0。
+7. Workflow参照Modelが`models.json`と一致。
+8. Local targetでは必須モデルがLocal生成環境から利用可能。
+9. Remote targetでは必須モデルがR2に存在する。
+10. target-specific Preflight blocking errorなし。
+
+`READY` は「実行開始可能」を意味し、生成完了を意味しない。
+
+### 8.2 COMPLETED
+
+Local target:
+
+- Scene Prompt continuous runが完了。
+- expected Local artifactを確認済み。
+
+Remote target:
+
+- Remote model staging完了。
+- Scene Prompt continuous run完了。
+- expected Remote artifactを確認済み。
+- package / SHA-256生成済み。
+- R2 upload成功。
+- R2からLocalへのdownload成功。
+- Local SHA-256がRemote package SHA-256と一致。
+
+これらを満たしたExecution Runだけを`COMPLETED`とする。
