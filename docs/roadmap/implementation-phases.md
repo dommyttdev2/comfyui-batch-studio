@@ -22,6 +22,8 @@ Civitai LoRA strength evidenceの取得・集計・Prompt Plan初期展開policy
 
 `prompt_tree.md` の正本関係も解決済みであり、標準 Artifact から外す。人間向け Prompt 表示・編集は Prompt Plan Web UI が担当する。
 
+Local / Remote Executionの設計境界も解決済みであり、`architecture/remote-execution.md` と `DEC-022` を正本とする。
+
 Exit criteria:
 
 - Open decision のうち実装を block する項目が Accepted。
@@ -203,6 +205,8 @@ Goal: Prompt Plan branch 数と一致し、leaf総数と一致する予定画像
 - SceneSaveImageのphysical filename suffix/indexはcustom nodeへ委譲。
 - `last_node_id` / `last_link_id` update。
 - compiled workflow validation。
+- Execution用API-format graphのdeterministic生成またはpaired template contract解決。
+- UI WorkflowとAPI graphのidentity/hash整合確認。
 - Compiler version / Manifest hash / Template identity+hash を Workflow build provenance として `project_meta.json` に記録。
 
 Exit criteria:
@@ -219,31 +223,36 @@ allBranchCounterCount == 1
 actualImageCount == totalPromptPlanLeafCount
 savePathMismatch == 0
 leafPathLabelMismatch == 0
+apiGraphValidationError == 0
 ```
 
 `generation.target_image_count` とactualImageCountの差分はinformational / warningであり、それだけではCompile failureにしない。
 
 ## Phase 7: Model Availability / Integrated R2 Manager
 
-Goal: 必要モデルの実体配置を確認し、同じ工程からR2を管理する。
+Goal: `executionTarget` に応じた必要モデルの配置条件を確認し、同じ工程からR2を管理する。
 
-- `models.json` file list。
+- `models.json` required model list。
 - Local ComfyUI models lookup。
 - Project指定R2 bucket / prefixの直接lookup。
-- `available` / `transfer-required` / `missing` status。
+- Local target: Local配置必須 / R2任意。
+- Remote target: R2配置必須 / Local任意。
+- target-specific availability state。
 - R2 connection settings / safe secret storage。
 - bucket list / create / empty-bucket delete。
 - folder browsing / paging / bucket-wide search。
 - multipart upload / pause / resume / cancel / restart-resume state。
 - object move / rename / multi-delete。
-- public / presigned URL generation。
+- public / presigned GET URL generation。
+- caller-specified GET expiry。
 - URL / curl / wget / aria2c output。
 - batch download popup with independent selection, cross-folder persistence, max 500 items and named templates。
 - optional storage metrics。
 
 Exit criteria:
 
-- R2-only modelは`transfer-required`としてPreflightをBlockする。
+- Local targetのLocal-missing modelはBLOCKED。
+- Remote targetのR2-missing modelはBLOCKED。
 - R2未設定/接続失敗を「R2に存在しない」と誤判定しない。
 - credential / API tokenをProject artifactやGrokへ渡さない。
 - 数GB fileをRendererへ全読込せずMain Processでstream uploadできる。
@@ -254,31 +263,175 @@ Exit criteria:
 
 ## Phase 8: Preflight
 
-Goal: Project を `READY` / `BLOCKED` に判定する。
+Goal: Project を `READY` / `BLOCKED` に判定し、Execution開始前のoperational capabilityを確認する。
+
+Common:
 
 - Artifact confirmed state。
 - catalog refs。
 - Prompt Plan refs。
-- Workflow refs / structure。
+- Workflow / API graph refs / structure。
 - planned image count / target delta。
-- Local / integrated R2 model availability。
+- target-specific model availability。
 - Blocking / Warning summary。
+
+Local target:
+
+- Local ComfyUI API reachable。
+- `ScenePrompterExpand` registered。
+- Scene Prompt Tools custom APIs available。
+- required custom nodes available。
+- Local output path writable。
+
+Remote target:
+
+- SSH configuration / private key path。
+- private-key authentication。
+- Host Key verification。
+- Remote ComfyUI directory / temp / output writeability。
+- Remote Worker runtime。
+- Remote disk capacity。
+- Remote host内からComfyUI localhost API reachable。
+- `ScenePrompterExpand` / Scene Prompt Tools APIs / required custom nodes。
+- required R2 model objects / bucket configuration。
+- remote model destination mapping。
 
 Exit criteria:
 
 - READY の理由と BLOCKED の理由をユーザーが追跡できる。
-- R2にあるだけのmodelをREADY扱いしない。
+- Local / Remote targetの配置条件を取り違えない。
+- operational check failureをavailability missingとして偽装しない。
 
-## Future: ComfyUI Runtime Integration
+## Phase 9: Execution Domain / Local Execution
 
-Phase 8 までとは別 scope とする。
+Goal: `実行` 工程とpersistent Execution Runを導入し、Local ComfyUIでScene Prompt連続生成できる。
 
-候補:
+- `実行` stage / navigation。
+- Execution Run types / phase / persisted state。
+- IPC start / status / stop / force interrupt / resume。
+- explicit Local ComfyUI API URL setting。
+- ComfyUI API client。
+- Scene Prompt Tools run-context client。
+- `ScenePrompterExpand` non-zero branches enumeration。
+- prepare / submit / wait / claim/reconcile / finalize / release sequence。
+- overall / branch progress。
+- normal Stop scheduling。
+- Force Interrupt。
+- unrelated queue保護。
+- Local output confirmation。
 
-- Queue API。
-- progress tracking。
-- cancel。
-- output collection。
-- generation history。
+Exit criteria:
 
-追加前に別 Requirement / Decision を作成する。
+- frontendの「連続生成」buttonを手動操作せずLocal生成できる。
+- all active branchesをdeterministic順序で実行できる。
+- generation progressを追跡できる。
+- Stop / Force Interruptが意味上分離される。
+- Local output確認後のみRunを`COMPLETED`にできる。
+
+## Phase 10: SSH / Remote Worker Foundation
+
+Goal: 公開SSH + private-key authenticationでRemote control planeを構築する。
+
+- SSH Host / Port / User / private key path settings。
+- password authを標準経路にしない。
+- Host Key verification / first-use policy。
+- long-lived SSH session / reconnect。
+- SSH Tunnelを実装しない。
+- small Remote Worker deployment。
+- Local / Remote Worker SHA-256 verification。
+- JSON request / response protocol。
+- structured progress events。
+- allowed-root path containment / symlink escape rejection。
+- Run IDに紐づくRemote temp state。
+
+Exit criteria:
+
+- ComfyUI portを外部公開せず、Remote Workerがlocalhost APIへ到達できる。
+- SSH disconnect後にRun stateを照会・復元できる基礎がある。
+- private key contentsをProject / Renderer / Remoteへコピーしない。
+
+## Phase 11: Remote Model Staging
+
+Goal: R2をsourceとして必要モデルをRemote ComfyUI models rootへ安全に配置する。
+
+- required model -> R2 object key resolution。
+- existing R2 GET signing logic再利用。
+- execution-specific expiry。
+- remote model destination resolver。
+- remote stat / expected size check。
+- reliable hash metadataがある場合のSHA-256 check。
+- `.part` download。
+- size/hash verification。
+- atomic rename。
+- valid existing model reuse。
+- model staging progress / Run State。
+
+Exit criteria:
+
+- model binaryをSSH/SCPで転送しない。
+- R2 credentialをRemoteへ渡さない。
+- partial downloadをvalid model filenameとして残さない。
+- verified existing modelを不要に再downloadしない。
+
+## Phase 12: Remote Scene Prompt Execution
+
+Goal: Remote WorkerがRemote localhost ComfyUI APIを使ってScene Prompt連続生成を完了する。
+
+- Remote Worker ComfyUI health / object_info / queue / history / interrupt。
+- Scene Prompt Tools prepare / claim / finalize / release。
+- API-format graph transfer/control。
+- multiple Expand branch FIFO orchestration。
+- Remote progress event -> Main -> Renderer。
+- reconnect / status recovery。
+- safe stop scheduling / force interrupt。
+- artifact baseline capture。
+
+Exit criteria:
+
+- LocalからpromptごとにSSH commandを発行せずRemote内でsequenceが進む。
+- SSH Tunnelを必要としない。
+- unrelated ComfyUI queueを破壊しない。
+- reconnect後にcurrent branch / prompt stateを復元できる。
+
+## Phase 13: Remote Artifact Delivery
+
+Goal: Remote生成成果物をR2経由でLocalへ確実に回収し、hash検証後にRunを完了する。
+
+- before / after artifact manifest差分。
+- current Run artifact count validation。
+- Remote ZIP packaging。
+- manifest embed。
+- Remote package SHA-256。
+- Integrated R2 Manager presigned PUT generation。
+- signed URL full queryのlog redaction。
+- Remote Worker direct HTTP PUT。
+- R2 object metadata persistence。
+- Main Process R2 streaming GET -> Local `.part`。
+- Local size / SHA-256 verification。
+- atomic rename。
+- cleanup / retention policy。
+- package済み / upload済み / download済み evidenceによるResume。
+
+Exit criteria:
+
+```text
+allGenerationJobsComplete == true
+expectedArtifactsConfirmed == true
+remotePackageVerified == true
+r2UploadComplete == true
+localDownloadComplete == true
+localSha256 == remotePackageSha256
+```
+
+上記を満たした場合のみRemote Runを`COMPLETED`とする。
+
+## Post-Execution Extensions
+
+Execution core完了後に必要性を確認して追加する候補:
+
+- Vast.ai instance discovery / start / stop integration。
+- 複数Remote profile管理。
+- artifact package以外の個別同期mode。
+- execution history横断検索 /統計。
+
+これらをRemote Execution coreの前提にしない。
