@@ -8,7 +8,7 @@ Status: Active
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
-| REQ-SCOPE-001 | Decided | Batch Studio はプロジェクト作成から生成実行前 Preflight までを支援する。ComfyUI への Queue 投入・生成進捗管理は v1 の必須範囲に含めない。 | `product/scope-and-flow.md` |
+| REQ-SCOPE-001 | Decided | Batch Studio はプロジェクト作成からPreflight、Local / Remote ComfyUIでの生成実行、成果物回収までを支援する。`READY`は実行開始可能状態、`COMPLETED`は対象Execution Runの成果物確認・回収まで完了した状態とする。 | `product/scope-and-flow.md` |
 | REQ-SCOPE-002 | Decided | Grok Web はユーザーが直接操作し、Batch Studio は Grok の入力欄・添付・送信・回答取得を自動操作しない。 | `product/scope-and-flow.md` |
 | REQ-SCOPE-003 | Decided | Grok の回答は下書きであり、ユーザー確認と Batch Studio の検証を経て明示保存されたファイルだけをプロジェクト成果物として扱う。 | `contracts/project-artifacts.md` |
 
@@ -59,23 +59,38 @@ Status: Active
 | REQ-WF-007 | Decided | Template の可変Nodeを Node ID のコード埋め込みで特定せず、`schemas/workflow-template-manifest.schema.json` に従う Manifest の semantic role、Prototype ownership、Common→Branch boundary から解決する。Prototype内部Linkは両端Nodeのownershipから自動導出し、ManifestへLink ID一覧を重複保持しない。 | `architecture/workflow-compiler.md` |
 | REQ-WF-008 | Decided | Manifest Schema v1 は Common/Branch role、`branchPrototype.nodeIds` / `groupIds`、Boundaryのrole+slot、2次元layout offset、`manifestVersion`、Template `id` / `version` / SHA-256 binding を定義する。Template hash不一致や未宣言cross-boundary LinkはCompileをBlockする。Compiler versionとManifest hashはManifest自身ではなくWorkflow build provenanceとして `project_meta.json` 側へ記録する。 | `architecture/workflow-compiler.md` |
 | REQ-WF-009 | Decided | v1 の生成枚数は `1 leaf = 1 image` とし、Branch枚数は `branch.leaves.length`、Project実枚数は全leaf総数からCompilerが算出する。`project_brief.json` の `generation.target_image_count` はPrompt設計の目標値であり差分だけではCompileをBlockしない。Workflow名は `LoRA_{Project実フォルダの親フォルダ名}.json`、ComfyUI保存先は `BatchStudio/{project.id}/{branch.id}`、SceneMatrix `row_id` / `path_label` は `leaf.id`、人間向け `name` は `leaf.name` とする。 | `architecture/workflow-compiler.md` |
+| REQ-WF-010 | Decided | Execution用にUI Workflowと対応するdeterministicなComfyUI API-format graphを生成またはTemplate contractから解決できるようにする。任意のUI Workflowを汎用変換する方式を主経路にしない。 | `architecture/remote-execution.md` |
 
 ## 6. Integrations
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-INT-001 | Decided | Civitai Collection同期、API key管理、`model_catalog.json`生成は Batch Studio Electron Main Process が担当し、Renderer/GrokへAPI keyを渡さない。旧 `civit-model-viewer` はStandalone/Legacyとする。 | `integrations/external-tools.md` |
-| REQ-INT-002 | Decided | Cloudflare R2のバケット・object・upload・download・delete・move・signed/public URL操作は Batch Studio Electron Main Process が担当する。旧 `r2-file-manager` はStandalone/Legacyとする。 | `integrations/external-tools.md` |
+| REQ-INT-002 | Decided | Cloudflare R2のバケット・object・upload・download・delete・move・signed/public URL操作は Batch Studio Electron Main Process が担当する。Remote Execution用のsigned GET / presigned PUT / Local回収も同一Integrated R2 Managerが所有し、旧 `r2-file-manager` はStandalone/Legacyとする。 | `integrations/external-tools.md` |
 | REQ-INT-003 | Decided | Batch Studio は Civitai API key と R2 secret を Grok へ渡さない。R2 Secret/API TokenはProjectファイルやRendererへ平文保存せず、Electron Main ProcessのOS暗号化ストレージで保護する。 | `quality/validation-and-security.md` |
 | REQ-INT-004 | Decided | Civitai 由来 LoRA strength evidence は Batch Studio が exact version の投稿metadataから決定済みpolicyで optional `strengthBaseline` と provenance を生成する。説明文解析や経験則による値を Civitai provenance として捏造しない。 | `integrations/external-tools.md` |
 | REQ-INT-005 | Decided | R2一括DLはメイン一覧の削除選択と独立した選択状態を持ち、フォルダ移動・バケット内検索を跨いで最大500件を保持する。URLは最終生成時だけ発行し、URL/curl/wget/aria2cを提供する。 | `integrations/external-tools.md` |
 | REQ-INT-006 | Decided | 大容量R2 uploadはMain Processからmultipartで実行し、進捗・pause/resume/cancelを提供する。未完了upload stateはapp dataへ永続化し、再起動後に再開可能とする。 | `integrations/external-tools.md` |
 
-## 7. Validation / Security
+## 7. Execution
+
+| ID | Status | Requirement | Owner |
+| --- | --- | --- | --- |
+| REQ-EXEC-001 | Decided | `executionTarget=local` ではLocal ComfyUI APIを使用し、必要モデルのLocal配置を必須、R2配置を任意とする。 | `architecture/remote-execution.md` |
+| REQ-EXEC-002 | Decided | `executionTarget=remote` では公開SSH endpointへの秘密鍵認証をcontrol planeとし、SSH Tunnelを使用しない。Remote WorkerがRemote host内のlocalhost ComfyUI APIを操作する。 | `architecture/remote-execution.md` |
+| REQ-EXEC-003 | Decided | Remote targetの必要モデルはR2をsourceとし、public/presigned GET URLでRemote hostが直接取得する。multi-GB model binaryをSSH/SCPで転送しない。 | `architecture/remote-execution.md` |
+| REQ-EXEC-004 | Decided | Scene Prompt Tools `ScenePrompterExpand` の連続生成はfrontend button操作ではなく、標準ComfyUI APIとScene Prompt Tools custom run-context APIのorchestrationで再現する。 | `architecture/remote-execution.md` |
+| REQ-EXEC-005 | Decided | Remote成果物はRemoteでmanifest/package/hashを作成し、Main Processが発行する短命presigned PUT URLでR2へuploadする。R2 credentialをRemoteへ渡さない。 | `architecture/remote-execution.md` |
+| REQ-EXEC-006 | Decided | Remote RunはR2へuploadした成果物をLocalへdownloadし、Local SHA-256とRemote package SHA-256が一致した後にのみ`COMPLETED`とする。 | `architecture/remote-execution.md` |
+| REQ-EXEC-007 | Decided | Executionはpersistent Runとしてphase、prompt ID、artifact evidence等を保持し、既に検証済みの高コスト工程を無条件に再実行せずResume可能とする。Secretや不要なsigned URLはRun Stateへ保存しない。 | `architecture/remote-execution.md` |
+| REQ-EXEC-008 | Decided | 通常停止は次promptのscheduleを止め、Force Interruptはcurrent promptへのComfyUI interruptとして分離する。他Runのqueueを変更しない。 | `architecture/remote-execution.md` |
+
+## 8. Validation / Security
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-VAL-001 | Decided | `story.md`、`models.json`、`prompt_plan.json`、最終 Workflow を工程ごとに検証する。 | `quality/validation-and-security.md` |
-| REQ-VAL-002 | Decided | Preflight では成果物相互のモデル参照、Workflow の構造、必要な実モデルのLocal/R2所在を確認する。 | `quality/validation-and-security.md` |
+| REQ-VAL-002 | Decided | Preflight では成果物相互のモデル参照、Workflow/API graph構造、`executionTarget`に応じた必要モデル所在とLocal/Remote operational capabilityを確認する。 | `quality/validation-and-security.md` / `architecture/remote-execution.md` |
 | REQ-SEC-001 | Decided | Grok 用 WebContents とローカル UI を権限・session 境界で分離する。 | `architecture/system-architecture.md` |
 | REQ-SEC-002 | Decided | `.env`、credential、R2 設定、ブラウザデータ、`.safetensors` 本体を Grok 添付候補へ出さない。 | `quality/validation-and-security.md` |
+| REQ-SEC-003 | Decided | SSH private key contentsとR2 credentialをProject/Renderer/Remoteへ配布しない。Remoteへ渡すR2 signed URLは必要object・operation・limited lifetimeに限定し、full queryを通常logへ保存しない。 | `architecture/remote-execution.md` |
