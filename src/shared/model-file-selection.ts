@@ -1,6 +1,6 @@
 import type { ModelFileCandidate, ModelFileRole } from './types.js';
 
-const ROLE_DIR:Record<ModelFileRole,'text_encoders'|'clip'>={text_encoder:'text_encoders',clip:'clip'};
+const ROLE_DIR:Record<ModelFileRole,'text_encoders'|'vae'>={text_encoder:'text_encoders',vae:'vae'};
 const relative=(value:string)=>value.replace(/\\/g,'/').replace(/^\/+/, '');
 const key=(value:string)=>relative(value).normalize('NFKC').toLocaleLowerCase();
 
