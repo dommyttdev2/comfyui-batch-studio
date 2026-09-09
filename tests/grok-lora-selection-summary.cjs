@@ -19,8 +19,10 @@ assert.match(stages,/setHistoryRevision\(x=>x\+1\)/,'history must refresh immedi
 assert.doesNotMatch(stages,/function SelectedLorasPanel/,'single current-selection panel must be removed');
 
 assert.match(historyUi,/artifact\.grokLoraHistory\(project\.rootPath\)/,'history must reload from persisted project data');
-assert.match(historyUi,/filter\(x=>x\.stage===stage\)/,'history must stay separated by Grok stage');
+assert.match(historyUi,/function visibleStageEntries/,'history must have explicit stage visibility semantics');
+assert.match(historyUi,/stage==='models'&&matching\.length\?matching\.slice\(-1\):matching/,'initial selection must show the latest imported result as selection 1 while reselections keep their progression');
 assert.match(historyUi,/stage==='models'\?'選定':'再選定'/,'history must label initial and reselection progression separately');
+assert.match(historyUi,/再取り込み時はこの「選定 1」を更新します/,'initial selection copy must explain that repeated imports replace selection 1');
 assert.match(historyUi,/lora\.fileName/,'history must show each selected file name');
 assert.match(historyUi,/thumbnailUrl/,'history must resolve a Civitai thumbnail');
 assert.match(historyUi,/ローカル/,'history must expose local presence');
