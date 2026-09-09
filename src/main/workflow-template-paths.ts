@@ -7,7 +7,7 @@ const builtinTemplateDir=path.resolve(moduleDir,'../templates/default-scene-batc
 
 export function resolveWorkflowTemplatePaths(settings?:Pick<ProjectSettings,'templatePath'|'manifestPath'>|null){
  return {
-  templatePath:settings?.templatePath?.trim()||path.join(builtinTemplateDir,'template.json'),
-  manifestPath:settings?.manifestPath?.trim()||path.join(builtinTemplateDir,'manifest.json')
+  templatePath:(process.env.BATCH_STUDIO_TEMPLATE_PATH??'').trim()||settings?.templatePath?.trim()||path.join(builtinTemplateDir,'template.json'),
+  manifestPath:(process.env.BATCH_STUDIO_MANIFEST_PATH??'').trim()||settings?.manifestPath?.trim()||path.join(builtinTemplateDir,'manifest.json')
  };
 }
