@@ -10,32 +10,70 @@ const runtime=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-rate-limit-test
 const tscBin=path.join(repo,'node_modules','typescript','bin','tsc');
 execFileSync(process.execPath,[tscBin,'-p',path.join(repo,'tsconfig.electron.json'),'--outDir',runtime],{cwd:repo,stdio:'inherit'});
 
-const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-
 (async()=>{
   process.env.CIVITAI_BASE_URL='https://civitai.test';
   process.env.CIVITAI_MATURE_BASE_URL='https://civitai.test';
   process.env.CIVITAI_REQUEST_INTERVAL_MS='0';
+  process.env.CIVITAI_MAX_REQUEST_INTERVAL_MS='1';
   process.env.CIVITAI_MIN_RETRY_MS='1';
+  process.env.CIVITAI_MAX_RETRIES='2';
+  process.env.CIVITAI_RECOVERY_SUCCESSES='1';
   const mod=await import(pathToFileURL(path.join(runtime,'main','civitai-request-policy.js')).href);
   assert.equal(mod.parseRetryAfter('2',1000),2000);
   assert.equal(mod.parseRetryAfter('Thu, 01 Jan 1970 00:00:03 GMT',1000),2000);
 
-  let calls=0;
-  const fakeFetch=async()=>{
-    calls++;
-    if(calls===1)return new Response('{}',{status:429,headers:{'Retry-After':'0'}});
-    return new Response(JSON.stringify({ok:true}),{status:200,headers:{'Content-Type':'application/json'}});
-  };
   const original=globalThis.fetch;
-  const policy=new mod.CivitaiRequestPolicy(fakeFetch);
-  policy.install();
   try{
+    let calls=0;
+    const fakeFetch=async()=>{
+      calls++;
+      if(calls===1)return new Response('{}',{status:429,headers:{'Retry-After':'0'}});
+      return new Response(JSON.stringify({ok:true}),{status:200,headers:{'Content-Type':'application/json'}});
+    };
+    const policy=new mod.CivitaiRequestPolicy(fakeFetch);
+    policy.install();
     const response=await globalThis.fetch('https://civitai.test/api/v1/models/1');
     assert.equal(response.status,200,'429 must be absorbed and retried');
     assert.equal(calls,2,'the exact request must resume after one rate-limit response');
-    for(let i=0;i<20&&policy.status().waiting;i++)await sleep(2);
-    assert.equal(policy.status().waiting,false,'policy must leave waiting state after successful retry');
+    const metrics=policy.status().metrics;
+    assert.equal(metrics.requests,2);
+    assert.equal(metrics.retries,1);
+    assert.equal(metrics.responses429,1);
+    assert.equal(metrics.requestsByEndpoint['/api/v1/models/:id'],2);
+
+    calls=0;
+    const always429=new mod.CivitaiRequestPolicy(async()=>{calls++;return new Response('{}',{status:429,headers:{'Retry-After':'0'}});});
+    always429.install();
+    const limited=await globalThis.fetch('https://civitai.test/api/v1/models/2');
+    assert.equal(limited.status,429,'429 retries must be bounded');
+    assert.equal(calls,3,'maxRetries=2 must produce at most three attempts');
+    assert.equal(always429.status().metrics.retries,2);
+    assert.equal(always429.status().metrics.responses429,3);
+
+    calls=0;
+    const recover5xx=new mod.CivitaiRequestPolicy(async()=>{calls++;return calls===1?new Response('{}',{status:503}):new Response('{}',{status:200});});
+    recover5xx.install();
+    const recovered=await globalThis.fetch('https://civitai.test/api/v1/models/3');
+    assert.equal(recovered.status,200,'transient 5xx must be retried');
+    assert.equal(calls,2);
+    assert.equal(recover5xx.status().metrics.responses5xx,1);
+    assert.equal(recover5xx.status().metrics.retries,1);
+
+    calls=0;
+    const aborting=new mod.CivitaiRequestPolicy(async(_input,init)=>{
+      calls++;
+      const signal=init?.signal;
+      return new Promise((resolve,reject)=>{
+        if(signal?.aborted){reject(signal.reason);return;}
+        signal?.addEventListener('abort',()=>reject(signal.reason),{once:true});
+      });
+    });
+    aborting.install();
+    const controller=new AbortController();
+    const pending=globalThis.fetch('https://civitai.test/api/v1/models/4',{signal:controller.signal});
+    controller.abort(new Error('caller abort'));
+    await assert.rejects(()=>pending,/caller abort/,'caller AbortSignal must propagate through the request policy');
+    assert.equal(calls,1,'caller cancellation must not be retried');
   } finally {
     globalThis.fetch=original;
   }
