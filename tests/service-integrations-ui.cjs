@@ -10,6 +10,8 @@ const services=read('src/renderer/ServiceIntegrationsStage.tsx');
 const vastPanel=read('src/renderer/integrations/VastAiIntegrationPanel.tsx');
 const execution=read('src/renderer/ExecutionStages.tsx');
 const config=read('src/main/vastai-config.ts');
+const main=read('src/main/main.ts');
+const preflight=read('src/main/preflight.ts');
 
 assert.match(app,/サービス連携/);
 assert.match(app,/ServiceIntegrationsStage/);
@@ -28,4 +30,9 @@ assert.match(execution,/remoteInstanceId/);
 assert.match(execution,/SSH Host\/PortはProjectへ固定保存せず/);
 assert.match(config,/VASTAI_ENVIRONMENT_VARIABLE='VASTAI_API_KEY'/);
 assert.match(config,/DEFAULT_VASTAI_COMFY_PORT=18188/);
+assert.match(preflight,/remoteTargetCheck/,'PreflightがRemote target検証hookを持つ');
+assert.match(main,/remoteTargetIssuesFor/,'Main ProcessがVast.ai Remote targetを検証する');
+assert.match(main,/runPreflight\(root,await r2LookupFor\(root\),settings\.modelsPath,\(\)=>remoteTargetIssuesFor\(root\)\)/,'PREFLIGHT_RUNからRemote target検証を実配線する');
+assert.match(main,/VASTAI_SSH_KEY_MISSING/);
+assert.match(main,/VASTAI_INSTANCE_LOOKUP_FAILED/);
 console.log('Service integrations UI tests passed.');
