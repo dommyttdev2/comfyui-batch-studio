@@ -102,8 +102,8 @@ model_loras.json は次の形だけにしてください。
   "promptFallbacks": [
     {
       "requirement": "LoRAで満たせなかった表現要件",
-      "positive": "positive promptへ追加するタグまたは短いprompt",
-      "negative": "negative promptへ追加するタグまたは短いprompt。不要なら空文字列",
+      "positive": "positive promptへ追加するDanbooru実在タグ列",
+      "negative": "negative promptへ追加するDanbooru実在タグ列。不要なら空文字列",
       "reason": "なぜLoRAなしでPrompt代替が十分と判断したか"
     }
   ]
@@ -147,6 +147,26 @@ prompt_plan.json は次の形だけにしてください。
 - model_prompt_fallbacks.json が添付されている場合、その promptFallbacks はLoRA不足をPromptで解決済みと判断した要件です。各 requirement と Story を照合し、該当する common / Branch / Leaf の positive・negativeへ記録済み文字列を反映してください。無関係なSceneへ一律適用せず、必要な範囲へ配置してください。
 - promptFallbacks の positive / negative は代替策として確定したPromptなので、省略したり反対の意味へ書き換えたりしません。重複だけは適用先Prompt内で1回にまとめて構いません。
 - common / rootLoras / branches / leaves の意味情報だけを出力し、Workflow内部fieldや未知fieldを追加しません。`;
+const danbooruTagRules=`## Danbooruタグ選定ルール
+画像生成に使用する positive / negative prompt の通常タグは、Danbooruで実在するタグを使用してください。
+- 自由作文の英語フレーズや、Danbooruに存在しない独自タグを新しく作ってはいけません。
+- Danbooruのcanonical tagを基準にし、aliasがある場合はalias先のcanonical tagを優先してください。
+- 同じ、またはほぼ同じ視覚的意味を表現できるタグ候補が複数ある場合は、意味の正確性を第一条件とし、その条件を満たす候補の中でDanbooruのpost_countが多いタグを優先してください。
+- post_countが少ない特殊なタグより、意味を十分維持できる使用頻度の高い一般的なタグを優先してください。
+- 低頻度タグしか正確に意味を表現できない場合は使用可能です。意味を損なわず高頻度タグへ置換できる場合だけ置換してください。
+- 高頻度という理由だけで、Storyが要求する意味と異なるタグへ置換してはいけません。
+- 複雑な表現をDanbooruに存在しない1個の合成タグとして作らず、必要に応じて複数の実在Danbooruタグへ分解してください。
+- Danbooruタグか不確かな語を推測だけで採用せず、必要に応じてDanbooruのタグ情報を確認してください。
+- post_countを確認できない場合、件数を捏造してはいけません。その場合も実在確認と意味の正確性を優先してください。
+
+### Model記法との関係
+- 実在確認・canonical判定・post_count比較は、underscoreを含むDanbooru canonical nameを基準に行ってください。
+- Illustriousではcanonical nameをunderscore形式でpromptへ出力してください。
+- Animaでは同じcanonical tagを確認したうえで、prompt出力時だけunderscoreをspaceへ変換してください。例: Danbooru canonical tagが \`looking_at_viewer\` の場合、Illustriousは \`looking_at_viewer\`、Animaは \`looking at viewer\` とします。
+
+### 例外
+- models.json の trainedWords と、そこから変更せず転記するCheckpoint / LoRA等のトリガーワードにはDanbooruタグ制約を適用しません。
+- trainedWordsはDanbooruに存在しなくても削除・翻訳・正規化・別タグへの置換をせず、models.jsonの文字列をそのまま使用してください。`;
 function dialectRule(family:ModelFamily|undefined){if(family==='anima')return `## Prompt記法 — Anima\n- trainedWordsとしてカタログから転記する文字列を除き、Danbooru系の通常タグは単語間をスペースで記述してください。例: \`looking at viewer\`, \`long hair\`, \`from below\`.\n- 通常タグを underscore 形式へ変換しません。\n- trainedWords は例外で、models.json に記録された文字列を1文字も変更せずそのまま使用します。`;return `## Prompt記法 — Illustrious\n- trainedWordsとしてカタログから転記する文字列を除き、Danbooru系の通常タグは underscore 形式で記述してください。例: \`looking_at_viewer\`, \`long_hair\`, \`from_below\`.\n- 通常タグをスペース区切りへ変換しません。\n- trainedWords は例外で、models.json に記録された文字列を1文字も変更せずそのまま使用します。`;}
 
 export async function buildGrokTask(root:string,stage:GrokTask['stage'],extra=''):Promise<GrokTask>{
@@ -154,7 +174,7 @@ export async function buildGrokTask(root:string,stage:GrokTask['stage'],extra=''
   const catalog=await catalogPathFor(root);
   if(stage==='story-initial')return {stage,title:'ストーリー検討',prompt:`${common}\n\n## Task\n添付した project_brief.json を基に、まだ story.md を確定せず、ユーザーとの対話用に検討材料を提示してください。\n1. 公開情報を調査して前提を整理する。版権キャラクターの不確かな設定は推測で確定しない。\n2. 大まかなStory案を複数提示する。\n3. 各案について画像化しやすさ・展開上の特徴を示す。\n4. ユーザーが決めるべき点や不足情報を質問する。\n\n${storyDiscussionShape}${extra?`\n\nユーザー追加入力:\n${extra}`:''}`,attachments:[await attachment('project_brief.json',brief,'基本設定')]};
   if(stage==='story-finalize'||stage==='story-fix')return {stage,title:stage==='story-finalize'?'ストーリー完成版':'ストーリー修正',prompt:`${common}\n\n## Task\nこれまでのGrok上の会話と添付された基本設定${stage==='story-fix'?'・現在の story.md':''}を基に、画像生成計画へ展開可能な完成 story.md を作成してください。章・場面・進行が追える構造にし、Prompt PlanそのものやComfyUI内部情報は書かないでください。\n\n${storyShape}${extra?`\n\n修正意図:\n${extra}`:''}`,attachments:[await attachment('project_brief.json',brief,'基本設定'),...(stage==='story-fix'?[await attachment('story.md',story,'現在の確定ストーリー')]:[])]};
-  if(stage==='models'||stage==='models-fix'){const basePath=await exists(modelsDraft)?modelsDraft:models,base=await readJson<any>(basePath),family=base?.modelFamily as ModelFamily|undefined;return {stage,title:stage==='models'?'LoRA選定':'LoRA再選定',prompt:`${common}\n\n## Task\n確定済み story.md と、ユーザーが選択済みの基盤モデルを記録した models.json を前提に、Story上必要なLoRAを選定してください。Checkpoint、Text Encoder、VAE、modelFamily はユーザーの責務であり、変更・再選定・代替提案をしません。trained words、採用理由、用途を考慮してください。\n\n${loraFallbackDecisionRules}\n\n${dialectRule(family)}\n\n${lorasShape}${extra?`\n\n再選定条件:\n${extra}`:''}`,attachments:[await attachment('story.md',story,'確定ストーリー'),await attachment('models.json',basePath,'ユーザー選択済み基盤モデル（変更禁止）'),...(catalog?[await attachment('model_catalog.json',path.resolve(catalog),'モデルカタログ')]:[]),...(stage==='models-fix'&&await exists(promptFallbacks)?[await attachment('model_prompt_fallbacks.json',promptFallbacks,'現在のPrompt代替策')]:[])]};}
+  if(stage==='models'||stage==='models-fix'){const basePath=await exists(modelsDraft)?modelsDraft:models,base=await readJson<any>(basePath),family=base?.modelFamily as ModelFamily|undefined;return {stage,title:stage==='models'?'LoRA選定':'LoRA再選定',prompt:`${common}\n\n## Task\n確定済み story.md と、ユーザーが選択済みの基盤モデルを記録した models.json を前提に、Story上必要なLoRAを選定してください。Checkpoint、Text Encoder、VAE、modelFamily はユーザーの責務であり、変更・再選定・代替提案をしません。trained words、採用理由、用途を考慮してください。\n\n${loraFallbackDecisionRules}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${lorasShape}${extra?`\n\n再選定条件:\n${extra}`:''}`,attachments:[await attachment('story.md',story,'確定ストーリー'),await attachment('models.json',basePath,'ユーザー選択済み基盤モデル（変更禁止）'),...(catalog?[await attachment('model_catalog.json',path.resolve(catalog),'モデルカタログ')]:[]),...(stage==='models-fix'&&await exists(promptFallbacks)?[await attachment('model_prompt_fallbacks.json',promptFallbacks,'現在のPrompt代替策')]:[])]};}
   const briefData=await readJson<any>(brief);const target=briefData?.generation?.target_image_count,family=briefData?.generation?.modelFamily as ModelFamily|undefined;
-  return {stage,title:stage==='prompt-plan'?'プロンプト設計':'プロンプト設計修正',prompt:`${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan を作成してください。共通Prompt、全体共通LoRA、意味的なBranch分割、Branch LoRA、各Leafのpositive/negative差分を設計してください。models.json の trainedWords はトリガーワードとして、適用される positive prompt に必ず含めてください。${Number.isInteger(target)?`\n計画上の目標画像枚数は ${target} 枚です。`:''}\n\n${dialectRule(family)}\n\n${planShape}${extra?`\n\n修正条件:\n${extra}`:''}`,attachments:[await attachment('project_brief.json',brief,'画像枚数・Model系統などの計画条件'),await attachment('story.md',story,'確定ストーリー'),await attachment('models.json',models,'確定モデル・trainedWords（トリガーワード）'),...(await exists(promptFallbacks)?[await attachment('model_prompt_fallbacks.json',promptFallbacks,'LoRA不足をPromptで解決した代替策')]:[])]};
+  return {stage,title:stage==='prompt-plan'?'プロンプト設計':'プロンプト設計修正',prompt:`${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan を作成してください。共通Prompt、全体共通LoRA、意味的なBranch分割、Branch LoRA、各Leafのpositive/negative差分を設計してください。models.json の trainedWords はトリガーワードとして、適用される positive prompt に必ず含めてください。${Number.isInteger(target)?`\n計画上の目標画像枚数は ${target} 枚です。`:''}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${planShape}${extra?`\n\n修正条件:\n${extra}`:''}`,attachments:[await attachment('project_brief.json',brief,'画像枚数・Model系統などの計画条件'),await attachment('story.md',story,'確定ストーリー'),await attachment('models.json',models,'確定モデル・trainedWords（トリガーワード）'),...(await exists(promptFallbacks)?[await attachment('model_prompt_fallbacks.json',promptFallbacks,'LoRA不足をPromptで解決した代替策')]:[])]};
 }

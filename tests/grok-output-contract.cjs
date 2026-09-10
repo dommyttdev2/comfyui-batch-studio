@@ -29,6 +29,18 @@ assert.match(src,/checkpoint\.main\.trainedWords と rootLoras[\s\S]*common\.pos
 assert.match(src,/Branch の loras[\s\S]*すべての Leaf の positive/,'branch LoRA trigger words must be applied to every leaf positive');
 assert.match(src,/trainedWords が空配列ならトリガーワードを捏造しません/,'empty trainedWords must not be invented');
 assert.match(src,/trainedWords を negative prompt へ入れません/,'trigger words must not be applied to negative prompts');
+assert.match(src,/^const danbooruTagRules=/m,'Danbooru tag selection policy must be defined');
+assert.match(src,/positive \/ negative prompt の通常タグ[\s\S]*Danbooruで実在するタグ/,'generated image prompts must require real Danbooru tags');
+assert.match(src,/canonical tag[\s\S]*alias先のcanonical tag/,'Danbooru aliases must prefer canonical tags');
+assert.match(src,/post_countが多いタグを優先/,'semantically equivalent Danbooru tags must prefer higher post counts');
+assert.match(src,/低頻度タグしか正確に意味を表現できない場合は使用可能/,'rare tags must remain allowed when they are the only semantically accurate choice');
+assert.match(src,/post_countを確認できない場合、件数を捏造してはいけません/,'unknown Danbooru post counts must never be invented');
+assert.match(src,/Illustriousではcanonical nameをunderscore形式[\s\S]*Animaでは同じcanonical tag[\s\S]*underscoreをspaceへ変換/,'Danbooru canonical tags must honor model-family prompt dialects');
+assert.match(src,/trainedWords[\s\S]*Danbooruタグ制約を適用しません/,'trainedWords must be exempt from Danbooru validation');
+const danbooruRuleUses=(src.match(/\$\{danbooruTagRules\}/g)||[]).length;
+assert.equal(danbooruRuleUses,2,'Danbooru tag policy must be injected into both LoRA fallback selection and Prompt Plan generation');
+assert.match(src,/positive promptへ追加するDanbooru実在タグ列/,'LoRA prompt fallback positive must require Danbooru tags');
+assert.match(src,/negative promptへ追加するDanbooru実在タグ列/,'LoRA prompt fallback negative must require Danbooru tags');
 assert.match(src,/^const storyDiscussionShape=/m,'story discussion must have a defined response format');
 assert.doesNotMatch(src,/最終成果物は指定された code block 1個だけ/,'final artifacts must no longer be requested inline as code blocks');
 console.log('Grok output contract tests passed.');
