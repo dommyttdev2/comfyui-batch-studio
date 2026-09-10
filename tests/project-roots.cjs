@@ -17,7 +17,7 @@ assert.match(appSettings,/BATCH_STUDIO_ARTIFACT_ROOT/,'成果物配置rootをrun
 assert.match(appSettings,/normalizeRootDirectory\('Project root'/,'Project rootを絶対パスの既存ディレクトリとして検証する');
 assert.match(appSettings,/normalizeRootDirectory\('成果物配置 root'/,'成果物配置rootを絶対パスの既存ディレクトリとして検証する');
 
-assert.match(environmentSettings,/>Project root</,'環境設定にProject root入力を表示する');
+assert.match(environmentSettings,/Project root.*BATCH_STUDIO_PROJECT_ROOT/s,'環境設定にProject root入力と環境設定IDを表示する');
 assert.match(environmentSettings,/成果物配置 root（生成画像）/,'環境設定に成果物配置root入力を表示する');
 assert.match(environmentSettings,/chooseRoot\('projectRoot'\)/,'Project rootをフォルダ選択できる');
 assert.match(environmentSettings,/chooseRoot\('artifactRoot'\)/,'成果物配置rootをフォルダ選択できる');
