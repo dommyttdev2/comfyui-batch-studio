@@ -14,6 +14,9 @@ export async function runPreflight(root:string,r2Lookup?:((fileName:string)=>Pro
  const plan=await readJson<PromptPlanArtifact>(path.join(root,'prompt_plan.json'));if(!plan)add('プロンプト設計',[{severity:'error',code:'PLAN_MISSING',message:'prompt_plan.jsonが確定していません。'}]);else add('プロンプト設計',validatePromptPlan(plan,models).issues);
  const workflowName=project.artifacts.find(a=>a.key==='workflow')?.relativePath;add('ワークフロー',workflowName?[]:[{severity:'error',code:'WORKFLOW_MISSING',message:'ワークフローが生成されていません。'}]);
  const av=await checkAvailability(root,r2Lookup,localModelsRoot);add('モデル配置',av.validation.issues);
- if(av.executionTarget==='remote')add('クラウド実行先',remoteTargetCheck?await remoteTargetCheck():[{severity:'error',code:'REMOTE_TARGET_UNAVAILABLE',message:'リモート実行先を検証できません。'}]);
+ if(av.executionTarget==='remote'){
+   const targetIssues=remoteTargetCheck?await remoteTargetCheck():(project.meta?.settings.remoteProvider==='vastai'&&Number.isInteger(project.meta.settings.remoteInstanceId)&&Number(project.meta.settings.remoteInstanceId)>0?[]:[{severity:'error' as const,code:'REMOTE_INSTANCE_REQUIRED',message:'リモート実行にはVast.ai Instanceを選択してください。'}]);
+   add('クラウド実行先',targetIssues);
+ }
  const planned=plan?plan.branches.reduce((n,b)=>n+b.leaves.length,0):0;if(project.targetImageCount!=null&&planned&&planned!==project.targetImageCount)warn.push({severity:'warning',code:'TARGET_DELTA',message:`目標${project.targetImageCount}枚 / 現在${planned}枚です。`});const uniqueBlock=block.filter((x,i,a)=>a.findIndex(y=>y.code===x.code&&y.path===x.path&&y.message===x.message)===i);return {state:uniqueBlock.length?'BLOCKED':'READY',plannedImages:planned,targetImages:project.targetImageCount,blocking:uniqueBlock,warnings:warn,sections};
 }
