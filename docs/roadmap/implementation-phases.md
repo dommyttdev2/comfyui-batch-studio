@@ -425,6 +425,29 @@ localSha256 == remotePackageSha256
 
 上記を満たした場合のみRemote Runを`COMPLETED`とする。
 
+## Current implementation snapshot (2026-09-11)
+
+最新mainのコードを正本にした実装状況:
+
+| Phase | Status | Current boundary |
+| --- | --- | --- |
+| 0 | Implemented / maintained | schemas/decisionsは運用中。models新規保存はv5 |
+| 1 | Implemented | Electron shell、Grok分離、Project scan、Home/recent、Standalone R2/Civit windows |
+| 2 | Implemented | Project Brief、Draft/History、Story import/confirm、Project/Artifact roots |
+| 3 | Implemented | Integrated Civitai Catalog、cache/retry/metrics、User base model + Grok LoRA selection |
+| 4 | Mostly implemented | Prompt Plan編集/順序/strength/validation。target差分の専用表示やvalidation field誘導は改善余地あり |
+| 5 | Implemented | Illustrious/Anima Template + Manifest |
+| 6 | Partial | UI Workflow compilerは実装済み。Execution API-format graphは未実装 |
+| 7 | Implemented for current UI | target別availability、Integrated R2 Manager、multipart upload、batch DL、temporary PUT URL |
+| 8 | Partial | Artifact/model/provider選択Gateは実装済み。ComfyUI/Scene Prompt/SSH等operational checksは未実装 |
+| 9 | Not implemented | `実行` stage、Execution Run、Local ComfyUI orchestration |
+| 10 | Partial foundation only | Vast.ai endpoint/private-key pathまでは実装。SSH client/Host Key/Remote Workerは未実装 |
+| 11 | Not implemented | Remote model staging |
+| 12 | Not implemented | Remote Scene Prompt execution |
+| 13 | Not implemented | Remote artifact package/R2 delivery/local verification |
+
+この表は要件の正本ではなく、実装進捗の記録である。
+
 ## Post-Execution Extensions
 
 Execution core完了後に必要性を確認して追加する候補:
