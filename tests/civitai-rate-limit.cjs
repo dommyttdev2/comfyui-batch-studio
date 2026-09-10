@@ -13,11 +13,9 @@ execFileSync(process.execPath,[tscBin,'-p',path.join(repo,'tsconfig.electron.jso
 (async()=>{
   process.env.CIVITAI_BASE_URL='https://civitai.test';
   process.env.CIVITAI_MATURE_BASE_URL='https://civitai.test';
-  process.env.CIVITAI_REQUEST_INTERVAL_MS='0';
-  process.env.CIVITAI_MAX_REQUEST_INTERVAL_MS='1';
+  process.env.CIVITAI_REQUEST_INTERVAL_MS='1';
   process.env.CIVITAI_MIN_RETRY_MS='1';
   process.env.CIVITAI_MAX_RETRIES='2';
-  process.env.CIVITAI_RECOVERY_SUCCESSES='1';
   const mod=await import(pathToFileURL(path.join(runtime,'main','civitai-request-policy.js')).href);
   assert.equal(mod.parseRetryAfter('2',1000),2000);
   assert.equal(mod.parseRetryAfter('Thu, 01 Jan 1970 00:00:03 GMT',1000),2000);
@@ -35,11 +33,18 @@ execFileSync(process.execPath,[tscBin,'-p',path.join(repo,'tsconfig.electron.jso
     const response=await globalThis.fetch('https://civitai.test/api/v1/models/1');
     assert.equal(response.status,200,'429 must be absorbed and retried');
     assert.equal(calls,2,'the exact request must resume after one rate-limit response');
-    const metrics=policy.status().metrics;
+    let metrics=policy.status().metrics;
     assert.equal(metrics.requests,2);
     assert.equal(metrics.retries,1);
     assert.equal(metrics.responses429,1);
     assert.equal(metrics.requestsByEndpoint['/api/v1/models/:id'],2);
+    assert.equal(metrics.currentIntervalMs,1,'429 must not increase the normal request interval');
+    assert.equal(policy.status().waiting,false,'successful retry must clear temporary rate-limit waiting state');
+
+    policy.resetMetrics();
+    metrics=policy.status().metrics;
+    assert.equal(metrics.requests,0);
+    assert.equal(metrics.currentIntervalMs,1,'a new sync must start at the configured fixed request interval');
 
     calls=0;
     const always429=new mod.CivitaiRequestPolicy(async()=>{calls++;return new Response('{}',{status:429,headers:{'Retry-After':'0'}});});
@@ -49,6 +54,7 @@ execFileSync(process.execPath,[tscBin,'-p',path.join(repo,'tsconfig.electron.jso
     assert.equal(calls,3,'maxRetries=2 must produce at most three attempts');
     assert.equal(always429.status().metrics.retries,2);
     assert.equal(always429.status().metrics.responses429,3);
+    assert.equal(always429.status().metrics.currentIntervalMs,1,'repeated 429 responses must not permanently throttle normal pacing');
 
     calls=0;
     const recover5xx=new mod.CivitaiRequestPolicy(async()=>{calls++;return calls===1?new Response('{}',{status:503}):new Response('{}',{status:200});});

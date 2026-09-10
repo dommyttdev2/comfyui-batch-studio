@@ -259,7 +259,7 @@ export class CivitaiCatalogService {
       const baselines=new Map<number,StrengthBaseline|null>();
       this.progress('LoRA強度根拠確認中',0,baselineIds.length||1,'選択中のLoRA Versionだけ強度根拠を確認しています');
       let baselineCompleted=0;
-      await mapLimit(baselineIds,4,async id=>{
+      await mapLimit(baselineIds,6,async id=>{
         baselines.set(id,await this.baseline(id));
         baselineCompleted+=1;
         this.progress('LoRA強度根拠確認中',baselineCompleted,baselineIds.length,`LoRA強度根拠 ${baselineCompleted}/${baselineIds.length} を確認中`);
