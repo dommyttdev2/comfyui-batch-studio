@@ -3,7 +3,7 @@ import type { CivitaiConnectionStatus, R2ConnectionStatus, VastAiConnectionStatu
 
 type ConnectedService='r2'|'civitai'|'vastai';
 
-export function HomeConnectedServices({onOpenR2,onOpenCivitai,onOpenVastAi}:{onOpenR2:()=>void;onOpenCivitai:()=>void;onOpenVastAi:()=>void}){
+export function HomeConnectedServices({activeService,onOpenR2,onOpenCivitai,onOpenVastAi}:{activeService:ConnectedService|null;onOpenR2:()=>void;onOpenCivitai:()=>void;onOpenVastAi:()=>void}){
   const [services,setServices]=useState<ConnectedService[]>([]);
   useEffect(()=>{
     let cancelled=false;
@@ -25,12 +25,10 @@ export function HomeConnectedServices({onOpenR2,onOpenCivitai,onOpenVastAi}:{onO
     return()=>{cancelled=true};
   },[]);
   if(!services.length)return null;
-  return <section className="recent-projects connected-services" aria-labelledby="connected-services-title">
-    <div className="panelhead"><div><h3 id="connected-services-title">連携済みサービス</h3><p>設定済みのサービスへホームから直接アクセスできます。</p></div></div>
-    <div className="service-card-grid">
-      {services.includes('r2')&&<button className="service-card" onClick={onOpenR2}><div><strong>Cloudflare R2</strong><span>R2 File Manager</span></div><b className="ok">連携済み</b><p>モデル・成果物ストレージを開きます。</p></button>}
-      {services.includes('civitai')&&<button className="service-card" onClick={onOpenCivitai}><div><strong>Civitai</strong><span>Civit Explorer</span></div><b className="ok">連携済み</b><p>モデルカタログとCivitai情報を開きます。</p></button>}
-      {services.includes('vastai')&&<button className="service-card" onClick={onOpenVastAi}><div><strong>Vast.ai</strong><span>Cloud Instance Manager</span></div><b className="ok">連携済み</b><p>GPU Instanceの状態確認・起動・停止を開きます。</p></button>}
-    </div>
-  </section>;
+  return <div className="home-connected-services-nav" aria-label="連携済みサービス">
+    <span className="home-nav-section-label">連携済みサービス</span>
+    {services.includes('r2')&&<button className={activeService==='r2'?'active':''} onClick={onOpenR2}><span>Cloudflare R2</span><i className="home-service-dot" aria-label="連携済み"/></button>}
+    {services.includes('civitai')&&<button className={activeService==='civitai'?'active':''} onClick={onOpenCivitai}><span>Civitai</span><i className="home-service-dot" aria-label="連携済み"/></button>}
+    {services.includes('vastai')&&<button className={activeService==='vastai'?'active':''} onClick={onOpenVastAi}><span>Vast.ai</span><i className="home-service-dot" aria-label="連携済み"/></button>}
+  </div>;
 }
