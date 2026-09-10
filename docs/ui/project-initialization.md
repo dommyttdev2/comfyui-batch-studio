@@ -86,8 +86,8 @@ Project内のstable filesystem identityである。
 - 先頭は小文字英数字。
 - 以降は小文字英数字、`.`、`_`、`-` を許可する。
 - 数字開始を許可する。
-- Workflow filename `LoRA_{project.id}.json` の派生元とする。
-- 保存先 `BatchStudio/{project.id}/{branch.id}` の派生元とする。
+- Workflow内部の保存先 `BatchStudio/{project.id}/{branch.id}` の派生元とする。
+- Workflow JSONファイル名には `project.id` を使わず、Project実フォルダの親フォルダ名を使って `LoRA_{project-destination-folder}.json` とする。
 - Project作成後は表示名を変更しても自動変更しない。
 - 既存Projectの設定画面から変更しない。
 
