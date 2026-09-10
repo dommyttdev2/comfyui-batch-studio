@@ -153,66 +153,74 @@ Story の初回検討のような対話用回答は Project Artifact ではな�
 
 Batch Studio はファイル内容を取り込み、検証して Draft とする。
 
-## 5. Model Selection Contract
+## 5. Model / LoRA Selection Contract
 
-### 5.1 Model selection owner
+### 5.1 Ownership
 
-モデル選定主体は Grok である。
+Model Familyと基盤モデルはユーザーがBatch Studio UIで選択する。Grokはユーザー選択済みの基盤モデルを変更・再選定しない。
 
-Batch Studio は「カタログ候補を手動選択する UI」を正本の選定経路としない。
+```text
+Illustrious: User -> Checkpoint
+Anima:       User -> Diffusion Model + Text Encoder + VAE
+Grok:        -> LoRA selection only
+```
 
 ### 5.2 Input
 
-Grok に次を渡す。
+Grok のLoRA選定へ次を渡す。
 
 - 確定済み `story.md`
-- `civit-model-viewer` が生成した `model_catalog.json`
+- ユーザー選択済み基盤モデルを含む `models.json` Draft/Confirmed
+- Batch Studioが同期したapp-wide `model_catalog.json`
 - 必要に応じたプロジェクト制約
 
-`model_catalog.json` はファイル添付を基本とする。
+`model_catalog.json` と `models.json` はファイル添付を基本とする。
 
 ### 5.3 Grok duties
 
-Grok は Story を満たすために、カタログ中から次を選定する。
+GrokはStoryと選択済みModel Familyに従って必要なLoRAだけを選定する。
 
-- Checkpoint
-- Character LoRA
-- Pose / Situation / Concept / Style 等の LoRA
-- 使用する Version
-- 使用する実ファイル
-- trained words / trigger words の利用方針
-- 各モデルの採用理由
-- 必要に応じた LoRA weight の提案
+- Character / Pose / Situation / Concept / Style等のLoRA
+- 使用するVersion / File
+- `trainedWords` の利用方針
+- 各LoRAの採用理由
+- Prompt Planで使用する実適用strengthの判断材料
 
-### 5.4 Catalog is authoritative
+`checkpoint` / `diffusionModel` / `textEncoder` / `clip` / `vae` / `modelFamily` を出力してはならない。Batch Studioはこれらを含むGrok返却を拒否する。
 
-カタログにない Model / Version / File を「存在する選定済みモデル」として捏造しない。
+### 5.4 Missing / fallback resolution
 
-Story 実現に必要だが catalog に存在しない場合は、例として次のような不足要件として分離する。
+Catalogに必要LoRAが無い場合、直ちに架空identityや `missingRequirements` を作らず、次の順で解決可能性を評価する。
 
-```json
-{
-  "missingRequirements": [
-    {
-      "role": "pose",
-      "requirement": "必要なLoRAの用途説明",
-      "reason": "Story上の必要性"
-    }
-  ]
-}
-```
+1. `civitai.com` / `civitai.red` の公開情報から代替候補を調査する。
+2. 複数のCatalog内LoRAを組み合わせて実現可能か確認する。
+3. Danbooru系Promptだけで十分に代替可能か判断する。
+4. Prompt代替できる場合は `promptFallbacks` として解決済みにする。
+5. 外部候補は見つかったがCatalog未登録、または代替不能の場合だけ `missingRequirements` に残す。
 
-`missingRequirements` は Draft / UI state 専用であり、確定版 `models.json` には含めない。不足モデルはユーザーが Civitai collection 側へ追加し、`civit-model-viewer` を SYNC してから再選定できる。
+`missingRequirements` が残る場合はユーザーがCivitai Collectionへ必要候補を追加し、Batch StudioでCatalog SYNC後に再選定する。
 
 ### 5.5 Output
 
-Grok の最終モデル選定は **`models.json` という名前のダウンロード可能な JSON ファイル**として返す。JSON 本文をチャット本文や code block へ再掲しない。
+Grokの返却ファイル名は **`model_loras.json`** とする。本文へ同じJSONを再掲しない。
 
-選定結果は `schemas/models.schema.json` の確定構造を基礎とし、不足がある場合だけ Draft 用 `missingRequirements` を root に追加できる。
+最低shape:
 
-定義されていない field を追加しない。
+```json
+{
+  "schemaVersion": 1,
+  "loras": [],
+  "promptFallbacks": [],
+  "missingRequirements": []
+}
+```
 
-Batch Studio が current `model_catalog.json` と照合した後に確定可能となる。
+`promptFallbacks` / `missingRequirements` は必要な場合だけ出力してよい。Batch Studioは `loras[]` をユーザー選択済み基盤モデルへmergeしてModels Draftを作る。
+
+- unresolved `missingRequirements` が1件でもあればConfirm不可。
+- `promptFallbacks` は確定 `models.json` へ残さず、`._batch_studio/model_prompt_fallbacks.json` に分離保存する。
+- current `model_catalog.json` とidentity照合できたLoRAだけ確定可能。
+- Model Familyに応じたPrompt dialectを守り、`trainedWords` はCatalog文字列を勝手に変換しない。
 
 ## 6. Prompt Planning Contract
 
