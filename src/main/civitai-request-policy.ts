@@ -37,7 +37,7 @@ function parseRetryAfter(value:string|null,now=Date.now()):number|null{
 function normalizedHosts(){
   const values=[process.env.CIVITAI_BASE_URL??'https://civitai.com',process.env.CIVITAI_MATURE_BASE_URL??'https://civitai.red'];
   const hosts=new Set<string>();
-  for(const value of values){try{hosts.add(new URL(value).hostname.toLowerCase())}catch{}}
+  for(const value of values){try{hosts.add(new URL(value).hostname.toLowerCase());}catch{}}
   return hosts;
 }
 
@@ -66,36 +66,29 @@ let activePolicy:CivitaiRequestPolicy|null=null;
 export class CivitaiRequestPolicy {
   private readonly originalFetch:typeof fetch;
   private readonly hosts:Set<string>;
-  private readonly baseIntervalMs:number;
-  private readonly maxIntervalMs:number;
+  private readonly requestIntervalMs:number;
   private readonly minRetryMs:number;
   private readonly timeoutMs:number;
   private readonly maxRetries:number;
-  private readonly recoverySuccesses:number;
-  private currentIntervalMs:number;
   private nextRequestAt=0;
   private blockedUntil=0;
   private transientUntil=0;
   private gate:Promise<void>=Promise.resolve();
   private consecutive429=0;
-  private successesSinceThrottle=0;
   private installed=false;
   private metricsValue:CivitaiRequestMetrics;
 
   constructor(originalFetch:typeof fetch=globalThis.fetch){
     this.originalFetch=originalFetch;
     this.hosts=normalizedHosts();
-    this.baseIntervalMs=Math.max(0,Number(process.env.CIVITAI_REQUEST_INTERVAL_MS??350));
-    this.maxIntervalMs=Math.max(this.baseIntervalMs,Number(process.env.CIVITAI_MAX_REQUEST_INTERVAL_MS??5000));
+    this.requestIntervalMs=Math.max(0,Number(process.env.CIVITAI_REQUEST_INTERVAL_MS??350));
     this.minRetryMs=Math.max(1,Number(process.env.CIVITAI_MIN_RETRY_MS??1000));
     this.timeoutMs=Math.max(1000,Number(process.env.CIVITAI_TIMEOUT??20)*1000);
     this.maxRetries=Math.max(0,Math.floor(Number(process.env.CIVITAI_MAX_RETRIES??5)));
-    this.recoverySuccesses=Math.max(1,Math.floor(Number(process.env.CIVITAI_RECOVERY_SUCCESSES??10)));
-    this.currentIntervalMs=this.baseIntervalMs;
     this.metricsValue=this.emptyMetrics();
   }
 
-  private emptyMetrics():CivitaiRequestMetrics{return {requests:0,retries:0,responses429:0,responses5xx:0,networkErrors:0,currentIntervalMs:this.currentIntervalMs,requestsByEndpoint:{}};}
+  private emptyMetrics():CivitaiRequestMetrics{return {requests:0,retries:0,responses429:0,responses5xx:0,networkErrors:0,currentIntervalMs:this.requestIntervalMs,requestsByEndpoint:{}};}
 
   install(){
     if(this.installed)return;
@@ -114,19 +107,19 @@ export class CivitaiRequestPolicy {
       retryAt:waiting?this.blockedUntil:null,
       retryAfterSeconds:waiting?Math.max(1,Math.ceil((this.blockedUntil-now)/1000)):0,
       consecutive429:this.consecutive429,
-      metrics:structuredClone({...this.metricsValue,currentIntervalMs:this.currentIntervalMs}),
+      metrics:structuredClone(this.metricsValue),
     };
   }
 
   private isCivitai(input:RequestInfo|URL){
-    try{const raw=typeof input==='string'||input instanceof URL?String(input):input.url;return this.hosts.has(new URL(raw).hostname.toLowerCase())}catch{return false}
+    try{const raw=typeof input==='string'||input instanceof URL?String(input):input.url;return this.hosts.has(new URL(raw).hostname.toLowerCase());}catch{return false;}
   }
 
   private async waitForSlot(signal?:AbortSignal){
     const task=this.gate.then(async()=>{
       const now=Date.now(),wait=Math.max(0,this.nextRequestAt-now,this.blockedUntil-now,this.transientUntil-now);
       if(wait>0)await sleep(wait,signal);
-      this.nextRequestAt=Date.now()+this.currentIntervalMs;
+      this.nextRequestAt=Date.now()+this.requestIntervalMs;
     });
     this.gate=task.catch(()=>{});
     await task;
@@ -148,21 +141,6 @@ export class CivitaiRequestPolicy {
   private transientDelay(attempt:number){
     const exponential=Math.min(30_000,this.minRetryMs*(2**Math.min(attempt,5)));
     return exponential+Math.floor(Math.random()*Math.min(1000,this.minRetryMs));
-  }
-
-  private slowDown(){
-    this.currentIntervalMs=Math.min(this.maxIntervalMs,Math.max(this.baseIntervalMs,Math.ceil(this.currentIntervalMs*1.75),this.currentIntervalMs+250));
-    this.metricsValue.currentIntervalMs=this.currentIntervalMs;
-    this.successesSinceThrottle=0;
-  }
-
-  private recover(){
-    if(this.currentIntervalMs<=this.baseIntervalMs)return;
-    this.successesSinceThrottle+=1;
-    if(this.successesSinceThrottle<this.recoverySuccesses)return;
-    this.currentIntervalMs=Math.max(this.baseIntervalMs,Math.floor(this.currentIntervalMs*.8));
-    this.metricsValue.currentIntervalMs=this.currentIntervalMs;
-    this.successesSinceThrottle=0;
   }
 
   private retryableMethod(init?:RequestInit){const method=String(init?.method??'GET').toUpperCase();return method==='GET'||method==='HEAD';}
@@ -195,7 +173,6 @@ export class CivitaiRequestPolicy {
       if(response.status===429){
         this.metricsValue.responses429+=1;
         this.consecutive429+=1;
-        this.slowDown();
         const delay=this.retryDelay(response,attempt);
         this.blockedUntil=Math.max(this.blockedUntil,Date.now()+delay);
         if(!retryable||attempt>=this.maxRetries)return response;
@@ -216,7 +193,6 @@ export class CivitaiRequestPolicy {
       this.consecutive429=0;
       this.blockedUntil=0;
       this.transientUntil=0;
-      if(response.ok)this.recover();
       return response;
     }
     throw new Error('Civitai request retry loop exited unexpectedly.');
