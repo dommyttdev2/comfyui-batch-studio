@@ -61,7 +61,7 @@ Projectを閉じている場合:
 サービス連携
 ```
 
-R2 File Manager / Civit Explorer は「サービス連携」配下から開く app-wide tool とし、Home navigationの同階層へ並べない。
+R2 File Manager / Civit Explorer / Vast.ai管理画面は「サービス連携」のcontextに属する app-wide tool とし、Home navigationの同階層へ固定表示しない。ただし連携済みサービスはHomeの「連携済みサービス」セクションから対象画面へ直接開ける。
 
 `Prompt Tree` の独立navigationは設けない。Prompt構造の人間向け表示・編集はPrompt Planへ統合する。
 
@@ -77,8 +77,24 @@ Projectを閉じたHomeでは最低限次を提供する。
 - プロジェクトを開く。
 - 最近使ったプロジェクト。
 - サービス連携。
+- 連携済みサービスへの直接ショートカット（1件以上存在する場合のみ）。
 
-初期状態のHomeを外部サービス管理画面の集合にしない。R2 / Civitai / Cloud Instanceの設定は「サービス連携」を明示的に開いてから操作する。
+初期状態のHomeを外部サービス管理画面の集合にしない。未連携サービスの設定は「サービス連携」を明示的に開いてから操作する。
+
+連携済みサービスはHomeの「連携済みサービス」セクションへ条件付き表示する。未連携サービスは表示しない。
+
+```text
+Cloudflare R2 connected
+  -> R2 File Manager
+
+Civitai connected
+  -> Civit Explorer
+
+Vast.ai connected
+  -> Vast.ai Instance管理画面
+```
+
+各service statusの取得失敗によってHome全体を利用不能にしない。取得できなかったserviceだけをショートカット対象外とする。
 
 ## 5. Service Integrations
 
@@ -161,7 +177,7 @@ Grokから貼り戻す工程ではparse preview、Draft save、validation、curr
 
 Project工程の「モデルカタログ」は統合CatalogをProject contextで利用する画面。
 
-Projectなしの「Civit Explorer」はサービス連携のCivitai画面から開くStandalone Toolとする。
+Projectなしの「Civit Explorer」はサービス連携のCivitai画面、またはCivitai連携済みの場合はHomeの直接ショートカットから開くStandalone Toolとする。
 
 Catalog SYNC、Collection選択、検索、Version/File/trained words/thumbnail/strengthBaseline確認、Civitai model pageへの外部navigation等を提供する。詳細なCatalog仕様は `../integrations/external-tools.md` を正本とする。
 
@@ -230,13 +246,13 @@ Projectへ保存するのは `remoteProvider=vastai` と `remoteInstanceId`。SS
 
 Vast.ai未連携の場合は「サービス連携 → クラウドインスタンス → Vast.ai」で設定する必要があることを明示する。
 
-R2 ExplorerはProject工程ではmodel availability確認用のread-only用途を基本とし、R2管理操作はサービス連携から開くStandalone R2 File Managerへ集約する。
+R2 ExplorerはProject工程ではmodel availability確認用のread-only用途を基本とし、R2管理操作はサービス連携またはHomeの連携済みサービスから開くStandalone R2 File Managerへ集約する。
 
 Remote targetでR2に存在するmodelはExecution開始時にRemote hostがR2から直接取得する。model binaryをSSH/SCPで送るUXを提供しない。
 
 ## 13. Standalone R2 File Manager
 
-サービス連携のCloudflare R2画面から開く。
+サービス連携のCloudflare R2画面、またはR2連携済みの場合はHomeの直接ショートカットから開く。
 
 Projectに依存せず、bucket管理、folder navigation、search、upload、move/rename、delete、download情報生成、一括DL、upload resume等を提供する。
 
@@ -320,7 +336,7 @@ Remote targetでは `generation completed` と `artifact delivery completed` を
 | モデル配置 | 非表示 |
 | 実行前チェック | 非表示 |
 | 実行 | 非表示 |
-| Home / サービス連携 / R2 File Manager / Civit Explorer | 非表示 |
+| Home / サービス連携 / R2 File Manager / Civit Explorer / Vast.ai | 非表示 |
 
 工程切替時はこの既定表示を再適用する。
 
