@@ -1006,7 +1006,8 @@ status normalization
 start / stop
 public SSH endpoint resolution
 Project remoteProvider / remoteInstanceId selection
-Project-level Preflight Gate
+Project-level Preflight Gate（provider設定 / key path / instance state / endpoint範囲）
+Integrated R2 Managerのpresigned GET / temporary presigned PUT primitive
 ```
 
 今後のExecution実装範囲:
@@ -1017,9 +1018,11 @@ Remote Worker
 remote model staging
 ComfyUI API graph submission
 Scene Prompt continuous runner
-artifact package/upload/download
+Execution連携としてのartifact package/upload/download
 Execution Run State / Resume
 provider lifecycle automatic start/wait/finalize
 ```
 
 未実装部分をUI上で成功済みとして扱わない。
+
+Standalone R2 File Managerの一時PUT URL生成は実装済みだが、Remote Runのartifact package/hash生成、Execution専用Object Key管理、Remote WorkerへのURL受け渡し、upload evidence、R2からLocalへのstream回収とhash検証は未実装である。
