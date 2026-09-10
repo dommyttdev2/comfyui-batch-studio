@@ -71,26 +71,32 @@ Status: Active
 | REQ-INT-004 | Decided | Civitai 由来 LoRA strength evidence は Batch Studio が exact version の投稿metadataから決定済みpolicyで optional `strengthBaseline` と provenance を生成する。説明文解析や経験則による値を Civitai provenance として捏造しない。 | `integrations/external-tools.md` |
 | REQ-INT-005 | Decided | R2一括DLはメイン一覧の削除選択と独立した選択状態を持ち、フォルダ移動・バケット内検索を跨いで最大500件を保持する。URLは最終生成時だけ発行し、URL/curl/wget/aria2cを提供する。 | `integrations/external-tools.md` |
 | REQ-INT-006 | Decided | 大容量R2 uploadはMain Processからmultipartで実行し、進捗・pause/resume/cancelを提供する。未完了upload stateはapp dataへ永続化し、再起動後に再開可能とする。 | `integrations/external-tools.md` |
+| REQ-INT-007 | Decided | Projectを閉じたHomeではProject管理と「サービス連携」を主要入口とし、R2 / Civitai / Cloud Instance credential管理をサービス連携へ集約する。環境設定はBatch Studio自身のローカル設定を所有する。 | `integrations/service-integrations.md` / `ui/application-shell.md` |
+| REQ-INT-008 | Decided | 初期Cloud Instance ProviderをVast.aiとし、API Keyは`safeStorage`で暗号化保存し、既存runnerとの互換のため`VASTAI_API_KEY`をenvironment fallbackとして利用する。保存済みAPI KeyをRenderer/Projectへ返さない。 | `integrations/service-integrations.md` |
+| REQ-INT-009 | Decided | Vast.ai連携はElectron Main ProcessからREST APIを利用し、Instance一覧、status正規化、start、stop、current public SSH endpoint解決を提供する。Python subprocess / Vast.ai CLIを必須依存としない。 | `integrations/service-integrations.md` |
+| REQ-INT-010 | Decided | Remote Projectは`remoteProvider=vastai`と`remoteInstanceId`をstable selectionとして保持し、SSH Host / PortはProjectへ固定保存せず、実行時にVast.ai APIから最新値を解決する。 | `integrations/service-integrations.md` / `architecture/remote-execution.md` |
+| REQ-INT-011 | Decided | Vast.ai Remote接続は公開SSH + private-key authenticationを前提とし、SSH private key contentsをapp config/ProjectへコピーせずLocal pathだけを保持する。SSH Tunnelとpassword fallbackを使用しない。 | `integrations/service-integrations.md` / `architecture/remote-execution.md` |
 
 ## 7. Execution
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-EXEC-001 | Decided | `executionTarget=local` ではLocal ComfyUI APIを使用し、必要モデルのLocal配置を必須、R2配置を任意とする。 | `architecture/remote-execution.md` |
-| REQ-EXEC-002 | Decided | `executionTarget=remote` では公開SSH endpointへの秘密鍵認証をcontrol planeとし、SSH Tunnelを使用しない。Remote WorkerがRemote host内のlocalhost ComfyUI APIを操作する。 | `architecture/remote-execution.md` |
+| REQ-EXEC-002 | Decided | `executionTarget=remote` ではCloud Instance Providerからcurrent SSH endpointを解決し、公開SSH endpointへの秘密鍵認証をcontrol planeとする。SSH Tunnelを使用せず、Remote WorkerがRemote host内のlocalhost ComfyUI APIを操作する。 | `architecture/remote-execution.md` |
 | REQ-EXEC-003 | Decided | Remote targetの必要モデルはR2をsourceとし、public/presigned GET URLでRemote hostが直接取得する。multi-GB model binaryをSSH/SCPで転送しない。 | `architecture/remote-execution.md` |
 | REQ-EXEC-004 | Decided | Scene Prompt Tools `ScenePrompterExpand` の連続生成はfrontend button操作ではなく、標準ComfyUI APIとScene Prompt Tools custom run-context APIのorchestrationで再現する。 | `architecture/remote-execution.md` |
 | REQ-EXEC-005 | Decided | Remote成果物はRemoteでmanifest/package/hashを作成し、Main Processが発行する短命presigned PUT URLでR2へuploadする。R2 credentialをRemoteへ渡さない。 | `architecture/remote-execution.md` |
 | REQ-EXEC-006 | Decided | Remote RunはR2へuploadした成果物をLocalへdownloadし、Local SHA-256とRemote package SHA-256が一致した後にのみ`COMPLETED`とする。 | `architecture/remote-execution.md` |
 | REQ-EXEC-007 | Decided | Executionはpersistent Runとしてphase、prompt ID、artifact evidence等を保持し、既に検証済みの高コスト工程を無条件に再実行せずResume可能とする。Secretや不要なsigned URLはRun Stateへ保存しない。 | `architecture/remote-execution.md` |
 | REQ-EXEC-008 | Decided | 通常停止は次promptのscheduleを止め、Force Interruptはcurrent promptへのComfyUI interruptとして分離する。他Runのqueueを変更しない。 | `architecture/remote-execution.md` |
+| REQ-EXEC-009 | Decided | Vast.ai選択時はRun開始時にInstanceのcurrent stateを再取得し、stoppedならstartしてrunning/SSH endpoint readinessを確認する。Run前からrunningだったInstanceとBatch Studioが起動したInstanceを区別し、initial-state preservationを既定思想とする。 | `architecture/remote-execution.md` |
 
 ## 8. Validation / Security
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-VAL-001 | Decided | `story.md`、`models.json`、`prompt_plan.json`、最終 Workflow を工程ごとに検証する。 | `quality/validation-and-security.md` |
-| REQ-VAL-002 | Decided | Preflight では成果物相互のモデル参照、Workflow/API graph構造、`executionTarget`に応じた必要モデル所在とLocal/Remote operational capabilityを確認する。 | `quality/validation-and-security.md` / `architecture/remote-execution.md` |
+| REQ-VAL-002 | Decided | Preflight では成果物相互のモデル参照、Workflow/API graph構造、`executionTarget`に応じた必要モデル所在とLocal/Remote operational capabilityを確認する。Remoteでは少なくともCloud Provider / Instance選択をGate化し、provider/SSH capability実装に応じて検証を強化する。 | `quality/validation-and-security.md` / `architecture/remote-execution.md` |
 | REQ-SEC-001 | Decided | Grok 用 WebContents とローカル UI を権限・session 境界で分離する。 | `architecture/system-architecture.md` |
 | REQ-SEC-002 | Decided | `.env`、credential、R2 設定、ブラウザデータ、`.safetensors` 本体を Grok 添付候補へ出さない。 | `quality/validation-and-security.md` |
-| REQ-SEC-003 | Decided | SSH private key contentsとR2 credentialをProject/Renderer/Remoteへ配布しない。Remoteへ渡すR2 signed URLは必要object・operation・limited lifetimeに限定し、full queryを通常logへ保存しない。 | `architecture/remote-execution.md` |
+| REQ-SEC-003 | Decided | SSH private key contents、Vast.ai API Key、R2 credentialをProject/Renderer/Remoteへ配布しない。Remoteへ渡すR2 signed URLは必要object・operation・limited lifetimeに限定し、full queryを通常logへ保存しない。 | `architecture/remote-execution.md` / `integrations/service-integrations.md` |
