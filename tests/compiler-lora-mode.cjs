@@ -41,8 +41,8 @@ const writeJson=(p,v)=>{fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeF
     common:{positive:'quality',negative:'bad'},
     rootLoras:[],
     branches:[
-      {id:'with-lora',label:'With LoRA',loras:[{modelRef:'lora.character',strengthModel:0.7,strengthClip:0.7}],leaves:[{id:'leaf-one',name:'one',positive:'p1',negative:'n1'}]},
-      {id:'without-lora',label:'Without LoRA',loras:[],leaves:[{id:'leaf-two',name:'two',positive:'p2',negative:'n2'}]}
+      {id:'with-lora',label:'With LoRA',loras:[{modelRef:'lora.character',strengthModel:0.7,strengthClip:0.7}],leaves:[{id:'leaf-one',name:'日本語の表示名',positive:'p1',negative:'n1'}]},
+      {id:'without-lora',label:'Without LoRA',loras:[],leaves:[{id:'leaf-two',name:'別の日本語名',positive:'p2',negative:'n2'}]}
     ]
   });
 
@@ -57,5 +57,18 @@ const writeJson=(p,v)=>{fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeF
   assert.equal(withoutLora.mode,4,'branch without LoRA must be bypassed');
   assert.equal(JSON.parse(withLora.widgets_values[0]).loras.length,1);
   assert.equal(JSON.parse(withoutLora.widgets_values[0]).loras.length,0);
+
+  const withLoraMatrix=workflow.nodes.find(n=>n.type==='SceneMatrix'&&String(n.title).startsWith('Prompt - with-lora -'));
+  const withoutLoraMatrix=workflow.nodes.find(n=>n.type==='SceneMatrix'&&String(n.title).startsWith('Prompt - without-lora -'));
+  assert.ok(withLoraMatrix,'with-LoRA SceneMatrix must exist');
+  assert.ok(withoutLoraMatrix,'without-LoRA SceneMatrix must exist');
+  const withLoraRow=JSON.parse(withLoraMatrix.widgets_values[0]).sets[0];
+  const withoutLoraRow=JSON.parse(withoutLoraMatrix.widgets_values[0]).sets[0];
+  assert.equal(withLoraRow.row_id,'leaf-one');
+  assert.equal(withLoraRow.name,'leaf-one','SceneMatrix row name must use prompt id, not prompt_plan name');
+  assert.equal(withLoraRow.path_label,'leaf-one');
+  assert.equal(withoutLoraRow.row_id,'leaf-two');
+  assert.equal(withoutLoraRow.name,'leaf-two','SceneMatrix row name must use prompt id, not prompt_plan name');
+  assert.equal(withoutLoraRow.path_label,'leaf-two');
   console.log('Compiler LoRA mode tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1});
