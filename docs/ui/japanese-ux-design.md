@@ -282,7 +282,7 @@ Grok pane の初期表示、サイズ、配置、show/hide の具体的な UX �
 表示内容の例:
 
 - Grok でストーリーを検討する必要がある。
-- Grok のモデル選定結果を貼り付ける必要がある。
+- 基盤モデルをユーザーが選択し、Grok のLoRA選定結果を取り込む必要がある。
 - モデルが不足しているため catalog 更新が必要。
 - Prompt Plan の下書き確認が必要。
 - Workflow の再生成が必要。
@@ -384,22 +384,20 @@ Story は会話・探索型の工程として扱う。
 
 ## 12. モデル選定工程 UX 要件
 
-Models は選定・照合型の工程として扱う。
+Models は **ユーザーによる基盤モデル選択 + GrokによるLoRA選定 + Batch Studioによる照合** の工程として扱う。
 
 ユーザーは最低限次を行えること。
 
-1. 使用中の `model_catalog.json` の generation / generatedAt を確認する。
-2. Grok へ渡すモデル選定依頼を生成する。
-3. `story.md` / `model_catalog.json` が必要添付であることを確認する。
-4. Grok の回答を貼り付ける。
-5. 選定結果を解析する。
-6. Checkpoint / LoRA ごとに Model / Version / File を確認する。
-7. catalog 実在性を確認する。
-8. `trainedWords` を確認する。
-9. Civitai 基準値が存在する場合、その値と根拠を確認する。
-10. 選定理由を確認する。
-11. missingRequirements がある場合、通常の確定フローとは分離して確認する。
-12. valid な選定だけを Draft / Confirm できる。
+1. Model Familyとして Illustrious / Anima を選択する。
+2. IllustriousではCheckpoint、AnimaではDiffusion Model / Text Encoder / VAEを選択する。
+3. Civitai Catalogのgeneration / generatedAtと必要なModel / Version / File / Base Modelを確認できる。
+4. 基盤モデルを保存した後、Grokへ渡すLoRA選定依頼を生成する。
+5. `story.md` / ユーザー選択済み基盤モデル / `model_catalog.json` が添付対象であることを確認する。
+6. Grokから返された `model_loras.json` をファイルとして取り込む。
+7. LoRAごとにModel / Version / File / trainedWords / Civitai基準値 / 選定理由を確認する。
+8. `promptFallbacks` と `missingRequirements` を区別して確認する。
+9. 未解決 `missingRequirements` がないvalidなModels DraftだけをConfirmできる。
+10. 基盤モデル変更時は後段Prompt Plan / Workflowがreset対象になることを理解できる。
 
 ### 12.1 Civitai 基準値表示
 
@@ -414,23 +412,27 @@ Models は選定・照合型の工程として扱う。
 
 この値を作者推奨値として誤表示しない。
 
-### 12.2 不足モデル
+### 12.2 不足LoRA / 代替解決
 
-不足モデルがある場合、単なる `not found` error ではなく、次の解決工程を理解できること。
+Catalogに必要LoRAが無い場合は単なる `not found` error にせず、次の解決手段を区別して示す。
 
 ```text
-Civitai collectionへ追加
-↓
-civit-model-viewerでSYNC
-↓
-model_catalog.json更新
-↓
-Grokで再選定
+Catalog外のCivitai候補がある
+  -> Collectionへ追加
+  -> Batch StudioでSYNC
+  -> GrokでLoRA再選定
+
+Catalog内の複数LoRAで代替可能
+  -> 組合せを選定結果へ反映
+
+Promptだけで代替可能
+  -> promptFallbacksとして解決済み
+
+いずれでも解決不能
+  -> missingRequirementsとしてBLOCK
 ```
 
-未解決 `missingRequirements` がある状態では models.json を Confirm できないことを明示する。
-
----
+`missingRequirements` が残る状態で確定操作を有効にしない。
 
 ## 13. プロンプト設計工程 UX 要件
 
@@ -698,9 +700,9 @@ Empty / Error state は状態だけでなく、可能な限り次の行動を示
 期待する意味:
 
 ```text
-まだモデル選定結果がない
-+ Grokでモデル選定が必要
-+ 選定依頼を生成できる
+まだ基盤モデル / LoRA選定が完了していない
++ Model Familyと基盤モデルを選択する
++ 基盤モデル保存後にGrokへLoRA選定依頼を生成できる
 ```
 
 解析失敗時:
@@ -755,7 +757,7 @@ Empty / Error state は状態だけでなく、可能な限り次の行動を示
 特に次を受入基準とする。
 
 1. ユーザーが次に何をすべきか判断できる。
-2. Grokとの手動往復がStory / Models / Prompt Planそれぞれで成立する。
+2. Grokとの手動往復がStory / LoRA Selection / Prompt Planそれぞれで成立する。
 3. Grokから受け取った内容を直接確定せず Draft / Validation / Confirm を経由する。
 4. 不足モデル等のBlocking状態から解決方法を理解できる。
 5. Prompt Plan が左から右へ展開する擬似 Workflow Tree として表示される。
