@@ -1,0 +1,38 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const repo=path.resolve(__dirname,'..');
+const read=p=>fs.readFileSync(path.join(repo,p),'utf8');
+
+const app=read('src/renderer/App.tsx');
+const settings=read('src/renderer/EnvironmentSettings.tsx');
+const services=read('src/renderer/ServiceIntegrationsStage.tsx');
+const vastPanel=read('src/renderer/integrations/VastAiIntegrationPanel.tsx');
+const execution=read('src/renderer/ExecutionStages.tsx');
+const config=read('src/main/vastai-config.ts');
+const main=read('src/main/main.ts');
+const preflight=read('src/main/preflight.ts');
+
+assert.match(app,/サービス連携/);
+assert.match(app,/ServiceIntegrationsStage/);
+assert.doesNotMatch(app,/>R2 File Manager<\/button>/,'Homeの直接R2入口を残さない');
+assert.doesNotMatch(app,/>Civit Explorer<\/button>/,'Homeの直接Civit入口を残さない');
+assert.doesNotMatch(settings,/<h3>Cloudflare R2 連携<\/h3>/,'環境設定でR2資格情報を二重管理しない');
+assert.doesNotMatch(settings,/<h3>Civitai 連携<\/h3>/,'環境設定でCivitai資格情報を二重管理しない');
+assert.match(services,/Cloudflare R2/);
+assert.match(services,/Civitai/);
+assert.match(services,/クラウドインスタンス/);
+assert.match(services,/Vast\.ai/);
+assert.match(vastPanel,/VASTAI_API_KEY/);
+assert.match(vastPanel,/既存Instanceの状態確認・起動・停止/);
+assert.match(execution,/remoteProvider:'vastai'/);
+assert.match(execution,/remoteInstanceId/);
+assert.match(execution,/SSH Host\/PortはProjectへ固定保存せず/);
+assert.match(config,/VASTAI_ENVIRONMENT_VARIABLE='VASTAI_API_KEY'/);
+assert.match(config,/DEFAULT_VASTAI_COMFY_PORT=18188/);
+assert.match(preflight,/remoteTargetCheck/,'PreflightがRemote target検証hookを持つ');
+assert.match(main,/remoteTargetIssuesFor/,'Main ProcessがVast.ai Remote targetを検証する');
+assert.match(main,/runPreflight\(root,await r2LookupFor\(root\),settings\.modelsPath,\(\)=>remoteTargetIssuesFor\(root\)\)/,'PREFLIGHT_RUNからRemote target検証を実配線する');
+assert.match(main,/VASTAI_SSH_KEY_MISSING/);
+assert.match(main,/VASTAI_INSTANCE_LOOKUP_FAILED/);
+console.log('Service integrations UI tests passed.');

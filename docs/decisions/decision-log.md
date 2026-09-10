@@ -210,13 +210,17 @@ Batch Studio はモデル所在を照合するが、初期段階の upload/downl
 ## DEC-011: Current required scope ends at Preflight
 
 Date: 2026-09-07
-Status: Accepted
+Status: Superseded
 
 ### Decision
 
 v1 の必須範囲は READY FOR COMFYUI まで。
 
 ComfyUI queue submission / progress / result retrieval は将来拡張とする。
+
+### Superseded by
+
+`DEC-022` により、責務終端を `実行` 工程まで拡張した。
 
 ---
 
@@ -1052,6 +1056,99 @@ baselineが存在しない場合、Batch Studioは `1.0 / 1.0` や `0.7 / 0.7` �
 - `REQ-PLAN-007` を Decided とする。
 - `REQ-INT-004` を Decided とする。
 - `OPEN-006` を Superseded とする。
+
+---
+
+## DEC-022: Execution scope extends through Local / Remote artifact delivery
+
+Date: 2026-09-10
+Status: Accepted
+
+### Decision
+
+Batch Studio の責務終端を Preflight から `実行` 工程まで拡張する。
+
+`executionTarget=local` では Local ComfyUI API を使用し、Scene Prompt Toolsの連続生成とLocal成果物確認までを1 Runとして扱う。
+
+`executionTarget=remote` では次の方式を採用する。
+
+```text
+Batch Studio Main Process
+  -> public SSH endpoint / private-key authentication
+  -> Remote Worker
+  -> Remote localhost ComfyUI API
+  -> R2 GET model staging
+  -> Scene Prompt continuous execution
+  -> Remote package/hash
+  -> presigned PUT -> R2
+  -> signed/public GET -> Local
+  -> Local hash verification
+```
+
+### Remote control boundary
+
+- SSH Tunnelは使用しない。
+- ComfyUI API portを外部公開する必要はない。
+- password authenticationを標準経路にしない。
+- Remote WorkerがRemote host内の `127.0.0.1:<comfy-port>` へComfyUI API requestを送る。
+- SSHはcontrol planeとして使用し、multi-GB model / artifact binaryをSSH/SCPで転送しない。
+
+### R2 boundary
+
+Cloudflare R2をlarge binary transfer planeとする。
+
+- Required model: R2 -> Remote direct HTTP GET。
+- Artifact: Remote -> R2 direct HTTP PUT。
+- Final delivery: R2 -> Local direct HTTP GET。
+- R2 credentialはElectron Main Processに留める。
+- Remoteへ渡すのは対象object / operation / lifetimeを限定したsigned URLのみ。
+
+### Scene Prompt boundary
+
+`ScenePrompterExpand` の「連続生成」はfrontend buttonを押す方式ではなく、標準ComfyUI APIとScene Prompt Tools custom run-context APIを組み合わせたorchestrationとして再現する。
+
+Remote targetではこのsequenceをRemote Workerがlocalhostから実行する。
+
+### Completion boundary
+
+Remote RunはComfyUI生成完了だけでは`COMPLETED`にしない。
+
+```text
+all generation jobs complete
++
+expected artifact confirmed
++
+Remote package/hash complete
++
+R2 upload complete
++
+Local download complete
++
+Local SHA-256 == Remote package SHA-256
+```
+
+を満たした時点でのみ`COMPLETED`とする。
+
+### Resume
+
+Executionはpersistent Runとしてphase / prompt IDs / artifact evidence等を保持し、既に検証済みの高コスト工程を無条件に再実行せずResume可能とする。
+
+### Rationale
+
+- Remote ComfyUIをpublic HTTP serviceとして露出させずに制御できる。
+- Local PCのupload帯域をmulti-GB model transferの中継に使わない。
+- R2 credentialをRemoteへ配布せずにdownload/uploadできる。
+- 生成完了後の成果物delivery failureとgeneration failureを分離できる。
+- 長時間・大量生成Runを中断後に最初からやり直す必要を減らせる。
+
+### Supersedes
+
+- `DEC-011` を Superseded とする。
+
+### Resolves
+
+- `REQ-SCOPE-001`。
+- `REQ-EXEC-001` から `REQ-EXEC-008`。
 
 ---
 
