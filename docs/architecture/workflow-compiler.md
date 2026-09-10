@@ -796,6 +796,12 @@ Manifest hash は Manifest 自身へ埋め込まず、Compile時の外部 proven
 
 `generation.target_image_count` とProject予定枚数の差分はblocking invariantではない。
 
+### 16.3 Current implementation boundary
+
+現在の `src/main/compiler.ts` は、Model Family別Template/ManifestからComfyUI **UI Workflow JSON** を決定論的に生成し、上記のNode/Link/Group/Matrix/Save path invariantを検証するところまで実装済みである。
+
+Execution用のComfyUI API-format graph生成・paired contract解決・UI Workflowとのhash/identity整合確認はまだ実装されていない。これらはExecution実装前に追加する必要があり、現時点でUI Workflow生成成功をAPI graph準備完了とは扱わない。
+
 ## 17. Manifest Schema Evolution
 
 Schema v1 が表現できない Template topology が必要になった場合は Compiler の暗黙推測や ad-hoc field を追加せず、正式な Manifest schema evolution として扱う。
