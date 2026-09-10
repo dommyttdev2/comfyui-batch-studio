@@ -27,13 +27,18 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.equal(mapped.hourlyCost,0.75);
 
   const calls=[];
+  let lifecycleState='running';
   const fakeFetch=async(url,init={})=>{
     calls.push({url:String(url),init});
     const u=new URL(String(url));
     if(u.pathname==='/api/v1/instances/'&&u.searchParams.get('after_token')==='next-page')return response({instances:[{id:2,actual_status:'stopped',gpu_name:'RTX 4090'}],next_token:null});
     if(u.pathname==='/api/v1/instances/')return response({instances:[{id:1,actual_status:'running',ssh_host:'ssh.vast.ai',ssh_port:12345,gpu_name:'RTX 5090'}],next_token:'next-page'});
-    if(u.pathname==='/api/v0/instances/1/'&&(!init.method||init.method==='GET'))return response({instances:{id:1,actual_status:'running',ssh_host:'ssh.vast.ai',ssh_port:12345}});
-    if(u.pathname==='/api/v0/instances/1/'&&init.method==='PUT')return response({success:true});
+    if(u.pathname==='/api/v0/instances/1/'&&init.method==='PUT'){
+      const requested=JSON.parse(init.body);
+      lifecycleState=requested.state;
+      return response({success:true});
+    }
+    if(u.pathname==='/api/v0/instances/1/'&&(!init.method||init.method==='GET'))return response({instances:{id:1,actual_status:lifecycleState,intended_status:lifecycleState,cur_state:lifecycleState,ssh_host:lifecycleState==='running'?'ssh.vast.ai':null,ssh_port:lifecycleState==='running'?12345:null}});
     return response({msg:'not found'},404);
   };
   const client=new VastAiClient(async()=>'secret-key',fakeFetch,'https://example.test');
@@ -44,13 +49,16 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
 
   const one=await client.getInstance(1);
   assert.equal(one.sshHost,'ssh.vast.ai');
-  await client.startInstance(1);
-  await client.stopInstance(1);
+  const started=await client.startInstance(1);
+  assert.equal(started.status,'running');
+  const stopped=await client.stopInstance(1);
+  assert.equal(stopped.status,'stopped');
   const puts=calls.filter(x=>x.init.method==='PUT');
   assert.equal(puts.length,2);
   assert.deepEqual(JSON.parse(puts[0].init.body),{state:'running'});
   assert.deepEqual(JSON.parse(puts[1].init.body),{state:'stopped'});
   assert.ok(puts.every(x=>x.init.headers.Authorization==='Bearer secret-key'));
+  assert.ok(calls.filter(x=>new URL(x.url).pathname==='/api/v0/instances/1/'&&(!x.init.method||x.init.method==='GET')).length>=3,'lifecycle操作後にGETで最終状態を確認する');
 
   console.log('Vast.ai client tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1});
