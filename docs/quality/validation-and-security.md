@@ -60,7 +60,7 @@ State:
 
 ### 5.1 Identity validation
 
-Grok が選定した各項目を current catalog と照合する。
+Civitai identityを持つユーザー選択基盤モデルとGrok選定LoRAをcurrent catalogと照合する。Anima Text Encoder / VAEはCatalog identityではなく用途別Local/R2 file inventoryで検証する。
 
 確認:
 
