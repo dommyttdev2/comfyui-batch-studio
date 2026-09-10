@@ -56,7 +56,7 @@ User         = review and final approval
 ## DEC-003: Grok owns model selection
 
 Date: 2026-09-07
-Status: Accepted
+Status: Superseded by DEC-023
 
 ### Decision
 
@@ -835,7 +835,7 @@ Branch / Node / Group title、Save path、image count、output filename metadata
 
 ---
 
-## DEC-020: Workflow naming and image count are compiler-derived from stable IDs
+## DEC-020: Workflow naming and image count are compiler-derived from project destination and stable IDs
 
 Date: 2026-09-07
 Status: Accepted
@@ -895,7 +895,7 @@ SceneSaveImage    = Save - {branch.id} - {displayLabel} ({branchImageCount})
 新規Workflow filename:
 
 ```text
-LoRA_{project.id}.json
+LoRA_{project-destination-folder}.json
 ```
 
 Branch save path:
@@ -913,11 +913,11 @@ SceneMatrix mapping:
 ```text
 leaf.id   -> row_id
 leaf.id   -> path_label
-leaf.name -> name
+leaf.id   -> name
 filename_enabled = true
 ```
 
-`leaf.id` をstable output identity、`leaf.name` を人間向け表示名とする。
+`leaf.id` をstable output identityおよびSceneMatrix row nameとし、`leaf.name` はBatch Studio UI上の人間向け表示名とする。
 
 ### Physical filename boundary
 
@@ -927,7 +927,8 @@ extension、numeric sequence、collision suffix、timestamp、seed等のcustom-n
 
 ### Rationale
 
-- display labelやProject title変更でfilesystem identityが変わる事故を防ぐ。
+- Workflow file名はProject実フォルダの親フォルダ名、ComfyUI save/output identityはstable IDから派生させ、用途を分離する。
+- display labelやProject title変更でComfyUI save/output identityが変わる事故を防ぐ。
 - Templateをコピーした際に旧ProjectのSave pathや枚数titleが残る事故を防ぐ。
 - Prompt Planのleaf数から予定枚数を一意に計算できる。
 - SceneSaveImageのversion固有filename挙動をBatch Studioへ重複実装しない。
@@ -1152,6 +1153,38 @@ Executionはpersistent Runとしてphase / prompt IDs / artifact evidence等を�
 
 ---
 
+## DEC-023: User owns model family and base model; Grok owns LoRA selection
+
+Date: 2026-09-09
+Status: Accepted
+
+### Decision
+
+Model Familyと基盤モデルの選定主体をユーザーへ変更し、GrokのModel工程はLoRA選定だけを担当する。
+
+- Illustrious: UserがCheckpointを選択。
+- Anima: UserがDiffusion Model / Text Encoder / VAEを選択。
+- Checkpoint / Diffusion ModelはCivitai Catalogから選択。
+- Text Encoder / VAEは用途別Local/R2 inventoryから選択。
+- Grok返却は `model_loras.json` とし、基盤モデルfieldの上書きを禁止する。
+- Batch Studioが既存基盤モデルへ `loras[]` をmergeして `models.json` Draftを構築する。
+- 新規保存は `models.json` Schema v5、v1〜v4はlegacy read/compile compatibilityとして維持する。
+
+### Prompt dialect
+
+- Illustrious: Danbooru tagはunderscore形式。
+- Anima: 通常tagはspace形式。
+- `trainedWords` はCatalog文字列を完全一致で維持する。
+
+### Supersedes
+
+- `DEC-003` の「GrokがCheckpointを含む全モデル選定を所有する」方針。
+- `DEC-018` のSchema v1を新規保存形式として固定する部分。stable ref / identity / provenance / resolved-only原則は継承する。
+
+詳細は `model-family-and-base-model-selection.md` を正本とする。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
@@ -1170,7 +1203,7 @@ Status: Superseded
 
 `DEC-018` により解決済み。
 
-`models.json` Schema v1 の正式 root structure、stable `ref`、Checkpoint / LoRA separation、Civitai identity fields、Grok `reason`、optional `strengthBaseline` provenance、`missingRequirements` の Draft/UI 分離を固定し、機械可読 schema を `schemas/models.schema.json` とした。
+`models.json` の初期Schema v1 contractを `DEC-018` で固定した。その後 `DEC-023` / `model-family-and-base-model-selection.md` により、現行新規保存形式はSchema v5へ進化し、Illustrious CheckpointとAnima Diffusion Model / Text Encoder / VAEを分離している。機械可読正本は引き続き `schemas/models.schema.json`。
 
 ---
 
