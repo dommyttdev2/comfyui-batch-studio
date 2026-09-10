@@ -2,6 +2,8 @@ import type { CloudInstanceStatus, VastAiInstance } from '../shared/types.js';
 
 const DEFAULT_BASE_URL='https://console.vast.ai';
 const REQUEST_TIMEOUT_MS=20_000;
+const LIFECYCLE_TIMEOUT_MS=15*60_000;
+const LIFECYCLE_POLL_MS=5_000;
 
 type JsonRecord=Record<string,unknown>;
 type FetchLike=typeof fetch;
@@ -12,6 +14,7 @@ function stringValue(value:unknown){return typeof value==='string'&&value.trim()
 function numberValue(value:unknown){const n=typeof value==='number'?value:Number(value);return Number.isFinite(n)?n:null;}
 function integerValue(value:unknown){const n=numberValue(value);return n!=null&&Number.isInteger(n)?n:null;}
 function rawStatusOf(payload:JsonRecord){return String(payload.actual_status??payload.status??'unknown').trim().toLowerCase()||'unknown';}
+function delay(ms:number){return new Promise(resolve=>setTimeout(resolve,ms));}
 
 export function normalizeVastStatus(payload:unknown):CloudInstanceStatus{
   const item=record(payload),raw=rawStatusOf(item),intended=String(item.intended_status??'').toLowerCase(),cur=String(item.cur_state??'').toLowerCase();
@@ -72,6 +75,16 @@ export class VastAiClient {
   }
   async getInstance(id:number){if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');const payload=record(await this.request(`/api/v0/instances/${id}/`));return normalizeVastInstance(payload.instances??payload);}
   private async setState(id:number,state:'running'|'stopped'){if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');await this.request(`/api/v0/instances/${id}/`,{method:'PUT',body:JSON.stringify({state})});}
-  async startInstance(id:number){await this.setState(id,'running');}
-  async stopInstance(id:number){await this.setState(id,'stopped');}
+  private async waitForStatus(id:number,target:'running'|'stopped',timeoutMs=LIFECYCLE_TIMEOUT_MS){
+    const deadline=Date.now()+timeoutMs;
+    while(true){
+      const current=await this.getInstance(id);
+      if(current.status===target)return current;
+      if(current.status==='error'||current.status==='offline')throw new Error(`Vast.ai Instance ${id} が ${current.status} 状態になりました: ${current.statusMessage??current.rawStatus}`);
+      if(Date.now()>=deadline)throw new Error(`Vast.ai Instance ${id} が ${target} 状態になるまでの待機がタイムアウトしました。`);
+      await delay(LIFECYCLE_POLL_MS);
+    }
+  }
+  async startInstance(id:number){await this.setState(id,'running');return this.waitForStatus(id,'running');}
+  async stopInstance(id:number){await this.setState(id,'stopped');return this.waitForStatus(id,'stopped');}
 }
