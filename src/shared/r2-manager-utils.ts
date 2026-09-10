@@ -2,6 +2,7 @@ export const MAX_R2_OBJECT_KEY_BYTES = 1024;
 export const MAX_BATCH_TEMPLATE_OBJECTS = 500;
 export const MAX_BATCH_TEMPLATES_PER_BUCKET = 100;
 export const MAX_BATCH_TEMPLATE_NAME_LENGTH = 100;
+export const MAX_R2_PRESIGNED_EXPIRES_IN = 604800;
 
 export interface NormalizedTemplateObject {
   key:string;
@@ -13,17 +14,40 @@ export function objectName(key:string){
   return key.split('/').pop() || 'download';
 }
 
-export function normalizeR2ObjectKey(raw:string){
+function normalizeR2Key(raw:string,label:string){
   let value=String(raw??'').trim().replaceAll('\\','/');
   value=value.replace(/^\/+/, '').replace(/\/{2,}/g,'/');
-  if(!value || value.endsWith('/')) throw new Error('移動先にはファイル名まで入力してください。');
+  if(!value || value.endsWith('/')) throw new Error(`${label}にはファイル名まで入力してください。`);
   const segments=value.split('/');
   if(segments.some(segment=>!segment||segment==='.'||segment==='..')){
-    throw new Error('移動先のパスに空の区切り、.、.. は使用できません。');
+    throw new Error(`${label}のパスに空の区切り、.、.. は使用できません。`);
   }
   if(new TextEncoder().encode(value).length>MAX_R2_OBJECT_KEY_BYTES){
-    throw new Error('移動先のパスが1,024バイトを超えています。');
+    throw new Error(`${label}のパスが1,024バイトを超えています。`);
   }
+  return value;
+}
+
+export function normalizeR2ObjectKey(raw:string){
+  return normalizeR2Key(raw,'移動先');
+}
+
+export function normalizeR2PutObjectKey(raw:string){
+  return normalizeR2Key(raw,'アップロード先');
+}
+
+export function normalizeR2PresignedExpiresIn(raw:number){
+  const value=Number(raw);
+  if(!Number.isInteger(value)||value<1||value>MAX_R2_PRESIGNED_EXPIRES_IN){
+    throw new Error('有効期限は1秒～7日（604,800秒）で指定してください。');
+  }
+  return value;
+}
+
+export function normalizeR2PutContentType(raw?:string|null){
+  const value=String(raw??'').trim();
+  if(!value)return null;
+  if(value.length>255||/[\r\n]/u.test(value))throw new Error('Content-Typeは改行を含まない255文字以内で入力してください。');
   return value;
 }
 

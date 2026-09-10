@@ -9,12 +9,15 @@ import {
   S3Client, UploadPartCommand, UploadPartCopyCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { R2BatchDownloadTemplate, R2DownloadInfo, R2ListResult, R2Object, R2SearchResult, R2UploadJob } from '../shared/types.js';
+import type { R2BatchDownloadTemplate, R2DownloadInfo, R2ListResult, R2Object, R2PutUrlInfo, R2SearchResult, R2UploadJob } from '../shared/types.js';
 import {
   MAX_BATCH_TEMPLATES_PER_BUCKET,
   normalizeBatchTemplateName,
   normalizeBatchTemplateObjects,
   normalizeR2ObjectKey,
+  normalizeR2PresignedExpiresIn,
+  normalizeR2PutContentType,
+  normalizeR2PutObjectKey,
   objectName,
 } from '../shared/r2-manager-utils.js';
 import { exists, readJson, writeJsonAtomic } from './fs-utils.js';
@@ -105,6 +108,14 @@ export class R2Manager {
   private info(key:string,url:string,isPublic:boolean,expiresIn:number|null,fileName=objectName(key)):R2DownloadInfo{return {key,url,public:isPublic,expiresIn,fileName,commands:{url,curl:`curl -L --fail --output ${quote(fileName)} ${quote(url)}`,wget:`wget -O ${quote(fileName)} ${quote(url)}`,aria2c:`aria2c -o ${quote(fileName)} ${quote(url)}`}};}
   async downloadInfo(bucket:string,key:string,expiresIn=3600){const d=await this.signed(bucket,key,expiresIn);return this.info(key,d.url,d.public,d.expiresIn);}
   async batchDownloadInfo(bucket:string,keys:string[],expiresIn=3600){if(!keys.length||keys.length>500)throw new Error('一度に生成できるダウンロードURLは1～500件です。');const names=uniqueNames(keys);return Promise.all(keys.map(async(key,i)=>{const d=await this.signed(bucket,key,expiresIn);return this.info(key,d.url,d.public,d.expiresIn,names[i]);}));}
+  async putUrlInfo(bucket:string,rawKey:string,expiresIn=3600,rawContentType=''):Promise<R2PutUrlInfo>{
+    if(!bucket)throw new Error('バケットを指定してください。');
+    const key=normalizeR2PutObjectKey(rawKey),expires=normalizeR2PresignedExpiresIn(expiresIn),contentType=normalizeR2PutContentType(rawContentType);
+    const command=new PutObjectCommand({Bucket:bucket,Key:key,...(contentType?{ContentType:contentType}:{})});
+    const url=await getSignedUrl(await this.clientFor(),command,{expiresIn:expires});
+    const fileName=objectName(key),contentTypeArg=contentType?` -H ${quote(`Content-Type: ${contentType}`)}`:'';
+    return {key,url,expiresIn:expires,contentType,commands:{url,curl:`curl --fail -X PUT${contentTypeArg} --data-binary ${quote(`@${fileName}`)} ${quote(url)}`}};
+  }
   async deleteObjects(bucket:string,keys:string[]){if(!keys.length)throw new Error('削除するファイルを選択してください。');if(keys.length>1000)throw new Error('一度に削除できるのは1,000件までです。');const r=await (await this.clientFor()).send(new DeleteObjectsCommand({Bucket:bucket,Delete:{Objects:keys.map(Key=>({Key})),Quiet:false}}));return {deleted:(r.Deleted??[]).map(x=>x.Key??'').filter(Boolean),errors:r.Errors??[]};}
   async move(bucket:string,sourceKey:string,destinationKey:string,overwrite=false){
     const destination=normalizeR2ObjectKey(destinationKey);
