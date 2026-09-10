@@ -3,20 +3,39 @@ import type { CatalogCollection, CatalogItem, CatalogVersion, CivitaiCatalogStat
 import type { Runner } from './ui';
 import './civit-explorer.css';
 
+type SyncMetricsView={
+  requests:number;
+  retries:number;
+  responses429:number;
+  responses5xx:number;
+  networkErrors:number;
+  cacheHits:number;
+  cacheMisses:number;
+  collectionPages:number;
+  membershipItems:number;
+  currentIntervalMs:number;
+  elapsedMs:number;
+  requestsByEndpoint:Record<string,number>;
+};
+type StatusWithMetrics=CivitaiCatalogStatus&{metrics?:SyncMetricsView};
+
 const norm=(value:string)=>value.normalize('NFKC').toLocaleLowerCase('ja');
-function searchable(item:CatalogItem){return norm([item.modelName,item.versionName,item.baseModel??'',...(item.trainedWords??[]),...(item.versions??[]).flatMap(v=>[v.versionName,v.baseModel??'',...v.files.map(f=>f.name),...(v.trainedWords??[])]),...item.files.map(f=>f.name)].join('\n'))}
-function versionFor(item:CatalogItem,versionId?:number):CatalogVersion|undefined{return item.versions?.find(v=>v.versionId===versionId)??item.versions?.find(v=>v.versionId===item.versionId)??item.versions?.[0]}
+function searchable(item:CatalogItem){return norm([item.modelName,item.versionName,item.baseModel??'',...(item.trainedWords??[]),...(item.versions??[]).flatMap(v=>[v.versionName,v.baseModel??'',...v.files.map(f=>f.name),...(v.trainedWords??[])]),...item.files.map(f=>f.name)].join('\n'));}
+function versionFor(item:CatalogItem,versionId?:number):CatalogVersion|undefined{return item.versions?.find(v=>v.versionId===versionId)??item.versions?.find(v=>v.versionId===item.versionId)??item.versions?.[0];}
 
 export function CivitExplorerStage({run}:{run:Runner}){
   const [status,setStatus]=useState<CivitaiCatalogStatus|null>(null),[catalog,setCatalog]=useState<ModelCatalog|null>(null),[collectionId,setCollectionId]=useState<number|null>(null),[query,setQuery]=useState(''),[versionIds,setVersionIds]=useState<Record<number,number>>({});
-  const load=async()=>{setStatus(await window.batchStudio.catalog.integratedStatus());setCatalog(await window.batchStudio.catalog.snapshot())};
-  useEffect(()=>{void run(load)},[]);
-  useEffect(()=>{if(status?.state!=='running')return;const id=window.setInterval(()=>{void window.batchStudio.catalog.integratedStatus().then(async s=>{setStatus(s);if(s.state==='ready')setCatalog(await window.batchStudio.catalog.snapshot())})},700);return()=>clearInterval(id)},[status?.state]);
+  const load=async()=>{setStatus(await window.batchStudio.catalog.integratedStatus());setCatalog(await window.batchStudio.catalog.snapshot());};
+  useEffect(()=>{void run(load);},[]);
+  useEffect(()=>{if(status?.state!=='running')return;const id=window.setInterval(()=>{void window.batchStudio.catalog.integratedStatus().then(async s=>{setStatus(s);if(s.state==='ready')setCatalog(await window.batchStudio.catalog.snapshot());});},700);return()=>clearInterval(id);},[status?.state]);
   const collections=catalog?.collections??[];
   const active=collectionId==null?null:collections.find(c=>c.id===collectionId)??null;
   const q=norm(query.trim());
-  const models=useMemo(()=>{const source=active?[active]:collections;const rows:Array<{collection:CatalogCollection;item:CatalogItem}>=[];for(const c of source)for(const item of c.items)if(!q||searchable(item).includes(q))rows.push({collection:c,item});return rows},[active,collections,q]);
+  const models=useMemo(()=>{const source=active?[active]:collections;const rows:Array<{collection:CatalogCollection;item:CatalogItem}>=[];for(const c of source)for(const item of c.items)if(!q||searchable(item).includes(q))rows.push({collection:c,item});return rows;},[active,collections,q]);
   const totalModels=useMemo(()=>collections.reduce((n,c)=>n+c.items.length,0),[collections]);
+  const metrics=(status as StatusWithMetrics|null)?.metrics;
+  const elapsed=metrics?`${(metrics.elapsedMs/1000).toFixed(1)}s`:'—';
+
   return <section className="civit-explorer">
     <div className="civit-explorer-head">
       <div><span className="eyebrow">CIVITAI MODEL INVENTORY</span><h2>Civit Explorer</h2><p>CollectionとModelをサムネイル中心で閲覧します。Projectのモデル選定では全量の model_catalog.json をGrokへ渡します。</p></div>
@@ -25,6 +44,21 @@ export function CivitExplorerStage({run}:{run:Runner}){
     {status?.state==='running'&&<div className="catalog-progress"><div><strong>{status.phase}</strong><span>{status.completed} / {status.total}</span></div><progress value={status.completed} max={Math.max(status.total,1)}/><p>{status.message}</p></div>}
     {status?.state==='error'&&<div className="issue error">✕ {status.error??status.message}</div>}
     {!status?.apiKeyConfigured&&<div className="issue warning">CIVIT_API_KEY が設定されていません。</div>}
+    {metrics&&<div className="civit-sync-metrics" aria-label="Civitai sync metrics">
+      <div><b>{metrics.requests}</b><small>API requests</small></div>
+      <div><b>{metrics.cacheHits}</b><small>Cache hits</small></div>
+      <div><b>{metrics.cacheMisses}</b><small>Cache misses</small></div>
+      <div><b>{metrics.retries}</b><small>Retries</small></div>
+      <div><b>{metrics.responses429}</b><small>HTTP 429</small></div>
+      <div><b>{metrics.responses5xx}</b><small>HTTP 5xx</small></div>
+      <div><b>{metrics.collectionPages}</b><small>Collection pages</small></div>
+      <div><b>{metrics.membershipItems}</b><small>Memberships</small></div>
+      <div><b>{status?.changes.added??0}</b><small>Added</small></div>
+      <div><b>{status?.changes.updated??0}</b><small>Updated</small></div>
+      <div><b>{status?.changes.removed??0}</b><small>Removed</small></div>
+      <div><b>{metrics.currentIntervalMs}ms</b><small>Request interval</small></div>
+      <div><b>{elapsed}</b><small>Elapsed</small></div>
+    </div>}
     <div className="civit-explorer-toolbar">
       <label><span>MODEL / BASE MODEL / FILE / TRIGGER</span><input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="モデル名・Base Model・ファイル名・トリガーワードを検索"/></label>
       <div className="civit-explorer-stats"><div><b>{collections.length}</b><small>Collections</small></div><div><b>{totalModels}</b><small>Models</small></div><div><b>{models.length}</b><small>Shown</small></div></div>
@@ -45,7 +79,7 @@ export function CivitExplorerStage({run}:{run:Runner}){
           <div className="civit-meta-block"><span>FILES</span>{files.length?<div className="civit-chips">{files.map(f=><code key={f.id} title={f.name}>{f.name}</code>)}</div>:<small>—</small>}</div>
           <div className="civit-meta-block"><span>TRIGGER WORDS</span>{trained.length?<div className="civit-chips words">{trained.map(w=><code key={w}>{w}</code>)}</div>:<small>—</small>}</div>
           <div className="civit-card-footer"><span>Version ID {v?.versionId??item.versionId}</span>{baseline?<b>Baseline {baseline.value}</b>:<span>Baseline —</span>}</div></div>
-        </article>})}</div>}
+        </article>;})}</div>}
       </main>
     </div>
   </section>;
