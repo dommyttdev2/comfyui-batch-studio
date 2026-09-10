@@ -270,7 +270,17 @@ Remote executionではRemoteへ渡すのは1 object / 1 operation / limited life
 - 名前付きbatch selection templateを保存・適用・削除できる。
 - cancel / popup close / generate完了後はsession selectionを残さない。
 
-### 3.5 Model Availability integration
+### 3.5 Temporary PUT URL UX
+
+Standalone R2 File Managerでは、現在選択中bucketと入力したObject Keyに対して短命presigned PUT URLを生成できる。
+
+- Object Keyは空文字、末尾`/`、1024 bytes超過を拒否する。
+- expiryは1秒〜604800秒（7日）に制限する。UIは5分 / 15分 / 1時間 / 6時間 / 24時間 / 7日を提供する。
+- `Content-Type` は任意。指定時は署名条件へ含め、PUT側でも同じheaderを要求する。
+- URLと`curl`を表示・copyできる。
+- 同名Objectが存在する場合は上書きされ得ること、期限内はURLを再利用できることをUIで警告する。
+
+### 3.6 Model Availability integration
 
 Projectごとに次を指定できる。
 
