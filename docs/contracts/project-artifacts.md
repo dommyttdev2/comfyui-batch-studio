@@ -17,7 +17,7 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 ├─ story.md
 ├─ models.json
 ├─ prompt_plan.json
-├─ LoRA_{project.id}.json
+├─ LoRA_{project-destination-folder}.json
 └─ ._batch_studio/
    ├─ drafts/
    └─ history/
@@ -33,9 +33,9 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 | --- | --- | --- | --- |
 | `project_brief.json` | Batch Studio / User | 初期画面 | Story作成前の最小入力 |
 | `story.md` | Grok + User | Brief / reference | 作品・場面設計の人間可読正本 |
-| `models.json` | Grok selection + Batch Studio validation + User | `story.md`, `model_catalog.json` | 使用モデルの固定結果と Civitai 由来のモデル基準情報 |
+| `models.json` | User base selection + Grok LoRA selection + Batch Studio validation | `story.md`, app-wide model inventory / `model_catalog.json` | Model Family、基盤モデル、LoRA集合とCivitai由来の基準情報 |
 | `prompt_plan.json` | Grok + Batch Studio validation + User approval | `story.md`, `models.json` | Workflow Compiler が読む確定済みの機械可読 Prompt Plan。実際の LoRA 適用強度も保持する |
-| `LoRA_{project.id}.json` | Workflow Compiler | Template, Manifest, models, plan, `project.id` | 最終ComfyUI Workflow |
+| `LoRA_{project-destination-folder}.json` | Workflow Compiler | Template, Manifest, models, plan, `project.id`, Project実フォルダ親名 | 最終ComfyUI UI Workflow |
 | `project_meta.json` | Batch Studio | System | Artifact status、version、Workflow build provenance 等 |
 
 Legacy:
@@ -50,7 +50,7 @@ Legacy:
 
 Brief は Story 全体の詳細 schema ではなく、Grok に最初の提案を依頼するための最小入力である。
 
-`project.id` は表示名とは独立したstable filesystem identityであり、Workflow filenameや生成物保存先の派生元として使用する。
+`project.id` は表示名とは独立したstable filesystem identityであり、ComfyUI生成物保存先等の内部identityに使用する。Workflow JSONファイル名だけはProject実フォルダの親フォルダ名から派生する。
 
 `generation.target_image_count` はPrompt設計の目標値であり、実生成予定枚数の正本ではない。v1の実生成予定枚数は確定 `prompt_plan.json` のleaf総数からCompilerが算出する。
 
@@ -76,98 +76,51 @@ Brief は Story 全体の詳細 schema ではなく、Grok に最初の提案を
 
 ### 6.1 意味
 
-Grok が `model_catalog.json` から選定した「このプロジェクトで実際に使う Checkpoint / LoRA の Model / Version / File」を固定する。
+Model Familyと基盤モデルはユーザーがBatch Studio UIで選択し、Grokはその基盤モデルを変更せずLoRAだけを選定する。IllustriousはCheckpoint、AnimaはDiffusion Model / Text Encoder / VAEを固定する。
 
-Batch Studio は選定主体ではなく、catalog 実在性の検証、Draft 管理、ユーザー確認、確定保存を担当する。
+Batch Studio は基盤モデル選択、Grok LoRA結果のmerge、catalog実在性の検証、Draft管理、ユーザー確認、確定保存を担当する。
 
 `models.json` は同時に、選定した LoRA について Civitai をソースとする基準強度を取得できる場合、その値と provenance を保持する。
 
 ここで保持する強度はモデル側の基準情報であり、最終 Workflow へ必ずそのまま適用される値ではない。実際に Root / Branch で使用する強度は `prompt_plan.json` が所有する。
 
-### 6.2 Schema v1
+### 6.2 Current schema / compatibility
 
-`models.json` は Batch Studio 専用 schema とし、既存の Civitai Selection API 等の既存形式との互換性を要件としない。
+`schemas/models.schema.json` を機械可読正本とする。新規の基盤モデル保存は **Schema v5** を使用し、v1〜v4は既存Projectの読み取り互換として保持する。
 
-機械可読 schema の正本:
-
-```text
-schemas/models.schema.json
-```
-
-Schema v1 の root fields:
+現行shape:
 
 ```text
-schemaVersion
-catalog
-checkpoint
-loras
+Illustrious:
+  schemaVersion: 5
+  modelFamily: illustrious
+  catalog
+  checkpoint          # ref = checkpoint.main
+  loras[]
+
+Anima:
+  schemaVersion: 5
+  modelFamily: anima
+  catalog
+  diffusionModel      # ref = diffusion_model.main
+  textEncoder          # models/text_encoders からの相対file name
+  vae                  # models/vae からの相対file name
+  loras[]
 ```
 
-概念 shape:
+- Illustriousで `diffusionModel` / `textEncoder` / `vae` は許可しない。
+- Animaで `checkpoint` は許可せず、`diffusionModel` / `textEncoder` / `vae` を必須とする。
+- Anima Text Encoder / VAE にCivitai identityを捏造せず、用途別directoryからの相対 `fileName` を保存する。
+- `loras[]` はModel Family共通でCivitai identityを保持する。
+- 新規保存で旧schemaへdowngradeしない。
 
-```json
-{
-  "schemaVersion": 1,
-  "catalog": {
-    "schemaVersion": 1,
-    "generation": 42,
-    "generatedAt": "2026-09-07T10:30:00Z"
-  },
-  "checkpoint": {
-    "ref": "checkpoint.main",
-    "modelId": 10001,
-    "modelName": "Example Checkpoint",
-    "versionId": 20001,
-    "versionName": "v1.0",
-    "fileId": 30001,
-    "fileName": "example_checkpoint.safetensors",
-    "modelUrl": "https://civitai.com/models/10001?modelVersionId=20001",
-    "trainedWords": [],
-    "reason": "Grok selection reason"
-  },
-  "loras": [
-    {
-      "ref": "lora.character",
-      "modelId": 10002,
-      "modelName": "Character LoRA",
-      "versionId": 20002,
-      "versionName": "v2.0",
-      "fileId": 30002,
-      "fileName": "character.safetensors",
-      "modelUrl": "https://civitai.com/models/10002?modelVersionId=20002",
-      "trainedWords": ["character_trigger"],
-      "reason": "Grok selection reason",
-      "strengthBaseline": {
-        "value": 0.7,
-        "provenance": {
-          "source": "civitai",
-          "basis": "observed-usage-derived",
-          "method": "median-of-post-medians:newest-200",
-          "sampleCount": 24
-        }
-      }
-    }
-  ]
-}
-```
+### 6.3 Selection ownership / Grok merge
 
-`strengthBaseline.value` は実適用値ではなく、Civitai由来のモデル/version側baselineである。
+基盤モデルはユーザー選択、LoRAはGrok選定という責務境界を持つ。
 
-### 6.3 Checkpoint / LoRA separation
+Grokから受け取る `model_loras.json` は `schemaVersion: 1` と `loras[]` を中心とし、`checkpoint` / `diffusionModel` / `textEncoder` / `clip` / `vae` / `modelFamily` を含む回答は拒否する。
 
-Schema v1 では generic `selections[] + role` 方式を採らず、Checkpoint と LoRA を構造上分離する。
-
-```text
-checkpoint
-  = Project で使用する Checkpoint 1件
-
-loras[]
-  = Project で使用する LoRA 0件以上
-```
-
-そのため `role: checkpoint` / `role: lora` のような技術種別 field は持たない。
-
-Character / Style / Pose / Concept 等のプロジェクト内での意味付けは stable `ref` で表す。
+Batch Studioは現在のModels DraftまたはConfirmed基盤モデルへLoRAだけをmergeし、`models.json` Draftを構築する。`promptFallbacks` はDraft処理で受け入れ、確定時に `._batch_studio/model_prompt_fallbacks.json` へ分離する。未解決 `missingRequirements` が残るDraftは確定できない。
 
 ### 6.4 Stable reference
 
@@ -228,13 +181,13 @@ reason
 
 `reason` は Civitai provenance ではなく Grok 由来の意味情報である。
 
-現行 `civit-model-viewer` の catalog exporter から確認できない `baseModel` や Batch Studio 独自 semantic role を Civitai 由来情報として捏造しない。
+app-wide Civitai catalogに存在しないCivitai由来metadataや Batch Studio 独自semantic roleを捏造しない。Catalogの `baseModel` は取得できる場合に表示・検索へ利用する。
 
 `trainedWords` が存在しない場合も空配列 `[]` として保持する。
 
 ### 6.6 Catalog provenance and revalidation
 
-`models.json` は、モデル選定時に使用した `model_catalog.json` の provenance として v1 では少なくとも次を保持する。
+`models.json` は、基盤モデル/LoRA選定時に使用した `model_catalog.json` の provenance として少なくとも次を保持する。
 
 ```text
 catalog.schemaVersion
@@ -262,13 +215,13 @@ generation mismatch
   = selected identities must be revalidated
 ```
 
-v1 では catalog 内容全体の hash を必須 provenance としない。
+現行schemaでは catalog 内容全体の hash を必須 provenance としない。
 
 ### 6.7 LoRA strengthBaseline
 
 Civitai 由来の根拠を取得できる LoRA だけ、任意 field `strengthBaseline` を持てる。
 
-Schema v1 の `basis`:
+`strengthBaseline.provenance.basis`:
 
 ```text
 creator-declared
@@ -277,7 +230,7 @@ observed-usage-derived
 
 #### observed-usage-derived
 
-v1で投稿画像metadataから基準値を導出する正式policy:
+投稿画像metadataから基準値を導出する現行policy:
 
 ```text
 source images:
@@ -320,7 +273,7 @@ provenance:
 
 `sampleCount` は画像枚数ではなく、aggregationに利用した distinct `postId` 数を表す。
 
-v1ではweightを0..1等へclampせず、追加の範囲filter / IQR除去 / trimmed meanを行わない。5 distinct posts未満なら `strengthBaseline` を生成しない。
+現行実装ではweightを0..1等へclampせず、追加の範囲filter / IQR除去 / trimmed meanを行わない。5 distinct posts未満なら `strengthBaseline` を生成しない。
 
 この値はCivitai上で観測できた利用例のbaselineであり、作者の明示推奨値や普遍的最適値と表示しない。
 
@@ -334,19 +287,17 @@ Model / Version descriptionの文章からregexやLLMで値を抽出し、それ
 
 - Civitai 由来の根拠がない場合は `strengthBaseline` field 自体を省略する。
 - `null` や経験則による仮値で正本を埋めない。
-- `source` は Schema v1 では `civitai`。
+- `source` は現行実装では `civitai`。
 - `observed-usage-derived` の場合は `method` と `sampleCount` を必須にする。
 - `creator-declared` と observed usage 由来の値を同一視しない。
-- strength evidence取得・集計は `civit-model-viewer` の責務で、Batch Studioはcatalogに保存された結果を再集計しない。
-- evidence freshnessは `model_catalog.json` のSYNC、`generation`、`generatedAt` と同じsnapshot boundaryで扱う。
+- strength evidence取得・集計はBatch Studio Electron Main Processの統合Civitai Catalogが行い、exact versionの投稿metadataから `strengthBaseline` を生成する。
+- evidenceはTTL付きapp-wide cacheを利用し、Catalog SYNC時のcurrent membershipと組み合わせて再利用する。
 
-`schemas/models.schema.json` は既にこの optional provenance shapeを表現できるため、本policy確定だけを理由とする `models.json.schemaVersion` bumpは不要。
-
-現行 `civit-model-viewer` が投稿画像weightをまだexportしていない期間は、通常どおり `strengthBaseline` absentになり得る。
+`schemas/models.schema.json` はこのoptional provenance shapeを表現する。投稿metadataの根拠が不足する場合は通常どおり `strengthBaseline` absentになり得る。
 
 ### 6.8 missingRequirements
 
-`missingRequirements` は確定版 `models.json` Schema v1 に含めない。
+`missingRequirements` は確定版 `models.json` に含めない。
 
 不足要件は Grok response、Models Draft、Batch Studio UI state で管理する。
 
@@ -355,7 +306,7 @@ Grok selection response
    -> missingRequirements
    -> Models Draft / UI
    -> User updates Civitai collection
-   -> civit-model-viewer SYNC
+   -> Batch Studio Civitai SYNC
    -> Grok re-selection
    -> validation
    -> models.json Confirm
@@ -372,7 +323,7 @@ models.json Confirm = prohibited
 
 ### 6.9 Extension / validation policy
 
-Schema v1 では未知 field を許可しない。
+各schema versionはJSON Schemaで定義した未知fieldを許可しない。
 
 ```text
 additionalProperties: false
@@ -484,42 +435,30 @@ Legacy conversion の詳細 schema / parser は必要になった時点で別要
 
 ## 9. Workflow Artifact
 
-新規確定時の標準名:
+新規生成時の標準名:
 
 ```text
-LoRA_{project.id}.json
+LoRA_{project-destination-folder}.json
 ```
 
-例:
+`project-destination-folder` はProject実フォルダの1階層上にある作成先フォルダ名である。例えばProject rootが `D:/BatchProjects/office_boss/project-a` なら、生成Workflowは `LoRA_office_boss.json` となる。
 
-```text
-project.id = 15_example
--> LoRA_15_example.json
-```
-
-Workflow filenameは `project.title` ではなくstable `project.id` から派生する。表示名変更だけで新規Workflow filenameを変更しない。
-
-Branchごとの生成物保存先とleaf output identityはWorkflow Compiler contractが次のように派生する。
+`project.id` はWorkflow filenameには使用せず、Branchごとの生成物保存先とleaf output identityに使用する。
 
 ```text
 save path  = BatchStudio/{project.id}/{branch.id}
 row_id     = leaf.id
 path_label = leaf.id
-name       = leaf.name
+name       = leaf.id
 ```
+
+`leaf.name` はBatch Studio UI上の人間向け表示名として保持する。ComfyUI Matrix側は `leaf.id` を使用し、日本語等の表示名を最終画像file nameへ持ち込まない。
 
 実ファイルのextension・numeric sequence・timestamp・collision suffix等はSceneSaveImage custom nodeの責務とし、Batch Studioが再実装しない。
 
-既存プロジェクトには次のような旧形式があるため読込互換を持つ。
+既存プロジェクトの旧命名は読み取り対象になり得るが、新規Compiler outputは上記命名へ統一する。
 
-```text
-LoRA Character Batch - ...json
-LoRA_Character_Batch_...json
-```
-
-旧形式を読み込めても、新規生成時の標準命名へ旧display nameを持ち込まない。
-
-最終 Workflow は Grok の成果物ではなく Compiler output である。
+最終 Workflow は Grok の成果物ではなく Compiler output である.
 
 ## 10. project_meta.json
 
@@ -576,18 +515,22 @@ Manifest 自身には Compiler version や Manifest 自身の hash を埋め込�
 
 既存プロジェクトでは metadata を必須にしない。
 
+### 10.1 Artifact output root
+
+環境設定の `BATCH_STUDIO_ARTIFACT_ROOT` が設定されている場合、Project作成時に `<artifactRoot>/<project.id>` を作成し、`project_meta.json.settings.artifactOutputPath` に絶対pathを保存する。これは生成画像等の成果物配置先として後続Executionから参照するためのProject設定であり、Project Artifact本体のrootを移動するものではない。
+
 ## 11. Draft / History
 
 確定前入力:
 
 ```text
-._batch_studio/drafts/{artifact}/{timestamp}
+._batch_studio/drafts/{artifact-file}
 ```
 
 確定ファイル更新直前の履歴:
 
 ```text
-._batch_studio/history/{artifact}/{timestamp}
+._batch_studio/history/{artifact-key}/{timestamp}-{artifact-file}
 ```
 
 原則:
@@ -608,10 +551,12 @@ project_brief.json
       +------------------+
       |                  |
       v                  v
-model_catalog.json    models.json
-      ^                  |
-      |                  v
-civit-model-viewer   prompt_plan.json
+app-wide model inventory / model_catalog.json
+      |                  |
+      +-------> models.json
+                   |
+                   v
+             prompt_plan.json
                          |
               Template + Manifest
                          |
@@ -619,7 +564,7 @@ civit-model-viewer   prompt_plan.json
                   Workflow Compiler
                          |
                          v
-              LoRA_{project.id}.json
+      LoRA_{project-destination-folder}.json
 ```
 
 `prompt_tree.md` は Legacy Artifact であり、この新規 Artifact dependency graph には含めない。
