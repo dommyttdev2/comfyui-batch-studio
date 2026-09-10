@@ -33,26 +33,30 @@ Batch Studio Electron Main Process が次を担当する。
 - app-wide `model_catalog.json` の保存・更新。
 - catalog `generation` / `generatedAt` / added・updated・removed件数管理。
 - Collection / Model / Version選択テンプレートのapp-wide保存。
+- Collection membershipのauthoritative refreshとadded / updated / removed差分計算。
+- Model / Version / strength baseline / collection thumbnailのTTL付きmetadata cache。
+- API request / retry / 429 / 5xx / network / cache hit-miss / page / membership / elapsed metrics。
 
 RendererへAPI keyを永続化しない。Grok WebへAPI keyを渡さない。
 
 標準保存先はElectron `app.getPath('userData')` 配下の `civitai/model_catalog.json` とする。Projectは `project_meta.json.settings.catalogPath` を介してこのCatalogを参照する。
 
-新規Project、およびcatalogPath未設定の既存Projectは統合Catalogへ自動関連付けする。既存の明示的な外部`catalogPath`は互換用として維持し、「モデルカタログ」工程から統合Catalogへ切り替え可能とする。
+標準フローはapp-wide統合Catalogを直接利用する。既存Projectの明示的な外部`catalogPath`は互換用として維持する。
 
 ### 2.2 UI / UX responsibility
 
-「モデルカタログ」工程はGrokを必要とせず、Local UIを全幅で使用する。
+Civit ExplorerはProject工程ではなくapp-wide toolとしてLocal UI全幅で使用する。Projectのモデル選定画面からも同じCatalogのSYNCを実行できる。
 
 最低限提供するUX:
 
 - SYNC状態 / phase / progress / error。
 - 保存済みCatalogがある場合、同期失敗後も閲覧可能。
 - Collection選択 / 全選択 / 解除。
-- モデル名・ファイル名による全Collection横断検索。
+- モデル名・Base Model・ファイル名・trigger wordによる全Collection横断検索。
 - Model選択状態を検索やCollection切替をまたいで保持。
 - Version切替。
-- File / trained words / thumbnail / `strengthBaseline`確認。
+- File / Base Model / trained words / thumbnail / `strengthBaseline`確認。
+- SYNC中/完了後のrequest数、cache hit/miss、retry、HTTP 429/5xx、collection page数、membership件数、経過時間等のmetrics表示。
 - Civitai model pageを外部ブラウザで開く。
 - 選択結果JSONコピー。
 - Collection / Model / Version選択状態の名前付きテンプレート保存・適用・削除。
@@ -61,9 +65,10 @@ RendererへAPI keyを永続化しない。Grok WebへAPI keyを渡さない。
 標準工程:
 
 ```text
-ストーリー          Grokあり
-  -> モデルカタログ  Grokなし
-  -> モデル選定      Grokあり
+ストーリー      Grokあり
+  -> モデル選定  基盤モデルはUser、LoRAはGrok
+
+Civit Explorerはapp-wide toolとして必要時に開く
 ```
 
 ### 2.3 Catalog structure
@@ -173,16 +178,19 @@ Collection一覧・item取得にはCivitai内部tRPC APIを利用する。非公
 
 成熟コンテンツを含むCollection item取得では設定されたmature endpointを使用する。Blocked contentを無条件に取得する設計にはしない。
 
-429 rate limitは同期失敗として即終了せず、`Retry-After`を優先し、未指定時はbackoff+jitterで待機して同一requestから自動再開する。通常時もrequest開始間隔を平準化する。
+429 rate limitは同期失敗として即終了せず、`Retry-After`を優先し、未指定時はbackoff+jitterで待機して同一requestから自動再開する。5xxとnetwork errorもGET/HEADに限ってbounded retryする。通常request intervalは設定値で固定し、429後に恒久的な遅延へ変化させない。既定cache TTLはModel/Version 30分、Baseline 7日、Thumbnail 24時間で、環境変数で上書き可能。
 
 ### 2.6 Missing model flow
 
 ```text
 Grok
-  -> 必要モデルがcatalogにない
-  -> missingRequirements
-  -> UserがCivitai Collectionへ追加
-  -> Batch Studio モデルカタログ SYNC
+  -> 必要LoRAがcatalogにない
+  -> civitai.com / civitai.redで代替候補を調査
+  -> 複数LoRAの組合せで解決可能か確認
+  -> Prompt代替可能ならpromptFallbacksとして解決済みにする
+  -> カタログ外候補または代替不能だけmissingRequirements
+  -> Userが必要候補をCivitai Collectionへ追加
+  -> Batch Studio Catalog SYNC
   -> model_catalog.json generation更新
   -> Grok再選定
 ```
@@ -199,6 +207,7 @@ Batch Studio Electron Main Process がCloudflare R2の実体操作を所有す�
 - multipart upload / pause / resume / cancel / persisted upload state。
 - object move / rename / delete。
 - public URL / presigned GET URL。
+- Standalone R2 File Managerの一時presigned PUT URL。
 - Execution用presigned PUT URL。
 - caller-specified expiryでのGET signing。
 - URL / `curl` / `wget` / `aria2c` command生成。
@@ -235,20 +244,26 @@ Remote executionではRemoteへ渡すのは1 object / 1 operation / limited life
 
 ### 3.3 Object browser UX
 
-「モデル配置」工程内のR2 File Manager領域で最低限次を提供する。
+Projectの「モデル配置」工程内ではR2をmodel availability確認用の **read-only browser** として提供する。管理操作はStandalone R2 File Managerへ集約する。
 
 - Bucket選択。
 - breadcrumb付きfolder navigation。
 - filename / full object keyによるbucket-wide検索。
 - paging / 「さらに読み込む」。
 - file size / modified time表示。
+- single object direct download / download info。
+- 一括DL URL生成（read-only参照画面からも利用可能）。
+
+Standalone R2 File Managerでは上記に加えて次を提供する。
+
 - upload file picker。
-- upload progress / pause / resume / cancel。
+- multipart upload progress / pause / resume / cancel。
 - app再起動後のunfinished upload表示・再開。
 - move / rename。
 - main list checkboxによるdelete selection。
-- single object download info。
+- bucket create / empty-bucket delete。
 - optional storage metrics。
+- 一時presigned PUT URL生成。
 
 数GB fileをRendererへ全読込しない。Main ProcessがローカルfileをpartごとにstreamしR2へmultipart uploadする。
 
