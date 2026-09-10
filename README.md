@@ -5,20 +5,21 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 意味的・創作的な判断は Grok、状態管理・検証・機械変換・保存は Batch Studio、最終決定はユーザー、という責務分担を採用しています。
 
 > [!IMPORTANT]
-> v1 の責務終端は **Preflight が `READY` になるところまで**です。ComfyUI Queue への投入、生成進捗、キャンセル、生成画像の回収は現在の v1 scope には含まれません。
+> 現在の実装は **Preflight まで**です。`実行` stage、ComfyUI Queue投入、生成進捗、Stop/Interrupt、Remote Worker、生成画像回収は設計済みですが未実装です。現行Preflightの `READY` は実装済みGate範囲の判定で、最終的なoperational READYより弱い状態です。
 
 ## 主な機能
 
 - Project Brief からのプロジェクト作成
 - Grok Web をアプリ内に表示した Story 作成支援
 - Civitai Model Collection の同期と統合 `model_catalog.json` 管理
-- Grok による Checkpoint / LoRA / Version / File 選定支援
+- ユーザーによる Model Family / 基盤モデル選択と、Grok による LoRA / Version / File 選定支援
 - `models.json` / `prompt_plan.json` の検証・Draft・確定・履歴管理
 - Prompt Plan のツリー形式レビュー・編集
 - Template + Manifest からの決定論的 ComfyUI Workflow 生成
 - Local / Cloudflare R2 のモデル所在確認
-- Cloudflare R2 の bucket / object / upload / download / move / delete 管理
-- 実行前 Preflight (`READY` / `BLOCKED`)
+- Cloudflare R2 の bucket / object / multipart upload / download / move / delete / batch DL / 一時PUT URL管理
+- 実行前 Preflight (`READY` / `BLOCKED`、現時点ではoperational checkの一部は未実装)
+- `Window` メニューから R2 File Manager / Civit Explorer を別ウィンドウ表示
 
 旧 `civit-model-viewer` と `r2-file-manager` の主要機能は Batch Studio に統合済みです。新規フローでは、それらを別サーバーとして起動する必要はありません。
 
@@ -35,7 +36,8 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - **Grok Web アカウント**: Story / モデル選定 / Prompt Plan の作成時
 - **Civitai API Key**: 統合モデルカタログを新規同期するとき
 - **Cloudflare R2 credentials**: R2 機能を利用するとき
-- **Local ComfyUI models directory**: Model Availability / Preflight で実モデル配置を確認するとき
+- **Local ComfyUI installation**: Localモデル配置確認を利用するとき
+- **Vast.ai API Key + SSH private key path**: Remote targetのprovider/instance選択を利用するとき
 
 ## セットアップ
 
@@ -58,6 +60,23 @@ npm run dev
 環境変数は **Electron を起動する前**に設定してください。
 
 現行実装は `.env` を自動読込しません。PowerShell の `$env:...`、bash の `export ...`、または OS / 起動環境側の環境変数として設定してください。
+
+### Batch Studio app-wide settings
+
+環境設定から保存した値はapp dataへ永続化され、対応するruntime環境変数へ反映されます。
+
+| 変数 | 用途 |
+| --- | --- |
+| `BATCH_STUDIO_PROJECT_ROOT` | 新規Project作成先の既定root |
+| `BATCH_STUDIO_ARTIFACT_ROOT` | 生成成果物の親root。Project作成時に `<root>/<project.id>` を作成 |
+| `BATCH_STUDIO_CATALOG_PATH` | 外部 `model_catalog.json` 互換用 |
+| `BATCH_STUDIO_R2_BUCKET` | 既定モデルbucket |
+| `BATCH_STUDIO_R2_MODEL_PREFIX` | R2上のmodel prefix |
+| `BATCH_STUDIO_R2_INDEX_PATH` | Legacy R2 index互換用 |
+| `BATCH_STUDIO_TEMPLATE_PATH` | Workflow Template上書き |
+| `BATCH_STUDIO_MANIFEST_PATH` | Workflow Manifest上書き |
+
+`Project root` / `成果物配置 root` は絶対pathかつ既存directoryのみ保存できます。
 
 ### Civitai
 
@@ -135,24 +154,24 @@ npm run dev
 
 ## 基本的な使い方
 
-Batch Studio の標準フローは次の8工程です。
+現在のProject UIは次の7工程で構成されています。Civit Explorerはapp-wide toolで、独立したProject工程ではありません。
 
 ```text
 1. Project Brief
    ↓
 2. Story
    ↓
-3. Model Catalog
+3. Model Selection
    ↓
-4. Model Selection
+4. Prompt Planning
    ↓
-5. Prompt Planning
+5. Workflow Compile
    ↓
-6. Workflow Compile
+6. Model Availability
    ↓
-7. Model Availability / R2
-   ↓
-8. Preflight
+7. Preflight
+
+Civit Explorer / R2 File Manager / Vast.ai は app-wide service tool
 ```
 
 アプリ上の主なナビゲーションは次の構成です。
@@ -161,7 +180,6 @@ Batch Studio の標準フローは次の8工程です。
 概要
 基本設定
 ストーリー
-モデルカタログ
 モデル選定
 プロンプト設計
 ワークフロー
@@ -212,9 +230,9 @@ Batch Studio は Grok を自動操作しません。基本操作は次の流れ�
 
 Batch Studio は Grok のログイン、入力欄 DOM 操作、自動送信、回答 scraping を行いません。
 
-### 3. Model Catalog を同期する
+### 3. Civitai Catalog を同期・確認する
 
-「モデルカタログ」工程で Civitai Model Collection を同期します。
+Civit Explorer はProject工程ではなくapp-wide toolです。Homeのサービス連携/連携済みサービス、`Window > Civit Explorer`、またはモデル選定画面のSYNC導線から同じCatalogを利用します。
 
 事前に `CIVIT_API_KEY` を設定した状態でアプリを起動してください。
 
@@ -223,28 +241,31 @@ Batch Studio は Grok のログイン、入力欄 DOM 操作、自動送信、�
 カタログでは次を確認できます。
 
 - Public / Private Model Collection
-- Model / Version / File
+- Model / Version / File / Base Model
 - thumbnail
 - trained words
 - LoRA の observed-use `strengthBaseline`
 - Collection / Model / Version 選択テンプレート
-- モデル名・ファイル名による Collection 横断検索
+- Model / Base Model / File / trigger wordによる Collection 横断検索
+- API request / cache hit-miss / retry / 429 / 5xx / membership等のSYNC metrics
 
-Grok が必要と判断したモデルがカタログに存在しない場合は、Civitai 側の Collection にモデルを追加してから再度 SYNC します。
+Grokが必要なLoRAをCatalog内で見つけられない場合は、外部Civitai候補、複数LoRA組合せ、Prompt代替を順に検討します。Catalog外候補が必要な場合だけCollectionへ追加して再SYNCします。
 
 ### 4. 使用モデルを選定する
 
-「モデル選定」工程では、確定済み `story.md` と現在の `model_catalog.json` を根拠として Grok に Checkpoint / LoRA を選定させます。
+「モデル選定」工程では、まずユーザーがModel Familyと基盤モデルを選択します。IllustriousはCheckpoint、AnimaはDiffusion Model / Text Encoder / VAEが必須です。その後Grokは選択済み基盤モデルを変更せずLoRAだけを選定します。
 
-Grok から受け取った `models.json` を Batch Studio へ取り込み、以下を検証してから確定します。
+Grokからは `model_loras.json` を受け取り、Batch Studioが基盤モデルへ `loras[]` をmergeして `models.json` Draftを構築します。以下を検証してから確定します。
 
 - Model ID
 - Version ID
 - File ID / File name
 - Catalog generation
 - 不足モデル (`missingRequirements`) の有無
+- Grokが基盤モデルfieldを上書きしていないこと
+- Prompt代替 (`promptFallbacks`) の形式
 
-不足モデルがある場合は、Model Catalog に戻って Civitai Collection を更新し、再同期・再選定します。
+未解決 `missingRequirements` がある場合は確定できません。`promptFallbacks` で解決した要件は確定 `models.json` ではなく内部補助Artifactへ分離保存されます。
 
 ### 5. Prompt Plan を作成する
 
@@ -326,15 +347,14 @@ r2ModelPrefix
 
 判定は次のとおりです。
 
-| Local | R2 | 状態 |
-| --- | --- | --- |
-| あり | 任意 | `available` |
-| なし | あり | `transfer-required` / `BLOCKED` |
-| なし | なし | `missing` / `BLOCKED` |
+| executionTarget | Local | R2 | 判定 |
+| --- | --- | --- | --- |
+| local | あり | 任意 | `available` |
+| local | なし | 任意 | `BLOCKED` |
+| remote | 任意 | あり | `available` |
+| remote | 任意 | なし | `BLOCKED` |
 
-**R2 に存在するだけでは `READY` になりません。** ComfyUI 実行前に Local models directory へ転送してください。
-
-「モデル配置」工程には統合 R2 Manager があり、bucket / folder browse、検索、multipart upload、pause / resume / cancel、download URL、`curl` / `wget` / `aria2c`、move / delete、一括ダウンロード情報生成を利用できます。
+Projectの「モデル配置」工程ではR2をread-onlyで参照します。upload / move / delete / multipart transfer / batch DL / 一時PUT URL等の管理操作はStandalone R2 File Managerから行います。
 
 ### 8. Preflight を実行する
 
@@ -347,12 +367,13 @@ r2ModelPrefix
 - `prompt_plan.json` が Confirmed
 - Workflow が生成済みで provenance が stale でない
 - Workflow 参照モデルと `models.json` が一致
-- 必須 Checkpoint / LoRA が Local に存在
+- `executionTarget` に応じた必須モデル配置条件を満たす
+- Remote時はVast.ai provider / instance、API Key、SSH private key path等の現在実装済みGateを満たす
 - Blocking error がない
 
-すべて通過すると `READY` になります。
+すべての**現在実装済み**Gateを通過すると `READY` になります。ただしLocal ComfyUI API / Scene Prompt Tools / SSH実認証等のoperational checkはまだ未実装です。
 
-その後、生成された Workflow JSON を ComfyUI 側で読み込み、ComfyUI で生成を実行してください。v1 の Batch Studio 自体は Queue API へ送信しません。
+現時点では生成された Workflow JSON を ComfyUI 側で読み込み、ComfyUI で生成を実行してください。Batch Studio自体のExecution stage / Queue API送信は未実装です。
 
 ## Project Settings
 
@@ -446,11 +467,11 @@ Template と Manifest が対応していません。Manifest が参照する Tem
 
 ### Preflight が R2 上のモデルを `BLOCKED` にする
 
-仕様どおりです。R2 は保管場所として確認できますが、現在の v1 は ComfyUI 実行時に Local モデルが存在することを要求します。対象ファイルを `comfyModelsRoot` 以下へ配置して再チェックしてください。
+`executionTarget=local` ではLocal配置が必須です。`executionTarget=remote` ではR2配置が必須で、Local配置は任意です。Projectの「モデル配置」で現在のtargetと不足先を確認してください。
 
 ## Security / Responsibility Boundary
 
-- Grok は Story / モデル選定 / Prompt Plan の意味設計を担当します。
+- Grok は Story / LoRA選定 / Prompt Plan の意味設計を担当します。Model Familyと基盤モデルはユーザーが選択します。
 - Batch Studio は Project 状態、validation、Workflow compile、Civitai / R2 integration を担当します。
 - Grok Web のログイン・送信・添付・会話継続はユーザーが操作します。
 - Civitai API Key は Project artifact や Grok へ渡しません。
@@ -458,7 +479,7 @@ Template と Manifest が対応していません。Manifest が参照する Tem
 - 保存済み R2 Secret は `safeStorage` で暗号化します。
 - 確定済み Artifact を暗黙上書きせず、編集は Draft から開始し履歴を残します。
 - Grok に ComfyUI Workflow JSON を生成させません。
-- v1 は Preflight までで、ComfyUI Queue / progress / cancel / output collection は行いません。
+- 現在の実装はPreflightまでで、ComfyUI Queue / progress / cancel / output collectionはまだ行いません。
 
 ## Documentation
 
