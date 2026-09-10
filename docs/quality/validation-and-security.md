@@ -229,6 +229,22 @@ READY 判定前に次をまとめて表示する。
 
 Blocking が1件でもあれば `BLOCKED`。
 
+### 10.1 Current implementation boundary
+
+現行 `src/main/preflight.ts` で実装済みのGateは次の範囲である。
+
+- `story.md` / `models.json` / `prompt_plan.json` / Workflow存在とstale状態。
+- Modelsのcurrent catalog identity再検証。
+- Prompt Plan modelRef validation。
+- `executionTarget` に応じたLocal/R2 model availability。
+- Remote時のVast.ai provider / instance選択。
+- Vast.ai API Key設定、SSH private key path存在。
+- selected Instanceのcurrent provider statusとrunning時のpublic SSH endpoint有無。
+
+一方、UI Workflowに対応するAPI-format graph、Local ComfyUI API、Scene Prompt Tools、required custom nodes、実SSH authentication、Host Key、Remote Worker、remote filesystem/disk等のoperational checkは未実装である。
+
+したがって現在の `READY` は実装済みGate範囲の結果であり、本章で定義する最終的な「Execution開始可能」のoperational READYより弱い。Execution capability追加時にPreflightを同時に強化し、未検証項目を成功扱いしない。
+
 ## 11. Grok Security
 
 ### 11.1 WebContents isolation
