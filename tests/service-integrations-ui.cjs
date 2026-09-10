@@ -7,6 +7,7 @@ const read=p=>fs.readFileSync(path.join(repo,p),'utf8');
 const app=read('src/renderer/App.tsx');
 const settings=read('src/renderer/EnvironmentSettings.tsx');
 const services=read('src/renderer/ServiceIntegrationsStage.tsx');
+const vastPanel=read('src/renderer/integrations/VastAiIntegrationPanel.tsx');
 const execution=read('src/renderer/ExecutionStages.tsx');
 const config=read('src/main/vastai-config.ts');
 
@@ -20,8 +21,8 @@ assert.match(services,/Cloudflare R2/);
 assert.match(services,/Civitai/);
 assert.match(services,/クラウドインスタンス/);
 assert.match(services,/Vast\.ai/);
-assert.match(services,/VASTAI_API_KEY/);
-assert.match(services,/Instance一覧・起動・停止/);
+assert.match(vastPanel,/VASTAI_API_KEY/);
+assert.match(vastPanel,/既存Instanceの状態確認・起動・停止/);
 assert.match(execution,/remoteProvider:'vastai'/);
 assert.match(execution,/remoteInstanceId/);
 assert.match(execution,/SSH Host\/PortはProjectへ固定保存せず/);
