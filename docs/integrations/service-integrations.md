@@ -87,16 +87,20 @@ Project を開いていない Home の主要入口は次とする。
 └─ サービス連携
 ```
 
-R2 File Manager / Civit Explorer を Home の最上位 action として並べず、サービス連携から関連 service の管理機能として開く。
+R2 File Manager / Civit Explorer を Home中央の最上位actionとして並べない。サービス連携から開くほか、連携済みの場合はHome左navigationの「連携済みサービス」から直接開ける。
 
 Project を開いていない side navigation:
 
 ```text
 ホーム
 サービス連携
+連携済みサービス（条件付き）
+  Cloudflare R2
+  Civitai
+  Vast.ai
 ```
 
-サービス連携配下で R2 File Manager / Civit Explorer を開いた場合も、navigation 上は「サービス連携」の context とする。
+左navigationの連携済みサービスから開いた場合は該当serviceをactive表示する。未連携serviceはこのグループへ表示しない。
 
 ---
 
@@ -668,9 +672,9 @@ Batch Studio では reference runner process 自体を起動せず、Electron Ma
 ## 24. Acceptance Criteria
 
 1. Home から「サービス連携」を開ける。
-2. Home の主要actionから R2 / Civit を直接並列表示しない。
+2. Home中央の主要actionから R2 / Civit を直接並列表示せず、連携済みserviceだけを左navigationへ条件付き表示する。
 3. R2 / Civitai credential は環境設定ではなくサービス連携から編集する。
-4. R2 File Manager / Civit Explorer はサービス連携から開ける。
+4. R2 File Manager / Civit Explorer はサービス連携、連携済み左navigation、application menuのWindowから開ける。
 5. クラウドインスタンス選択画面に Vast.ai が表示される。
 6. Vast.ai API Key を `safeStorage` で保存できる。
 7. `VASTAI_API_KEY` を environment fallback として利用できる。
