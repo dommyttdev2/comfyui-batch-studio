@@ -1,7 +1,7 @@
-export const REMOTE_WORKER_VERSION='4';
+export const REMOTE_WORKER_VERSION='5';
 export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
 import base64,hashlib,json,os,re,shutil,subprocess,sys,tempfile,time,urllib.parse,urllib.request
-VERSION="4"
+VERSION="5"
 CHUNK_SIZE=8*1024*1024
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -282,8 +282,8 @@ def sync_custom_nodes(comfy_root,token,nodes):
   name=repository.split("/",1)[1];dest=os.path.join(custom_root,name);cloned=False
   if os.path.exists(dest):
    if not os.path.isdir(os.path.join(dest,".git")):raise WorkerError("CUSTOM_NODE_DESTINATION_CONFLICT",name)
-   origin=run_cmd(["git","config","--get","remote.origin.url"],cwd=dest,error_code="CUSTOM_NODE_ORIGIN_MISSING").stdout.strip()
-   if normalize_origin(origin).lower()!=repository.lower():raise WorkerError("CUSTOM_NODE_ORIGIN_MISMATCH",f"{name} points to {redact(origin)} instead of {repository}.")
+   identity=run_cmd(["gh","repo","view","--json","nameWithOwner","--jq",".nameWithOwner"],cwd=dest,env=env,error_code="CUSTOM_NODE_IDENTITY_LOOKUP_FAILED").stdout.strip()
+   if identity.lower()!=repository.lower():raise WorkerError("CUSTOM_NODE_ORIGIN_MISMATCH",f"{name} resolves to {identity or 'unknown'} instead of {repository}.")
    dirty=run_cmd(["git","status","--porcelain","--untracked-files=no"],cwd=dest,error_code="CUSTOM_NODE_GIT_STATUS_FAILED").stdout.strip()
    if dirty:raise WorkerError("CUSTOM_NODE_GIT_DIRTY",f"{repository} has tracked local changes.")
   else:
