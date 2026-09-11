@@ -50,7 +50,7 @@ export class VastAiConfigStore {
   async apiKey(){const saved=decrypt((await this.raw())?.encryptedApiKey);return saved||this.environmentApiKey();}
   async status():Promise<VastAiConnectionStatus>{
     const stored=await this.raw(),saved=decrypt(stored?.encryptedApiKey),environment=this.environmentApiKey();
-    const sshPrivateKeyPath=text(stored?.sshPrivateKeyPath),sshPublicKeyPath=stored?.schemaVersion===2?text(stored.sshPublicKeyPath):'';
+    const sshPrivateKeyPath=text(stored?.sshPrivateKeyPath),sshPublicKeyPath=stored?.schemaVersion===2||stored?.schemaVersion===3?text(stored.sshPublicKeyPath):'';
     const sshPrivateKeyExists=Boolean(sshPrivateKeyPath&&await isFile(sshPrivateKeyPath)),sshPublicKeyExists=Boolean(sshPublicKeyPath&&await isFile(sshPublicKeyPath));
     const sshUser=text(stored?.sshUser)||DEFAULT_VASTAI_SSH_USER,comfyUiPort=stored?.comfyUiPort??DEFAULT_VASTAI_COMFY_PORT;
     return {configured:Boolean(saved||environment),source:saved?'saved':environment?'environment':'none',sshPrivateKeyPath,sshPrivateKeyExists,sshPublicKeyPath,sshPublicKeyExists,sshKeyPairValid:sshPrivateKeyExists&&sshPublicKeyExists?await pairValid(sshPrivateKeyPath,sshPublicKeyPath):false,sshUser,comfyUiPort};
