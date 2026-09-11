@@ -43,7 +43,7 @@ Local Run は Workflow 実行と Local 成果物確認まで完了した時点�
 
 Remote Run は次の全工程が成功した時点でのみ完了とする。
 
-1. Cloud Instance / Remote environment準備。
+1. Cloud Instance / Remote environment準備（aria2 / GitHub CLI、GitHub認証、ComfyUI latest release、workflow依存 custom_nodes）。
 2. 必要モデル配置。
 3. Scene Prompt Expand連続生成。
 4. 成果物収集とpackage化。
@@ -419,6 +419,37 @@ Worker配置後はLocal/RemoteのSHA-256を比較し、不一致なら実行し�
 
 ---
 
+## 12.1 Remote Environment Bootstrap
+
+Remote workflow実行では、Remote Worker配置後かつモデルstaging前に環境をidempotentに整備する。
+
+順序:
+
+```text
+SSH / Remote Worker ready
+  -> aria2 / gh existence check
+  -> missing packages only install
+  -> GitHub PAT validation via ephemeral GH_TOKEN
+  -> ComfyUI official latest release tag lookup
+  -> tracked local changes check
+  -> latest release commit checkout
+  -> requirements.txt / manager_requirements.txt sync
+  -> Environment Settingsで指定した custom_nodes clone/update
+  -> custom_node requirements sync
+  -> supervisorctl restart comfyui
+  -> Remote model staging (aria2)
+```
+
+GitHub PATは `BATCH_STUDIO_GITHUB_PAT` または `GH_TOKEN` を優先し、Environment Settingsから保存する場合はOSのsafeStorageで暗号化する。RendererへPAT本体を返さず、Execution Runへも永続化しない。Remote hostではWorker requestの一時payloadからsubprocessの `GH_TOKEN` に渡し、`gh auth login` によるcredential file保存は行わない。
+
+ComfyUI releaseは `comfyanonymous/ComfyUI` の `releases/latest` から実行時にtagを取得し、tag名をhard-codeしない。Remote ComfyUIまたは管理対象custom_nodeにtracked local changesがある場合は自動破棄せずbootstrapを停止する。
+
+workflow依存 custom_nodes はEnvironment Settingsのapp-wide listを正本とする。各entryはGitHub `owner/repo` と任意の `ref` を持つ。未導入ならclone、導入済みならorigin一致を確認してfetch/checkoutする。空listはcustom_node同期をskipする。
+
+model downloadはRemote側の `aria2c` を使用する。presigned URLはprocess argvへ載せずstdinのinput-fileとして渡し、size/SHA-256検証後にatomic renameする。
+
+---
+
 ## 13. Remote Model Staging
 
 Remote executionの必要モデルはR2をsourceとする。
@@ -569,6 +600,12 @@ CLOUD_INSTANCE_RESOLVING
   -> SSH_CONNECTED
   -> REMOTE_WORKER_PREPARING
   -> REMOTE_ENVIRONMENT_CHECKING
+  -> REMOTE_DEPENDENCIES_INSTALLING
+  -> REMOTE_GITHUB_AUTHENTICATING
+  -> REMOTE_COMFYUI_UPDATING
+  -> REMOTE_CUSTOM_NODES_SYNCING
+  -> REMOTE_COMFYUI_RESTARTING
+  -> REMOTE_ENVIRONMENT_READY
   -> REMOTE_MODELS_CHECKING
   -> REMOTE_MODELS_DOWNLOADING
   -> REMOTE_MODELS_READY
@@ -807,6 +844,8 @@ Service Integration
   selected Instance exists
   SSH private key path exists
   Remote ComfyUI install path configured in Environment Settings
+  GitHub PAT resolved from safeStorage / BATCH_STUDIO_GITHUB_PAT / GH_TOKEN
+  workflow依存 custom_nodes list valid
 
 Execution environment
   Instance can become running
@@ -1031,7 +1070,8 @@ secret / private-key contents / credential / presigned URL persistence guard
 SSH client / Host Key policy
 Remote Worker
 Remote ComfyUI install path validation
-R2 -> Remote model staging
+Remote environment bootstrap（aria2 / gh / PAT / ComfyUI latest release / custom_nodes）
+R2 -> Remote model staging via aria2
 per-model progress / evidence / Resume skip
 size / SHA-256 validation + .part + atomic rename
 signed URL non-persistence + expiry retry
