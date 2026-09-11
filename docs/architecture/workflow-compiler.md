@@ -801,9 +801,27 @@ Manifest hash は Manifest 自身へ埋め込まず、Compile時の外部 proven
 
 ### 16.3 Current implementation boundary
 
-現在の `src/main/compiler.ts` は、Model Family別Template/ManifestからComfyUI **UI Workflow JSON** を決定論的に生成し、上記のNode/Link/Group/Matrix/Save path invariantを検証するところまで実装済みである。
+現在の `src/main/compiler.ts` は、Model Family別Template/ManifestからComfyUI **UI Workflow JSON** と Execution 用 **API-format graph** を同じ確定入力から決定論的に生成する。
 
-Execution用のComfyUI API-format graph生成・paired contract解決・UI Workflowとのhash/identity整合確認はまだ実装されていない。これらはExecution実装前に追加する必要があり、現時点でUI Workflow生成成功をAPI graph準備完了とは扱わない。
+API-format graph は任意のUI Workflowを汎用変換する方式ではなく、Batch Studioが所有するTemplate node contractを `src/main/workflow-api.ts` で明示的に解決する。未知のnode typeは暗黙変換せずCompile errorとする。
+
+Compile時には以下を検証する。
+
+- 全API nodeに `class_type` / `inputs` が存在する。
+- UI WorkflowとAPI graphのnode identity / class typeが一致する。
+- IllustriousはCheckpoint、AnimaはDiffusion Model / Text Encoder / VAEを使用する。
+- Root/Branch LoRA参照が `models.json` / `prompt_plan.json` と一致する。
+- Branch数、SceneMatrix leaf mapping、ScenePrompterExpand model mode、Save pathがUI Workflowと同じ意味を持つ。
+- API graph内のlink参照がdanglingになっていない。
+
+出力は次とする。
+
+```text
+LoRA_{project-destination-folder}.json      # UI Workflow
+LoRA_{project-destination-folder}.api.json  # Execution API graph
+```
+
+両方のcanonical SHA-256と対応 `workflowIdentity` を `project_meta.json.workflowBuild` に保存する。PreflightはAPI graphの存在、構造、hash、UI/API identityを検証し、不整合があればBLOCKする。
 
 ## 17. Manifest Schema Evolution
 
