@@ -47,7 +47,9 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
   assert.match(worker.REMOTE_WORKER_FILE,/gh","auth","status/,'worker must verify non-interactive GitHub auth');
   assert.doesNotMatch(worker.REMOTE_WORKER_FILE,/gh","auth","login/,'worker must not start interactive gh auth login');
   assert.match(worker.REMOTE_WORKER_FILE,/gh","repo","clone/,'worker must clone configured custom nodes with gh');
-  assert.equal(worker.REMOTE_WORKER_VERSION,'4','worker version must advance when bootstrap install behavior changes');
+  assert.match(worker.REMOTE_WORKER_FILE,/gh","repo","view","--json","nameWithOwner"/,'existing custom-node repository identity must be resolved through gh');
+  assert.doesNotMatch(worker.REMOTE_WORKER_FILE,/git","config","--get","remote\.origin\.url"/,'existing custom-node identity must not depend on raw git origin URL parsing');
+  assert.equal(worker.REMOTE_WORKER_VERSION,'5','worker version must advance when bootstrap install behavior changes');
   assert.match(worker.REMOTE_WORKER_FILE,/RECORD file not found/,'worker must detect Debian packages without pip RECORD metadata');
   assert.match(worker.REMOTE_WORKER_FILE,/installed by debian/,'worker must scope the retry to Debian-managed package conflicts');
   assert.match(worker.REMOTE_WORKER_FILE,/--ignore-installed/,'worker must retry only the affected requirements install without uninstalling Debian package metadata');
