@@ -86,8 +86,8 @@ Project内のstable filesystem identityである。
 - 先頭は小文字英数字。
 - 以降は小文字英数字、`.`、`_`、`-` を許可する。
 - 数字開始を許可する。
-- Workflow filename `LoRA_{project.id}.json` の派生元とする。
-- 保存先 `BatchStudio/{project.id}/{branch.id}` の派生元とする。
+- Workflow内部の保存先 `BatchStudio/{project.id}/{branch.id}` の派生元とする。
+- Workflow JSONファイル名には `project.id` を使わず、Project実フォルダの親フォルダ名を使って `LoRA_{project-destination-folder}.json` とする。
 - Project作成後は表示名を変更しても自動変更しない。
 - 既存Projectの設定画面から変更しない。
 
@@ -198,7 +198,23 @@ Blocking error:
 
 既存Projectの編集では、`project.id` の変更もBlockする。
 
-## 11. Story への引き渡し
+## 11. App-wide Project / Artifact roots
+
+現在の実装では環境設定に次のapp-wide pathを持つ。
+
+```text
+Project root          -> BATCH_STUDIO_PROJECT_ROOT
+成果物配置 root       -> BATCH_STUDIO_ARTIFACT_ROOT
+```
+
+- `Project root` が設定されている場合、新規Project画面の作成先初期値に使用する。
+- ユーザーは新規Project画面で別の作成先を選び直せる。
+- `成果物配置 root` が設定されている場合、Project作成時に `<artifactRoot>/<project.id>` を作成する。
+- 作成した成果物pathは `project_meta.json.settings.artifactOutputPath` に絶対pathで保存する。
+- root設定は既存Projectの実フォルダを自動移動しない。
+- 両rootとも絶対pathかつ存在するdirectoryのみ保存可能とする。
+
+## 12. Story への引き渡し
 
 初回Grok依頼では完成Storyを一度で要求せず、まず調査・Story案・不足確認を行う。
 

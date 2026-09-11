@@ -45,13 +45,11 @@ Projectを開いている場合:
 概要
 基本設定
 ストーリー
-モデルカタログ
 モデル選定
 プロンプト設計
 ワークフロー
 モデル配置
 実行前チェック
-実行
 ```
 
 Projectを閉じている場合:
@@ -61,7 +59,7 @@ Projectを閉じている場合:
 サービス連携
 ```
 
-R2 File Manager / Civit Explorer / Vast.ai管理画面は「サービス連携」のcontextに属する app-wide tool とし、Home navigationの同階層へ固定表示しない。ただし連携済みサービスはHomeの「連携済みサービス」セクションから対象画面へ直接開ける。
+R2 File Manager / Civit Explorer / Vast.ai管理画面は「サービス連携」のcontextに属する app-wide tool とする。Project未選択時の左navigationには `ホーム` / `サービス連携` を固定表示し、その下に連携済みサービスだけを `連携済みサービス` グループとして条件付き表示する。
 
 `Prompt Tree` の独立navigationは設けない。Prompt構造の人間向け表示・編集はPrompt Planへ統合する。
 
@@ -77,11 +75,11 @@ Projectを閉じたHomeでは最低限次を提供する。
 - プロジェクトを開く。
 - 最近使ったプロジェクト。
 - サービス連携。
-- 連携済みサービスへの直接ショートカット（1件以上存在する場合のみ）。
+- 左navigation内の連携済みサービス直接導線（1件以上存在する場合のみ）。
 
 初期状態のHomeを外部サービス管理画面の集合にしない。未連携サービスの設定は「サービス連携」を明示的に開いてから操作する。
 
-連携済みサービスはHomeの「連携済みサービス」セクションへ条件付き表示する。未連携サービスは表示しない。
+連携済みサービスはHome中央コンテンツではなく左navigationの「連携済みサービス」グループへ条件付き表示する。未連携サービスは表示しない。
 
 ```text
 Cloudflare R2 connected
@@ -173,13 +171,13 @@ Model Catalog / Workflow / Model Availability / Preflight / ExecutionにはGrok 
 
 Grokから貼り戻す工程ではparse preview、Draft save、validation、current confirmedとの差分、explicit Confirmを提供し、pasteしただけでfinal fileを更新しない。
 
-## 9. Model Catalog / Civit Explorer
+## 9. Civit Explorer / Model Catalog
 
-Project工程の「モデルカタログ」は統合CatalogをProject contextで利用する画面。
+Civit ExplorerはProject工程ではなくapp-wide toolとして提供する。サービス連携のCivitai画面、Home左navigationの連携済みCivitai導線、またはapplication menuの `Window > Civit Explorer` から開ける。
 
-Projectなしの「Civit Explorer」はサービス連携のCivitai画面、またはCivitai連携済みの場合はHomeの直接ショートカットから開くStandalone Toolとする。
+Projectのモデル選定画面は同じapp-wide Catalogを利用し、必要に応じてその場でSYNCできる。
 
-Catalog SYNC、Collection選択、検索、Version/File/trained words/thumbnail/strengthBaseline確認、Civitai model pageへの外部navigation等を提供する。詳細なCatalog仕様は `../integrations/external-tools.md` を正本とする。
+Catalog SYNC、Collection選択、検索、Version/File/Base Model/trained words/thumbnail/strengthBaseline確認、同期metrics、Civitai model pageへの外部navigation等を提供する。詳細なCatalog仕様は `../integrations/external-tools.md` を正本とする。
 
 ## 10. Story / Models / Prompt Plan
 
@@ -192,12 +190,14 @@ Story:
 
 Models:
 
-- current catalog情報。
-- Grok Model Selection prompt。
-- `models.json` import。
+- Model Family選択。
+- Illustrious Checkpoint / Anima Diffusion ModelのCatalog選択。
+- Anima Text Encoder / VAEのLocal/R2 inventory選択。
+- 選択済み基盤モデルを変更しないGrok LoRA Selection prompt。
+- `model_loras.json` importと既存基盤モデルへのmerge。
 - catalog identity validation。
-- reason / missingRequirements。
-- re-selection prompt。
+- reason / promptFallbacks / missingRequirements。
+- LoRA re-selection promptと履歴表示。
 - explicit Confirm。
 
 Prompt Plan:
@@ -217,7 +217,7 @@ GrokではなくCompiler工程。
 - Compile。
 - generated branch / node / link summary。
 - UI Workflow output path。
-- Execution API graph availability / validation status。
+- Execution API graphは未実装のため、現行画面ではavailability/validation statusを表示しない。
 - structure validation。
 - Workflow生成済みの場合の「フォルダを開く」。
 
@@ -252,9 +252,9 @@ Remote targetでR2に存在するmodelはExecution開始時にRemote hostがR2�
 
 ## 13. Standalone R2 File Manager
 
-サービス連携のCloudflare R2画面、またはR2連携済みの場合はHomeの直接ショートカットから開く。
+サービス連携のCloudflare R2画面、Home左navigationの連携済みR2導線、またはapplication menuの `Window > R2 File Manager` から開く。
 
-Projectに依存せず、bucket管理、folder navigation、search、upload、move/rename、delete、download情報生成、一括DL、upload resume等を提供する。
+Projectに依存せず、bucket管理、folder navigation、search、multipart upload、pause/resume/cancel、move/rename、delete、download情報生成、一括DL、名前付きbatch template、一時presigned PUT URL生成等を提供する。
 
 数GB fileをRendererへ全読込せず、Main Processがstream/multipart uploadする。
 
@@ -289,6 +289,8 @@ Vast.ai/SSH/Remote Worker capabilityの実装に応じて次を段階的にblock
 検証未実装のcapabilityを成功したように表示しない。
 
 ## 15. Execution Screen
+
+> Current implementation: `実行` stageはまだProject navigationへ実装されていない。以下はExecution実装時の画面契約であり、現行UIの機能一覧ではない。
 
 Grok paneは非表示とし、Local UIを全幅使用する。
 
@@ -329,20 +331,25 @@ Remote targetでは `generation completed` と `artifact delivery completed` を
 | 概要 | 非表示 |
 | 基本設定 | 非表示 |
 | ストーリー | 表示 |
-| モデルカタログ | 非表示 |
 | モデル選定 | 表示 |
 | プロンプト設計 | 表示 |
 | ワークフロー | 非表示 |
 | モデル配置 | 非表示 |
 | 実行前チェック | 非表示 |
-| 実行 | 非表示 |
 | Home / サービス連携 / R2 File Manager / Civit Explorer / Vast.ai | 非表示 |
+| `Window` から開いたStandalone R2/Civit window | 非表示 |
 
 工程切替時はこの既定表示を再適用する。
 
 Grok paneを非表示にしてもWebContents/persistent sessionは破棄しない。
 
 Grokを使用しない工程ではshow/hide control自体を表示しない。
+
+## 16.1 Standalone tool windows
+
+Electron application menuの `Window` には `R2 File Manager` と `Civit Explorer` を提供する。選択するとMain Windowとは独立した `BaseWindow + WebContentsView` で該当toolを表示する。同一tool windowが既に存在する場合は新規作成せず、既存windowをshow/focusする。
+
+Standalone windowも同じpreload APIを利用するが、Grok paneは持たない。
 
 ## 17. Secret boundary in UI
 

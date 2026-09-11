@@ -17,7 +17,7 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - 版権キャラクター等の公開情報の調査・整理。
 - Story案の生成とユーザーとの会話による調整。
 - `story.md` の作成。
-- `model_catalog.json` を根拠にした使用モデルの選定。
+- `model_catalog.json` を根拠にしたLoRA選定。基盤モデルはユーザー選択済みのものを変更しない。
 - 共通プロンプト、Root LoRA、Branch、Leaf promptsの意味設計。
 
 ### 2.2 Batch Studio の責務
@@ -30,7 +30,7 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - Model / Version / File / thumbnail / trained words取得。
 - Civitai observed LoRA strength baseline集計。
 - Collection / Model / Version選択テンプレート管理。
-- Grokが選定したModel / Version / Fileの実在確認。
+- ユーザーが選択した基盤モデルとGrokが選定したLoRAのModel / Version / File実在確認。
 - Prompt Plan検証。
 - Workflow TemplateとPrompt PlanからComfyUI Workflowを決定論的に生成。
 - Cloudflare R2 credentialのMain Process内管理。
@@ -47,7 +47,7 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - Project Brief入力。
 - Civitai Collectionの整理・必要モデル追加。
 - Grok Webでのログイン、送信、添付、会話継続。
-- Story案、モデル選定、Prompt Planの最終確認。
+- Story案、基盤モデル/LoRA選定、Prompt Planの最終確認。
 - R2の接続設定と破壊操作の明示実行。
 - Remote executionを使用する場合のSSH接続設定・秘密鍵path設定。
 - 警告・差分確認。
@@ -111,39 +111,33 @@ Batch Studio
   -> Validate / Confirm
         |
         v
-[3. Model Catalog]
-Batch Studio Main Process
-  -> Civitai Public/Private Model Collections
-  -> Model / Version / File / thumbnail / trained words
-  -> observed LoRA strength evidence
-  -> app-wide model_catalog.json
-  -> generation increment
+[3. Model Selection]
+Batch Studio Main Process / Local UI
+  -> Civitai Collectionをapp-wide model_catalog.jsonへ同期
+  -> UserがModel Familyを選択
+  -> Illustrious: CheckpointをCatalogから選択
+  -> Anima: Diffusion ModelをCatalog、Text Encoder / VAEをLocal/R2 inventoryから選択
         |
         v
-Batch Studio Local UI
-  -> Collection selection / cross-search
-  -> Version inspection
-  -> selection templates / JSON copy
-        |
-        v
-[4. Model Selection]
-story.md + model_catalog.json
+ユーザー選択済み基盤モデル + story.md + model_catalog.json
         |
         v
 Grok
-  -> Checkpoint / LoRA / Version / File selection
-  -> missingRequirements when needed
-        |
-        v
-models.json Draft
+  -> LoRAのみ選定
+  -> catalog外候補 / 複数LoRA / Prompt代替を評価
+  -> unresolvedのみmissingRequirements
         |
         v
 Batch Studio
+  -> 基盤モデルへloras[]をmerge
   -> catalog identity validation
   -> User Confirm
         |
         v
-[5. Prompt Planning]
+models.json
+        |
+        v
+[4. Prompt Planning]
 story.md + models.json
         |
         v
@@ -231,10 +225,9 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 | --- | --- | --- | --- |
 | 基本設定 | ユーザー入力 | `project_brief.json` | 必須Brief有効 |
 | ストーリー | Brief / 参考資料 | `story.md` | User Confirm / validation成功 |
-| モデルカタログ | Civitai Collection | app-wide `model_catalog.json` | Catalog生成済み。必要モデルがCollectionに含まれることをユーザーが確認可能 |
-| モデル選定 | `story.md`, `model_catalog.json` | `models.json` | identity実在 / missing requirement解消 |
+| モデル選定 | `story.md`, app-wide `model_catalog.json`, Local/R2 model inventory | `models.json` | Model Family/基盤モデル選択済み、LoRA identity実在、unresolved `missingRequirements` なし |
 | プロンプト設計 | story, models | `prompt_plan.json` | schema / refs / branch-leaf整合性有効 |
-| ワークフロー | Template, Manifest, models, plan | UI Workflow + API execution graph | Compiler / structure validation成功 |
+| ワークフロー | Template, Manifest, models, plan | UI Workflow | 現行CompilerのUI Workflow構造validation成功。Execution用API graphは未実装 |
 | モデル配置 | models, Local, integrated R2, executionTarget | 所在状態 / R2操作 | Local targetはLocal配置済み。Remote targetはR2配置済み |
 | 実行前チェック | 全成果物 + target環境 | READY / BLOCKED | artifact/model validationとtarget-specific operational checkにblocking errorなし |
 | 実行 | READY Project + executionTarget | Execution Run / Local成果物 | Localは生成+成果物確認、Remoteは生成+R2経由Local回収+hash検証成功 |
@@ -245,20 +238,17 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 概要
 基本設定
 ストーリー
-モデルカタログ
 モデル選定
 プロンプト設計
 ワークフロー
 モデル配置
 実行前チェック
-実行
 ```
 
 Grok pane既定表示:
 
 ```text
 ストーリー      表示
-モデルカタログ  非表示
 モデル選定      表示
 プロンプト設計  表示
 その他          非表示
@@ -274,15 +264,13 @@ Grokを使用しない工程では `Grokを表示` / `Grokを隠す` 操作自�
 
 `civit-model-viewer` の機能はBatch Studioへ統合済み。新規フローでは別Flask processやlocalhost:5055を起動しない。
 
-Catalog標準保存先はElectron app data配下で、Projectは`project_meta.json.settings.catalogPath`から参照する。新規Projectは統合Catalogへ自動関連付けする。
-
-既存Projectで外部`catalogPath`が明示されている場合は互換性のため維持し、「モデルカタログ」工程の明示操作で統合Catalogへ切り替える。
+Catalog標準保存先はElectron app data配下で、標準フローは統合Catalogを直接利用する。Civit ExplorerはProject工程ではなくapp-wide toolであり、モデル選定画面からもCatalog同期を実行できる。既存Projectの明示的な外部`catalogPath`は互換用として維持する。
 
 ### 7.2 R2
 
 `r2-file-manager` の主要機能はBatch Studioへ統合済み。新規フローでは別Python/Flask processやlocalhost R2 UIを起動しない。
 
-R2 Secret / Cloudflare API TokenはElectron Main Processでのみ復号・利用し、Project artifactやGrokへ渡さない。`モデル配置`工程からbucket/folder閲覧、検索、upload、download情報生成、move/delete、一括DLを操作する。
+R2 Secret / Cloudflare API TokenはElectron Main Processでのみ復号・利用し、Project artifactやGrokへ渡さない。Projectの`モデル配置`工程ではR2をread-only参照し、upload / move / delete / 一括DL / 一時PUT URL等の管理操作はStandalone R2 File Managerへ集約する。
 
 Remote executionではIntegrated R2 Managerが model GET URL、artifact presigned PUT、Local artifact GETを所有する。RemoteへR2 credentialを渡さない。
 
@@ -298,6 +286,12 @@ Executionの詳細責務は `../architecture/remote-execution.md` を正本と�
 - Remote WorkerがRemote host内のComfyUI localhost APIを利用する。
 - SSHはcontrol plane、R2はlarge binary transfer planeとする。
 - Scene Prompt Expand連続生成はfrontend button clickではなくAPI orchestrationで再現する。
+
+### 7.4 Current implementation boundary
+
+現在のProject navigationは `概要 -> 基本設定 -> ストーリー -> モデル選定 -> プロンプト設計 -> ワークフロー -> モデル配置 -> 実行前チェック` まで実装済みである。
+
+`実行` stage、Execution Run、Local ComfyUI API execution、SSH/Remote Worker、remote model staging、remote Scene Prompt execution、artifact deliveryは設計済みだが未実装である。したがって現行Preflightの `READY` はArtifact/model/provider選択の範囲であり、設計上の完全なoperational READYへは今後強化する必要がある。
 
 ## 8. 状態定義
 

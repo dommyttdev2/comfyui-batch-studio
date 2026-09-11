@@ -497,7 +497,7 @@ Grok 側:
 ```json
 {
   "id": "s1-01-c1",
-  "name": "S1-01_C1_sitting_desk",
+  "name": "s1-01-c1",
   "positive": "sitting, desk, looking at viewer",
   "negative": "standing"
 }
@@ -533,10 +533,10 @@ Compiler 側の概念出力:
 ```text
 leaf.id   -> row_id
 leaf.id   -> path_label
-leaf.name -> name
+leaf.id   -> name
 ```
 
-`leaf.id` は Project-wide unique かつ filesystem-safe stable ID なので、出力identityにも使用する。`leaf.name` は人間向け名称であり、filesystem identityには使用しない。
+`leaf.id` は Project-wide unique かつ filesystem-safe stable ID なので、SceneMatrixの `row_id` / `path_label` / `name` と出力identityに使用する。`leaf.name` はBatch Studio UI上の人間向け表示名として保持し、ComfyUI側のMatrix row nameや最終ファイル名へ日本語等を持ち込まない。
 
 内部形式は Template/custom node version に依存するため Compiler adapter が所有する。
 
@@ -627,14 +627,15 @@ Sampler / Encode / VAE Decode / Prompter 等、上記以外の内部Node title�
 新規確定Workflow filename:
 
 ```text
-LoRA_{project.id}.json
+LoRA_{project-destination-folder}.json
 ```
 
 例:
 
 ```text
-project.id = 15_office_boss
--> LoRA_15_office_boss.json
+Project root = D:/BatchProjects/office_boss/15_office_boss
+Project destination folder = office_boss
+-> LoRA_office_boss.json
 ```
 
 BranchのSceneSaveImage保存先はCompilerが次から派生する。
@@ -652,7 +653,8 @@ BatchStudio/15_office_boss/b02
 
 原則:
 
-- `project.title` をfilesystem pathに使用しない。
+- Workflow filenameはProject実フォルダの親フォルダ名から派生する。
+- `project.title` をWorkflow filenameやComfyUI save pathに使用しない。
 - `branch.label` をfilesystem pathに使用しない。
 - Grokに保存先を生成させない。
 - Templateに残った旧Projectの保存先をそのまま継承しない。
@@ -723,6 +725,7 @@ Template version/hash
 + models.json
 + prompt_plan.json
 + project.id
++ project destination folder name
 + compiler version/config
 ```
 
@@ -788,13 +791,19 @@ Manifest hash は Manifest 自身へ埋め込まず、Compile時の外部 proven
 - 全 Branch の `counter` が `count = 1`。
 - 各BranchのMain SceneMatrix row数が `branch.leaves.length` と一致。
 - Project予定枚数がPrompt Plan全leaf総数と一致。
-- `row_id` / `path_label` が対応する `leaf.id` と一致。
+- `row_id` / `path_label` / `name` が対応する `leaf.id` と一致。
 - Save path が `BatchStudio/{project.id}/{branch.id}` と一致。
 - LoRA file が `models.json` に存在。
 - `filename_enabled` 等 Compiler-owned invariant が成立。
 - `last_node_id` / `last_link_id` 整合。
 
 `generation.target_image_count` とProject予定枚数の差分はblocking invariantではない。
+
+### 16.3 Current implementation boundary
+
+現在の `src/main/compiler.ts` は、Model Family別Template/ManifestからComfyUI **UI Workflow JSON** を決定論的に生成し、上記のNode/Link/Group/Matrix/Save path invariantを検証するところまで実装済みである。
+
+Execution用のComfyUI API-format graph生成・paired contract解決・UI Workflowとのhash/identity整合確認はまだ実装されていない。これらはExecution実装前に追加する必要があり、現時点でUI Workflow生成成功をAPI graph準備完了とは扱わない。
 
 ## 17. Manifest Schema Evolution
 

@@ -10,7 +10,7 @@ Goal: 実装前に境界と schema の未決事項を減らす。
 
 - Artifact status state model。
 
-`models.json` Schema v1 は解決済みであり、機械可読正本は `schemas/models.schema.json` とする。
+`models.json` の現行新規保存形式はSchema v5であり、機械可読正本は `schemas/models.schema.json` とする。v1〜v4は既存Project互換として保持する。
 
 `prompt_plan.json` Schema v1 も解決済みであり、機械可読正本は `schemas/prompt-plan.schema.json` とする。
 
@@ -95,7 +95,7 @@ Batch Studio:
 - Collection / Model / Version browsing / search / template UX。
 - Grok Model Selection prompt preparation。
 - Models Draft / import。
-- `schemas/models.schema.json` を使った Schema v1 validation。
+- `schemas/models.schema.json` を使った現行Schema v5 + legacy v1〜v4 validation。
 - Checkpoint `checkpoint.main` / LoRA `lora.*` ref validation。
 - Project-wide model `ref` uniqueness の semantic validation。
 - Model / Version / File identity validation。
@@ -110,7 +110,7 @@ Batch Studio:
 Exit criteria:
 
 - Grok が catalog から選んだ file を Batch Studio が再照合できる。
-- Schema v1 に準拠し semantic validation を通過した `models.json` だけを確定できる。
+- 現行Schemaに準拠し semantic validation を通過した `models.json` だけを確定できる。
 - `ref` 重複や架空 Model / Version / File identity を確定できない。
 - 未解決 `missingRequirements` がある状態で `models.json` を Confirm できない。
 - catalog generation が変化しても、それだけで `models.json` を invalid にしない。
@@ -196,7 +196,7 @@ Goal: Prompt Plan branch 数と一致し、leaf総数と一致する予定画像
 - Manifest layout offset適用。
 - Branch LoRA Stack patch。
 - leaf -> SceneMatrix conversion。
-- `leaf.id -> row_id / path_label`、`leaf.name -> name` mapping。
+- `leaf.id -> row_id / path_label / name` mapping。`leaf.name` はBatch Studio UIの表示名として保持。
 - 全Branch `ScenePromptCounter.count = 1` patch。
 - Branch / Project image count derivation。
 - Branch human-readable title derivation from `branch.id` / `branch.label`。
@@ -424,6 +424,29 @@ localSha256 == remotePackageSha256
 ```
 
 上記を満たした場合のみRemote Runを`COMPLETED`とする。
+
+## Current implementation snapshot (2026-09-11)
+
+最新mainのコードを正本にした実装状況:
+
+| Phase | Status | Current boundary |
+| --- | --- | --- |
+| 0 | Implemented / maintained | schemas/decisionsは運用中。models新規保存はv5 |
+| 1 | Implemented | Electron shell、Grok分離、Project scan、Home/recent、Standalone R2/Civit windows |
+| 2 | Implemented | Project Brief、Draft/History、Story import/confirm、Project/Artifact roots |
+| 3 | Implemented | Integrated Civitai Catalog、cache/retry/metrics、User base model + Grok LoRA selection |
+| 4 | Mostly implemented | Prompt Plan編集/順序/strength/validation。target差分の専用表示やvalidation field誘導は改善余地あり |
+| 5 | Implemented | Illustrious/Anima Template + Manifest |
+| 6 | Partial | UI Workflow compilerは実装済み。Execution API-format graphは未実装 |
+| 7 | Implemented for current UI | target別availability、Integrated R2 Manager、multipart upload、batch DL、temporary PUT URL |
+| 8 | Partial | Artifact/model/provider選択Gateは実装済み。ComfyUI/Scene Prompt/SSH等operational checksは未実装 |
+| 9 | Not implemented | `実行` stage、Execution Run、Local ComfyUI orchestration |
+| 10 | Partial foundation only | Vast.ai endpoint/private-key pathまでは実装。SSH client/Host Key/Remote Workerは未実装 |
+| 11 | Not implemented | Remote model staging |
+| 12 | Not implemented | Remote Scene Prompt execution |
+| 13 | Not implemented | Remote artifact package/R2 delivery/local verification |
+
+この表は要件の正本ではなく、実装進捗の記録である。
 
 ## Post-Execution Extensions
 
