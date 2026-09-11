@@ -14,9 +14,9 @@ def emit(kind, **data):
 
 def redact(value):
  text=str(value or "")
- text=re.sub(r"https?://\\\\S+","[url]",text)
+ text=re.sub(r"https?://\\S+","[url]",text)
  text=re.sub(r"(?i)(github_pat_|ghp_)[A-Za-z0-9_]+","[token]",text)
- text=re.sub(r"(?i)([?&](?:X-Amz-[^=]+|Signature|sig|token)=)[^&\\\\s]+",r"\\\\1[redacted]",text)
+ text=re.sub(r"(?i)([?&](?:X-Amz-[^=]+|Signature|sig|token)=)[^&\\s]+",r"\\1[redacted]",text)
  return text[:4000]
 
 def run_cmd(args,cwd=None,env=None,input_text=None,error_code="REMOTE_COMMAND_FAILED",allow_failure=False):
@@ -86,11 +86,11 @@ def download_model(model_root,req):
  target=model_path(model_root,req.get("path")); part=target+".part"; control=part+".aria2"
  if os.path.lexists(part) and os.path.isdir(part): raise WorkerError("MODEL_PART_IS_DIRECTORY")
  args=["aria2c","--input-file=-","--allow-overwrite=true","--auto-file-renaming=false","--continue=true","--file-allocation=none","--max-connection-per-server=8","--split=8","--min-split-size=16M","--summary-interval=0","--console-log-level=warn","--dir="+parent,"--out="+os.path.basename(part)]
- result=run_cmd(args,input_text=url+"\\\\n",error_code="MODEL_DOWNLOAD_NETWORK",allow_failure=True)
+ result=run_cmd(args,input_text=url+"\\n",error_code="MODEL_DOWNLOAD_NETWORK",allow_failure=True)
  if result is None: raise WorkerError("MODEL_DOWNLOAD_NETWORK")
  if result.returncode!=0:
   detail=(result.stderr or result.stdout or "").strip()
-  match=re.search(r"(?:status=|HTTP[/ ]|\\\\b)(401|403|408|429|5\\\\d\\\\d)\\\\b",detail,re.I)
+  match=re.search(r"(?:status=|HTTP[/ ]|\\b)(401|403|408|429|5\\d\\d)\\b",detail,re.I)
   code="MODEL_DOWNLOAD_HTTP_"+match.group(1) if match else "MODEL_DOWNLOAD_NETWORK"
   raise WorkerError(code,redact(detail) or "aria2c failed.")
  if not os.path.isfile(part): raise WorkerError("MODEL_DOWNLOAD_NETWORK","aria2c completed without producing the expected file.")
@@ -133,7 +133,7 @@ def ensure_tools():
    download_file("https://cli.github.com/packages/githubcli-archive-keyring.gpg",key_tmp.name)
    run_cmd(root_args(["install","-m","0644",key_tmp.name,"/etc/apt/keyrings/githubcli-archive-keyring.gpg"]),error_code="GH_REPOSITORY_SETUP_FAILED")
    arch=run_cmd(["dpkg","--print-architecture"],error_code="GH_REPOSITORY_SETUP_FAILED").stdout.strip()
-   source_tmp.write(f"deb [arch={arch} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\\\\n"); source_tmp.close()
+   source_tmp.write(f"deb [arch={arch} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\\n"); source_tmp.close()
    run_cmd(root_args(["install","-d","-m","755","/etc/apt/sources.list.d"]),error_code="GH_REPOSITORY_SETUP_FAILED")
    run_cmd(root_args(["install","-m","0644",source_tmp.name,"/etc/apt/sources.list.d/github-cli.list"]),error_code="GH_REPOSITORY_SETUP_FAILED")
   finally:
@@ -165,7 +165,7 @@ def hash_files(paths):
  h=hashlib.sha256()
  for p in paths:
   if os.path.isfile(p):
-   h.update(os.path.basename(p).encode());h.update(b"\\\\0")
+   h.update(os.path.basename(p).encode());h.update(b"\\0")
    with open(p,"rb") as f:
     while True:
      chunk=f.read(CHUNK_SIZE)
@@ -181,7 +181,7 @@ def install_requirements(comfy_root,paths,marker_name):
  if os.path.isfile(marker) and open(marker,encoding="utf-8").read().strip()==digest:return False
  python=comfy_python(comfy_root)
  for req in paths:run_cmd([python,"-m","pip","install","-r",req],cwd=comfy_root,error_code="PIP_REQUIREMENTS_FAILED")
- tmp=marker+".tmp";open(tmp,"w",encoding="utf-8").write(digest+"\\\\n");os.replace(tmp,marker)
+ tmp=marker+".tmp";open(tmp,"w",encoding="utf-8").write(digest+"\\n");os.replace(tmp,marker)
  return True
 
 def patch_manager_startup():
