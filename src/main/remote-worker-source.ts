@@ -1,7 +1,7 @@
-export const REMOTE_WORKER_VERSION='5';
+export const REMOTE_WORKER_VERSION='6';
 export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
 import base64,hashlib,json,os,re,shutil,subprocess,sys,tempfile,time,urllib.parse,urllib.request
-VERSION="5"
+VERSION="6"
 CHUNK_SIZE=8*1024*1024
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -282,10 +282,17 @@ def sync_custom_nodes(comfy_root,token,nodes):
   name=repository.split("/",1)[1];dest=os.path.join(custom_root,name);cloned=False
   if os.path.exists(dest):
    if not os.path.isdir(os.path.join(dest,".git")):raise WorkerError("CUSTOM_NODE_DESTINATION_CONFLICT",name)
-   identity=run_cmd(["gh","repo","view","--json","nameWithOwner","--jq",".nameWithOwner"],cwd=dest,env=env,error_code="CUSTOM_NODE_IDENTITY_LOOKUP_FAILED").stdout.strip()
-   if identity.lower()!=repository.lower():raise WorkerError("CUSTOM_NODE_ORIGIN_MISMATCH",f"{name} resolves to {identity or 'unknown'} instead of {repository}.")
    dirty=run_cmd(["git","status","--porcelain","--untracked-files=no"],cwd=dest,error_code="CUSTOM_NODE_GIT_STATUS_FAILED").stdout.strip()
-   if dirty:raise WorkerError("CUSTOM_NODE_GIT_DIRTY",f"{repository} has tracked local changes.")
+   if dirty:raise WorkerError("CUSTOM_NODE_GIT_DIRTY",f"{name} has tracked local changes; automatic repository replacement was stopped.")
+   identity=run_cmd(["gh","repo","view","--json","nameWithOwner","--jq",".nameWithOwner"],cwd=dest,env=env,error_code="CUSTOM_NODE_IDENTITY_LOOKUP_FAILED").stdout.strip()
+   if identity.lower()!=repository.lower():
+    backup_root=os.path.join(comfy_root,".batch-studio","bootstrap","custom-node-backups");os.makedirs(backup_root,exist_ok=True)
+    stamp=time.strftime("%Y%m%d-%H%M%S",time.gmtime());safe_identity=re.sub(r"[^A-Za-z0-9_.-]+","__",identity or "unknown")
+    backup=os.path.join(backup_root,f"{stamp}-{name}-{safe_identity}");suffix=1
+    while os.path.exists(backup):
+     backup=os.path.join(backup_root,f"{stamp}-{name}-{safe_identity}-{suffix}");suffix+=1
+    shutil.move(dest,backup)
+    run_cmd(["gh","repo","clone",repository,dest],env=env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
   else:
    run_cmd(["gh","repo","clone",repository,dest],env=env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
   commit=custom_node_commit(dest,ref,env)
