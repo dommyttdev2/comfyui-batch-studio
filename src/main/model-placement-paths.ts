@@ -1,4 +1,3 @@
-import path from 'node:path';
 import type { ModelAvailabilityRow, ModelFamily, ModelsArtifact } from '../shared/types.js';
 
 export interface RequiredModelSelection {
@@ -7,11 +6,12 @@ export interface RequiredModelSelection {
   kind:ModelAvailabilityRow['kind'];
 }
 
-function fileLeaf(fileName:string){
+function safeRelativeModelPath(fileName:string){
   const normalized=fileName.replace(/\\/g,'/').trim();
-  const leaf=path.posix.basename(normalized);
-  if(!leaf||leaf==='.'||leaf==='..')throw new Error(`Invalid model file name: ${fileName}`);
-  return leaf;
+  if(!normalized||normalized.startsWith('/')||/^[a-zA-Z]:\//.test(normalized))throw new Error(`Invalid model file name: ${fileName}`);
+  const parts=normalized.split('/').filter(Boolean);
+  if(!parts.length||parts.some(part=>part==='.'||part==='..'))throw new Error(`Invalid model file name: ${fileName}`);
+  return parts.join('/');
 }
 
 export function effectiveModelFamily(models:ModelsArtifact):ModelFamily{
@@ -33,19 +33,19 @@ export function requiredModelSelections(models:ModelsArtifact):RequiredModelSele
 }
 
 export function remoteModelRelativePath(family:ModelFamily,kind:ModelAvailabilityRow['kind'],fileName:string){
-  const leaf=fileLeaf(fileName);
+  const relative=safeRelativeModelPath(fileName);
   if(kind==='checkpoint'){
     if(family!=='illustrious')throw new Error('Anima model family cannot stage a checkpoint model.');
-    return `checkpoints/${leaf}`;
+    return `checkpoints/${relative}`;
   }
   if(kind==='diffusion_model'){
     if(family!=='anima')throw new Error('Illustrious model family cannot stage a diffusion model.');
-    return `diffusion_models/${leaf}`;
+    return `diffusion_models/${relative}`;
   }
-  if(kind==='text_encoder')return `text_encoders/${leaf}`;
-  if(kind==='clip')return `clip/${leaf}`;
-  if(kind==='vae')return `vae/${leaf}`;
-  if(kind==='lora')return `loras/${leaf}`;
+  if(kind==='text_encoder')return `text_encoders/${relative}`;
+  if(kind==='clip')return `clip/${relative}`;
+  if(kind==='vae')return `vae/${relative}`;
+  if(kind==='lora')return `loras/${relative}`;
   const exhaustive:never=kind;
   throw new Error(`Unsupported model kind: ${String(exhaustive)}`);
 }
