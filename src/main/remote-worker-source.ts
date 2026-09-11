@@ -1,7 +1,7 @@
-export const REMOTE_WORKER_VERSION='3';
+export const REMOTE_WORKER_VERSION='4';
 export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
 import base64,hashlib,json,os,re,shutil,subprocess,sys,tempfile,time,urllib.parse,urllib.request
-VERSION="3"
+VERSION="4"
 CHUNK_SIZE=8*1024*1024
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -175,6 +175,28 @@ def hash_files(paths):
      h.update(chunk)
  return h.hexdigest()
 
+def is_system_python(comfy_root,python):
+ for candidate in (os.path.join(comfy_root,"venv","bin","python"),os.path.join(comfy_root,".venv","bin","python")):
+  if os.path.realpath(python)==os.path.realpath(candidate):return False
+ system=shutil.which("python3")
+ return bool(system) and os.path.realpath(python)==os.path.realpath(system)
+
+def pip_install_requirements(comfy_root,python,req):
+ args=[python,"-m","pip","install","-r",req]
+ result=run_cmd(args,cwd=comfy_root,allow_failure=True)
+ if result is None:raise WorkerError("PIP_REQUIREMENTS_FAILED","pip executable was not found.")
+ if result.returncode==0:return {"retry":"none"}
+ detail=((result.stderr or "")+"\\n"+(result.stdout or "")).strip()
+ debian_record=("RECORD file not found" in detail and "installed by debian" in detail.lower())
+ if not (debian_record and is_system_python(comfy_root,python)):
+  raise WorkerError("PIP_REQUIREMENTS_FAILED",redact(detail) or "pip install failed.")
+ retry=run_cmd([python,"-m","pip","install","--ignore-installed","-r",req],cwd=comfy_root,allow_failure=True)
+ if retry is None:raise WorkerError("PIP_REQUIREMENTS_FAILED","pip retry executable was not found.")
+ if retry.returncode!=0:
+  retry_detail=((retry.stderr or "")+"\\n"+(retry.stdout or "")).strip()
+  raise WorkerError("PIP_REQUIREMENTS_DEBIAN_RETRY_FAILED",redact(retry_detail) or "pip --ignore-installed retry failed.")
+ return {"retry":"debian-record-ignore-installed"}
+
 def install_requirements(comfy_root,paths,marker_name):
  paths=[p for p in paths if os.path.isfile(p)]
  if not paths:return False
@@ -182,7 +204,7 @@ def install_requirements(comfy_root,paths,marker_name):
  marker=os.path.join(marker_dir,marker_name);digest=hash_files(paths)
  if os.path.isfile(marker) and open(marker,encoding="utf-8").read().strip()==digest:return False
  python=comfy_python(comfy_root)
- for req in paths:run_cmd([python,"-m","pip","install","-r",req],cwd=comfy_root,error_code="PIP_REQUIREMENTS_FAILED")
+ for req in paths:pip_install_requirements(comfy_root,python,req)
  tmp=marker+".tmp";open(tmp,"w",encoding="utf-8").write(digest+"\\n");os.replace(tmp,marker)
  return True
 
