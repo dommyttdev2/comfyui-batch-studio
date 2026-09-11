@@ -1,6 +1,6 @@
 export const REMOTE_WORKER_VERSION='3';
 export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
-import hashlib,json,os,re,shutil,subprocess,sys,tempfile,time,urllib.parse,urllib.request
+import base64,hashlib,json,os,re,shutil,subprocess,sys,tempfile,time,urllib.parse,urllib.request
 VERSION="3"
 CHUNK_SIZE=8*1024*1024
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -112,6 +112,8 @@ def github_env(token):
  token=str(token or "").strip()
  if not token: raise WorkerError("GITHUB_PAT_REQUIRED","GitHub PAT is required for remote bootstrap.")
  env=os.environ.copy(); env["GH_TOKEN"]=token; env["GH_HOST"]="github.com"
+ basic=base64.b64encode(("x-access-token:"+token).encode("utf-8")).decode("ascii")
+ env["GIT_CONFIG_COUNT"]="1"; env["GIT_CONFIG_KEY_0"]="http.https://github.com/.extraheader"; env["GIT_CONFIG_VALUE_0"]="AUTHORIZATION: basic "+basic
  return env
 
 def download_file(url,target):
@@ -210,7 +212,7 @@ def update_comfyui(comfy_root,token):
  env=github_env(token)
  latest=run_cmd(["gh","api","repos/comfyanonymous/ComfyUI/releases/latest","--jq",".tag_name"],env=env,error_code="COMFYUI_RELEASE_LOOKUP_FAILED").stdout.strip()
  if not latest:raise WorkerError("COMFYUI_RELEASE_LOOKUP_FAILED","Latest ComfyUI release tag was empty.")
- run_cmd(["git","fetch","origin","--tags","--force"],cwd=comfy_root,error_code="COMFYUI_GIT_FETCH_FAILED")
+ run_cmd(["git","fetch","--force","https://github.com/comfyanonymous/ComfyUI.git",f"refs/tags/{latest}:refs/tags/{latest}"],cwd=comfy_root,error_code="COMFYUI_GIT_FETCH_FAILED")
  release=run_cmd(["git","rev-parse","--verify",f"refs/tags/{latest}^{{commit}}"],cwd=comfy_root,error_code="COMFYUI_RELEASE_TAG_MISSING").stdout.strip()
  current=run_cmd(["git","rev-parse","HEAD"],cwd=comfy_root,error_code="COMFYUI_GIT_STATUS_FAILED").stdout.strip()
  changed=current!=release
@@ -228,8 +230,8 @@ def normalize_origin(value):
  raw=raw.rstrip("/");raw=raw[:-4] if raw.lower().endswith(".git") else raw
  return raw
 
-def custom_node_commit(dest,ref):
- run_cmd(["git","fetch","origin","--prune","--tags"],cwd=dest,error_code="CUSTOM_NODE_FETCH_FAILED")
+def custom_node_commit(dest,ref,env):
+ run_cmd(["git","fetch","origin","--prune","--tags"],cwd=dest,env=env,error_code="CUSTOM_NODE_FETCH_FAILED")
  if ref:
   candidates=[f"refs/remotes/origin/{ref}^{{commit}}",f"refs/tags/{ref}^{{commit}}",f"{ref}^{{commit}}"]
   commit=""
@@ -237,11 +239,11 @@ def custom_node_commit(dest,ref):
    result=run_cmd(["git","rev-parse","--verify",candidate],cwd=dest,allow_failure=True)
    if result and result.returncode==0:commit=result.stdout.strip();break
   if not commit:
-   fetched=run_cmd(["git","fetch","origin",ref],cwd=dest,allow_failure=True)
+   fetched=run_cmd(["git","fetch","origin",ref],cwd=dest,env=env,allow_failure=True)
    if fetched and fetched.returncode==0:commit=run_cmd(["git","rev-parse","FETCH_HEAD"],cwd=dest,error_code="CUSTOM_NODE_REF_NOT_FOUND").stdout.strip()
   if not commit:raise WorkerError("CUSTOM_NODE_REF_NOT_FOUND",f"custom_node ref was not found: {ref}")
  else:
-  run_cmd(["git","remote","set-head","origin","--auto"],cwd=dest,allow_failure=True)
+  run_cmd(["git","remote","set-head","origin","--auto"],cwd=dest,env=env,allow_failure=True)
   head=run_cmd(["git","symbolic-ref","refs/remotes/origin/HEAD"],cwd=dest,allow_failure=True)
   if head and head.returncode==0:commit=run_cmd(["git","rev-parse",head.stdout.strip()],cwd=dest,error_code="CUSTOM_NODE_FETCH_FAILED").stdout.strip()
   else:commit=run_cmd(["git","rev-parse","HEAD"],cwd=dest,error_code="CUSTOM_NODE_FETCH_FAILED").stdout.strip()
@@ -264,7 +266,7 @@ def sync_custom_nodes(comfy_root,token,nodes):
    if dirty:raise WorkerError("CUSTOM_NODE_GIT_DIRTY",f"{repository} has tracked local changes.")
   else:
    run_cmd(["gh","repo","clone",repository,dest],env=env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
-  commit=custom_node_commit(dest,ref)
+  commit=custom_node_commit(dest,ref,env)
   req=os.path.join(dest,"requirements.txt")
   marker="custom-node-"+repository.replace("/","__")+".sha256"
   installed=install_requirements(comfy_root,[req],marker)
