@@ -110,7 +110,7 @@ export class LocalExecutionService {
       applyExpandState(branchGraph,binding.expandNodeId,continuousId,branchProgress.completed);
       const wrapper={output:branchGraph},prepared=await scene.prepare(wrapper,binding.expandNodeId,workflow,run.runId);
       if(Number(prepared.total_batches)!==binding.leafIds.length)throw new Error(`Scene Prompt plan mismatch for ${binding.branchId}: expected ${binding.leafIds.length} batches, got ${prepared.total_batches}.`);
-      let lastPromptId='';
+      let lastPromptId='',runHandleClaimed=false;
       try{
         for(let index=branchProgress.completed;index<binding.leafIds.length;index++){
           run=await getExecutionRun(root,runId);if(!run||run.lifecycle!=='RUNNING')return;
@@ -119,7 +119,7 @@ export class LocalExecutionService {
           await mutateExecutionRun(root,runId,r=>{r.phase='EXECUTING';r.current={branchId:binding.branchId,leafId:binding.leafIds[index],promptId:null};const bp=r.progress.branches.find(x=>x.branchId===binding.branchId);if(bp)bp.state='running'});
           const submitted=await comfy.prompt(branchGraph,run.runId);lastPromptId=submitted.prompt_id;
           await mutateExecutionRun(root,runId,r=>{r.current.promptId=lastPromptId;if(!r.promptIds.includes(lastPromptId))r.promptIds.push(lastPromptId)});
-          await scene.claim(prepared.run_handle,lastPromptId);
+          if(!runHandleClaimed){await scene.claim(prepared.run_handle,lastPromptId);runHandleClaimed=true}
           let terminal:'success'|'error'='error';
           for(;;){const history=await comfy.history(lastPromptId),state=comfy.historyState(history,lastPromptId);if(state!=='pending'){terminal=state;break}await sleep(750)}
           run=await getExecutionRun(root,runId);if(!run)return;

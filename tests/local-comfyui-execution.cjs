@@ -37,7 +37,7 @@ async function makeProject(execution,hashCanonicalJson,projectId='local-api-proj
   return {root,install,run,ready};
 }
 function startServer(install,options={}){
-  const calls={prompts:[],claims:[],prepares:[],finalizes:[],releases:[],interrupts:0},history=new Map(),running=new Set();
+  const calls={prompts:[],claims:[],prepares:[],finalizes:[],releases:[],interrupts:0},history=new Map(),running=new Set(),claimedHandles=new Map();
   let holdFirst=Boolean(options.holdFirst);
   const server=http.createServer(async(req,res)=>{
     const chunks=[];for await(const chunk of req)chunks.push(chunk);const raw=Buffer.concat(chunks).toString('utf8'),body=raw?JSON.parse(raw):{};
@@ -46,7 +46,7 @@ function startServer(install,options={}){
     if(req.url==='/object_info')return json(200,{SceneMatrix:{},ScenePrompterExpand:{},SceneSaveImage:{}});
     if(req.url==='/scene_prompt/runs/prepare'){
       calls.prepares.push(body);const node=body.api_graph.output[String(body.expand_node_id)],matrix=body.api_graph.output[String(node.inputs.scene_prompt[0])],total=JSON.parse(matrix.inputs.matrix_json).sets.length;
-      return json(200,{run_handle:`handle-${body.expand_node_id}`,total_batches:total,total_images:total,presets:[],preset_graphs:{}});
+      return json(200,{run_handle:`handle-${body.expand_node_id}-${calls.prepares.length}`,total_batches:total,total_images:total,presets:[],preset_graphs:{}});
     }
     if(req.url==='/prompt'){
       const graph=body.prompt,expand=Object.entries(graph).find(([,n])=>n.class_type==='ScenePrompterExpand'),save=Object.values(graph).find(n=>n.class_type==='SceneSaveImage'),promptId=`prompt-${calls.prompts.length+1}`;
@@ -55,7 +55,7 @@ function startServer(install,options={}){
       if(!(holdFirst&&calls.prompts.length===1)){history.set(promptId,'success');running.delete(promptId)}
       return json(200,{prompt_id:promptId,number:calls.prompts.length,node_errors:{}});
     }
-    if(req.url==='/scene_prompt/runs/claim'){calls.claims.push(body);return json(200,{claimed:true})}
+    if(req.url==='/scene_prompt/runs/claim'){calls.claims.push(body);const previous=claimedHandles.get(body.run_handle);if(previous&&previous!==body.prompt_id)return json(200,{claimed:false});claimedHandles.set(body.run_handle,body.prompt_id);return json(200,{claimed:true})}
     if(req.url==='/scene_prompt/runs/finalize'){calls.finalizes.push(body);return json(200,{state:'finalized'})}
     if(req.url==='/scene_prompt/runs/release'){calls.releases.push(body);return json(200,{released:true})}
     if(req.url==='/queue')return json(200,{queue_running:[...running].map((id,i)=>[i,id,{}]),queue_pending:[]});
@@ -77,7 +77,7 @@ function startServer(install,options={}){
       const service=new LocalExecutionService(async()=>({endpoint:mock.endpoint,installPath:install}));service.start(root,run.runId);
       const done=await waitFor(async()=>{const current=await execution.getExecutionRun(root,run.runId);return current?.lifecycle==='COMPLETED'?current:null});
       assert.deepEqual(mock.calls.prompts.map(x=>[x.expandId,x.index]),[['2',0],['2',1],['5',0]],'branches and indexes must be FIFO/sequential');
-      assert.deepEqual(mock.calls.claims.map(x=>x.prompt_id),['prompt-1','prompt-2','prompt-3']);
+      assert.deepEqual(mock.calls.claims.map(x=>x.prompt_id),['prompt-1','prompt-3'],'each prepared run_handle is claimed only by its first prompt');
       assert.deepEqual(mock.calls.finalizes.map(x=>x.prompt_id),['prompt-2','prompt-3']);
       assert.equal(mock.calls.releases.length,2);assert.equal(done.progress.overall.completed,3);assert.equal(done.promptIds.length,3);
       assert.ok(mock.calls.prompts.every(x=>String(x.runHandle).startsWith('handle-')),'prepared run_handle must be injected before submit');
