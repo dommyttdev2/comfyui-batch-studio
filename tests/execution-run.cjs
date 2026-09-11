@@ -77,8 +77,16 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
 
   const persisted=fs.readFileSync(runPath,'utf8');
   assert.doesNotMatch(persisted,/X-Amz-Signature|PRIVATE KEY|presignedUrl/);
+  const remoteMeta=JSON.parse(fs.readFileSync(path.join(root,'project_meta.json'),'utf8'));
+  remoteMeta.settings.executionTarget='remote';
+  remoteMeta.settings.remoteProvider='vastai';
+  remoteMeta.settings.remoteInstanceId=123;
+  writeJson(path.join(root,'project_meta.json'),remoteMeta);
   const second=await execution.startExecutionRun(root,async()=>ready);
   assert.notEqual(second.runId,started.runId,'a completed run must allow a new unique run');
+  assert.equal(second.executionTarget,'remote');
+  assert.equal(second.phase,'CLOUD_INSTANCE_RESOLVING');
+  assert.deepEqual(second.remote,{provider:'vastai',instanceId:123});
 
   const blocked={state:'BLOCKED',plannedImages:2,targetImages:2,blocking:[{severity:'error',code:'BLOCKED_FOR_TEST',message:'blocked'}],warnings:[],sections:[]};
   await execution.mutateExecutionRun(root,second.runId,run=>{run.lifecycle='FAILED';});
