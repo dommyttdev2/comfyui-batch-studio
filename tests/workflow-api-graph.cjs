@@ -94,7 +94,6 @@ function byTitle(graph,prefix){return Object.values(graph).find(node=>String(nod
     assert.deepEqual(rows.map(row=>[row.row_id,row.path_label,row.name]),[['leaf-a1','leaf-a1','leaf-a1'],['leaf-a2','leaf-a2','leaf-a2']]);
     assert.equal(byTitle(api,'Save - branch-a -').inputs.path,`BatchStudio/${family}-api-project/branch-a`);
     assert.equal(byTitle(api,'Save - branch-b -').inputs.path,`BatchStudio/${family}-api-project/branch-b`);
-    assert.equal(byTitle(api,'連続生成')?.inputs.model_mode,undefined); // template title is not branch-unique; checked below by class
     for(const expand of Object.values(api).filter(node=>node.class_type==='ScenePrompterExpand'))assert.equal(expand.inputs.model_mode,family==='anima'?'Anima':'Illustrious');
 
     const meta=JSON.parse(fs.readFileSync(path.join(root,'project_meta.json'),'utf8'));
