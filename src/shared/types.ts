@@ -75,6 +75,7 @@ export type ExecutionPhase=
 export type ExecutionEvidenceKind='MODEL_VERIFIED'|'MODELS_VERIFIED'|'EXECUTION_COMPLETED'|'PACKAGE_VERIFIED'|'R2_OBJECT_VERIFIED'|'LOCAL_FILE_VERIFIED'|'CUSTOM';
 export interface ExecutionProgressCounter { completed:number; total:number; }
 export interface ExecutionBranchProgress { branchId:string; completed:number; total:number; state:'pending'|'running'|'completed'|'failed'|'skipped'; }
+export interface ExecutionModelProgress { ref:string; fileName:string; kind:ModelAvailabilityRow['kind']; objectKey:string; destination:string; state:'pending'|'checking'|'downloading'|'ready'|'failed'|'skipped'; transferredBytes:number; totalBytes:number; reused:boolean; sha256:string|null; error:string|null; }
 export interface ExecutionError { code:string; message:string; phase:ExecutionPhase; at:string; retryable:boolean; }
 export interface ExecutionEvidence { id:string; kind:ExecutionEvidenceKind; scope:string; runIdentity:string; fingerprint:string; recordedAt:string; data:Record<string,string|number|boolean|null>; }
 export interface ExecutionRunSnapshot {
@@ -101,7 +102,7 @@ export interface ExecutionRun {
     forceInterruptRequestedAt:string|null;
   };
   current:{branchId:string|null;leafId:string|null;promptId:string|null};
-  progress:{overall:ExecutionProgressCounter;branches:ExecutionBranchProgress[]};
+  progress:{overall:ExecutionProgressCounter;branches:ExecutionBranchProgress[];models:ExecutionModelProgress[]};
   promptIds:string[];
   evidence:ExecutionEvidence[];
   error:ExecutionError|null;
