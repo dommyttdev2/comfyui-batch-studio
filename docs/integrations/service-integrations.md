@@ -284,8 +284,9 @@ encryptedApiKey?
 sshPrivateKeyPath
 sshPublicKeyPath
 sshUser
-comfyUiPort
 ```
+
+SSH Port / Remote ComfyUI Port は保存しない。どちらも選択Instanceのcurrent Vast.ai API responseを正本として実行時に解決する。
 
 API Key は `safeStorage` で暗号化する。暗号化不能時の plaintext fallback を禁止する。
 
@@ -293,18 +294,17 @@ API Key は `safeStorage` で暗号化する。暗号化不能時の plaintext f
 
 ## 10. Vast.ai Remote defaults
 
-provider固有の初期 default は既存 `anima-vast-workflow-runner` と互換にする。
+provider固有の固定defaultとして保持するのはSSH Userのみとする。
 
 ```text
-SSH User            root
-Remote ComfyUI Port 18188
+SSH User  root
 ```
 
 SSH private/public key path はユーザーが file picker から選択する。SSH private key contents を Batch Studio 独自 config へコピーしない。
 
 Remote ComfyUI install path は Vast.ai config では管理せず、環境設定の `Remote ComfyUI インストール先ディレクトリ` を正本とする。Remote実行では `BATCH_STUDIO_REMOTE_COMFYUI_INSTALL_PATH` 相当のPOSIX絶対パス設定を必須とする。
 
-Remote ComfyUI Port は設定可能とし、`8188` を Vast.ai 用に hard-codeしない。
+SSH Portは選択Instanceの `ports["22/tcp"]` の `HostPort` を実行時に解決する。Remote ComfyUI Portも設定画面では持たず、同Instanceの `ports` から解決する。現在は `18188/tcp` を優先し、存在しない場合は `8188/tcp` を使用する。
 
 ---
 
@@ -354,6 +354,7 @@ gpuRamMb
 hourlyCost
 sshHost
 sshPort
+comfyUiPort
 ```
 
 Normalized status:
@@ -391,7 +392,9 @@ ssh_host + ssh_port
 
 `0.0.0.0` / `::` を接続先 host として採用しない。
 
-Project へ SSH Host / Port を固定保存しない。
+Project へ SSH Host / Port を固定保存しない。Instanceごとに `22/tcp` の `HostPort` は異なり得るため、Run開始時のAPI応答を毎回使用する。
+
+Remote ComfyUI Portも同様に固定保存しない。Remote Workerがlocalhost接続に使う内部Portはcurrent `ports` の `18188/tcp`、fallbackとして `8188/tcp` から解決する。
 
 ---
 
@@ -533,6 +536,9 @@ Vast.ai API: get current instance
         |
         v
 resolve latest public SSH host / port
+        |
+        +-- 22/tcp.HostPort -> SSH接続先Port
+        +-- 18188/tcp or 8188/tcp -> Remote ComfyUI内部Port
         |
         v
 app-wide SSH private key path / user
@@ -685,5 +691,6 @@ Batch Studio では reference runner process 自体を起動せず、Electron Ma
 12. Destroy / Reboot / instance creationを初期UIに出さない。
 13. Remote Projectに `remoteProvider=vastai` と `remoteInstanceId` を保存できる。
 14. SSH host / portをProjectへ固定保存しない。
-15. 実行時にcurrent Vast.ai API responseから公開SSH endpointを解決できる service API を持つ。
-16. SSH Tunnelを導入しない。
+15. 実行時にcurrent Vast.ai API responseから、選択Instance固有の `22/tcp.HostPort` を公開SSH接続先Portとして解決する。
+16. ComfyUI PortをVast.ai設定へ保存せず、current Instanceの `ports` から解決する。
+17. SSH Tunnelを導入しない。
