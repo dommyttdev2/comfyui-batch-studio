@@ -3,12 +3,18 @@ const crypto=require('node:crypto');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
-const {spawnSync}=require('node:child_process');
+const {spawnSync,execFileSync}=require('node:child_process');
 const {pathToFileURL}=require('node:url');
+
 (async()=>{
+ const repo=path.resolve(__dirname,'..');
  const runtime=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-remote-'));
- const hostKeys=await import(pathToFileURL(path.resolve('dist-electron/main/ssh-host-keys.js')));
- const worker=await import(pathToFileURL(path.resolve('dist-electron/main/remote-worker-source.js')));
+ const compiled=path.join(runtime,'compiled');
+ const tscBin=path.join(repo,'node_modules','typescript','bin','tsc');
+ execFileSync(process.execPath,[tscBin,'-p',path.join(repo,'tsconfig.electron.json'),'--outDir',compiled],{cwd:repo,stdio:'inherit'});
+ const load=relative=>import(pathToFileURL(path.join(compiled,'main',relative)).href);
+ const hostKeys=await load('ssh-host-keys.js');
+ const worker=await load('remote-worker-source.js');
  const store=new hostKeys.SshHostKeyStore(runtime),key=crypto.randomBytes(64),fp=hostKeys.sshHostKeyFingerprint(key);
  assert.equal((await store.check('gpu.example',22022,key)).status,'unknown');
  await store.trust('gpu.example',22022,key,'ssh-ed25519');
