@@ -7,7 +7,7 @@ const {execFileSync}=require('node:child_process');
 const {utils}=require('ssh2');
 
 const repo=path.resolve(__dirname,'..');
-const runtime=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-vastai-runtime-'));
+const runtime=fs.mkdtempSync(path.join(repo,'.tmp-vastai-runtime-'));
 const tscBin=path.join(repo,'node_modules','typescript','bin','tsc');
 execFileSync(process.execPath,[tscBin,'-p',path.join(repo,'tsconfig.electron.json'),'--outDir',runtime],{cwd:repo,stdio:'inherit'});
 const load=relative=>import(pathToFileURL(path.join(runtime,'main',relative)).href);
@@ -89,4 +89,4 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.ok(calls.filter(x=>new URL(x.url).pathname==='/api/v0/instances/1/'&&(!x.init.method||x.init.method==='GET')).length>=3,'lifecycle操作後にGETで最終状態を確認する');
 
   console.log('Vast.ai client tests passed.');
-})().catch(error=>{console.error(error);process.exitCode=1});
+})().catch(error=>{console.error(error);process.exitCode=1}).finally(()=>{fs.rmSync(runtime,{recursive:true,force:true})});
