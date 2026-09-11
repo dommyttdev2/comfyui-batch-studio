@@ -290,7 +290,7 @@ Vast.ai/SSH/Remote Worker capabilityの実装に応じて次を段階的にblock
 
 ## 15. Execution Screen
 
-> Current implementation: `実行` stageはまだProject navigationへ実装されていない。以下はExecution実装時の画面契約であり、現行UIの機能一覧ではない。
+> Current implementation: `実行` stageをProject navigationへ実装済み。persistent Execution Runを復元・ポーリングし、Start / Stop scheduling / Force interrupt / Resumeとphase/progress/error監視を提供する。ComfyUI実submitやartifact transfer本体は後続Execution実装の責務。
 
 Grok paneは非表示とし、Local UIを全幅使用する。
 
@@ -336,6 +336,7 @@ Remote targetでは `generation completed` と `artifact delivery completed` を
 | ワークフロー | 非表示 |
 | モデル配置 | 非表示 |
 | 実行前チェック | 非表示 |
+| 実行 | 非表示 |
 | Home / サービス連携 / R2 File Manager / Civit Explorer / Vast.ai | 非表示 |
 | `Window` から開いたStandalone R2/Civit window | 非表示 |
 

@@ -6,6 +6,18 @@ const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
 
 const repo = path.resolve(__dirname, '..');
+const uiSource=fs.readFileSync(path.join(repo,'src','renderer','ui.tsx'),'utf8');
+const appSource=fs.readFileSync(path.join(repo,'src','renderer','App.tsx'),'utf8');
+const executionSource=fs.readFileSync(path.join(repo,'src','renderer','ExecutionStages.tsx'),'utf8');
+assert.match(uiSource,/実行前チェック','実行'/,'Project navigation must place 実行 after 実行前チェック');
+assert.match(appSource,/case'実行':return <ExecutionStage/,'実行 stage must render ExecutionStage');
+assert.match(executionSource,/execution\.status\(project\.rootPath\)/,'ExecutionStage must restore and poll the persistent current Run');
+assert.match(executionSource,/Stop scheduling/);
+assert.match(executionSource,/Force interrupt/);
+assert.match(executionSource,/Artifact delivery completed/,'generation completion and artifact delivery completion must remain distinct');
+assert.match(executionSource,/Startできない理由/,'blocked Preflight reason must be visible');
+assert.match(executionSource,/current\?\.lifecycle!==\'COMPLETED\'/,'output directory action must remain gated until completion');
+assert.match(executionSource,/artifactOutputPath\?\?project\.rootPath/,'completed Run must open the configured local artifact output directory with a legacy fallback');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-navigation-'));
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(process.execPath, [tscBin, '-p', path.join(repo, 'tsconfig.electron.json'), '--outDir', runtime], {
