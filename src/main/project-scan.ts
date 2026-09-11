@@ -11,7 +11,8 @@ async function mtime(p:string){try{return (await stat(p)).mtimeMs}catch{return 0
 function sha256(text:string){return createHash('sha256').update(Buffer.from(text,'utf8')).digest('hex');}
 async function workflowInputsChanged(root:string,meta:any){
  const build=meta?.workflowBuild as any;if(!build)return true;
- const {templatePath,manifestPath}=resolveWorkflowTemplatePaths(meta?.settings);
+ const models=await readJson<any>(path.join(root,'models.json'));const family=models?.modelFamily==='anima'?'anima':'illustrious';
+ const {templatePath,manifestPath}=resolveWorkflowTemplatePaths(meta?.settings,family);
  if(!(await exists(templatePath))||!(await exists(manifestPath)))return true;
  const templateRaw=await readText(templatePath),manifest=await readJson<any>(manifestPath);if(!templateRaw||!manifest)return true;
  if(build.template?.sha256!==sha256(templateRaw)||build.template?.id!==manifest.template?.id||build.template?.version!==manifest.template?.version)return true;
