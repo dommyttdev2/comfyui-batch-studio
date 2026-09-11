@@ -55,8 +55,11 @@ function mappedTcpEndpoint(payload:JsonRecord,internalPort:number){
 }
 function publicSshEndpoint(payload:JsonRecord){return mappedTcpEndpoint(payload,22);}
 export function resolveVastComfyUiPort(payload:unknown){
-  const item=record(payload);
-  for(const internalPort of [18188,8188])if(mappedTcpEndpoint(item,internalPort))return internalPort;
+  const ports=record(record(payload).ports);
+  for(const internalPort of [18188,8188]){
+    const mappings=ports[`${internalPort}/tcp`];
+    if(Array.isArray(mappings)&&mappings.some(candidate=>{const port=integerValue(record(candidate).HostPort);return port!=null&&port>0;}))return internalPort;
+  }
   return null;
 }
 
