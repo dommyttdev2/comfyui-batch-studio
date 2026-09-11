@@ -23,8 +23,11 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.equal(normalizeVastStatus({actual_status:'offline'}),'offline');
 
   const mapped=normalizeVastInstance({id:42,actual_status:'running',public_ipaddr:'203.0.113.9',ssh_host:'fallback.vast.ai',ssh_port:10022,ports:{'22/tcp':[{HostIp:'0.0.0.0',HostPort:'40022'}]},gpu_name:'RTX 5090',num_gpus:1,gpu_ram:32768,dph_total:0.75});
-  assert.equal(mapped.sshHost,'203.0.113.9');
-  assert.equal(mapped.sshPort,40022);
+  assert.equal(mapped.sshHost,'fallback.vast.ai');
+  assert.equal(mapped.sshPort,10022);
+  const directFallback=normalizeVastInstance({id:43,actual_status:'running',public_ipaddr:'203.0.113.10',ports:{'22/tcp':[{HostIp:'0.0.0.0',HostPort:'40023'}]}});
+  assert.equal(directFallback.sshHost,'203.0.113.10');
+  assert.equal(directFallback.sshPort,40023);
   assert.equal(mapped.gpuName,'RTX 5090');
   assert.equal(mapped.hourlyCost,0.75);
 
