@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import { safeStorage } from 'electron';
+import { createRequire } from 'node:module';
 import type { AppSettings, AppSettingsSaveInput, AppSettingsStatus, RemoteCustomNodeRepository } from '../shared/types.js';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
 import { listLocalModelFiles } from './model-file-sources.js';
@@ -20,8 +20,9 @@ const RUNTIME_ENV={remoteComfyUiInstallPath:'BATCH_STUDIO_REMOTE_COMFYUI_INSTALL
 async function isDirectory(target:string){try{return (await stat(target)).isDirectory()}catch{return false}}
 function text(value:unknown){return typeof value==='string'?value.trim():''}
 function endpoint(value:unknown){const raw=text(value)||EMPTY.comfyUiApiEndpoint;let url:URL;try{url=new URL(raw)}catch{throw new Error('ComfyUI API endpointが不正です。')}if(url.protocol!=='http:'&&url.protocol!=='https:')throw new Error('ComfyUI API endpointはhttpまたはhttpsで指定してください。');if(url.username||url.password)throw new Error('ComfyUI API endpointに認証情報を含めないでください。');url.hash='';url.search='';return url.toString().replace(/\/$/,'')}
-function encryptSecret(value:string){if(!safeStorage.isEncryptionAvailable())throw new Error('OSの安全な暗号化ストレージを利用できないためGitHub PATを保存できません。');return safeStorage.encryptString(value).toString('base64');}
-function decryptSecret(value:string|undefined){if(!value)return '';try{return safeStorage.decryptString(Buffer.from(value,'base64'));}catch{return '';}}
+function safeStorageApi(){return (createRequire(import.meta.url)('electron') as typeof import('electron')).safeStorage;}
+function encryptSecret(value:string){const safeStorage=safeStorageApi();if(!safeStorage.isEncryptionAvailable())throw new Error('OSの安全な暗号化ストレージを利用できないためGitHub PATを保存できません。');return safeStorage.encryptString(value).toString('base64');}
+function decryptSecret(value:string|undefined){if(!value)return '';try{return safeStorageApi().decryptString(Buffer.from(value,'base64'));}catch{return '';}}
 function normalizeGithubRepository(value:unknown){
   const raw=text(value).replace(/\.git$/i,'');
   if(!raw)throw new Error('custom_node のGitHubリポジトリを入力してください。');
