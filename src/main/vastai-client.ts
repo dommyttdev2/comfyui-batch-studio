@@ -58,7 +58,7 @@ export function normalizeVastInstance(payload:unknown):VastAiInstance{
   const item=record(payload),id=integerValue(item.id);
   if(id==null||id<1)throw new Error('Vast.ai Instance応答に有効なIDがありません。');
   const status=normalizeVastStatus(item),mapped=status==='running'?publicSshEndpoint(item):null;
-  const sshHost=status==='running'?(stringValue(item.ssh_host)??mapped?.host??stringValue(item.public_ipaddr)):null,sshPort=status==='running'?(integerValue(item.ssh_port)??mapped?.port):null;
+  const sshHost=status==='running'?(stringValue(item.ssh_host)??mapped?.host??stringValue(item.public_ipaddr)):null,sshPort=status==='running'?(integerValue(item.ssh_port)??mapped?.port??null):null;
   return {provider:'vastai',id,label:stringValue(item.label),status,rawStatus:rawStatusOf(item),intendedStatus:stringValue(item.intended_status),curState:stringValue(item.cur_state),statusMessage:stringValue(item.status_msg),gpuName:stringValue(item.gpu_name),gpuCount:integerValue(item.num_gpus),gpuRamMb:integerValue(item.gpu_ram)??integerValue(item.gpu_totalram),hourlyCost:numberValue(item.dph_total),sshHost,sshPort};
 }
 
