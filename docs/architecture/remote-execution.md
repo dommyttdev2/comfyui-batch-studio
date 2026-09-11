@@ -136,24 +136,24 @@ Remote WorkerがRemote host内からComfyUI localhost APIを呼ぶ。
 ```text
 Batch Studio
     |
-    | public SSH endpoint
+    | Vast.ai APIで選択Instanceを再取得
+    |   22/tcp.HostPort -> SSH接続先Port
+    |   18188/tcp または 8188/tcp -> Remote ComfyUI内部Port
+    v
+public SSH endpoint
+    |
     | private-key authentication
     v
 Remote Worker
     |
     | HTTP localhost
     v
-ComfyUI 127.0.0.1:<configured-port>
+ComfyUI 127.0.0.1:<instance-resolved-port>
 ```
 
-Vast.ai provider固有の初期既定値は次とする。
+SSH Userの既定値は `root` とするが、SSH Port / ComfyUI Portは固定設定として保持しない。SSH Portは選択Instanceの `22/tcp` mappingの `HostPort` を毎回使用する。Remote ComfyUI Portは同Instanceの `ports` から解決し、現在のVast.ai template互換として `18188/tcp` を優先し、存在しなければ `8188/tcp` を使用する。どちらも解決できなければPreflight/Remote接続を失敗させる。
 
-```text
-SSH User      root
-ComfyUI Port  18188
-```
-
-Remote ComfyUI install path は provider設定ではなく app-wide の「環境設定」を正本とする。Remote実行時は未設定を許可せず、POSIX絶対パス（例: `/workspace/ComfyUI`）を指定する。Remote ComfyUI Portを8188へhard-codeしない。
+Remote ComfyUI install path は provider設定ではなく app-wide の「環境設定」を正本とする。Remote実行時は未設定を許可せず、POSIX絶対パス（例: `/workspace/ComfyUI`）を指定する。
 
 ---
 
@@ -327,17 +327,19 @@ app-wide Vast.ai Remote設定:
 sshPrivateKeyPath
 sshPublicKeyPath
 sshUser
-comfyUiPort
 ```
 
 Remote ComfyUI install path は環境設定の `remoteComfyUiInstallPath` / `BATCH_STUDIO_REMOTE_COMFYUI_INSTALL_PATH` が所有する。
 
-Providerから実行時解決:
+Providerから選択Instanceごとに実行時解決:
 
 ```text
 sshHost
-sshPort
+sshPort        # 22/tcp のHostPort
+comfyUiPort    # portsから解決したRemote内部Port
 ```
+
+`sshPort` / `comfyUiPort` をProject artifactやVast.ai設定へ固定保存しない。Instanceの停止・再作成・mapping変更後も、Run開始時のVast.ai API応答を正本とする。
 
 秘密鍵本文をProject artifactやapp configへコピーしない。保存するのはLocal pathだけとする。
 
