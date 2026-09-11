@@ -3,7 +3,7 @@ import { getExecutionRun, mutateExecutionRun } from './execution-run.js';
 import { VerifiedSshClient, type VerifiedSshSession } from './ssh-client.js';
 import { RemoteWorkerClient, RemoteWorkerRequestError } from './remote-worker.js';
 
-interface RemoteHandle { session:VerifiedSshSession;deployment:{runDir:string;workerPath:string;modelsRoot:string;localSha256:string;remoteSha256:string};endpoint:VastAiSshEndpoint; }
+interface RemoteHandle { session:VerifiedSshSession;deployment:{runDir:string;workerPath:string;modelsRoot:string;comfyRoot:string;localSha256:string;remoteSha256:string};endpoint:VastAiSshEndpoint; }
 type EndpointResolver=(instanceId:number)=>Promise<VastAiSshEndpoint>;
 
 export class RemoteControlPlane {
