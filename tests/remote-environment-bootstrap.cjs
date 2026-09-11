@@ -47,6 +47,12 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
   assert.match(worker.REMOTE_WORKER_FILE,/gh","auth","status/,'worker must verify non-interactive GitHub auth');
   assert.doesNotMatch(worker.REMOTE_WORKER_FILE,/gh","auth","login/,'worker must not start interactive gh auth login');
   assert.match(worker.REMOTE_WORKER_FILE,/gh","repo","clone/,'worker must clone configured custom nodes with gh');
+  assert.equal(worker.REMOTE_WORKER_VERSION,'4','worker version must advance when bootstrap install behavior changes');
+  assert.match(worker.REMOTE_WORKER_FILE,/RECORD file not found/,'worker must detect Debian packages without pip RECORD metadata');
+  assert.match(worker.REMOTE_WORKER_FILE,/installed by debian/,'worker must scope the retry to Debian-managed package conflicts');
+  assert.match(worker.REMOTE_WORKER_FILE,/--ignore-installed/,'worker must retry only the affected requirements install without uninstalling Debian package metadata');
+  assert.match(worker.REMOTE_WORKER_FILE,/is_system_python/,'Debian RECORD fallback must be restricted to system Python');
+  assert.match(worker.REMOTE_WORKER_FILE,/PIP_REQUIREMENTS_DEBIAN_RETRY_FAILED/,'retry failures must remain explicit and diagnosable');
   console.log('Remote environment bootstrap tests passed.');
  }finally{fs.rmSync(runtime,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1});
