@@ -4,6 +4,7 @@ const os=require('node:os');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
 const {execFileSync}=require('node:child_process');
+const {utils}=require('ssh2');
 
 const repo=path.resolve(__dirname,'..');
 const runtime=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-vastai-runtime-'));
@@ -14,6 +15,7 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
 
 (async()=>{
   const {VastAiClient,normalizeVastInstance,normalizeVastStatus}=await load('vastai-client.js');
+  const {normalizeOpenSshPublicKey,validateSshKeyPair}=await load('ssh-key-pair.js');
   assert.equal(normalizeVastStatus({actual_status:'running'}),'running');
   assert.equal(normalizeVastStatus({actual_status:'scheduling'}),'scheduling');
   assert.equal(normalizeVastStatus({actual_status:'exited',intended_status:'stopped',cur_state:'stopped'}),'stopped');
@@ -26,13 +28,25 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.equal(mapped.gpuName,'RTX 5090');
   assert.equal(mapped.hourlyCost,0.75);
 
+  const pair=utils.generateKeyPairSync('ed25519');
+  const otherPair=utils.generateKeyPairSync('ed25519');
+  const privatePath=path.join(runtime,'id_test'),publicPath=privatePath+'.pub',mismatchPath=path.join(runtime,'other.pub');
+  fs.writeFileSync(privatePath,pair.private);fs.writeFileSync(publicPath,pair.public+' test-comment\n');fs.writeFileSync(mismatchPath,otherPair.public);
+  const validated=await validateSshKeyPair(privatePath,publicPath);
+  assert.equal(validated.publicKey,normalizeOpenSshPublicKey(pair.public));
+  await assert.rejects(()=>validateSshKeyPair(privatePath,mismatchPath),/同じキーペアではありません/);
+
   const calls=[];
-  let lifecycleState='running';
+  let lifecycleState='running',accountKeys=[{id:7,key:validated.publicKey}],instanceKeys=[{id:8,public_key:validated.publicKey}];
   const fakeFetch=async(url,init={})=>{
     calls.push({url:String(url),init});
     const u=new URL(String(url));
     if(u.pathname==='/api/v1/instances/'&&u.searchParams.get('after_token')==='next-page')return response({instances:[{id:2,actual_status:'stopped',gpu_name:'RTX 4090'}],next_token:null});
     if(u.pathname==='/api/v1/instances/')return response({instances:[{id:1,actual_status:'running',ssh_host:'ssh.vast.ai',ssh_port:12345,gpu_name:'RTX 5090'}],next_token:'next-page'});
+    if(u.pathname==='/api/v0/ssh/'&&(!init.method||init.method==='GET'))return response(accountKeys);
+    if(u.pathname==='/api/v0/ssh/'&&init.method==='POST'){const body=JSON.parse(init.body);accountKeys=[...accountKeys,{id:9,key:body.ssh_key}];return response({success:true,key:{id:9,public_key:body.ssh_key}})}
+    if(u.pathname==='/api/v0/instances/1/ssh/'&&(!init.method||init.method==='GET'))return response({success:true,ssh_keys:JSON.stringify(instanceKeys)});
+    if(u.pathname==='/api/v0/instances/1/ssh/'&&init.method==='POST'){const body=JSON.parse(init.body);instanceKeys=[...instanceKeys,{id:10,public_key:body.ssh_key}];return response({success:true,msg:'SSH key attached successfully'})}
     if(u.pathname==='/api/v0/instances/1/'&&init.method==='PUT'){
       const requested=JSON.parse(init.body);
       lifecycleState=requested.state;
@@ -46,6 +60,20 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.deepEqual(instances.map(x=>x.id),[1,2]);
   assert.equal(calls[0].init.headers.Authorization,'Bearer secret-key');
   assert.match(calls[1].url,/after_token=next-page/);
+
+  const existing=await client.ensureSshAccess(1,validated.publicKey+' ignored-comment');
+  assert.deepEqual(existing,{accountAlreadyRegistered:true,instanceAlreadyAttached:true,instanceAttached:true});
+  assert.equal(calls.filter(x=>x.init.method==='POST'&&new URL(x.url).pathname.includes('/ssh/')).length,0,'既存鍵は再登録・再attachしない');
+
+  accountKeys=[];instanceKeys=[];
+  const provisioned=await client.ensureSshAccess(1,validated.publicKey);
+  assert.deepEqual(provisioned,{accountAlreadyRegistered:false,instanceAlreadyAttached:false,instanceAttached:true});
+  const sshPosts=calls.filter(x=>x.init.method==='POST'&&new URL(x.url).pathname.includes('/ssh/'));
+  assert.equal(sshPosts.length,2);
+  assert.equal(new URL(sshPosts[0].url).pathname,'/api/v0/ssh/');
+  assert.equal(new URL(sshPosts[1].url).pathname,'/api/v0/instances/1/ssh/');
+  assert.equal(JSON.parse(sshPosts[0].init.body).ssh_key,validated.publicKey);
+  assert.equal(JSON.parse(sshPosts[1].init.body).ssh_key,validated.publicKey);
 
   const one=await client.getInstance(1);
   assert.equal(one.sshHost,'ssh.vast.ai');
