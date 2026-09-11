@@ -34,7 +34,7 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
       checkpoint:{ref:'checkpoint.main',modelId:1,modelName:'Base',versionId:2,versionName:'v1',fileId:3,fileName:'base.safetensors',modelUrl:'https://example.com/base',trainedWords:[],reason:'test'},
       loras:[]
     });
-    writeJson(path.join(project,'project_meta.json'),{schemaVersion:1,createdAt:new Date().toISOString(),settings:{executionTarget:'remote',r2Bucket:'models-bucket',r2ModelPrefix:'models'}});
+    writeJson(path.join(project,'project_meta.json'),{schemaVersion:1,createdAt:new Date().toISOString(),settings:{executionTarget:'remote',r2Bucket:'models-bucket',r2ModelPrefix:''}});
     const runId='00000000-0000-4000-8000-000000000050';
     writeJson(path.join(project,'execution_runs',runId+'.json'),{
       schemaVersion:1,runId,projectId:'p50',executionTarget:'remote',remote:{provider:'vastai',instanceId:50},lifecycle:'RUNNING',phase:'REMOTE_ENVIRONMENT_CHECKING',
@@ -46,8 +46,10 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
     const payload=Buffer.from('remote-model-payload');
     const expectedSha=sha(payload);
     let metadata={key:'models/checkpoints/base.safetensors',size:payload.length,sha256:expectedSha,etag:'etag-v1'};
-    let urlCalls=0,stageCalls=0,inspectValid=false;
+    let urlCalls=0,stageCalls=0,inspectValid=false,indexSyncCalls=0,resolveCalls=0;
     const fakeR2={
+      syncObjectIndex:async()=>{indexSyncCalls++;},
+      resolveModelObjectKey:async(_bucket,relativePath,prefix)=>{resolveCalls++;assert.equal(relativePath,'checkpoints/base.safetensors');assert.equal(prefix,'');return 'models/checkpoints/base.safetensors';},
       objectMetadata:async(_bucket,key)=>({...metadata,key}),
       downloadInfo:async(_bucket,key,expiresIn)=>{urlCalls++;assert.equal(key,'models/checkpoints/base.safetensors');assert.ok(expiresIn>=21600);return {key,url:urlCalls===1?'https://r2.invalid/expired?X-Amz-Signature=SECRET':'https://r2.invalid/fresh?X-Amz-Signature=SECRET2',public:false,expiresIn,fileName:'base.safetensors',commands:{url:'',curl:'',wget:'',aria2c:''}}}
     };
@@ -67,6 +69,8 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
     };
     const stager=new RemoteModelStager(fakeR2,fakeRemote);
     await stager.stage(project,runId);
+    assert.equal(indexSyncCalls,1,'R2 object index must be refreshed before resolving model keys');
+    assert.equal(resolveCalls,1,'stager must resolve the actual R2 object key');
     assert.equal(urlCalls,2,'expired URL must be reissued');
     assert.equal(stageCalls,2);
     let persisted=fs.readFileSync(path.join(project,'execution_runs',runId+'.json'),'utf8');
