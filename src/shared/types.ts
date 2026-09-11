@@ -10,7 +10,7 @@ export type ModelFileRole='text_encoder'|'vae';
 export interface ProjectBriefInput { project:{id:string;title:string}; subject:{copyrightedCharacter:boolean;characterName:string;series:string}; audience:string; request:string; exclusions:string; assumptions:{adultCharacters:false|boolean;consensual:false|boolean}; generation:{target_image_count:number;modelFamily?:ModelFamily|'Illustrious';targetChapterCount?:number}; references?:string[]; }
 export type ExecutionTarget = 'local' | 'remote';
 export type CloudInstanceProviderId='vastai';
-export interface AppSettings { comfyUiInstallPath:string; comfyUiApiEndpoint?:string; catalogPath?:string; r2Bucket?:string; r2ModelPrefix?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; }
+export interface AppSettings { comfyUiInstallPath:string; remoteComfyUiInstallPath?:string; comfyUiApiEndpoint?:string; catalogPath?:string; r2Bucket?:string; r2ModelPrefix?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; }
 export interface LocalModelFile { fileName:string; path:string; size:number; }
 export interface LocalModelDirectory { path:string|null; exists:boolean; files:LocalModelFile[]; }
 export interface AppSettingsStatus extends Required<AppSettings> { configured:boolean; modelsPath:string|null; installExists:boolean; modelsExists:boolean; modelFiles:{text_encoders:LocalModelDirectory;vae:LocalModelDirectory}; }
@@ -49,8 +49,8 @@ export interface CatalogStatus { configured:boolean; path:string|null; exists:bo
 export interface CivitaiCatalogStatus { state:'idle'|'running'|'ready'|'error'; phase:string; completed:number; total:number; message:string; generation:number; changes:{added:number;updated:number;removed:number}; error:string|null; apiKeyConfigured:boolean; catalogPath:string; }
 export interface CivitaiConnectionInput { apiKey:string; }
 export interface CivitaiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; }
-export interface VastAiConnectionInput { apiKey?:string; sshPrivateKeyPath?:string; sshPublicKeyPath?:string; sshUser?:string; comfyUiDirectory?:string; comfyUiPort?:number; }
-export interface VastAiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; sshPrivateKeyPath:string; sshPrivateKeyExists:boolean; sshPublicKeyPath:string; sshPublicKeyExists:boolean; sshKeyPairValid:boolean; sshUser:string; comfyUiDirectory:string; comfyUiPort:number; }
+export interface VastAiConnectionInput { apiKey?:string; sshPrivateKeyPath?:string; sshPublicKeyPath?:string; sshUser?:string; comfyUiPort?:number; }
+export interface VastAiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; sshPrivateKeyPath:string; sshPrivateKeyExists:boolean; sshPublicKeyPath:string; sshPublicKeyExists:boolean; sshKeyPairValid:boolean; sshUser:string; comfyUiPort:number; }
 export type CloudInstanceStatus='running'|'stopped'|'starting'|'scheduling'|'stopping'|'offline'|'error'|'unknown';
 export interface VastAiInstance { provider:'vastai'; id:number; label:string|null; status:CloudInstanceStatus; rawStatus:string; intendedStatus:string|null; curState:string|null; statusMessage:string|null; gpuName:string|null; gpuCount:number|null; gpuRamMb:number|null; hourlyCost:number|null; sshHost:string|null; sshPort:number|null; }
 export interface VastAiSshEndpoint { provider:'vastai'; instanceId:number; host:string; port:number; user:string; privateKeyPath:string; publicKeyPath:string; comfyUiDirectory:string; comfyUiPort:number; }
