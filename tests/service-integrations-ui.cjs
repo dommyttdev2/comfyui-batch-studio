@@ -42,6 +42,9 @@ assert.match(vastPanel,/VASTAI_API_KEY/,'Vast.ai API Keyに環境設定IDを併�
 assert.match(vastPanel,/SSH公開鍵/,'Vast.ai設定にSSH公開鍵選択を表示する');
 assert.match(vastPanel,/selectPublicKey/,'Rendererから公開鍵選択IPCを使用する');
 assert.match(vastPanel,/sshKeyPairValid/,'秘密鍵と公開鍵のペア検証結果を表示する');
+assert.doesNotMatch(vastPanel,/Remote ComfyUI Directory/,'Remote ComfyUIのパスはVast.ai連携設定で管理しない');
+assert.match(settings,/Remote ComfyUI インストール先ディレクトリ/,'Remote ComfyUIのパスは環境設定で管理する');
+assert.match(settings,/BATCH_STUDIO_REMOTE_COMFYUI_INSTALL_PATH/,'Remote ComfyUI pathの環境設定IDを表示する');
 for(const id of ['BATCH_STUDIO_PROJECT_ROOT','BATCH_STUDIO_ARTIFACT_ROOT','BATCH_STUDIO_CATALOG_PATH','BATCH_STUDIO_R2_INDEX_PATH','BATCH_STUDIO_TEMPLATE_PATH','BATCH_STUDIO_MANIFEST_PATH'])assert.match(settings,new RegExp(id),`環境設定に${id}を併記する`);
 assert.match(vastPanel,/既存Instanceの状態確認・起動・停止/);
 assert.match(execution,/remoteProvider:'vastai'/);
@@ -56,6 +59,8 @@ assert.match(main,/VASTAI_SSH_KEY_MISSING/);
 assert.match(main,/VASTAI_SSH_PUBLIC_KEY_REQUIRED/);
 assert.match(main,/VASTAI_SSH_PUBLIC_KEY_MISSING/);
 assert.match(main,/VASTAI_SSH_KEY_PAIR_MISMATCH/);
+assert.match(main,/REMOTE_COMFYUI_INSTALL_PATH_REQUIRED/);
+assert.match(main,/appSettings\.remoteComfyUiInstallPath/,'SSH endpointは環境設定のRemote ComfyUI pathを使う');
 assert.match(main,/ensureSshAccess/,'SSH接続前にVast.aiへ公開鍵をprovisionする');
 assert.match(main,/VASTAI_INSTANCE_LOOKUP_FAILED/);
 console.log('Service integrations UI tests passed.');
