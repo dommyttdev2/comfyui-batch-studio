@@ -42,6 +42,8 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
 
   assert.match(worker.REMOTE_WORKER_FILE,/aria2c/,'worker must use aria2c for model staging');
   assert.match(worker.REMOTE_WORKER_FILE,/repos\/comfyanonymous\/ComfyUI\/releases\/latest/,'worker must resolve the latest official ComfyUI release');
+  assert.match(worker.REMOTE_WORKER_FILE,/https:\/\/github\.com\/comfyanonymous\/ComfyUI\.git/,'worker must fetch the release tag from the official ComfyUI repository');
+  assert.match(worker.REMOTE_WORKER_FILE,/GIT_CONFIG_VALUE_0/,'private git fetch authentication must stay ephemeral in process environment');
   assert.match(worker.REMOTE_WORKER_FILE,/gh","auth","status/,'worker must verify non-interactive GitHub auth');
   assert.doesNotMatch(worker.REMOTE_WORKER_FILE,/gh","auth","login/,'worker must not start interactive gh auth login');
   assert.match(worker.REMOTE_WORKER_FILE,/gh","repo","clone/,'worker must clone configured custom nodes with gh');
