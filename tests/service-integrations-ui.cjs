@@ -53,7 +53,7 @@ assert.match(execution,/remoteProvider:'vastai'/);
 assert.match(execution,/remoteInstanceId/);
 assert.match(execution,/SSH Host\/PortはProjectへ固定保存せず/);
 assert.match(config,/VASTAI_ENVIRONMENT_VARIABLE='VASTAI_API_KEY'/);
-assert.match(config,/stored\?\.schemaVersion===2\|\|stored\?\.schemaVersion===3\?text\(stored\.sshPublicKeyPath\):''/,'schema v3で保存したSSH公開鍵をstatusで再読込する');
+assert.match(config,/stored\?\.schemaVersion===2\|\|stored\?\.schemaVersion===3\|\|stored\?\.schemaVersion===4\?text\(stored\.sshPublicKeyPath\):''/,'schema v2-v4で保存したSSH公開鍵をstatusで再読込する');
 assert.match(preflight,/remoteTargetCheck/,'PreflightがRemote target検証hookを持つ');
 assert.match(main,/remoteTargetIssuesFor/,'Main ProcessがVast.ai Remote targetを検証する');
 assert.match(main,/runPreflight\(root,await r2LookupFor\(root\),settings\.modelsPath,\(\)=>remoteTargetIssuesFor\(root\)\)/,'PREFLIGHT_RUNからRemote target検証を実配線する');
