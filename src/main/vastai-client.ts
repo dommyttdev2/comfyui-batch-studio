@@ -43,14 +43,20 @@ export function normalizeVastStatus(payload:unknown):CloudInstanceStatus{
   return'unknown';
 }
 
-function publicSshEndpoint(payload:JsonRecord){
-  const ports=record(payload.ports),mappings=ports['22/tcp'];
+function mappedTcpEndpoint(payload:JsonRecord,internalPort:number){
+  const ports=record(payload.ports),mappings=ports[`${internalPort}/tcp`];
   if(!Array.isArray(mappings))return null;
   const publicHost=stringValue(payload.public_ipaddr);
   for(const candidate of mappings){
     const mapping=record(candidate),host=publicHost??stringValue(mapping.HostIp),port=integerValue(mapping.HostPort);
-    if(host&&host!=='0.0.0.0'&&host!=='::'&&port&&port>0)return {host,port};
+    if(host&&host!=='0.0.0.0'&&host!=='::'&&port&&port>0)return {host,port,internalPort};
   }
+  return null;
+}
+function publicSshEndpoint(payload:JsonRecord){return mappedTcpEndpoint(payload,22);}
+export function resolveVastComfyUiPort(payload:unknown){
+  const item=record(payload);
+  for(const internalPort of [18188,8188])if(mappedTcpEndpoint(item,internalPort))return internalPort;
   return null;
 }
 
@@ -58,8 +64,8 @@ export function normalizeVastInstance(payload:unknown):VastAiInstance{
   const item=record(payload),id=integerValue(item.id);
   if(id==null||id<1)throw new Error('Vast.ai Instance応答に有効なIDがありません。');
   const status=normalizeVastStatus(item),mapped=status==='running'?publicSshEndpoint(item):null;
-  const sshHost=status==='running'?(mapped?.host??stringValue(item.ssh_host)??stringValue(item.public_ipaddr)):null,sshPort=status==='running'?(mapped?.port??integerValue(item.ssh_port)??null):null;
-  return {provider:'vastai',id,label:stringValue(item.label),status,rawStatus:rawStatusOf(item),intendedStatus:stringValue(item.intended_status),curState:stringValue(item.cur_state),statusMessage:stringValue(item.status_msg),gpuName:stringValue(item.gpu_name),gpuCount:integerValue(item.num_gpus),gpuRamMb:integerValue(item.gpu_ram)??integerValue(item.gpu_totalram),hourlyCost:numberValue(item.dph_total),sshHost,sshPort};
+  const sshHost=status==='running'?(mapped?.host??stringValue(item.ssh_host)??stringValue(item.public_ipaddr)):null,sshPort=status==='running'?(mapped?.port??integerValue(item.ssh_port)??null):null,comfyUiPort=status==='running'?resolveVastComfyUiPort(item):null;
+  return {provider:'vastai',id,label:stringValue(item.label),status,rawStatus:rawStatusOf(item),intendedStatus:stringValue(item.intended_status),curState:stringValue(item.cur_state),statusMessage:stringValue(item.status_msg),gpuName:stringValue(item.gpu_name),gpuCount:integerValue(item.num_gpus),gpuRamMb:integerValue(item.gpu_ram)??integerValue(item.gpu_totalram),hourlyCost:numberValue(item.dph_total),sshHost,sshPort,comfyUiPort};
 }
 
 function messageFromPayload(payload:unknown){const item=record(payload);return stringValue(item.msg)??stringValue(item.error)??stringValue(item.detail);}
