@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { utils } from 'ssh2';
+import ssh2 from 'ssh2';
+
+const { utils }=ssh2;
 
 function parsed(data:Buffer|string,label:string){
   const key=utils.parseKey(data);
