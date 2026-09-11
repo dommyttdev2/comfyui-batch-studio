@@ -90,42 +90,48 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 
     const workerPath=path.join(runtime,'worker.py'),modelsRoot=path.join(runtime,'remote-comfy','models'),runRoot=path.join(runtime,'worker-run');
     fs.mkdirSync(path.join(modelsRoot,'checkpoints'),{recursive:true});fs.mkdirSync(runRoot,{recursive:true});fs.writeFileSync(workerPath,worker.REMOTE_WORKER_FILE);
-    const pythonTest=String.raw`
-import hashlib,importlib.util,os,sys,urllib.error
+    const pythonTest=String.raw\`
+import hashlib,importlib.util,os,sys
 worker_path=sys.argv[1]; model_root=sys.argv[2]
 spec=importlib.util.spec_from_file_location("batch_worker",worker_path); w=importlib.util.module_from_spec(spec); spec.loader.exec_module(w)
 payload=b"worker-model-payload"
-class Resp:
- status=200
- def __init__(self,data): self.data=data; self.pos=0
- def __enter__(self): return self
- def __exit__(self,*args): return False
- def read(self,n):
-  if self.pos>=len(self.data): return b""
-  chunk=self.data[self.pos:self.pos+n]; self.pos+=len(chunk); return chunk
-w.urllib.request.urlopen=lambda req,timeout=60: Resp(payload)
+class Result:
+ def __init__(self,code=0,out="",err=""): self.returncode=code; self.stdout=out; self.stderr=err
+w.shutil.which=lambda name: "/fake/aria2c" if name=="aria2c" else None
+calls=[]
+def successful_run(args,cwd=None,env=None,input=None,text=True,capture_output=True):
+ assert args[0]=="aria2c"
+ assert all("X-Amz-Signature" not in a for a in args), "signed URL must not appear in process argv"
+ assert input and "X-Amz-Signature=" in input, "signed URL must be supplied through stdin"
+ out_name=next(a for a in args if a.startswith("--out=")).split("=",1)[1]
+ out_dir=next(a for a in args if a.startswith("--dir=")).split("=",1)[1]
+ open(os.path.join(out_dir,out_name),"wb").write(payload)
+ calls.append((args,input))
+ return Result()
+w.subprocess.run=successful_run
 target=os.path.join(model_root,"checkpoints","model.safetensors")
-open(target+".part","wb").write(b"interrupted")
 expected=hashlib.sha256(payload).hexdigest()
-result=w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":"https://example.invalid/model","expectedSize":len(payload),"expectedSha256":expected})
+url="https://example.invalid/model?X-Amz-Signature=SECRET"
+result=w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"expectedSha256":expected})
 assert result["valid"] and open(target,"rb").read()==payload and not os.path.exists(target+".part")
 os.unlink(target)
 try:
- w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":"https://example.invalid/model","expectedSize":len(payload),"expectedSha256":"0"*64})
+ w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"expectedSha256":"0"*64})
  raise AssertionError("hash mismatch must fail")
 except w.WorkerError as e:
  assert e.code=="MODEL_SHA256_MISMATCH"
-assert not os.path.exists(target) and not os.path.exists(target+".part")
-def expired(req,timeout=60): raise urllib.error.HTTPError(req.full_url,403,"Forbidden",None,None)
-w.urllib.request.urlopen=expired
+assert not os.path.exists(target)
+def expired_run(args,cwd=None,env=None,input=None,text=True,capture_output=True):
+ return Result(22,"","HTTP status=403")
+w.subprocess.run=expired_run
 try:
- w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":"https://example.invalid/expired","expectedSize":len(payload)})
+ w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload)})
  raise AssertionError("expired URL must fail")
 except w.WorkerError as e:
  assert e.code=="MODEL_DOWNLOAD_HTTP_403"
 assert not os.path.exists(target)
-print("worker staging regression passed")
-`;
+print("worker aria2 staging regression passed")
+\`
     const py=spawnSync('python',[ '-c',pythonTest,workerPath,modelsRoot],{encoding:'utf8'});
     assert.equal(py.status,0,py.stderr||py.stdout);
     console.log('Remote model staging tests passed.');
