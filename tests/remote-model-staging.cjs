@@ -22,7 +22,7 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
     ]);
 
     assert.equal(placement.remoteModelRelativePath('illustrious','checkpoint','base.safetensors'),'checkpoints/base.safetensors');
-    assert.equal(placement.remoteModelRelativePath('illustrious','lora','folder/character.safetensors'),'loras/character.safetensors');
+    assert.equal(placement.remoteModelRelativePath('illustrious','lora','folder/character.safetensors'),'loras/folder/character.safetensors');
     assert.equal(placement.remoteModelRelativePath('anima','diffusion_model','anima.safetensors'),'diffusion_models/anima.safetensors');
     assert.equal(placement.remoteModelRelativePath('anima','text_encoder','qwen.safetensors'),'text_encoders/qwen.safetensors');
     assert.equal(placement.remoteModelRelativePath('anima','vae','vae.safetensors'),'vae/vae.safetensors');
