@@ -140,7 +140,7 @@ function resumePhase(run:ExecutionRun,evidence:ExecutionEvidence[]):{phase:Execu
   if(run.executionTarget==='remote'&&kinds.has('R2_OBJECT_VERIFIED'))return {phase:'LOCAL_DOWNLOADING',lifecycle:'RUNNING'};
   if(run.executionTarget==='remote'&&kinds.has('PACKAGE_VERIFIED'))return {phase:'R2_UPLOAD_URL_ISSUED',lifecycle:'RUNNING'};
   if(kinds.has('EXECUTION_COMPLETED'))return {phase:run.executionTarget==='remote'?'ARTIFACTS_COLLECTING':'LOCAL_OUTPUT_VERIFYING',lifecycle:'RUNNING'};
-  if(kinds.has('MODELS_VERIFIED')||kinds.has('MODEL_VERIFIED'))return {phase:'WORKFLOW_PREPARING',lifecycle:'RUNNING'};
+  if(kinds.has('MODELS_VERIFIED'))return {phase:'WORKFLOW_PREPARING',lifecycle:'RUNNING'};
   return {phase:initialPhase(run.executionTarget),lifecycle:'RUNNING'};
 }
 
