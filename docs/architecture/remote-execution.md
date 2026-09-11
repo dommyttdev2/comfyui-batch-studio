@@ -146,15 +146,14 @@ Remote Worker
 ComfyUI 127.0.0.1:<configured-port>
 ```
 
-Vast.aiの初期既定値は次とする。
+Vast.ai provider固有の初期既定値は次とする。
 
 ```text
-SSH User            root
-Remote ComfyUI Dir  /workspace/ComfyUI
-ComfyUI Port         18188
+SSH User      root
+ComfyUI Port  18188
 ```
 
-Remote ComfyUI Portを8188へhard-codeしない。
+Remote ComfyUI install path は provider設定ではなく app-wide の「環境設定」を正本とする。Remote実行時は未設定を許可せず、POSIX絶対パス（例: `/workspace/ComfyUI`）を指定する。Remote ComfyUI Portを8188へhard-codeしない。
 
 ---
 
@@ -326,10 +325,12 @@ app-wide Vast.ai Remote設定:
 
 ```text
 sshPrivateKeyPath
+sshPublicKeyPath
 sshUser
-comfyUiDirectory
 comfyUiPort
 ```
+
+Remote ComfyUI install path は環境設定の `remoteComfyUiInstallPath` / `BATCH_STUDIO_REMOTE_COMFYUI_INSTALL_PATH` が所有する。
 
 Providerから実行時解決:
 
@@ -485,7 +486,7 @@ LoRA             -> models/loras/
 
 Anima
 diffusion model  -> models/diffusion_models/
-text encoder      -> template-compatible text encoder directory
+text encoder      -> models/text_encoders/
 VAE               -> models/vae/
 LoRA              -> models/loras/
 ```
@@ -805,6 +806,7 @@ Service Integration
   Vast.ai API reachable
   selected Instance exists
   SSH private key path exists
+  Remote ComfyUI install path configured in Environment Settings
 
 Execution environment
   Instance can become running
@@ -1023,12 +1025,21 @@ stale Workflow/API graph / Prompt Plan resume rejection
 secret / private-key contents / credential / presigned URL persistence guard
 ```
 
-今後のExecution実装範囲:
+現在実装済みのRemote Execution基盤:
 
 ```text
 SSH client / Host Key policy
 Remote Worker
-remote model staging
+Remote ComfyUI install path validation
+R2 -> Remote model staging
+per-model progress / evidence / Resume skip
+size / SHA-256 validation + .part + atomic rename
+signed URL non-persistence + expiry retry
+```
+
+今後のExecution実装範囲:
+
+```text
 ComfyUI API graph submission
 Scene Prompt continuous runner
 Execution連携としてのartifact package/upload/download
