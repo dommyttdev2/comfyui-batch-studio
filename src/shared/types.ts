@@ -63,6 +63,55 @@ export interface CompileResult { outputPath:string; apiOutputPath:string; branch
 export interface ModelAvailabilityRow { ref:string; fileName:string; kind:'checkpoint'|'diffusion_model'|'text_encoder'|'clip'|'vae'|'lora'; local:boolean; r2:boolean; state:'available'|'transfer-required'|'missing'; localPath?:string; }
 export interface AvailabilityResult { rows:ModelAvailabilityRow[]; validation:ValidationResult; executionTarget:ExecutionTarget; localModelsRoot:string|null; }
 export interface PreflightResult { state:'READY'|'BLOCKED'; plannedImages:number; targetImages:number|null; blocking:ValidationIssue[]; warnings:ValidationIssue[]; sections:Array<{name:string;valid:boolean;issues:ValidationIssue[]}>; }
+export type ExecutionRunLifecycle='RUNNING'|'PAUSED'|'INTERRUPTED'|'FAILED'|'COMPLETED';
+export type ExecutionPhase=
+  'LOCAL_COMFYUI_CONNECTING'|'LOCAL_CAPABILITY_CHECKING'|
+  'CLOUD_INSTANCE_RESOLVING'|'CLOUD_INSTANCE_STARTING'|'CLOUD_INSTANCE_READY'|
+  'SSH_CONNECTING'|'SSH_CONNECTED'|'REMOTE_WORKER_PREPARING'|'REMOTE_ENVIRONMENT_CHECKING'|
+  'REMOTE_MODELS_CHECKING'|'REMOTE_MODELS_DOWNLOADING'|'REMOTE_MODELS_READY'|
+  'WORKFLOW_PREPARING'|'EXECUTING'|'EXECUTION_COMPLETED'|'ARTIFACTS_COLLECTING'|'ARTIFACTS_PACKAGING'|
+  'R2_UPLOAD_URL_ISSUED'|'R2_UPLOADING'|'R2_UPLOADED'|'LOCAL_DOWNLOADING'|'LOCAL_VERIFYING'|'LOCAL_OUTPUT_VERIFYING'|
+  'REMOTE_CLEANUP'|'CLOUD_INSTANCE_FINALIZING'|'COMPLETED';
+export type ExecutionEvidenceKind='MODEL_VERIFIED'|'MODELS_VERIFIED'|'EXECUTION_COMPLETED'|'PACKAGE_VERIFIED'|'R2_OBJECT_VERIFIED'|'LOCAL_FILE_VERIFIED'|'CUSTOM';
+export interface ExecutionProgressCounter { completed:number; total:number; }
+export interface ExecutionBranchProgress { branchId:string; completed:number; total:number; state:'pending'|'running'|'completed'|'failed'|'skipped'; }
+export interface ExecutionError { code:string; message:string; phase:ExecutionPhase; at:string; retryable:boolean; }
+export interface ExecutionEvidence { id:string; kind:ExecutionEvidenceKind; scope:string; runIdentity:string; fingerprint:string; recordedAt:string; data:Record<string,string|number|boolean|null>; }
+export interface ExecutionRunSnapshot {
+  projectId:string;
+  target:ExecutionTarget;
+  remote:{provider:CloudInstanceProviderId|null;instanceId:number|null}|null;
+  preflight:PreflightResult;
+  workflow:{uiPath:string;apiPath:string;uiSha256:string;apiSha256:string;workflowIdentity:string};
+  plan:{sha256:string;branches:Array<{branchId:string;leafIds:string[]}>};
+  runIdentity:string;
+}
+export interface ExecutionRun {
+  schemaVersion:1;
+  runId:string;
+  projectId:string;
+  executionTarget:ExecutionTarget;
+  remote:{provider:CloudInstanceProviderId|null;instanceId:number|null}|null;
+  lifecycle:ExecutionRunLifecycle;
+  phase:ExecutionPhase;
+  controls:{
+    scheduling:'ACTIVE'|'STOP_REQUESTED'|'STOPPED';
+    interrupt:'IDLE'|'FORCE_REQUESTED'|'INTERRUPTED';
+    stopSchedulingRequestedAt:string|null;
+    forceInterruptRequestedAt:string|null;
+  };
+  current:{branchId:string|null;leafId:string|null;promptId:string|null};
+  progress:{overall:ExecutionProgressCounter;branches:ExecutionBranchProgress[]};
+  promptIds:string[];
+  evidence:ExecutionEvidence[];
+  error:ExecutionError|null;
+  errorHistory:ExecutionError[];
+  snapshot:ExecutionRunSnapshot;
+  resume:{attempts:number;lastAttemptAt:string|null;lastValidatedEvidenceIds:string[];lastIgnoredEvidenceIds:string[];lastDecisionPhase:ExecutionPhase|null};
+  startedAt:string;
+  updatedAt:string;
+  completedAt:string|null;
+}
 export interface R2ConnectionInput { name?:string; accountId:string; accessKeyId:string; secretAccessKey?:string; publicUrl?:string; cloudflareApiToken?:string; }
 export interface R2ConnectionStatus { configured:boolean; name:string; accountId:string; accessKeyId:string; publicUrl:string; secretConfigured:boolean; metricsTokenConfigured:boolean; }
 export interface R2Bucket { name:string; createdAt?:string|null; }
@@ -84,7 +133,7 @@ export interface BatchStudioApi {
   catalog:{status:(root:string)=>Promise<CatalogStatus>;integratedStatus:()=>Promise<CivitaiCatalogStatus>;snapshot:()=>Promise<ModelCatalog|null>;sync:()=>Promise<CivitaiCatalogStatus>;linkProject:(root:string)=>Promise<ProjectSummary>;templates:()=>Promise<CatalogSelectionTemplate[]>;saveTemplate:(input:CatalogSelectionTemplateInput)=>Promise<CatalogSelectionTemplate[]>;deleteTemplate:(id:string)=>Promise<CatalogSelectionTemplate[]>;openModel:(url:string)=>Promise<void>};
   civitai:{settings:()=>Promise<CivitaiConnectionStatus>;saveSettings:(input:CivitaiConnectionInput)=>Promise<CivitaiConnectionStatus>};
   vastai:{settings:()=>Promise<VastAiConnectionStatus>;saveSettings:(input:VastAiConnectionInput)=>Promise<VastAiConnectionStatus>;test:(input?:VastAiConnectionInput)=>Promise<void>;selectPrivateKey:()=>Promise<string|null>;instances:()=>Promise<VastAiInstance[]>;startInstance:(id:number)=>Promise<void>;stopInstance:(id:number)=>Promise<void>;resolveSshEndpoint:(id:number)=>Promise<VastAiSshEndpoint>};
-  workflow:{compile:(root:string)=>Promise<CompileResult>}; availability:{check:(root:string)=>Promise<AvailabilityResult>;checkLoraFiles:(root:string,fileNames:string[])=>Promise<LoraFileAvailability[]>;openR2:(root:string)=>Promise<void>}; preflight:{run:(root:string)=>Promise<PreflightResult>}; clipboard:{writeText:(text:string)=>Promise<void>};
+  workflow:{compile:(root:string)=>Promise<CompileResult>}; availability:{check:(root:string)=>Promise<AvailabilityResult>;checkLoraFiles:(root:string,fileNames:string[])=>Promise<LoraFileAvailability[]>;openR2:(root:string)=>Promise<void>}; preflight:{run:(root:string)=>Promise<PreflightResult>}; execution:{start:(root:string)=>Promise<ExecutionRun>;status:(root:string)=>Promise<ExecutionRun|null>;get:(root:string,runId:string)=>Promise<ExecutionRun|null>;stopScheduling:(root:string,runId:string)=>Promise<ExecutionRun>;forceInterrupt:(root:string,runId:string)=>Promise<ExecutionRun>;resume:(root:string,runId:string)=>Promise<ExecutionRun>}; clipboard:{writeText:(text:string)=>Promise<void>};
   r2:{settings:()=>Promise<R2ConnectionStatus>; environment:()=>Promise<R2ConnectionInput>; test:(input:R2ConnectionInput)=>Promise<void>; saveSettings:(input:R2ConnectionInput)=>Promise<R2ConnectionStatus>;buckets:()=>Promise<R2Bucket[]>; createBucket:(name:string)=>Promise<void>; deleteBucket:(name:string)=>Promise<void>;list:(bucket:string,prefix:string,token?:string|null)=>Promise<R2ListResult>; search:(bucket:string,query:string,token?:string|null)=>Promise<R2SearchResult>;downloadInfo:(bucket:string,key:string,expiresIn?:number)=>Promise<R2DownloadInfo>; batchDownloadInfo:(bucket:string,keys:string[],expiresIn?:number)=>Promise<R2DownloadInfo[]>; putUrlInfo:(bucket:string,key:string,expiresIn?:number,contentType?:string)=>Promise<R2PutUrlInfo>;deleteObjects:(bucket:string,keys:string[])=>Promise<{deleted:string[];errors:unknown[]}>; move:(bucket:string,sourceKey:string,destinationKey:string,overwrite?:boolean)=>Promise<void>;selectUploadFiles:()=>Promise<string[]>; beginUpload:(bucket:string,prefix:string,filePath:string,overwrite?:boolean)=>Promise<R2UploadJob>; uploads:()=>Promise<R2UploadJob[]>; resumeUpload:(id:string)=>Promise<R2UploadJob>; pauseUpload:(id:string)=>Promise<R2UploadJob>; cancelUpload:(id:string)=>Promise<void>;templates:(bucket?:string)=>Promise<R2BatchDownloadTemplate[]>; saveTemplate:(input:{id?:string;name:string;bucket:string;objects:Array<{key:string;name:string;size?:number}>})=>Promise<R2BatchDownloadTemplate[]>; deleteTemplate:(id:string)=>Promise<R2BatchDownloadTemplate[]>;metrics:()=>Promise<R2Metrics>;};
   grok:{setVisible:(visible:boolean)=>Promise<GrokPaneState>;setContext:(root:string,stage:GrokContextStage)=>Promise<GrokPaneState>;setRatio:(ratio:number)=>Promise<GrokPaneState>;setDividerScreenX:(screenX:number)=>Promise<GrokPaneState>;reload:()=>Promise<void>;openExternal:()=>Promise<void>};
 }
