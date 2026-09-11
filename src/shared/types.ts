@@ -10,7 +10,7 @@ export type ModelFileRole='text_encoder'|'vae';
 export interface ProjectBriefInput { project:{id:string;title:string}; subject:{copyrightedCharacter:boolean;characterName:string;series:string}; audience:string; request:string; exclusions:string; assumptions:{adultCharacters:false|boolean;consensual:false|boolean}; generation:{target_image_count:number;modelFamily?:ModelFamily|'Illustrious';targetChapterCount?:number}; references?:string[]; }
 export type ExecutionTarget = 'local' | 'remote';
 export type CloudInstanceProviderId='vastai';
-export interface AppSettings { comfyUiInstallPath:string; catalogPath?:string; r2Bucket?:string; r2ModelPrefix?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; }
+export interface AppSettings { comfyUiInstallPath:string; comfyUiApiEndpoint?:string; catalogPath?:string; r2Bucket?:string; r2ModelPrefix?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; }
 export interface LocalModelFile { fileName:string; path:string; size:number; }
 export interface LocalModelDirectory { path:string|null; exists:boolean; files:LocalModelFile[]; }
 export interface AppSettingsStatus extends Required<AppSettings> { configured:boolean; modelsPath:string|null; installExists:boolean; modelsExists:boolean; modelFiles:{text_encoders:LocalModelDirectory;vae:LocalModelDirectory}; }
