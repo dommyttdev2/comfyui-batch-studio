@@ -40,9 +40,9 @@ function normalizeRemoteCustomNodes(value:unknown):RemoteCustomNodeRepository[]{
   if(value.length>100)throw new Error('Remote custom_nodes は100件以内で設定してください。');
   const seen=new Set<string>();
   return value.map((item,index)=>{
-    if(!item||typeof item!=='object'||Array.isArray(item))throw new Error(\`Remote custom_nodes #\${index+1} の設定が不正です。\`);
+    if(!item||typeof item!=='object'||Array.isArray(item))throw new Error(`Remote custom_nodes #${index+1} の設定が不正です。`);
     const repository=normalizeGithubRepository((item as any).repository),ref=text((item as any).ref);
-    const key=repository.toLowerCase();if(seen.has(key))throw new Error(\`Remote custom_nodes に重複したリポジトリがあります: \${repository}\`);seen.add(key);
+    const key=repository.toLowerCase();if(seen.has(key))throw new Error(`Remote custom_nodes に重複したリポジトリがあります: ${repository}`);seen.add(key);
     return ref?{repository,ref}:{repository};
   });
 }
