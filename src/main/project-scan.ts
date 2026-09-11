@@ -15,14 +15,18 @@ function storyBriefInputs(value:any){
  return copy;
 }
 function sameStoryBriefInputs(a:any,b:any){return JSON.stringify(storyBriefInputs(a))===JSON.stringify(storyBriefInputs(b));}
+function historyTimestamp(name:string){
+ const match=name.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z-/);
+ if(!match)return 0;
+ const [,date,hour,minute,second,millis]=match;
+ return Date.parse(`${date}T${hour}:${minute}:${second}.${millis}Z`);
+}
 async function briefChangedAfterStory(root:string,storyT:number,briefT:number){
  if(!storyT||briefT<=storyT)return false;
  const current=await readJson<any>(path.join(root,'project_brief.json'));if(!current)return true;
  const historyDir=path.join(root,'._batch_studio','history','projectBrief');
  let names:string[]=[];try{names=(await readdir(historyDir)).filter(name=>name.endsWith('-project_brief.json'))}catch{return true}
- const candidates:Array<{file:string;time:number}>=[];
- for(const name of names){const file=path.join(historyDir,name),time=await mtime(file);if(time>storyT)candidates.push({file,time});}
- candidates.sort((a,b)=>a.time-b.time);
+ const candidates=names.map(name=>({file:path.join(historyDir,name),time:historyTimestamp(name)})).filter(item=>item.time>storyT).sort((a,b)=>a.time-b.time);
  if(!candidates.length)return true;
  const baseline=await readJson<any>(candidates[0].file);if(!baseline)return true;
  return !sameStoryBriefInputs(current,baseline);
