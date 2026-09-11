@@ -1010,6 +1010,19 @@ Project-level Preflight Gate（provider設定 / key path / instance state / endp
 Integrated R2 Managerのpresigned GET / temporary presigned PUT primitive
 ```
 
+Execution foundationとして現在実装する範囲:
+
+```text
+Project-local persistent Execution Run
+start / status / get / stop scheduling / force interrupt / resume IPC
+Preflight + Workflow/API graph identity + Prompt Plan identity snapshot
+Local / Remote phase model
+Run-scoped progress / current branch / current prompt / error state
+evidence fingerprint validation
+stale Workflow/API graph / Prompt Plan resume rejection
+secret / private-key contents / credential / presigned URL persistence guard
+```
+
 今後のExecution実装範囲:
 
 ```text
@@ -1019,7 +1032,6 @@ remote model staging
 ComfyUI API graph submission
 Scene Prompt continuous runner
 Execution連携としてのartifact package/upload/download
-Execution Run State / Resume
 provider lifecycle automatic start/wait/finalize
 ```
 
