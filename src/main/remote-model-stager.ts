@@ -73,8 +73,10 @@ export class RemoteModelStager {
     if(!models)throw new Error('REMOTE_MODELS_MISSING: models.json is missing.');
     const {bucket,prefix}=await this.r2Location(root);
     const required=requiredRemoteModels(models);
+    await this.r2.syncObjectIndex();
     const resolved=await Promise.all(required.map(async item=>{
-      const objectKey=joinR2ModelKey(prefix,item.relativePath);
+      const objectKey=await this.r2.resolveModelObjectKey(bucket,item.relativePath,prefix);
+      if(!objectKey)throw new Error(`REMOTE_MODEL_R2_OBJECT_MISSING: ${joinR2ModelKey(prefix,item.relativePath)}`);
       const meta=await this.r2.objectMetadata(bucket,objectKey);
       return {...item,objectKey,destination:`models/${item.relativePath}`,meta};
     }));

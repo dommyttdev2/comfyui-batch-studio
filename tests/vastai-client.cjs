@@ -14,7 +14,7 @@ const load=relative=>import(pathToFileURL(path.join(runtime,'main',relative)).hr
 function response(payload,status=200){return {ok:status>=200&&status<300,status,statusText:status===200?'OK':'ERR',text:async()=>JSON.stringify(payload)};}
 
 (async()=>{
-  const {VastAiClient,normalizeVastInstance,normalizeVastStatus}=await load('vastai-client.js');
+  const {VastAiClient,normalizeVastInstance,normalizeVastStatus,resolveVastComfyUiPort}=await load('vastai-client.js');
   const {normalizeOpenSshPublicKey,validateSshKeyPair}=await load('ssh-key-pair.js');
   assert.equal(normalizeVastStatus({actual_status:'running'}),'running');
   assert.equal(normalizeVastStatus({actual_status:'scheduling'}),'scheduling');
@@ -22,12 +22,18 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.equal(normalizeVastStatus({actual_status:'loading'}),'starting');
   assert.equal(normalizeVastStatus({actual_status:'offline'}),'offline');
 
-  const mapped=normalizeVastInstance({id:42,actual_status:'running',public_ipaddr:'203.0.113.9',ssh_host:'fallback.vast.ai',ssh_port:10022,ports:{'22/tcp':[{HostIp:'0.0.0.0',HostPort:'40022'}]},gpu_name:'RTX 5090',num_gpus:1,gpu_ram:32768,dph_total:0.75});
+  const mapped=normalizeVastInstance({id:42,actual_status:'running',public_ipaddr:'203.0.113.9',ssh_host:'fallback.vast.ai',ssh_port:10022,ports:{'22/tcp':[{HostIp:'0.0.0.0',HostPort:'40022'}],'18188/tcp':[{HostIp:'0.0.0.0',HostPort:'48188'}]},gpu_name:'RTX 5090',num_gpus:1,gpu_ram:32768,dph_total:0.75});
   assert.equal(mapped.sshHost,'203.0.113.9');
   assert.equal(mapped.sshPort,40022);
-  const proxyFallback=normalizeVastInstance({id:43,actual_status:'running',ssh_host:'ssh43.vast.ai',ssh_port:10443});
-  assert.equal(proxyFallback.sshHost,'ssh43.vast.ai');
-  assert.equal(proxyFallback.sshPort,10443);
+  assert.equal(mapped.comfyUiPort,18188);
+  assert.equal(resolveVastComfyUiPort({ports:{'8188/tcp':[{HostIp:'0.0.0.0',HostPort:'38188'}]}}),8188);
+  assert.equal(resolveVastComfyUiPort({ports:{'22/tcp':[{HostIp:'0.0.0.0',HostPort:'40022'}]}}),null);
+  const secondMapped=normalizeVastInstance({id:43,actual_status:'running',public_ipaddr:'203.0.113.10',ports:{'22/tcp':[{HostIp:'0.0.0.0',HostPort:'40123'}],'8188/tcp':[{HostIp:'0.0.0.0',HostPort:'48189'}]}});
+  assert.equal(secondMapped.sshPort,40123,'SSH HostPortはInstanceごとの22/tcp mappingを使う');
+  assert.equal(secondMapped.comfyUiPort,8188);
+  const proxyFallback=normalizeVastInstance({id:44,actual_status:'running',ssh_host:'ssh44.vast.ai',ssh_port:10444});
+  assert.equal(proxyFallback.sshHost,'ssh44.vast.ai');
+  assert.equal(proxyFallback.sshPort,10444);
   assert.equal(mapped.gpuName,'RTX 5090');
   assert.equal(mapped.hourlyCost,0.75);
 

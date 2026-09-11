@@ -10,10 +10,12 @@ export type ModelFileRole='text_encoder'|'vae';
 export interface ProjectBriefInput { project:{id:string;title:string}; subject:{copyrightedCharacter:boolean;characterName:string;series:string}; audience:string; request:string; exclusions:string; assumptions:{adultCharacters:false|boolean;consensual:false|boolean}; generation:{target_image_count:number;modelFamily?:ModelFamily|'Illustrious';targetChapterCount?:number}; references?:string[]; }
 export type ExecutionTarget = 'local' | 'remote';
 export type CloudInstanceProviderId='vastai';
-export interface AppSettings { comfyUiInstallPath:string; remoteComfyUiInstallPath?:string; comfyUiApiEndpoint?:string; catalogPath?:string; r2Bucket?:string; r2ModelPrefix?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; }
+export interface RemoteCustomNodeRepository { repository:string; ref?:string; }
+export interface AppSettings { comfyUiInstallPath:string; remoteComfyUiInstallPath?:string; comfyUiApiEndpoint?:string; projectRoot?:string; artifactRoot?:string; remoteCustomNodes?:RemoteCustomNodeRepository[]; catalogPath?:string; r2Bucket?:string; r2ModelPrefix?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; }
+export interface AppSettingsSaveInput extends AppSettings { githubPat?:string; }
 export interface LocalModelFile { fileName:string; path:string; size:number; }
 export interface LocalModelDirectory { path:string|null; exists:boolean; files:LocalModelFile[]; }
-export interface AppSettingsStatus extends Required<AppSettings> { configured:boolean; modelsPath:string|null; installExists:boolean; modelsExists:boolean; modelFiles:{text_encoders:LocalModelDirectory;vae:LocalModelDirectory}; }
+export interface AppSettingsStatus extends Required<AppSettings> { configured:boolean; githubPatConfigured:boolean; githubPatSource:'saved'|'environment'|'none'; modelsPath:string|null; installExists:boolean; modelsExists:boolean; modelFiles:{text_encoders:LocalModelDirectory;vae:LocalModelDirectory}; }
 export interface ProjectSettings { catalogPath?:string; comfyModelsRoot?:string; executionTarget?:ExecutionTarget; remoteProvider?:CloudInstanceProviderId; remoteInstanceId?:number; artifactOutputPath?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; r2FileManagerUrl?:string; r2Bucket?:string; r2ModelPrefix?:string; }
 export interface ProjectMeta { schemaVersion:1; createdAt:string; updatedAt?:string; settings:ProjectSettings; workflowBuild?:Record<string,unknown>; }
 export interface ProjectSummary { rootPath:string; title:string; id:string|null; targetImageCount:number|null; artifacts:ArtifactSummary[]; meta:ProjectMeta|null; }
@@ -49,10 +51,10 @@ export interface CatalogStatus { configured:boolean; path:string|null; exists:bo
 export interface CivitaiCatalogStatus { state:'idle'|'running'|'ready'|'error'; phase:string; completed:number; total:number; message:string; generation:number; changes:{added:number;updated:number;removed:number}; error:string|null; apiKeyConfigured:boolean; catalogPath:string; }
 export interface CivitaiConnectionInput { apiKey:string; }
 export interface CivitaiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; }
-export interface VastAiConnectionInput { apiKey?:string; sshPrivateKeyPath?:string; sshPublicKeyPath?:string; sshUser?:string; comfyUiPort?:number; }
-export interface VastAiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; sshPrivateKeyPath:string; sshPrivateKeyExists:boolean; sshPublicKeyPath:string; sshPublicKeyExists:boolean; sshKeyPairValid:boolean; sshUser:string; comfyUiPort:number; }
+export interface VastAiConnectionInput { apiKey?:string; sshPrivateKeyPath?:string; sshPublicKeyPath?:string; sshUser?:string; }
+export interface VastAiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; sshPrivateKeyPath:string; sshPrivateKeyExists:boolean; sshPublicKeyPath:string; sshPublicKeyExists:boolean; sshKeyPairValid:boolean; sshUser:string; }
 export type CloudInstanceStatus='running'|'stopped'|'starting'|'scheduling'|'stopping'|'offline'|'error'|'unknown';
-export interface VastAiInstance { provider:'vastai'; id:number; label:string|null; status:CloudInstanceStatus; rawStatus:string; intendedStatus:string|null; curState:string|null; statusMessage:string|null; gpuName:string|null; gpuCount:number|null; gpuRamMb:number|null; hourlyCost:number|null; sshHost:string|null; sshPort:number|null; }
+export interface VastAiInstance { provider:'vastai'; id:number; label:string|null; status:CloudInstanceStatus; rawStatus:string; intendedStatus:string|null; curState:string|null; statusMessage:string|null; gpuName:string|null; gpuCount:number|null; gpuRamMb:number|null; hourlyCost:number|null; sshHost:string|null; sshPort:number|null; comfyUiPort:number|null; }
 export interface VastAiSshEndpoint { provider:'vastai'; instanceId:number; host:string; port:number; user:string; privateKeyPath:string; publicKeyPath:string; comfyUiDirectory:string; comfyUiPort:number; }
 export interface CatalogSelectionEntry { collectionId:number; modelId:number; versionId:number; }
 export interface CatalogSelectionTemplate { id:string; name:string; createdAt:string; updatedAt:string; selection:CatalogSelectionEntry[]; }
@@ -68,6 +70,7 @@ export type ExecutionPhase=
   'LOCAL_COMFYUI_CONNECTING'|'LOCAL_CAPABILITY_CHECKING'|
   'CLOUD_INSTANCE_RESOLVING'|'CLOUD_INSTANCE_STARTING'|'CLOUD_INSTANCE_READY'|
   'SSH_CONNECTING'|'SSH_CONNECTED'|'REMOTE_WORKER_PREPARING'|'REMOTE_ENVIRONMENT_CHECKING'|
+  'REMOTE_DEPENDENCIES_INSTALLING'|'REMOTE_GITHUB_AUTHENTICATING'|'REMOTE_COMFYUI_UPDATING'|'REMOTE_CUSTOM_NODES_SYNCING'|'REMOTE_COMFYUI_RESTARTING'|'REMOTE_ENVIRONMENT_READY'|
   'REMOTE_MODELS_CHECKING'|'REMOTE_MODELS_DOWNLOADING'|'REMOTE_MODELS_READY'|
   'WORKFLOW_PREPARING'|'EXECUTING'|'EXECUTION_COMPLETED'|'ARTIFACTS_COLLECTING'|'ARTIFACTS_PACKAGING'|
   'R2_UPLOAD_URL_ISSUED'|'R2_UPLOADING'|'R2_UPLOADED'|'LOCAL_DOWNLOADING'|'LOCAL_VERIFYING'|'LOCAL_OUTPUT_VERIFYING'|
@@ -127,7 +130,7 @@ export interface R2Metrics { configured:boolean; payload?:unknown; }
 export type GrokContextStage='story'|'models'|'prompt-plan';
 export interface GrokPaneState { visible:boolean; ratio:number; }
 export interface BatchStudioApi {
-  appSettings:{get:()=>Promise<AppSettingsStatus>;selectComfyUiDirectory:()=>Promise<string|null>;save:(settings:AppSettings)=>Promise<AppSettingsStatus>};
+  appSettings:{get:()=>Promise<AppSettingsStatus>;selectComfyUiDirectory:()=>Promise<string|null>;save:(settings:AppSettingsSaveInput)=>Promise<AppSettingsStatus>};
   project:{select:()=>Promise<ProjectSummary|null>;last:()=>Promise<ProjectSummary|null>;recent:()=>Promise<ProjectSummary[]>;removeRecent:(root:string)=>Promise<void>;open:(root:string)=>Promise<ProjectSummary>;close:()=>Promise<void>;selectParent:()=>Promise<string|null>;create:(parent:string,brief:ProjectBriefInput)=>Promise<ProjectSummary>;scan:(root:string)=>Promise<ProjectSummary>;openFolder:(root:string)=>Promise<void>;saveSettings:(root:string,settings:ProjectSettings)=>Promise<ProjectSummary>;saveBrief:(root:string,brief:ProjectBriefInput)=>Promise<ProjectSummary>};
   artifact:{read:(root:string,key:ArtifactKey,source:'confirmed'|'draft')=>Promise<ArtifactReadResult>;beginEdit:(root:string,key:'story'|'models'|'promptPlan')=>Promise<ArtifactReadResult>;saveDraft:(root:string,key:'story'|'models'|'promptPlan',content:string)=>Promise<ArtifactReadResult>;importGrok:(root:string,key:'story'|'models'|'promptPlan',raw:string,stage?:GrokLoraSelectionStage)=>Promise<ImportResult>;confirm:(root:string,key:'story'|'models'|'promptPlan')=>Promise<ProjectSummary>;savePromptPlan:(root:string,plan:PromptPlanArtifact)=>Promise<ArtifactReadResult>;grokLoraHistory:(root:string)=>Promise<GrokLoraSelectionHistoryEntry[]>};
   grokTask:{build:(root:string,stage:GrokTask['stage'],extra?:string)=>Promise<GrokTask>}; file:{showInFolder:(filePath:string)=>Promise<void>};

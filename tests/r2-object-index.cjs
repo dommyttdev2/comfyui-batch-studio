@@ -20,7 +20,9 @@ const load=relative=>import(pathToFileURL(path.join(runtime,'main',relative)).hr
     fs.writeFileSync(file,JSON.stringify({schemaVersion:1,syncedAt:'2026-09-08T00:00:00Z',buckets:{models:[
       {key:'models/checkpoints/base.safetensors',name:'base.safetensors',size:100,etag:'a',lastModified:null,storageClass:'STANDARD'},
       {key:'models/loras/deep/character.safetensors',name:'character.safetensors',size:200,etag:'b',lastModified:null,storageClass:'STANDARD'},
-      {key:'archive/other.bin',name:'other.bin',size:300,etag:'c',lastModified:null,storageClass:'STANDARD'}
+      {key:'models/loras/pov/action.safetensors',name:'action.safetensors',size:210,etag:'c',lastModified:null,storageClass:'STANDARD'},
+      {key:'archive/checkpoints/legacy.safetensors',name:'legacy.safetensors',size:220,etag:'d',lastModified:null,storageClass:'STANDARD'},
+      {key:'archive/other.bin',name:'other.bin',size:300,etag:'e',lastModified:null,storageClass:'STANDARD'}
     ]}},null,2));
     const fakeConfig={credentials:async()=>{throw new Error('search must not access R2')}};
     const index=new R2ObjectIndex(fakeConfig,userData);
@@ -29,6 +31,10 @@ const load=relative=>import(pathToFileURL(path.join(runtime,'main',relative)).hr
     assert.equal(result.objects[0].key,'models/loras/deep/character.safetensors');
     assert.equal(await index.containsFile('models','character.safetensors','models/'),true);
     assert.equal(await index.containsFile('models','character.safetensors','models/checkpoints/'),false);
+    assert.equal(await index.resolveModelKey('models','checkpoints/base.safetensors',''),'models/checkpoints/base.safetensors');
+    assert.equal(await index.resolveModelKey('models','loras/character.safetensors',''),'models/loras/deep/character.safetensors','nested LoRA folder must resolve by category + basename');
+    assert.equal(await index.resolveModelKey('models','loras/action.safetensors','models'),'models/loras/pov/action.safetensors','configured prefix must scope nested model resolution');
+    assert.equal(await index.resolveModelKey('models','checkpoints/legacy.safetensors',''),'archive/checkpoints/legacy.safetensors','leading R2 folders before model category are allowed');
     console.log('R2 object index tests passed.');
   } finally {
     fs.rmSync(runtime,{recursive:true,force:true});
