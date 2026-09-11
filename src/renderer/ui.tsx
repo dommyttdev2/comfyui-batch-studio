@@ -1,8 +1,8 @@
 import type { GrokContextStage, ProjectSummary, ValidationIssue } from '../shared/types';
 
-export type Stage='概要'|'基本設定'|'ストーリー'|'モデル選定'|'プロンプト設計'|'ワークフロー'|'モデル配置'|'実行前チェック';
+export type Stage='概要'|'基本設定'|'ストーリー'|'モデル選定'|'プロンプト設計'|'ワークフロー'|'モデル配置'|'実行前チェック'|'実行';
 export type Runner=<T>(fn:()=>Promise<T>)=>Promise<T|undefined>;
-export const stages:Stage[]=['概要','基本設定','ストーリー','モデル選定','プロンプト設計','ワークフロー','モデル配置','実行前チェック'];
+export const stages:Stage[]=['概要','基本設定','ストーリー','モデル選定','プロンプト設計','ワークフロー','モデル配置','実行前チェック','実行'];
 const GROK_STAGE_CONTEXT:Partial<Record<Stage,GrokContextStage>>={'ストーリー':'story','モデル選定':'models','プロンプト設計':'prompt-plan'};
 export function shouldShowGrok(stage:Stage){return Boolean(GROK_STAGE_CONTEXT[stage])}
 export function grokContextStage(stage:Stage){return GROK_STAGE_CONTEXT[stage]??null}

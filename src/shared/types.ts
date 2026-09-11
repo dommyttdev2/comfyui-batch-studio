@@ -14,7 +14,7 @@ export interface AppSettings { comfyUiInstallPath:string; catalogPath?:string; r
 export interface LocalModelFile { fileName:string; path:string; size:number; }
 export interface LocalModelDirectory { path:string|null; exists:boolean; files:LocalModelFile[]; }
 export interface AppSettingsStatus extends Required<AppSettings> { configured:boolean; modelsPath:string|null; installExists:boolean; modelsExists:boolean; modelFiles:{text_encoders:LocalModelDirectory;vae:LocalModelDirectory}; }
-export interface ProjectSettings { catalogPath?:string; comfyModelsRoot?:string; executionTarget?:ExecutionTarget; remoteProvider?:CloudInstanceProviderId; remoteInstanceId?:number; r2IndexPath?:string; templatePath?:string; manifestPath?:string; r2FileManagerUrl?:string; r2Bucket?:string; r2ModelPrefix?:string; }
+export interface ProjectSettings { catalogPath?:string; comfyModelsRoot?:string; executionTarget?:ExecutionTarget; remoteProvider?:CloudInstanceProviderId; remoteInstanceId?:number; artifactOutputPath?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; r2FileManagerUrl?:string; r2Bucket?:string; r2ModelPrefix?:string; }
 export interface ProjectMeta { schemaVersion:1; createdAt:string; updatedAt?:string; settings:ProjectSettings; workflowBuild?:Record<string,unknown>; }
 export interface ProjectSummary { rootPath:string; title:string; id:string|null; targetImageCount:number|null; artifacts:ArtifactSummary[]; meta:ProjectMeta|null; }
 export interface ArtifactReadResult { key:ArtifactKey; source:'confirmed'|'draft'; content:string|null; exists:boolean; validation:ValidationResult; }
