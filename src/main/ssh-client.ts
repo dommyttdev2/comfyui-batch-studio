@@ -1,12 +1,15 @@
 import { readFile } from 'node:fs/promises';
-import { Client, type ConnectConfig, type SFTPWrapper } from 'ssh2';
+import ssh2 from 'ssh2';
+import type { Client as SshClient, ConnectConfig, SFTPWrapper } from 'ssh2';
 import { sshHostKeyFingerprint, type SshHostKeyStore } from './ssh-host-keys.js';
+
+const { Client }=ssh2;
 
 export interface SshEndpoint { host:string;port:number;user:string;privateKeyPath:string; }
 export class SshHostKeyError extends Error { constructor(public readonly code:'HOST_KEY_UNVERIFIED'|'HOST_KEY_MISMATCH',message:string,public readonly fingerprint:string,public readonly expectedFingerprint?:string){super(message);} }
 
 export class VerifiedSshSession {
-  constructor(private readonly client:Client,readonly endpoint:SshEndpoint){}
+  constructor(private readonly client:SshClient,readonly endpoint:SshEndpoint){}
   exec(command:string,stdin?:string):Promise<{stdout:string;stderr:string;code:number|null}>{return new Promise((resolve,reject)=>this.client.exec(command,(error,stream)=>{
     if(error)return reject(error);let stdout='',stderr='';stream.on('data',(d:Buffer)=>stdout+=d.toString());stream.stderr.on('data',(d:Buffer)=>stderr+=d.toString());
     stream.on('close',(code:number|null)=>resolve({stdout,stderr,code}));stream.on('error',reject);if(stdin!==undefined){stream.end(stdin);}else stream.end();
