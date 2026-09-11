@@ -14,7 +14,7 @@ export class RemoteWorkerClient {
   async deploy(session:VerifiedSshSession,comfyDir:string,runId:string){
     if(!/^[0-9a-f-]{36}$/i.test(runId))throw new Error('Invalid Execution Run ID');
     const normalizedComfyDir=comfyDir.replace(/\/$/,'');const runDir=`${normalizedComfyDir}/.batch-studio/runs/${runId}`,workerPath=`${runDir}/worker-v${REMOTE_WORKER_VERSION}.py`,modelsRoot=`${normalizedComfyDir}/models`;
-    let result=await session.exec(`mkdir -p ${q(runDir)} && chmod 700 ${q(runDir)}`);if(result.code!==0)throw new Error(`Remote run temp creation failed: ${result.stderr}`);
+    let result=await session.exec(`if [ ! -d ${q(normalizedComfyDir)} ] || [ ! -d ${q(modelsRoot)} ]; then exit 44; fi; mkdir -p ${q(runDir)} && chmod 700 ${q(runDir)}`);if(result.code===44)throw new Error(`REMOTE_COMFYUI_DIRECTORY_MISSING: ${normalizedComfyDir}/models`);if(result.code!==0)throw new Error(`Remote run temp creation failed: ${result.stderr}`);
     const sftp=await session.sftp();try{await sftpWrite(sftp,workerPath,Buffer.from(REMOTE_WORKER_FILE));}finally{sftp.end();}
     const verifyProgram=`import hashlib;print(hashlib.sha256(open(${JSON.stringify(workerPath)},'rb').read()).hexdigest())`;
     result=await session.exec(`python3 -c ${q(verifyProgram)}`);
