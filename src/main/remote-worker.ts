@@ -19,11 +19,11 @@ export class RemoteWorkerClient {
     const verifyProgram=`import hashlib;print(hashlib.sha256(open(${JSON.stringify(workerPath)},'rb').read()).hexdigest())`;
     result=await session.exec(`python3 -c ${q(verifyProgram)}`);
     const remoteSha256=result.stdout.trim();if(result.code!==0||remoteSha256!==this.localSha256)throw new Error(`REMOTE_WORKER_SHA256_MISMATCH local=${this.localSha256} remote=${remoteSha256||'unavailable'}`);
-    return {runDir,workerPath,modelsRoot,localSha256:this.localSha256,remoteSha256};
+    return {runDir,workerPath,modelsRoot,comfyRoot:normalizedComfyDir,localSha256:this.localSha256,remoteSha256};
   }
-  async request(session:VerifiedSshSession,deployment:{runDir:string;workerPath:string;modelsRoot?:string},op:string,payload:Record<string,unknown>={}){
+  async request(session:VerifiedSshSession,deployment:{runDir:string;workerPath:string;modelsRoot?:string;comfyRoot?:string},op:string,payload:Record<string,unknown>={}){
     const requestId=randomUUID(),input=JSON.stringify({requestId,op,...payload})+'\n';
-    const command=`python3 ${q(deployment.workerPath)} --root ${q(deployment.runDir)}${deployment.modelsRoot?` --model-root ${q(deployment.modelsRoot)}`:''}`;const result=await session.exec(command,input);const events:WorkerEvent[]=[];
+    const command=`python3 ${q(deployment.workerPath)} --root ${q(deployment.runDir)}${deployment.modelsRoot?` --model-root ${q(deployment.modelsRoot)}`:''}${deployment.comfyRoot?` --comfy-root ${q(deployment.comfyRoot)}`:''}`;const result=await session.exec(command,input);const events:WorkerEvent[]=[];
     for(const line of result.stdout.split(/\r?\n/).filter(Boolean)){try{events.push(JSON.parse(line));}catch{throw new Error('REMOTE_WORKER_PROTOCOL_INVALID_JSON');}}
     const response=events.find((event):event is Extract<WorkerEvent,{type:'response'}>=>event.type==='response'&&event.requestId===requestId);
     if(!response)throw new Error(`REMOTE_WORKER_NO_RESPONSE: ${result.stderr}`);if(response.error)throw new RemoteWorkerRequestError(response.error.code,response.error.message);return {response:response.result,events};
