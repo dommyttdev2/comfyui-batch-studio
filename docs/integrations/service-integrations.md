@@ -22,12 +22,13 @@ ComfyUI Batch Studio が外部サービスの資格情報・接続状態・ク�
 
 ### 2.1 環境設定とサービス連携を分離する
 
-`環境設定` は Batch Studio 自身のローカル動作設定を所有する。
+`環境設定` は Batch Studio 自身の app-wide runtime / path 設定を所有する。
 
 例:
 
 ```text
-ComfyUI install path
+Local ComfyUI install path
+Remote ComfyUI install path
 legacy external model_catalog.json path
 legacy R2 index path
 Workflow Template override
@@ -281,8 +282,8 @@ userData/
 schemaVersion
 encryptedApiKey?
 sshPrivateKeyPath
+sshPublicKeyPath
 sshUser
-comfyUiDirectory
 comfyUiPort
 ```
 
@@ -292,19 +293,18 @@ API Key は `safeStorage` で暗号化する。暗号化不能時の plaintext f
 
 ## 10. Vast.ai Remote defaults
 
-初期 default は既存 `anima-vast-workflow-runner` と合わせる。
+provider固有の初期 default は既存 `anima-vast-workflow-runner` と互換にする。
 
 ```text
-SSH User              root
-Remote ComfyUI Dir    /workspace/ComfyUI
-Remote ComfyUI Port   18188
+SSH User            root
+Remote ComfyUI Port 18188
 ```
 
-SSH private key path はユーザーが file picker から選択する。
+SSH private/public key path はユーザーが file picker から選択する。SSH private key contents を Batch Studio 独自 config へコピーしない。
 
-SSH private key contents を Batch Studio 独自 config へコピーしない。
+Remote ComfyUI install path は Vast.ai config では管理せず、環境設定の `Remote ComfyUI インストール先ディレクトリ` を正本とする。Remote実行では `BATCH_STUDIO_REMOTE_COMFYUI_INSTALL_PATH` 相当のPOSIX絶対パス設定を必須とする。
 
-Remote ComfyUI Port は設定可能とし、`8188` を Vast.ai 用に hard-code しない。
+Remote ComfyUI Port は設定可能とし、`8188` を Vast.ai 用に hard-codeしない。
 
 ---
 
@@ -600,6 +600,7 @@ Execution-start blocking:
 Instance can reach running state
 public SSH endpoint resolved
 private-key SSH authentication succeeds
+Environment SettingsにRemote ComfyUI install pathが設定済み
 Remote ComfyUI environment is valid
 ```
 
@@ -658,7 +659,6 @@ Remote Execution が retry する場合も、Instance ID identity を維持す�
 VASTAI_API_KEY
 private-key SSH
 ssh_user = root
-comfy_dir = /workspace/ComfyUI
 comfy_port = 18188
 Instance normalization
 start/stop lifecycle

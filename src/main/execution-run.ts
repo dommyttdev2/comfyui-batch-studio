@@ -125,7 +125,7 @@ function evidenceFingerprint(runIdentity:string,input:ExecutionEvidenceInput){
   return hashCanonicalJson({runIdentity,kind:input.kind,scope:input.scope,data:input.data??{}});
 }
 
-function validatedEvidence(run:ExecutionRun){
+export function validatedExecutionEvidence(run:ExecutionRun){
   const valid:ExecutionEvidence[]=[],invalid:string[]=[];
   for(const evidence of run.evidence){
     const expected=hashCanonicalJson({runIdentity:run.snapshot.runIdentity,kind:evidence.kind,scope:evidence.scope,data:evidence.data??{}});
@@ -140,7 +140,7 @@ function resumePhase(run:ExecutionRun,evidence:ExecutionEvidence[]):{phase:Execu
   if(run.executionTarget==='remote'&&kinds.has('R2_OBJECT_VERIFIED'))return {phase:'LOCAL_DOWNLOADING',lifecycle:'RUNNING'};
   if(run.executionTarget==='remote'&&kinds.has('PACKAGE_VERIFIED'))return {phase:'R2_UPLOAD_URL_ISSUED',lifecycle:'RUNNING'};
   if(kinds.has('EXECUTION_COMPLETED'))return {phase:run.executionTarget==='remote'?'ARTIFACTS_COLLECTING':'LOCAL_OUTPUT_VERIFYING',lifecycle:'RUNNING'};
-  if(kinds.has('MODELS_VERIFIED')||kinds.has('MODEL_VERIFIED'))return {phase:'WORKFLOW_PREPARING',lifecycle:'RUNNING'};
+  if(kinds.has('MODELS_VERIFIED'))return {phase:'WORKFLOW_PREPARING',lifecycle:'RUNNING'};
   return {phase:initialPhase(run.executionTarget),lifecycle:'RUNNING'};
 }
 
@@ -165,7 +165,7 @@ export async function startExecutionRun(root:string,preflightProvider:PreflightP
       phase:initialPhase(snapshot.target),
       controls:{scheduling:'ACTIVE',interrupt:'IDLE',stopSchedulingRequestedAt:null,forceInterruptRequestedAt:null},
       current:{branchId:null,leafId:null,promptId:null},
-      progress:{overall:{completed:0,total:preflight.plannedImages},branches},
+      progress:{overall:{completed:0,total:preflight.plannedImages},branches,models:[]},
       promptIds:[],
       evidence:[],
       error:null,
@@ -231,7 +231,7 @@ export async function resumeExecutionRun(root:string,runId:string,preflightProvi
     if(preflight.state!=='READY')throw new Error(`Execution cannot resume: Preflight is BLOCKED: ${preflight.blocking.map(item=>item.message).join(' / ')}`);
     const after=await captureSnapshot(root,preflight);
     if(!sameSnapshot(run.snapshot,after))throw new Error('Execution cannot resume: Workflow/API graph or Prompt Plan changed during validation.');
-    const checked=validatedEvidence(run),decision=resumePhase(run,checked.valid),now=new Date().toISOString();
+    const checked=validatedExecutionEvidence(run),decision=resumePhase(run,checked.valid),now=new Date().toISOString();
     const next:ExecutionRun={
       ...run,
       lifecycle:decision.lifecycle,

@@ -119,7 +119,7 @@ Vast.ai画面では次を提供する。
 - API接続テスト。
 - SSH private key path選択。
 - SSH User。
-- Remote ComfyUI Directory / Port。
+- Remote ComfyUI Port。
 - Instance一覧・更新。
 - Instance start / stop。
 - GPU / status / cost / current SSH endpoint表示。
@@ -130,9 +130,10 @@ Instance creation / destroy / rebootは初期UIへ置かない。
 
 ## 6. Environment Settings
 
-環境設定はBatch Studio自身のローカル設定だけを扱う。
+環境設定はBatch Studio自身の app-wide runtime / path 設定を扱う。
 
 - Local ComfyUI install path。
+- Remote ComfyUI install path（Remote実行時必須、POSIX絶対パス）。
 - legacy external `model_catalog.json` path。
 - legacy R2 index path。
 - Workflow Template override。
@@ -280,6 +281,7 @@ Vast.ai/SSH/Remote Worker capabilityの実装に応じて次を段階的にblock
 - Vast.ai API Key / API reachability。
 - selected Instance existence。
 - SSH private key path。
+- Environment Settings の Remote ComfyUI install path。
 - current public SSH endpoint。
 - private-key SSH authentication。
 - Remote filesystem/runtime/disk。

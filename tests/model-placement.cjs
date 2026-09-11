@@ -64,9 +64,10 @@ const modelArtifact={schemaVersion:1,catalog:{schemaVersion:1,generation:1,gener
   let status=await store.status();
   assert.equal(status.configured,false);
   assert.equal(status.r2Bucket,'');
+  assert.equal(status.remoteComfyUiInstallPath,'');
   const invalidComfy=fs.mkdtempSync(path.join(os.tmpdir(),'invalid-comfy-'));
   await assert.rejects(()=>store.save({comfyUiInstallPath:invalidComfy}),/modelsフォルダー/);
-  status=await store.save({comfyUiInstallPath:comfyRoot,catalogPath:'/tmp/model_catalog.json',r2Bucket:'models-bucket',r2ModelPrefix:'/models/',r2IndexPath:'/tmp/r2-index.json',templatePath:'/tmp/template.json',manifestPath:'/tmp/manifest.json'});
+  status=await store.save({comfyUiInstallPath:comfyRoot,catalogPath:'/tmp/model_catalog.json',remoteComfyUiInstallPath:'/workspace/ComfyUI',r2Bucket:'models-bucket',r2ModelPrefix:'/models/',r2IndexPath:'/tmp/r2-index.json',templatePath:'/tmp/template.json',manifestPath:'/tmp/manifest.json'});
   assert.equal(status.configured,true);
   assert.equal(status.comfyUiInstallPath,path.resolve(comfyRoot));
   assert.equal(status.modelsPath,path.join(path.resolve(comfyRoot),'models'));
@@ -74,6 +75,8 @@ const modelArtifact={schemaVersion:1,catalog:{schemaVersion:1,generation:1,gener
   assert.equal(status.modelsExists,true);
   assert.equal(status.catalogPath,'/tmp/model_catalog.json');
   assert.equal(status.r2Bucket,'models-bucket');
+  assert.equal(status.remoteComfyUiInstallPath,'/workspace/ComfyUI');
+  assert.equal(process.env.BATCH_STUDIO_REMOTE_COMFYUI_INSTALL_PATH,'/workspace/ComfyUI');
   assert.equal(status.r2ModelPrefix,'models');
   assert.equal(status.r2IndexPath,'/tmp/r2-index.json');
   assert.equal(status.templatePath,'/tmp/template.json');
@@ -85,7 +88,7 @@ const modelArtifact={schemaVersion:1,catalog:{schemaVersion:1,generation:1,gener
   assert.equal(process.env.BATCH_STUDIO_TEMPLATE_PATH,'/tmp/template.json');
   assert.equal(process.env.BATCH_STUDIO_MANIFEST_PATH,'/tmp/manifest.json');
 
-  status=await store.save({comfyUiInstallPath:'',catalogPath:'',r2Bucket:'remote-only-bucket',r2ModelPrefix:'remote-models',r2IndexPath:'',templatePath:'',manifestPath:''});
+  status=await store.save({comfyUiInstallPath:'',remoteComfyUiInstallPath:'/workspace/ComfyUI',catalogPath:'',r2Bucket:'remote-only-bucket',r2ModelPrefix:'remote-models',r2IndexPath:'',templatePath:'',manifestPath:''});
   assert.equal(status.configured,false,'remote-only environments must be able to save common settings without a local ComfyUI path');
   assert.equal(status.r2Bucket,'remote-only-bucket');
   assert.equal(process.env.BATCH_STUDIO_R2_BUCKET,'remote-only-bucket');

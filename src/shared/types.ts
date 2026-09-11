@@ -10,7 +10,7 @@ export type ModelFileRole='text_encoder'|'vae';
 export interface ProjectBriefInput { project:{id:string;title:string}; subject:{copyrightedCharacter:boolean;characterName:string;series:string}; audience:string; request:string; exclusions:string; assumptions:{adultCharacters:false|boolean;consensual:false|boolean}; generation:{target_image_count:number;modelFamily?:ModelFamily|'Illustrious';targetChapterCount?:number}; references?:string[]; }
 export type ExecutionTarget = 'local' | 'remote';
 export type CloudInstanceProviderId='vastai';
-export interface AppSettings { comfyUiInstallPath:string; comfyUiApiEndpoint?:string; catalogPath?:string; r2Bucket?:string; r2ModelPrefix?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; }
+export interface AppSettings { comfyUiInstallPath:string; remoteComfyUiInstallPath?:string; comfyUiApiEndpoint?:string; catalogPath?:string; r2Bucket?:string; r2ModelPrefix?:string; r2IndexPath?:string; templatePath?:string; manifestPath?:string; }
 export interface LocalModelFile { fileName:string; path:string; size:number; }
 export interface LocalModelDirectory { path:string|null; exists:boolean; files:LocalModelFile[]; }
 export interface AppSettingsStatus extends Required<AppSettings> { configured:boolean; modelsPath:string|null; installExists:boolean; modelsExists:boolean; modelFiles:{text_encoders:LocalModelDirectory;vae:LocalModelDirectory}; }
@@ -49,8 +49,8 @@ export interface CatalogStatus { configured:boolean; path:string|null; exists:bo
 export interface CivitaiCatalogStatus { state:'idle'|'running'|'ready'|'error'; phase:string; completed:number; total:number; message:string; generation:number; changes:{added:number;updated:number;removed:number}; error:string|null; apiKeyConfigured:boolean; catalogPath:string; }
 export interface CivitaiConnectionInput { apiKey:string; }
 export interface CivitaiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; }
-export interface VastAiConnectionInput { apiKey?:string; sshPrivateKeyPath?:string; sshPublicKeyPath?:string; sshUser?:string; comfyUiDirectory?:string; comfyUiPort?:number; }
-export interface VastAiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; sshPrivateKeyPath:string; sshPrivateKeyExists:boolean; sshPublicKeyPath:string; sshPublicKeyExists:boolean; sshKeyPairValid:boolean; sshUser:string; comfyUiDirectory:string; comfyUiPort:number; }
+export interface VastAiConnectionInput { apiKey?:string; sshPrivateKeyPath?:string; sshPublicKeyPath?:string; sshUser?:string; comfyUiPort?:number; }
+export interface VastAiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; sshPrivateKeyPath:string; sshPrivateKeyExists:boolean; sshPublicKeyPath:string; sshPublicKeyExists:boolean; sshKeyPairValid:boolean; sshUser:string; comfyUiPort:number; }
 export type CloudInstanceStatus='running'|'stopped'|'starting'|'scheduling'|'stopping'|'offline'|'error'|'unknown';
 export interface VastAiInstance { provider:'vastai'; id:number; label:string|null; status:CloudInstanceStatus; rawStatus:string; intendedStatus:string|null; curState:string|null; statusMessage:string|null; gpuName:string|null; gpuCount:number|null; gpuRamMb:number|null; hourlyCost:number|null; sshHost:string|null; sshPort:number|null; }
 export interface VastAiSshEndpoint { provider:'vastai'; instanceId:number; host:string; port:number; user:string; privateKeyPath:string; publicKeyPath:string; comfyUiDirectory:string; comfyUiPort:number; }
@@ -75,6 +75,7 @@ export type ExecutionPhase=
 export type ExecutionEvidenceKind='MODEL_VERIFIED'|'MODELS_VERIFIED'|'EXECUTION_COMPLETED'|'PACKAGE_VERIFIED'|'R2_OBJECT_VERIFIED'|'LOCAL_FILE_VERIFIED'|'CUSTOM';
 export interface ExecutionProgressCounter { completed:number; total:number; }
 export interface ExecutionBranchProgress { branchId:string; completed:number; total:number; state:'pending'|'running'|'completed'|'failed'|'skipped'; }
+export interface ExecutionModelProgress { ref:string; fileName:string; kind:ModelAvailabilityRow['kind']; objectKey:string; destination:string; state:'pending'|'checking'|'downloading'|'ready'|'failed'|'skipped'; transferredBytes:number; totalBytes:number; reused:boolean; sha256:string|null; error:string|null; }
 export interface ExecutionError { code:string; message:string; phase:ExecutionPhase; at:string; retryable:boolean; }
 export interface ExecutionEvidence { id:string; kind:ExecutionEvidenceKind; scope:string; runIdentity:string; fingerprint:string; recordedAt:string; data:Record<string,string|number|boolean|null>; }
 export interface ExecutionRunSnapshot {
@@ -101,7 +102,7 @@ export interface ExecutionRun {
     forceInterruptRequestedAt:string|null;
   };
   current:{branchId:string|null;leafId:string|null;promptId:string|null};
-  progress:{overall:ExecutionProgressCounter;branches:ExecutionBranchProgress[]};
+  progress:{overall:ExecutionProgressCounter;branches:ExecutionBranchProgress[];models:ExecutionModelProgress[]};
   promptIds:string[];
   evidence:ExecutionEvidence[];
   error:ExecutionError|null;
