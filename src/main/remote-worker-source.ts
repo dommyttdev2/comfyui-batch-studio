@@ -1,5 +1,5 @@
 export const REMOTE_WORKER_VERSION='3';
-export const REMOTE_WORKER_FILE=\`#!/usr/bin/env python3
+export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
 import hashlib,json,os,re,shutil,subprocess,sys,tempfile,time,urllib.parse,urllib.request
 VERSION="3"
 CHUNK_SIZE=8*1024*1024
@@ -325,4 +325,4 @@ def main():
  except Exception as e:
   code=getattr(e,"code",str(e)); emit("response",requestId=rid,error={"code":str(code),"message":redact(str(e))}); sys.exit(2)
 if __name__=="__main__": main()
-\`;
+`;
