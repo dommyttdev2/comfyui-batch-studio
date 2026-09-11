@@ -15,7 +15,8 @@ export class RemoteWorkerClient {
     const runDir=`${comfyDir.replace(/\/$/,'')}/.batch-studio/runs/${runId}`,workerPath=`${runDir}/worker-v${REMOTE_WORKER_VERSION}.py`;
     let result=await session.exec(`mkdir -p ${q(runDir)} && chmod 700 ${q(runDir)}`);if(result.code!==0)throw new Error(`Remote run temp creation failed: ${result.stderr}`);
     const sftp=await session.sftp();try{await sftpWrite(sftp,workerPath,Buffer.from(REMOTE_WORKER_FILE));}finally{sftp.end();}
-    result=await session.exec(`python3 -c "import hashlib;print(hashlib.sha256(open(${JSON.stringify(workerPath)},'rb').read()).hexdigest())"`);
+    const verifyProgram=`import hashlib;print(hashlib.sha256(open(${JSON.stringify(workerPath)},'rb').read()).hexdigest())`;
+    result=await session.exec(`python3 -c ${q(verifyProgram)}`);
     const remoteSha256=result.stdout.trim();if(result.code!==0||remoteSha256!==this.localSha256)throw new Error(`REMOTE_WORKER_SHA256_MISMATCH local=${this.localSha256} remote=${remoteSha256||'unavailable'}`);
     return {runDir,workerPath,localSha256:this.localSha256,remoteSha256};
   }
