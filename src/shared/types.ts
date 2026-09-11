@@ -51,10 +51,10 @@ export interface CatalogStatus { configured:boolean; path:string|null; exists:bo
 export interface CivitaiCatalogStatus { state:'idle'|'running'|'ready'|'error'; phase:string; completed:number; total:number; message:string; generation:number; changes:{added:number;updated:number;removed:number}; error:string|null; apiKeyConfigured:boolean; catalogPath:string; }
 export interface CivitaiConnectionInput { apiKey:string; }
 export interface CivitaiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; }
-export interface VastAiConnectionInput { apiKey?:string; sshPrivateKeyPath?:string; sshPublicKeyPath?:string; sshUser?:string; comfyUiPort?:number; }
-export interface VastAiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; sshPrivateKeyPath:string; sshPrivateKeyExists:boolean; sshPublicKeyPath:string; sshPublicKeyExists:boolean; sshKeyPairValid:boolean; sshUser:string; comfyUiPort:number; }
+export interface VastAiConnectionInput { apiKey?:string; sshPrivateKeyPath?:string; sshPublicKeyPath?:string; sshUser?:string; }
+export interface VastAiConnectionStatus { configured:boolean; source:'saved'|'environment'|'none'; sshPrivateKeyPath:string; sshPrivateKeyExists:boolean; sshPublicKeyPath:string; sshPublicKeyExists:boolean; sshKeyPairValid:boolean; sshUser:string; }
 export type CloudInstanceStatus='running'|'stopped'|'starting'|'scheduling'|'stopping'|'offline'|'error'|'unknown';
-export interface VastAiInstance { provider:'vastai'; id:number; label:string|null; status:CloudInstanceStatus; rawStatus:string; intendedStatus:string|null; curState:string|null; statusMessage:string|null; gpuName:string|null; gpuCount:number|null; gpuRamMb:number|null; hourlyCost:number|null; sshHost:string|null; sshPort:number|null; }
+export interface VastAiInstance { provider:'vastai'; id:number; label:string|null; status:CloudInstanceStatus; rawStatus:string; intendedStatus:string|null; curState:string|null; statusMessage:string|null; gpuName:string|null; gpuCount:number|null; gpuRamMb:number|null; hourlyCost:number|null; sshHost:string|null; sshPort:number|null; comfyUiPort:number|null; }
 export interface VastAiSshEndpoint { provider:'vastai'; instanceId:number; host:string; port:number; user:string; privateKeyPath:string; publicKeyPath:string; comfyUiDirectory:string; comfyUiPort:number; }
 export interface CatalogSelectionEntry { collectionId:number; modelId:number; versionId:number; }
 export interface CatalogSelectionTemplate { id:string; name:string; createdAt:string; updatedAt:string; selection:CatalogSelectionEntry[]; }
