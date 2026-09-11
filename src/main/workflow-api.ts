@@ -79,7 +79,7 @@ export function validateApiGraphStructure(graph:unknown):ValidationIssue[]{
   if(typeof node.class_type!=='string'||!node.class_type.trim())issues.push({severity:'error',code:'API_CLASS_TYPE',message:`API graph node ${id} のclass_typeが不正です。`,path:id});
   if(!node.inputs||typeof node.inputs!=='object'||Array.isArray(node.inputs)){issues.push({severity:'error',code:'API_INPUTS',message:`API graph node ${id} のinputsが不正です。`,path:id});continue;}
   for(const [name,input] of Object.entries(node.inputs as Record<string,unknown>)){
-   if(Array.isArray(input)&&input.length===2&&typeof input[0]==='string'&&Number.isInteger(input[1])){
+   if(Array.isArray(input)&&input.length===2&&typeof input[0]==='string'&&typeof input[1]==='number'&&Number.isInteger(input[1])){
     if(!ids.has(input[0]))issues.push({severity:'error',code:'API_DANGLING_LINK',message:`API graph ${id}.${name} の参照先 ${input[0]} が存在しません。`,path:`${id}.inputs.${name}`});
    }
   }
