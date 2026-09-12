@@ -65,6 +65,8 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
   const active=current?.lifecycle==='RUNNING'||current?.lifecycle==='PAUSED'||current?.lifecycle==='INTERRUPTED';
   const canStart=preflight?.state==='READY'&&!active;
   const canResume=Boolean(current&&['PAUSED','INTERRUPTED','FAILED'].includes(current.lifecycle));
+  const canStopScheduling=Boolean(current&&current.lifecycle==='RUNNING'&&current.controls.scheduling!=='STOPPED'&&!reached(current.phase,'EXECUTION_COMPLETED'));
+  const canForceInterrupt=Boolean(current&&current.lifecycle==='RUNNING'&&current.phase==='EXECUTING'&&current.controls.interrupt!=='INTERRUPTED');
   const startBanner=checking
     ? {state:'CHECKING',message:'Preflightを確認しています。'}
     : preflight?.state!=='READY'
@@ -86,7 +88,7 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
     {monitorError&&<div className="errorbar">{monitorError}</div>}
     <div className={'preflight '+(canStart?'ready':'blocked')}><h2>{startBanner.state}</h2><p>{startBanner.message}</p></div>
     {blockedReasons.length>0&&<><h4>Startできない理由</h4>{issuesView(blockedReasons)}</>}
-    <div className="actions execution-actions"><button className="primary" disabled={!canStart} onClick={()=>void apply(()=>window.batchStudio.execution.start(project.rootPath))}>Start</button><button disabled={!current||current.lifecycle!=='RUNNING'||current.controls.scheduling==='STOPPED'} onClick={()=>current&&void apply(()=>window.batchStudio.execution.stopScheduling(project.rootPath,current.runId))}>Stop scheduling</button><button className="danger" disabled={!current||current.lifecycle!=='RUNNING'||current.controls.interrupt==='INTERRUPTED'} onClick={()=>current&&void apply(()=>window.batchStudio.execution.forceInterrupt(project.rootPath,current.runId))}>Force interrupt</button><button disabled={!canResume} onClick={()=>current&&void apply(()=>window.batchStudio.execution.resume(project.rootPath,current.runId))}>Resume</button><button disabled={current?.lifecycle!=='COMPLETED'} onClick={()=>void window.batchStudio.project.openFolder(outputPath)}>Open local output directory</button></div>
+    <div className="actions execution-actions"><button className="primary" disabled={!canStart} onClick={()=>void apply(()=>window.batchStudio.execution.start(project.rootPath))}>Start</button><button disabled={!canStopScheduling} onClick={()=>current&&void apply(()=>window.batchStudio.execution.stopScheduling(project.rootPath,current.runId))}>Stop scheduling</button><button className="danger" disabled={!canForceInterrupt} onClick={()=>current&&void apply(()=>window.batchStudio.execution.forceInterrupt(project.rootPath,current.runId))}>Force interrupt</button><button disabled={!canResume} onClick={()=>current&&void apply(()=>window.batchStudio.execution.resume(project.rootPath,current.runId))}>Resume</button><button disabled={current?.lifecycle!=='COMPLETED'} onClick={()=>void window.batchStudio.project.openFolder(outputPath)}>Open local output directory</button></div>
     </section>
 
     {!current?<section className="panel execution-empty"><h3>Runはまだありません</h3><p>PreflightがREADYならStartできます。開始後のRun ID・phase・progressはProject内に永続化され、画面再読込後も復元されます。</p></section>:<>

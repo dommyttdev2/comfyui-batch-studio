@@ -49,6 +49,10 @@ async function localMatches(file:string,size:number,sha256:string){
   const info=await stat(file);if(info.size!==size)return false;
   return (await sha256File(file))===sha256;
 }
+async function pauseForStop(root:string,runId:string){
+  return mutateExecutionRun(root,runId,run=>{run.lifecycle='PAUSED';run.controls.scheduling='STOPPED';run.current.promptId=null;});
+}
+
 function applyRemoteState(run:ExecutionRun,state:RemoteSequenceState){
   const completed=state.completed??{};
   for(const branch of run.progress.branches){
@@ -93,6 +97,9 @@ export class RemoteExecutionService {
     }
   }
   private async runGeneration(root:string,runId:string,run:ExecutionRun){
+    let currentRun=await getExecutionRun(root,runId);
+    if(!currentRun||currentRun.lifecycle!=='RUNNING')return false;
+    if(currentRun.controls.scheduling!=='ACTIVE'){await pauseForStop(root,runId);return false;}
     const graph=await readJson<ApiGraph>(path.join(root,run.snapshot.workflow.apiPath));
     const workflow=await readJson<unknown>(path.join(root,run.snapshot.workflow.uiPath));
     if(!graph||!workflow)throw new Error('Execution workflow snapshot files are missing.');
@@ -100,7 +107,13 @@ export class RemoteExecutionService {
     const branches=bindings.map(binding=>({branchId:binding.branchId,leafIds:binding.leafIds,expandNodeId:binding.expandNodeId,graph:sliceSceneBranchGraph(graph,binding.expandNodeId)}));
     const outputPrefix=`BatchStudio/${safeProjectPart(run.projectId)}/${runId}`;
     await mutateExecutionRun(root,runId,current=>{current.phase='WORKFLOW_PREPARING';current.error=null;});
+    currentRun=await getExecutionRun(root,runId);
+    if(!currentRun||currentRun.lifecycle!=='RUNNING')return false;
+    if(currentRun.controls.scheduling!=='ACTIVE'){await pauseForStop(root,runId);return false;}
     await mutateExecutionRun(root,runId,current=>{current.phase='EXECUTING'});
+    currentRun=await getExecutionRun(root,runId);
+    if(!currentRun||currentRun.lifecycle!=='RUNNING')return false;
+    if(currentRun.controls.scheduling!=='ACTIVE'){await pauseForStop(root,runId);return false;}
     let response=asResponse((await this.remote.requestWorker(root,runId,'run_scene_sequence',{runId,projectId:run.projectId,outputPrefix,comfyEndpoint:'http://127.0.0.1:8188',workflow,branches})).response);
     let state=response.state;if(response.alreadyRunning)state=await this.waitExisting(root,runId);
     if(!state){const reconciled=await this.remote.reconcile(root,runId);state=(reconciled.response as any)?.state as RemoteSequenceState|undefined;}

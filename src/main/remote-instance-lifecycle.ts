@@ -48,6 +48,11 @@ export class RemoteInstanceLifecycleService {
     this.sleepImpl=options.sleep??sleep;
   }
 
+  private async assertRunActive(root:string,runId:string){
+    const run=await getExecutionRun(root,runId);
+    if(!run||run.lifecycle!=='RUNNING')throw new Error(`Execution Run ${runId} is not running.`);
+  }
+
   private async persistSnapshot(root:string,runId:string,instance:VastAiInstance,phase?:ExecutionPhase){
     return mutateExecutionRun(root,runId,run=>{
       const lifecycle=run.remoteLifecycle??defaultLifecycle();
@@ -83,11 +88,13 @@ export class RemoteInstanceLifecycleService {
         state.phase='CLOUD_INSTANCE_STARTING';
       });
       startedByBatchStudio=true;
+      await this.assertRunActive(root,runId);
       await this.client.requestStartInstance(instanceId);
     }
 
     const deadline=Date.now()+this.timeoutMs;
     for(;;){
+      await this.assertRunActive(root,runId);
       if(current.id!==instanceId)throw new Error(`Vast.ai returned Instance ${current.id} while ${instanceId} was requested. Silent fallback is not allowed.`);
       if(unavailable(current))throw new Error(`Vast.ai Instance ${instanceId} entered ${current.status}: ${statusDetail(current)}`);
       if(current.status==='scheduling'){
@@ -104,6 +111,7 @@ export class RemoteInstanceLifecycleService {
       if(Date.now()>=deadline)throw new Error(`Vast.ai Instance ${instanceId} did not become running with a public SSH endpoint before timeout.`);
       await this.persistSnapshot(root,runId,current,'CLOUD_INSTANCE_STARTING');
       await this.sleepImpl(this.pollMs);
+      await this.assertRunActive(root,runId);
       current=await this.client.getInstance(instanceId);
       if(current.status==='stopped'&&initialStatus==='stopped'&&!startedByBatchStudio){
         await mutateExecutionRun(root,runId,state=>{
