@@ -60,6 +60,8 @@ const load=relative=>import(pathToFileURL(path.join(runtime,relative)).href);
   assert.match(managerSource,/async syncObjectIndex\(\)/,'remote model staging must be able to refresh the R2 index');
   assert.match(managerSource,/resolveModelObjectKey/,'remote model staging must resolve actual R2 object keys');
   assert.match(managerSource,/new PutObjectCommand\(\{Bucket:bucket,Key:key/,'PUT URL must sign a PutObject request for the requested key');
+  assert.match(managerSource,/requestChecksumCalculation:'WHEN_REQUIRED'/,'R2 presigned streaming PUT must not sign an implicit empty-body checksum');
+  assert.doesNotMatch(managerSource,/headers:\{'content-type':contentType,'x-amz-meta-sha256':digest\}/,'hoisted metadata must not also be sent as a duplicate HTTP header');
   assert.match(managerSource,/ContentType:contentType/,'PUT URL must support an optional signed Content-Type restriction');
   assert.match(mainSource,/R2_PUT_URL_INFO/,'main process must register PUT URL IPC');
   assert.match(mainSource,/await r2Index\(\)\.sync\(\)/,'model availability must refresh R2 index before checking placement');

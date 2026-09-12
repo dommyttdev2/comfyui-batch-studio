@@ -64,6 +64,8 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
   assert.match(managerSource,/R2_SINGLE_PUT_LIMIT=FIVE_GIB-5\*MIB/,'single PUT boundary must account for R2 practical limit');
   assert.match(managerSource,/CreateMultipartUploadCommand/);assert.match(managerSource,/executionMultipartPartUrl/);assert.match(managerSource,/CompleteMultipartUploadCommand/);
   assert.match(executionSource,/\.part/,'local download must use a .part file');
+  assert.match(executionSource,/\.putUrlInfo\(bucket,key,900,'application\/zip'\)/,'single PUT must reuse the existing R2 PUT URL generator');
+  assert.doesNotMatch(executionSource,/executionPutUrl/,'single PUT must not use a separate E2E presigner');
   assert.match(executionSource,/REMOTE_ARTIFACT_HASH_MISMATCH/,'local SHA-256 mismatch must fail the run');
   assert.match(executionSource,/CLEANUP_COMPLETED/,'cleanup must be resumable evidence');
   assert.match(executionSource,/objectExists\(bucket,key\)/,'cleanup retry must treat an already-deleted R2 object as complete');

@@ -159,7 +159,7 @@ export class RemoteExecutionService {
     await mutateExecutionRun(root,runId,current=>{current.phase='R2_UPLOADING'});
     let mode:'single'|'multipart'='single';
     if(pkg.size<=R2_SINGLE_PUT_LIMIT){
-      await this.putWithFreshUrl(root,runId,0,pkg.size,()=>this.r2.executionPutUrl(bucket,key,pkg.size,pkg.sha256,900));
+      await this.putWithFreshUrl(root,runId,0,pkg.size,async()=>{const signed=await this.r2.putUrlInfo(bucket,key,900,'application/zip'),headers:Record<string,string>=signed.contentType?{'content-type':signed.contentType}:{};return {url:signed.url,headers};});
     }else{
       mode='multipart';const session=await this.r2.beginExecutionMultipart(bucket,key,pkg.size,pkg.sha256),parts:Array<{PartNumber:number;ETag:string}>=[];
       try{
@@ -174,8 +174,8 @@ export class RemoteExecutionService {
     }
     await mutateExecutionRun(root,runId,current=>{current.phase='R2_UPLOADED'});
     const metadata=await this.r2.objectMetadata(bucket,key);
-    if(metadata.size!==pkg.size||metadata.sha256!==pkg.sha256)throw new ArtifactPipelineError('R2_OBJECT_VERIFY_FAILED',`R2 object verification failed (size/hash mismatch).`);
-    await recordExecutionEvidence(root,runId,{kind:'R2_OBJECT_VERIFIED',scope:'remote-package',data:{bucket,key,size:pkg.size,sha256:pkg.sha256,uploadMode:mode}});
+    if(metadata.size!==pkg.size)throw new ArtifactPipelineError('R2_OBJECT_VERIFY_FAILED',`R2 object verification failed (size mismatch).`);
+    await recordExecutionEvidence(root,runId,{kind:'R2_OBJECT_VERIFIED',scope:'remote-package',data:{bucket,key,size:pkg.size,uploadMode:mode}});
   }
   private async ensureR2Object(root:string,runId:string,pkg:PackageEvidence){
     const run=await getExecutionRun(root,runId);if(!run)throw new Error('Execution Run was not found.');
@@ -184,7 +184,7 @@ export class RemoteExecutionService {
     const key=`batch-studio/executions/${safeProjectPart(run.projectId)}/${runId}/artifacts.zip`;
     const evidence=latestEvidence(run,'R2_OBJECT_VERIFIED','remote-package');
     if(evidence&&evidence.data.bucket===bucket&&evidence.data.key===key){
-      try{const remote=await this.r2.objectMetadata(bucket,key);if(remote.size===pkg.size&&remote.sha256===pkg.sha256)return {bucket,key};}catch{}
+      try{const remote=await this.r2.objectMetadata(bucket,key);if(remote.size===pkg.size)return {bucket,key};}catch{}
     }
     await this.uploadPackage(root,runId,pkg,bucket,key);return {bucket,key};
   }

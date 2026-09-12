@@ -100,7 +100,7 @@ export class R2Manager {
   async settings(){return this.config.status();}
   environment(){return this.config.environmentDefaults();}
   async saveSettings(input:R2ConnectionInput){await this.test(input);this.clientCache=null;return this.config.save(input);}
-  private async clientFor(input?:R2ConnectionInput){const c=input??await this.config.credentials();const secret=(c.secretAccessKey??'').trim();if(!secret)throw new Error('Secret Access Keyが必要です。');const key=`${c.accountId}|${c.accessKeyId}|${secret}`;if(!input&&this.clientCache?.key===key)return this.clientCache.client;const client=new S3Client({endpoint:`https://${c.accountId}.r2.cloudflarestorage.com`,region:'auto',credentials:{accessKeyId:c.accessKeyId,secretAccessKey:secret},maxAttempts:5});if(!input)this.clientCache={key,client};return client;}
+  private async clientFor(input?:R2ConnectionInput){const c=input??await this.config.credentials();const secret=(c.secretAccessKey??'').trim();if(!secret)throw new Error('Secret Access Keyが必要です。');const key=`${c.accountId}|${c.accessKeyId}|${secret}`;if(!input&&this.clientCache?.key===key)return this.clientCache.client;const client=new S3Client({endpoint:`https://${c.accountId}.r2.cloudflarestorage.com`,region:'auto',credentials:{accessKeyId:c.accessKeyId,secretAccessKey:secret},maxAttempts:5,requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED'});if(!input)this.clientCache={key,client};return client;}
   async test(input:R2ConnectionInput){const resolved=await this.config.resolveInput(input);const client=await this.clientFor(resolved);await client.send(new ListBucketsCommand({}));}
   async buckets(){const r=await (await this.clientFor()).send(new ListBucketsCommand({}));return (r.Buckets??[]).map(x=>({name:x.Name??'',createdAt:x.CreationDate?.toISOString()??null})).filter(x=>x.name);}
   async createBucket(name:string){if(!BUCKET.test(name))throw new Error('バケット名は3～63文字の小文字、数字、ハイフンで入力してください。');await (await this.clientFor()).send(new CreateBucketCommand({Bucket:name}));}
@@ -122,17 +122,6 @@ export class R2Manager {
     const url=await getSignedUrl(await this.clientFor(),command,{expiresIn:expires});
     const fileName=objectName(key),contentTypeArg=contentType?` -H ${quote(`Content-Type: ${contentType}`)}`:'';
     return {key,url,expiresIn:expires,contentType,commands:{url,curl:`curl --fail -X PUT${contentTypeArg} --data-binary ${quote(`@${fileName}`)} ${quote(url)}`}};
-  }
-  async executionPutUrl(bucket:string,rawKey:string,size:number,sha256:string,expiresIn=900){
-    const key=normalizeR2PutObjectKey(rawKey),expires=normalizeR2PresignedExpiresIn(expiresIn),digest=sha256Hex(sha256);
-    if(!bucket)throw new Error('R2 bucket is required for execution artifact upload.');
-    if(!Number.isSafeInteger(size)||size<0)throw new Error('Execution artifact size is invalid.');
-    if(size>R2_SINGLE_PUT_LIMIT)throw new Error('Execution artifact exceeds the R2 single PUT limit.');
-    if(!digest)throw new Error('Execution artifact SHA-256 is invalid.');
-    const contentType='application/zip',metadata={sha256:digest};
-    const command=new PutObjectCommand({Bucket:bucket,Key:key,ContentType:contentType,Metadata:metadata,ContentLength:size});
-    const url=await getSignedUrl(await this.clientFor(),command,{expiresIn:expires});
-    return {key,url,expiresIn:expires,headers:{'content-type':contentType,'x-amz-meta-sha256':digest}};
   }
   async beginExecutionMultipart(bucket:string,rawKey:string,size:number,sha256:string){
     const key=normalizeR2PutObjectKey(rawKey),digest=sha256Hex(sha256);

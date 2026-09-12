@@ -133,10 +133,14 @@ def download_model(model_root,req):
  emit("progress",stage="model_ready",transferredBytes=size,totalBytes=expected_size)
  return {"exists":True,"valid":True,"size":size,"sha256":actual_sha,"reason":"downloaded","reused":False}
 
-def github_env(token):
+def github_cli_env(token):
  token=str(token or "").strip()
  if not token: raise WorkerError("GITHUB_PAT_REQUIRED","GitHub PAT is required for remote bootstrap.")
  env=os.environ.copy(); env["GH_TOKEN"]=token; env["GH_HOST"]="github.com"
+ return env
+
+def github_git_env(token):
+ env=github_cli_env(token);token=env["GH_TOKEN"]
  basic=base64.b64encode(("x-access-token:"+token).encode("utf-8")).decode("ascii")
  env["GIT_CONFIG_COUNT"]="1"; env["GIT_CONFIG_KEY_0"]="http.https://github.com/.extraheader"; env["GIT_CONFIG_VALUE_0"]="AUTHORIZATION: basic "+basic
  return env
@@ -177,7 +181,7 @@ def ensure_tools():
  return {"aria2":run_cmd(["aria2c","--version"]).stdout.splitlines()[0],"gh":run_cmd(["gh","--version"]).stdout.splitlines()[0],"installed":True}
 
 def github_auth(token):
- env=github_env(token)
+ env=github_cli_env(token)
  result=run_cmd(["gh","auth","status","--hostname","github.com"],env=env,error_code="GITHUB_AUTH_FAILED")
  return {"ok":True,"ephemeral":True,"status":redact(result.stderr or result.stdout)}
 
@@ -256,10 +260,10 @@ def update_comfyui(comfy_root,token):
  if not os.path.isdir(os.path.join(comfy_root,".git")):raise WorkerError("COMFYUI_GIT_REPOSITORY_REQUIRED","Remote ComfyUI directory is not a Git repository.")
  dirty=run_cmd(["git","status","--porcelain","--untracked-files=no"],cwd=comfy_root,error_code="COMFYUI_GIT_STATUS_FAILED").stdout.strip()
  if dirty:raise WorkerError("COMFYUI_GIT_DIRTY","Remote ComfyUI has tracked local changes; automatic release update was stopped.")
- env=github_env(token)
- latest=run_cmd(["gh","api","repos/comfyanonymous/ComfyUI/releases/latest","--jq",".tag_name"],env=env,error_code="COMFYUI_RELEASE_LOOKUP_FAILED").stdout.strip()
+ cli_env=github_cli_env(token);git_env=github_git_env(token)
+ latest=run_cmd(["gh","api","repos/comfyanonymous/ComfyUI/releases/latest","--jq",".tag_name"],env=cli_env,error_code="COMFYUI_RELEASE_LOOKUP_FAILED").stdout.strip()
  if not latest:raise WorkerError("COMFYUI_RELEASE_LOOKUP_FAILED","Latest ComfyUI release tag was empty.")
- run_cmd(["git","fetch","--force","https://github.com/comfyanonymous/ComfyUI.git",f"refs/tags/{latest}:refs/tags/{latest}"],cwd=comfy_root,error_code="COMFYUI_GIT_FETCH_FAILED")
+ run_cmd(["git","fetch","--force","https://github.com/comfyanonymous/ComfyUI.git",f"refs/tags/{latest}:refs/tags/{latest}"],cwd=comfy_root,env=git_env,error_code="COMFYUI_GIT_FETCH_FAILED")
  release=run_cmd(["git","rev-parse","--verify",f"refs/tags/{latest}^{{commit}}"],cwd=comfy_root,error_code="COMFYUI_RELEASE_TAG_MISSING").stdout.strip()
  current=run_cmd(["git","rev-parse","HEAD"],cwd=comfy_root,error_code="COMFYUI_GIT_STATUS_FAILED").stdout.strip()
  changed=current!=release
@@ -299,7 +303,7 @@ def custom_node_commit(dest,ref,env):
 
 def sync_custom_nodes(comfy_root,token,nodes):
  if not isinstance(nodes,list):raise WorkerError("CUSTOM_NODE_CONFIG_INVALID")
- env=github_env(token);custom_root=os.path.join(comfy_root,"custom_nodes");os.makedirs(custom_root,exist_ok=True)
+ cli_env=github_cli_env(token);git_env=github_git_env(token);custom_root=os.path.join(comfy_root,"custom_nodes");os.makedirs(custom_root,exist_ok=True)
  results=[]
  for item in nodes:
   repository=str((item or {}).get("repository") or "").strip();ref=str((item or {}).get("ref") or "").strip()
@@ -309,7 +313,7 @@ def sync_custom_nodes(comfy_root,token,nodes):
    if not os.path.isdir(os.path.join(dest,".git")):raise WorkerError("CUSTOM_NODE_DESTINATION_CONFLICT",name)
    dirty=run_cmd(["git","status","--porcelain","--untracked-files=no"],cwd=dest,error_code="CUSTOM_NODE_GIT_STATUS_FAILED").stdout.strip()
    if dirty:raise WorkerError("CUSTOM_NODE_GIT_DIRTY",f"{name} has tracked local changes; automatic repository replacement was stopped.")
-   identity=run_cmd(["gh","repo","view","--json","nameWithOwner","--jq",".nameWithOwner"],cwd=dest,env=env,error_code="CUSTOM_NODE_IDENTITY_LOOKUP_FAILED").stdout.strip()
+   identity=run_cmd(["gh","repo","view","--json","nameWithOwner","--jq",".nameWithOwner"],cwd=dest,env=cli_env,error_code="CUSTOM_NODE_IDENTITY_LOOKUP_FAILED").stdout.strip()
    if identity.lower()!=repository.lower():
     backup_root=os.path.join(comfy_root,".batch-studio","bootstrap","custom-node-backups");os.makedirs(backup_root,exist_ok=True)
     stamp=time.strftime("%Y%m%d-%H%M%S",time.gmtime());safe_identity=re.sub(r"[^A-Za-z0-9_.-]+","__",identity or "unknown")
@@ -317,10 +321,10 @@ def sync_custom_nodes(comfy_root,token,nodes):
     while os.path.exists(backup):
      backup=os.path.join(backup_root,f"{stamp}-{name}-{safe_identity}-{suffix}");suffix+=1
     shutil.move(dest,backup)
-    run_cmd(["gh","repo","clone",repository,dest],env=env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
+    run_cmd(["gh","repo","clone",repository,dest],env=cli_env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
   else:
-   run_cmd(["gh","repo","clone",repository,dest],env=env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
-  commit=custom_node_commit(dest,ref,env)
+   run_cmd(["gh","repo","clone",repository,dest],env=cli_env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
+  commit=custom_node_commit(dest,ref,git_env)
   req=os.path.join(dest,"requirements.txt")
   marker="custom-node-"+repository.replace("/","__")+".sha256"
   installed=install_requirements(comfy_root,[req],marker)
@@ -400,6 +404,19 @@ def require_api(endpoint,path,method="GET",body=None,accepted=(200,)):
   message=payload.get("error") if isinstance(payload,dict) else None
   raise WorkerError("REMOTE_COMFYUI_API_FAILED",f"{path}: HTTP {status}: {message or payload}")
  return payload
+
+def resolve_comfy_endpoint(preferred):
+ candidates=[]
+ for endpoint in (str(preferred or "").rstrip("/"),"http://127.0.0.1:18188","http://127.0.0.1:8188"):
+  if endpoint and endpoint not in candidates:candidates.append(endpoint)
+ last=None
+ for endpoint in candidates:
+  try:
+   require_api(endpoint,"/system_stats");require_api(endpoint,"/object_info")
+   return endpoint
+  except WorkerError as e:last=e
+ if last:raise last
+ raise WorkerError("COMFYUI_API_UNAVAILABLE","Remote ComfyUI API endpoint was not found.")
 
 def prompt_history_state(endpoint,prompt_id):
  payload=require_api(endpoint,"/history/"+urllib.parse.quote(str(prompt_id),safe=""))
@@ -525,8 +542,7 @@ def initialize_sequence(root,req):
  save_state(root,state);write_control(root,{"stopRequested":False,"interruptRequested":False});return state
 
 def run_scene_sequence(root,req):
- endpoint=str(req.get("comfyEndpoint") or "http://127.0.0.1:8188")
- require_api(endpoint,"/system_stats");require_api(endpoint,"/object_info")
+ endpoint=resolve_comfy_endpoint(req.get("comfyEndpoint"))
  branches=req.get("branches") or [];workflow=req.get("workflow");run_id=str(req.get("runId") or "")
  state=initialize_sequence(root,req)
  if state.get("status") in ("completed","paused","interrupted","failed"):return {"state":state}
@@ -586,6 +602,7 @@ def force_interrupt_sequence(root,endpoint):
  if not isinstance(state,dict):return {"interrupted":False,"state":None}
  prompt_id=str(((state.get("current") or {}).get("promptId")) or "")
  if not prompt_id:return {"interrupted":False,"state":state}
+ endpoint=resolve_comfy_endpoint(endpoint)
  queue=require_api(endpoint,"/queue")
  if not queue_contains(queue.get("queue_running"),prompt_id):return {"interrupted":False,"state":state}
  write_control(root,{"interruptRequested":True})
