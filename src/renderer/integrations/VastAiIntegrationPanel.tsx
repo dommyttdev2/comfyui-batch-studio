@@ -3,26 +3,59 @@ import type { VastAiConnectionInput, VastAiConnectionStatus, VastAiInstance } fr
 import type { Runner } from '../ui';
 
 const EMPTY_VAST:VastAiConnectionInput={apiKey:'',sshPrivateKeyPath:'',sshPublicKeyPath:'',sshUser:'root'};
+const INSTANCE_REFRESH_MS=5_000;
+type InstanceAction='start'|'stop'|'destroy'|'reboot';
+
 function statusLabel(status:VastAiConnectionStatus|null){if(!status?.configured)return'未設定';return status.source==='environment'?'環境変数を使用':'設定済み';}
 function instanceStatusLabel(status:VastAiInstance['status']){return ({running:'RUNNING',stopped:'STOPPED',starting:'STARTING',scheduling:'SCHEDULING',stopping:'STOPPING',offline:'OFFLINE',error:'ERROR',unknown:'UNKNOWN'} as const)[status];}
 function formatCost(value:number|null){return value==null?'-':`$${value.toFixed(3)}/h`;}
 function formatVram(value:number|null){return value==null?'-':`${Math.round(value/1024)} GB`;}
+function startButtonLabel(status:VastAiInstance['status']){if(status==='scheduling')return'Scheduling';if(status==='running'||status==='starting')return'起動中';return'起動';}
+function statusDetail(instance:VastAiInstance){
+  const details:string[]=[];
+  if(instance.status==='scheduling')details.push('起動要求済み · GPU割り当て待ち');
+  else if(instance.status==='starting')details.push('起動処理中');
+  else if(instance.status==='stopping')details.push('停止処理中');
+  if(instance.statusMessage)details.push(instance.statusMessage);
+  const raw=[`actual=${instance.rawStatus}`,instance.intendedStatus?`intended=${instance.intendedStatus}`:null,instance.curState?`cur=${instance.curState}`:null,instance.nextState?`next=${instance.nextState}`:null].filter(Boolean).join(' / ');
+  if(raw)details.push(raw);
+  return details.join(' · ');
+}
+function canStart(instance:VastAiInstance){return instance.status==='stopped';}
+function canStop(instance:VastAiInstance){return instance.status==='running'||instance.status==='starting'||instance.status==='scheduling';}
+function canReboot(instance:VastAiInstance){return instance.status==='running';}
+function StopIcon(){return <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor"/></svg>;}
+function TrashIcon(){return <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2h4l.6 1.5H14v1.5H2V3.5h3.4L6 2Zm-2.5 4h9l-.6 8H4.1l-.6-8Zm2 1.5.35 5h1.2l-.2-5H5.5Zm3 0v5h1.2v-5H8.5Z" fill="currentColor"/></svg>;}
+function RebootIcon(){return <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2a6 6 0 1 0 5.55 8.29l-1.39-.57A4.5 4.5 0 1 1 11.6 5H9.5v1.5H14V2h-1.5v1.77A5.97 5.97 0 0 0 8 2Z" fill="currentColor"/></svg>;}
 
-export function VastAiIntegrationPanel({run,onBack,onStatus}:{run:Runner;onBack:()=>void;onStatus:(s:VastAiConnectionStatus)=>void}){
-  const [status,setStatus]=useState<VastAiConnectionStatus|null>(null),[input,setInput]=useState<VastAiConnectionInput>(EMPTY_VAST),[instances,setInstances]=useState<VastAiInstance[]>([]),[loadingInstances,setLoadingInstances]=useState(false);
+export function VastAiIntegrationPanel({run,onBack,onStatus}:{run:Runner;onBack?:()=>void;onStatus?:(s:VastAiConnectionStatus)=>void}){
+  const [status,setStatus]=useState<VastAiConnectionStatus|null>(null),[input,setInput]=useState<VastAiConnectionInput>(EMPTY_VAST),[instances,setInstances]=useState<VastAiInstance[]>([]),[loadingInstances,setLoadingInstances]=useState(false),[busyAction,setBusyAction]=useState<string|null>(null);
   const configured=Boolean(status?.configured);
   const loadInstances=async()=>{setLoadingInstances(true);try{setInstances(await window.batchStudio.vastai.instances());}finally{setLoadingInstances(false);}};
-  const load=async()=>{const s=await window.batchStudio.vastai.settings();setStatus(s);onStatus(s);setInput({apiKey:'',sshPrivateKeyPath:s.sshPrivateKeyPath,sshPublicKeyPath:s.sshPublicKeyPath,sshUser:s.sshUser});if(s.configured)await loadInstances();};
+  const load=async()=>{const s=await window.batchStudio.vastai.settings();setStatus(s);onStatus?.(s);setInput({apiKey:'',sshPrivateKeyPath:s.sshPrivateKeyPath,sshPublicKeyPath:s.sshPublicKeyPath,sshUser:s.sshUser});if(s.configured)await loadInstances();};
   useEffect(()=>{void load().catch(()=>{});},[]);
+  useEffect(()=>{if(!configured)return;const timer=window.setInterval(()=>{void loadInstances().catch(()=>{});},INSTANCE_REFRESH_MS);return()=>window.clearInterval(timer);},[configured]);
   const set=(key:keyof VastAiConnectionInput,value:string|number|undefined)=>setInput(prev=>({...prev,[key]:value}));
-  const save=()=>run(async()=>{const next=await window.batchStudio.vastai.saveSettings(input);setStatus(next);onStatus(next);setInput(prev=>({...prev,apiKey:''}));await loadInstances();});
+  const save=()=>run(async()=>{const next=await window.batchStudio.vastai.saveSettings(input);setStatus(next);onStatus?.(next);setInput(prev=>({...prev,apiKey:''}));await loadInstances();});
   const choosePrivateKey=()=>run(async()=>{const selected=await window.batchStudio.vastai.selectPrivateKey();if(selected)set('sshPrivateKeyPath',selected);});
   const choosePublicKey=()=>run(async()=>{const selected=await window.batchStudio.vastai.selectPublicKey();if(selected)set('sshPublicKeyPath',selected);});
-  const changeState=(instance:VastAiInstance,next:'start'|'stop')=>run(async()=>{if(next==='start')await window.batchStudio.vastai.startInstance(instance.id);else await window.batchStudio.vastai.stopInstance(instance.id);await loadInstances();});
+  const perform=(instance:VastAiInstance,action:InstanceAction)=>run(async()=>{
+    const key=`${instance.id}:${action}`;setBusyAction(key);
+    try{
+      if(action==='start')await window.batchStudio.vastai.startInstance(instance.id);
+      else if(action==='stop')await window.batchStudio.vastai.stopInstance(instance.id);
+      else if(action==='reboot')await window.batchStudio.vastai.rebootInstance(instance.id);
+      else {
+        const destroyed=await window.batchStudio.vastai.destroyInstance(instance.id);
+        if(!destroyed)return;
+      }
+      await loadInstances();
+    }finally{setBusyAction(null);}
+  });
   const sorted=useMemo(()=>instances.slice().sort((a,b)=>Number(b.status==='running')-Number(a.status==='running')||b.id-a.id),[instances]);
-  return <section className="panel service-page"><div className="service-page-head"><button onClick={onBack}>← クラウドインスタンス</button><div><h3>Vast.ai</h3><p>Vast.ai APIと、リモート環境へ接続するためのSSH設定を管理します。Remote ComfyUIのインストール先は環境設定で管理します。</p></div><b className={configured?'ok':'muted'}>{statusLabel(status)}</b></div>
+  return <section className="panel service-page"><div className="service-page-head">{onBack?<button onClick={onBack}>← クラウドインスタンス</button>:<span aria-hidden="true"/>}<div><h3>Vast.ai</h3><p>Vast.ai APIと、リモート環境へ接続するためのSSH設定を管理します。Remote ComfyUIのインストール先は環境設定で管理します。</p></div><b className={configured?'ok':'muted'}>{statusLabel(status)}</b></div>
     <div className="formgrid service-form"><label className="wide"><span>Vast.ai API Key <code>VASTAI_API_KEY</code></span><input type="password" value={input.apiKey??''} onChange={e=>set('apiKey',e.target.value)} placeholder={configured?'設定済み（変更時のみ入力）':'API Keyを入力'}/></label><label className="wide">SSH秘密鍵<div className="actions"><input style={{flex:1}} value={input.sshPrivateKeyPath??''} readOnly placeholder="秘密鍵ファイルを選択"/><button onClick={()=>void choosePrivateKey()}>選択</button><button disabled={!input.sshPrivateKeyPath} onClick={()=>set('sshPrivateKeyPath','')}>解除</button></div></label><label className="wide">SSH公開鍵<div className="actions"><input style={{flex:1}} value={input.sshPublicKeyPath??''} readOnly placeholder="公開鍵（.pub）ファイルを選択"/><button onClick={()=>void choosePublicKey()}>選択</button><button disabled={!input.sshPublicKeyPath} onClick={()=>set('sshPublicKeyPath','')}>解除</button></div></label><label>SSH User<input value={input.sshUser??''} onChange={e=>set('sshUser',e.target.value)} placeholder="root"/></label></div>
     <p className="hint">SSHは公開Host/Port + 鍵認証を前提とし、SSH Tunnelは使用しません。SSH接続先PortとRemote ComfyUI Portは選択したInstanceのVast.ai API応答から実行時に解決し、固定設定として保存しません。保存時に秘密鍵と公開鍵が同一キーペアか検証し、Remote Execution開始時に公開鍵をVast.aiアカウントへ登録確認したうえで対象Instanceへattachします。</p>{status?.sshPrivateKeyPath&&status?.sshPublicKeyPath&&<div className="facts"><div>SSH key pair <b>{status.sshKeyPairValid?'✓':'✕'}</b></div><div>秘密鍵 <b>{status.sshPrivateKeyExists?'✓':'✕'}</b></div><div>公開鍵 <b>{status.sshPublicKeyExists?'✓':'✕'}</b></div></div>}<div className="actions service-actions"><button disabled={!configured&&!input.apiKey?.trim()} onClick={()=>void run(()=>window.batchStudio.vastai.test(input))}>API接続テスト</button><button className="primary" disabled={!configured&&!input.apiKey?.trim()} onClick={()=>void save()}>保存</button></div>
-    <div className="service-subsection"><div className="panelhead"><div><h4>インスタンス</h4><p>既存Instanceの状態確認・起動・停止を行います。新規作成・Destroy・Rebootはこの初期実装の対象外です。</p></div><button disabled={!configured||loadingInstances} onClick={()=>void run(loadInstances)}>{loadingInstances?'更新中…':'更新'}</button></div>{configured&&sorted.length===0&&!loadingInstances&&<p className="hint">Vast.ai Instanceがありません。</p>}{sorted.length>0&&<div className="vast-instance-table"><div className="vast-instance-row vast-instance-head"><span>ID / Label</span><span>GPU</span><span>Status</span><span>Cost</span><span>SSH</span><span>操作</span></div>{sorted.map(instance=><div className="vast-instance-row" key={instance.id}><span><b>#{instance.id}</b><small>{instance.label||'ラベルなし'}</small></span><span>{instance.gpuName??'-'}<small>{instance.gpuCount??'-'} GPU / {formatVram(instance.gpuRamMb)}</small></span><span><b className={`vast-status vast-status-${instance.status}`}>{instanceStatusLabel(instance.status)}</b><small>{instance.statusMessage??instance.rawStatus}</small></span><span>{formatCost(instance.hourlyCost)}</span><span>{instance.sshHost&&instance.sshPort?<><code>{instance.sshHost}:{instance.sshPort}</code><small>ComfyUI localhost:{instance.comfyUiPort??'未解決'}</small></>:'-'}</span><span className="actions">{instance.status==='running'?<button onClick={()=>void changeState(instance,'stop')}>停止</button>:instance.status==='stopped'?<button onClick={()=>void changeState(instance,'start')}>起動</button>:<button disabled>操作待ち</button>}</span></div>)}</div>}</div>
+    <div className="service-subsection"><div className="panelhead"><div><h4>インスタンス</h4><p>既存Instanceの状態確認・起動・停止・削除・再起動を行います。状態は5秒ごとに自動更新します。</p></div><button disabled={!configured||loadingInstances} onClick={()=>void run(loadInstances)}>{loadingInstances?'更新中…':'更新'}</button></div>{configured&&sorted.length===0&&!loadingInstances&&<p className="hint">Vast.ai Instanceがありません。</p>}{sorted.length>0&&<div className="vast-instance-table"><div className="vast-instance-row vast-instance-head"><span>ID / Label</span><span>GPU</span><span>Status</span><span>Cost</span><span>SSH</span><span>操作</span></div>{sorted.map(instance=>{const busy=busyAction?.startsWith(`${instance.id}:`)===true;return <div className="vast-instance-row" key={instance.id}><span><b>#{instance.id}</b><small>{instance.label||'ラベルなし'}</small></span><span>{instance.gpuName??'-'}<small>{instance.gpuCount??'-'} GPU / {formatVram(instance.gpuRamMb)}</small></span><span><b className={`vast-status vast-status-${instance.status}`}>{instanceStatusLabel(instance.status)}</b><small>{statusDetail(instance)}</small></span><span>{formatCost(instance.hourlyCost)}</span><span>{instance.sshHost&&instance.sshPort?<><code>{instance.sshHost}:{instance.sshPort}</code><small>ComfyUI localhost:{instance.comfyUiPort??'未解決'}</small></>:'-'}</span><span className="vast-instance-actions"><button className={`vast-instance-primary-action ${instance.status==='scheduling'?'vast-instance-primary-action-scheduling':''}`} disabled={busy||!canStart(instance)} onClick={()=>void perform(instance,'start')}>{startButtonLabel(instance.status)}</button><button className="vast-instance-icon-action" disabled={busy||!canStop(instance)} title={instance.status==='scheduling'?'Schedulingを停止':'停止'} aria-label={instance.status==='scheduling'?'Schedulingを停止':'停止'} onClick={()=>void perform(instance,'stop')}><StopIcon/></button><button className="vast-instance-icon-action vast-instance-icon-action-danger" disabled={busy} title="削除" aria-label="削除" onClick={()=>void perform(instance,'destroy')}><TrashIcon/></button><button className="vast-instance-icon-action" disabled={busy||!canReboot(instance)} title="再起動" aria-label="再起動" onClick={()=>void perform(instance,'reboot')}><RebootIcon/></button></span></div>})}</div>}</div>
   </section>;
 }
