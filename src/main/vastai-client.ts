@@ -155,6 +155,7 @@ export class VastAiClient {
     return templates[0];
   }
   async comfyUiTemplate(){return this.resolveComfyUiTemplate();}
+  async comfyUiTemplateByHash(hashId:string){return this.resolveComfyUiTemplate(hashId);}
   private normalizeOfferSearchInput(input:VastAiOfferSearchInput,template:VastAiComfyUiTemplate){
     const storageGb=numberValue(input?.storageGb),minTflops=numberValue(input?.minTflops),gpuCount=integerValue(input?.gpuCount),minReliability=numberValue(input?.minReliability),excludedCountries=normalizedCountryCodes(input?.excludedCountries);
     if(storageGb==null||storageGb<=0)throw new Error('Storageは0より大きいGB値を指定してください。');
@@ -166,7 +167,7 @@ export class VastAiClient {
   }
   async searchOffers(input:VastAiOfferSearchInput):Promise<VastAiOfferSearchResult>{
     const template=await this.resolveComfyUiTemplate(),search=this.normalizeOfferSearchInput(input,template);
-    const body:JsonRecord={limit:100,type:'ondemand',rentable:{eq:true},rented:{eq:false},allocated_storage:search.storageGb,...template.extraFilters,num_gpus:{eq:search.gpuCount},reliability:{gte:search.minReliability/100}};
+    const body:JsonRecord={...template.extraFilters,limit:100,type:'ondemand',rentable:{eq:true},rented:{eq:false},allocated_storage:search.storageGb,num_gpus:{eq:search.gpuCount},reliability:{gte:search.minReliability/100}};
     if(search.minTflops>0)body.total_flops={gte:search.minTflops};
     if(search.excludedCountries.length>0)body.geolocation={notin:search.excludedCountries};
     const payload=record(await this.request('/api/v0/bundles',{method:'POST',body:JSON.stringify(body)})),rows=Array.isArray(payload.offers)?payload.offers:[];
