@@ -1,7 +1,7 @@
-export const REMOTE_WORKER_VERSION='9';
+export const REMOTE_WORKER_VERSION='10';
 export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
 import base64,copy,hashlib,http.client,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,zipfile
-VERSION="9"
+VERSION="10"
 CHUNK_SIZE=8*1024*1024
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -645,37 +645,48 @@ def force_interrupt_sequence(root,endpoint):
  sequence_progress(state,"interrupt_requested",promptId=prompt_id)
  return {"interrupted":True,"state":state}
 
+def archive_artifact_path(rel):
+ parts=[part for part in str(rel or "").replace("\\","/").split("/") if part and part not in (".","..")]
+ if not parts:raise WorkerError("REMOTE_ARTIFACT_PATH_INVALID")
+ if len(parts)==1:return parts[0]
+ return parts[0]+"/"+parts[-1]
+
 def package_artifacts(root,comfy_root,req):
  state=read_state(root)
  if not isinstance(state,dict) or state.get("status")!="completed":raise WorkerError("REMOTE_ARTIFACT_GENERATION_INCOMPLETE")
  run_id=str(state.get("runId") or req.get("runId") or "")
  prefix=str((state.get("artifact") or {}).get("outputPrefix") or req.get("outputPrefix") or "")
+ archive_name=str(req.get("archiveFileName") or "").strip()
+ if not re.match(r"^[0-9]{8}_[0-9]{6}\.zip$",archive_name):raise WorkerError("REMOTE_ARTIFACT_ARCHIVE_NAME_INVALID",archive_name or "missing")
  output_dir=safe_output_dir(comfy_root,prefix)
  files=list_artifact_files(output_dir);expected=int(req.get("expectedCount",-1))
  if expected<0:raise WorkerError("REMOTE_ARTIFACT_EXPECTED_COUNT_REQUIRED")
  if len(files)!=expected:raise WorkerError("REMOTE_ARTIFACT_COUNT_MISMATCH",f"Expected {expected} artifacts but found {len(files)}.")
- entries=[]
- for rel,target in files:entries.append({"path":rel,"size":os.path.getsize(target),"sha256":sha256_file(target)})
- manifest={"version":1,"runId":run_id,"outputPrefix":prefix,"artifactCount":len(entries),"artifacts":entries}
- manifest_bytes=(json.dumps(manifest,sort_keys=True,separators=(",",":"))+"\\n").encode("utf-8")
- manifest_sha=hashlib.sha256(manifest_bytes).hexdigest()
+ packaged=[];seen=set()
+ for rel,target in files:
+  archive_path=archive_artifact_path(rel)
+  if archive_path in seen:raise WorkerError("REMOTE_ARTIFACT_ARCHIVE_PATH_COLLISION",archive_path)
+  seen.add(archive_path);packaged.append((archive_path,target))
  artifact_dir=contained(root,"artifacts");os.makedirs(artifact_dir,exist_ok=True)
- manifest_path=contained(root,"artifacts/manifest.json");tmp_manifest=manifest_path+".tmp"
- with open(tmp_manifest,"wb") as f:f.write(manifest_bytes)
- os.replace(tmp_manifest,manifest_path)
  package=artifact_package_path(root,run_id);tmp=package+".part"
  try:
   if os.path.exists(tmp):os.unlink(tmp)
   with zipfile.ZipFile(tmp,"w",compression=zipfile.ZIP_STORED,allowZip64=True) as archive:
-   archive.writestr("manifest.json",manifest_bytes)
-   for rel,target in files:archive.write(target,"artifacts/"+rel)
+   for archive_path,target in packaged:archive.write(target,archive_path)
   os.replace(tmp,package)
  finally:
   if os.path.exists(tmp):os.unlink(tmp)
  package_size=os.path.getsize(package);package_sha=sha256_file(package)
+ entries=[{"path":archive_path,"size":os.path.getsize(target),"sha256":sha256_file(target)} for archive_path,target in packaged]
+ manifest={"version":2,"runId":run_id,"outputPrefix":prefix,"artifactCount":len(entries),"package":{"fileName":archive_name,"size":package_size,"sha256":package_sha},"artifacts":entries}
+ manifest_json=json.dumps(manifest,sort_keys=True,separators=(",",":"))+"\n"
+ manifest_bytes=manifest_json.encode("utf-8");manifest_sha=hashlib.sha256(manifest_bytes).hexdigest()
+ manifest_path=contained(root,"artifacts/manifest.json");tmp_manifest=manifest_path+".tmp"
+ with open(tmp_manifest,"wb") as f:f.write(manifest_bytes)
+ os.replace(tmp_manifest,manifest_path)
  state.setdefault("artifact",{}).update({"manifestSha256":manifest_sha,"artifactCount":len(entries),"package":{"fileName":os.path.basename(package),"size":package_size,"sha256":package_sha}})
  save_state(root,state);sequence_progress(state,"artifacts_packaged",artifactCount=len(entries),packageSize=package_size)
- return {"artifactCount":len(entries),"manifestSha256":manifest_sha,"package":{"fileName":os.path.basename(package),"size":package_size,"sha256":package_sha}}
+ return {"artifactCount":len(entries),"manifestSha256":manifest_sha,"manifestJson":manifest_json,"package":{"fileName":os.path.basename(package),"size":package_size,"sha256":package_sha}}
 
 def http_put_file(url,target,offset,length,headers):
  parsed=urllib.parse.urlparse(str(url or ""))

@@ -23,17 +23,18 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 
 (async()=>{
   const {REMOTE_WORKER_FILE,REMOTE_WORKER_VERSION}=await load('remote-worker-source.js');
-  assert.equal(REMOTE_WORKER_VERSION,'9');
+  assert.equal(REMOTE_WORKER_VERSION,'10');
   const workerPath=path.join(runtime,'worker.py');fs.writeFileSync(workerPath,REMOTE_WORKER_FILE);
   const runId='11111111-1111-4111-8111-111111111111',runDir=path.join(runtime,'run'),comfyRoot=path.join(runtime,'ComfyUI');
   const outputPrefix='BatchStudio/test/'+runId,outputDir=path.join(comfyRoot,'output',...outputPrefix.split('/'));
-  fs.mkdirSync(path.join(outputDir,'branch-a'),{recursive:true});
-  fs.writeFileSync(path.join(outputDir,'branch-a','a.png'),Buffer.from('artifact-a'));
-  fs.writeFileSync(path.join(outputDir,'branch-a','b.png'),Buffer.from('artifact-b'));
+  const nested=path.join(outputDir,'branch-a',runId+'_branch-a');
+  fs.mkdirSync(nested,{recursive:true});
+  fs.writeFileSync(path.join(nested,'a.png'),Buffer.from('artifact-a'));
+  fs.writeFileSync(path.join(nested,'b.png'),Buffer.from('artifact-b'));
   fs.mkdirSync(runDir,{recursive:true});
   fs.writeFileSync(path.join(runDir,'state.json'),JSON.stringify({version:1,runId,status:'completed',artifact:{outputPrefix}}));
 
-  let result=await callWorker(workerPath,runDir,comfyRoot,{requestId:'package',op:'package_artifacts',runId,expectedCount:2});
+  let result=await callWorker(workerPath,runDir,comfyRoot,{requestId:'package',op:'package_artifacts',runId,expectedCount:2,archiveFileName:'20260912_234512.zip'});
   assert.equal(result.code,0,result.stderr);
   const packaged=result.lines.at(-1).result;
   assert.equal(packaged.artifactCount,2);assert.match(packaged.package.sha256,/^[0-9a-f]{64}$/);assert.match(packaged.manifestSha256,/^[0-9a-f]{64}$/);
@@ -41,9 +42,16 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
   assert.equal(fs.existsSync(packagePath),true);assert.equal(packaged.package.size,fs.statSync(packagePath).size);
   assert.equal(packaged.package.sha256,sha(fs.readFileSync(packagePath)));
   const zipEntries=execFileSync('python',['-c','import json,sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); print(json.dumps(sorted(z.namelist())))',packagePath],{encoding:'utf8'}).trim();
-  assert.deepEqual(JSON.parse(zipEntries),['artifacts/branch-a/a.png','artifacts/branch-a/b.png','manifest.json']);
+  assert.deepEqual(JSON.parse(zipEntries),['branch-a/a.png','branch-a/b.png'],'transport ZIP must contain only simplified artifact paths');
+  assert.equal(JSON.parse(zipEntries).includes('manifest.json'),false,'manifest.json must stay outside the ZIP');
+  const manifest=JSON.parse(packaged.manifestJson);
+  assert.equal(manifest.version,2);
+  assert.equal(manifest.package.fileName,'20260912_234512.zip');
+  assert.equal(manifest.package.size,packaged.package.size);
+  assert.equal(manifest.package.sha256,packaged.package.sha256);
+  assert.deepEqual(manifest.artifacts.map(x=>x.path),['branch-a/a.png','branch-a/b.png']);
 
-  result=await callWorker(workerPath,runDir,comfyRoot,{requestId:'bad-count',op:'package_artifacts',runId,expectedCount:3});
+  result=await callWorker(workerPath,runDir,comfyRoot,{requestId:'bad-count',op:'package_artifacts',runId,expectedCount:3,archiveFileName:'20260912_234512.zip'});
   assert.equal(result.code,2);assert.equal(result.lines.at(-1).error.code,'REMOTE_ARTIFACT_COUNT_MISMATCH');
 
   let uploaded=Buffer.alloc(0),seenHeaders={};
@@ -61,9 +69,15 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 
   const managerSource=fs.readFileSync(path.join(repo,'src/main/r2-manager.ts'),'utf8');
   const executionSource=fs.readFileSync(path.join(repo,'src/main/remote-execution.ts'),'utf8');
+  const remoteExecution=await load('remote-execution.js');
+  assert.equal(remoteExecution.executionArchiveTimestampJst('2026-09-12T14:45:12.000Z'),'20260912_234512');
+  assert.equal(remoteExecution.executionArchiveTimestampJst('2026-09-12T23:30:45.000Z'),'20260913_083045','JST timestamp must cross the UTC date boundary correctly');
   assert.match(managerSource,/R2_SINGLE_PUT_LIMIT=FIVE_GIB-5\*MIB/,'single PUT boundary must account for R2 practical limit');
   assert.match(managerSource,/CreateMultipartUploadCommand/);assert.match(managerSource,/executionMultipartPartUrl/);assert.match(managerSource,/CompleteMultipartUploadCommand/);
   assert.match(executionSource,/\.part/,'local download must use a .part file');
+  assert.match(executionSource,/path\.join\(base,'remote_output',runId\)/,'Remote outputs must be stored under <artifact project>/remote_output/<runId>');
+  assert.match(executionSource,/manifest\.json/,'manifest must be persisted beside the downloaded ZIP');
+  assert.match(executionSource,/executionArchiveTimestampJst/,'archive filename must use an explicit JST timestamp');
   assert.match(executionSource,/\.putUrlInfo\(bucket,key,900,'application\/zip'\)/,'single PUT must reuse the existing R2 PUT URL generator');
   assert.doesNotMatch(executionSource,/executionPutUrl/,'single PUT must not use a separate E2E presigner');
   assert.match(executionSource,/REMOTE_ARTIFACT_HASH_MISMATCH/,'local SHA-256 mismatch must fail the run');

@@ -66,7 +66,7 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
   assert.match(worker.REMOTE_WORKER_FILE,/custom-node-backups/,'mismatched clean custom-node repositories must be archived before replacement');
   assert.match(worker.REMOTE_WORKER_FILE,/shutil\.move\(dest,backup\)/,'mismatched clean custom-node repositories must be moved aside, not deleted');
   assert.match(worker.REMOTE_WORKER_FILE,/automatic repository replacement was stopped/,'tracked local changes must still block automatic replacement');
-  assert.equal(worker.REMOTE_WORKER_VERSION,'9','worker version must advance when remote worker behavior changes');
+  assert.equal(worker.REMOTE_WORKER_VERSION,'10','worker version must advance when remote worker behavior changes');
   assert.match(worker.REMOTE_WORKER_FILE,/RECORD file not found/,'worker must detect Debian packages without pip RECORD metadata');
   assert.match(worker.REMOTE_WORKER_FILE,/installed by debian/,'worker must scope the retry to Debian-managed package conflicts');
   assert.match(worker.REMOTE_WORKER_FILE,/--ignore-installed/,'worker must retry only the affected requirements install without uninstalling Debian package metadata');
