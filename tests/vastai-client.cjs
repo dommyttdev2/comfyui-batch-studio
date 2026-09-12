@@ -18,6 +18,8 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   const {normalizeOpenSshPublicKey,validateSshKeyPair}=await load('ssh-key-pair.js');
   assert.equal(normalizeVastStatus({actual_status:'running'}),'running');
   assert.equal(normalizeVastStatus({actual_status:'scheduling'}),'scheduling');
+  assert.equal(normalizeVastStatus({actual_status:'stopped',status_msg:'success, running'}),'scheduling','Vast list response may keep actual_status=stopped while status_msg reports accepted running request');
+  assert.equal(normalizeVastStatus({actual_status:'running',intended_status:'stopped'}),'stopping','running instance with stop intent must be shown as stopping');
   assert.equal(normalizeVastStatus({actual_status:'exited',intended_status:'stopped',cur_state:'stopped'}),'stopped');
   assert.equal(normalizeVastStatus({actual_status:'exited',intended_status:'stopped',cur_state:'stopped',next_state:'running'}),'scheduling','restart scheduling must be derived from next_state=running even while actual_status remains exited');
   assert.equal(normalizeVastStatus({actual_status:'stopped',intended_status:'running',cur_state:'stopped'}),'scheduling','restart scheduling must be derived from intended_status=running while allocation is pending');
@@ -61,6 +63,8 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
     if(u.pathname==='/api/v0/ssh/'&&init.method==='POST'){const body=JSON.parse(init.body);accountKeys=[...accountKeys,{id:9,key:body.ssh_key}];return response({success:true,key:{id:9,public_key:body.ssh_key}})}
     if(u.pathname==='/api/v0/instances/1/ssh/'&&(!init.method||init.method==='GET'))return response({success:true,ssh_keys:JSON.stringify(instanceKeys)});
     if(u.pathname==='/api/v0/instances/1/ssh/'&&init.method==='POST'){const body=JSON.parse(init.body);instanceKeys=[...instanceKeys,{id:10,public_key:body.ssh_key}];return response({success:true,msg:'SSH key attached successfully'})}
+    if(u.pathname==='/api/v0/instances/reboot/1/'&&init.method==='PUT')return response({success:true});
+    if(u.pathname==='/api/v0/instances/1/'&&init.method==='DELETE')return response({success:true,msg:'Instance destroyed successfully'});
     if(u.pathname==='/api/v0/instances/1/'&&init.method==='PUT'){
       const requested=JSON.parse(init.body);
       lifecycleState=requested.state;
@@ -97,12 +101,40 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.equal(started.status,'running');
   const stopped=await client.stopInstance(1);
   assert.equal(stopped.status,'stopped');
+  await client.requestRebootInstance(1);
+  await client.destroyInstance(1);
   const puts=calls.filter(x=>x.init.method==='PUT');
-  assert.equal(puts.length,2);
+  assert.equal(puts.length,3);
   assert.deepEqual(JSON.parse(puts[0].init.body),{state:'running'});
   assert.deepEqual(JSON.parse(puts[1].init.body),{state:'stopped'});
+  assert.equal(new URL(puts[2].url).pathname,'/api/v0/instances/reboot/1/');
+  const deletes=calls.filter(x=>x.init.method==='DELETE');
+  assert.equal(deletes.length,1);
+  assert.equal(new URL(deletes[0].url).pathname,'/api/v0/instances/1/');
   assert.ok(puts.every(x=>x.init.headers.Authorization==='Bearer secret-key'));
   assert.ok(calls.filter(x=>new URL(x.url).pathname==='/api/v0/instances/1/'&&(!x.init.method||x.init.method==='GET')).length>=3,'lifecycle操作後にGETで最終状態を確認する');
+
+  {
+    const schedulingCalls=[];
+    const schedulingFetch=async(url,init={})=>{
+      schedulingCalls.push({url:String(url),init});
+      const u=new URL(String(url));
+      if(u.pathname==='/api/v1/instances/')return response({instances:[{id:77,actual_status:'stopped',intended_status:'stopped',cur_state:'stopped',status_msg:null}],next_token:null});
+      if(u.pathname==='/api/v0/instances/77/'&&init.method==='PUT')return response({success:true});
+      if(u.pathname==='/api/v0/instances/77/'&&(!init.method||init.method==='GET'))return response({instances:{id:77,actual_status:'stopped',intended_status:'stopped',cur_state:'stopped',status_msg:null}});
+      return response({msg:'not found'},404);
+    };
+    const schedulingClient=new VastAiClient(async()=>'secret-key',schedulingFetch,'https://example.test');
+    const before=(await schedulingClient.listInstances())[0];
+    assert.equal(before.status,'stopped');
+    await schedulingClient.requestStartInstance(77);
+    const afterStart=(await schedulingClient.listInstances())[0];
+    assert.equal(afterStart.status,'scheduling','accepted start request must stay Scheduling even when Vast API still reports stopped without intent fields');
+    assert.match(afterStart.statusMessage,/起動要求を送信済み/);
+    await schedulingClient.requestStopInstance(77);
+    const afterStop=(await schedulingClient.listInstances())[0];
+    assert.equal(afterStop.status,'stopped','explicit stop request must cancel the local Scheduling intent when provider is already stopped');
+  }
 
   console.log('Vast.ai client tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1}).finally(()=>{fs.rmSync(runtime,{recursive:true,force:true})});
