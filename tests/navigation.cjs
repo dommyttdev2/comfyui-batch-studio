@@ -15,8 +15,8 @@ assert.match(appSource,/case'実行':return <ExecutionStage/,'実行 stage must 
 assert.match(executionSource,/execution\.status\(project\.rootPath\)/,'ExecutionStage must restore and poll the persistent current Run');
 assert.match(executionSource,/Stop scheduling/);
 assert.match(executionSource,/Force interrupt/);
-assert.match(executionSource,/controls\.scheduling==='STOPPED'/,'pending stop scheduling requests must remain retryable');
-assert.match(executionSource,/controls\.interrupt==='INTERRUPTED'/,'pending force interrupt requests must remain retryable');
+assert.match(executionSource,/current\.controls\.scheduling!=='STOPPED'/,'Stop scheduling must remain available until the Run has actually stopped scheduling');
+assert.match(executionSource,/current\.controls\.interrupt!=='INTERRUPTED'/,'Force interrupt must remain available until interruption is confirmed');
 assert.match(executionSource,/current\.phase==='EXECUTING'/,'Force interrupt must only be enabled during EXECUTING');
 assert.match(executionSource,/canStopScheduling/,'Stop scheduling availability must be derived explicitly from Run phase');
 assert.match(mainSource,/isRemotePreGenerationPhase\(run\.phase\)/,'pre-generation remote Stop scheduling must be handled locally');
