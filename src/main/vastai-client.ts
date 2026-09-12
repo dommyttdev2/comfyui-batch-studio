@@ -167,7 +167,7 @@ export class VastAiClient {
   }
   async searchOffers(input:VastAiOfferSearchInput):Promise<VastAiOfferSearchResult>{
     const template=await this.resolveComfyUiTemplate(),search=this.normalizeOfferSearchInput(input,template);
-    const body:JsonRecord={...template.extraFilters,limit:100,type:'ondemand',rentable:{eq:true},rented:{eq:false},allocated_storage:search.storageGb,num_gpus:{eq:search.gpuCount},reliability:{gte:search.minReliability/100}};
+    const body:JsonRecord={...template.extraFilters,limit:100,type:'on-demand',rentable:{eq:true},rented:{eq:false},allocated_storage:search.storageGb,num_gpus:{eq:search.gpuCount},reliability:{gte:search.minReliability/100}};
     if(search.minTflops>0)body.total_flops={gte:search.minTflops};
     if(search.excludedCountries.length>0)body.geolocation={notin:search.excludedCountries};
     const payload=record(await this.request('/api/v0/bundles',{method:'POST',body:JSON.stringify(body)})),rows=Array.isArray(payload.offers)?payload.offers:[];
@@ -176,7 +176,7 @@ export class VastAiClient {
   async getOffer(offerId:number,storageGb:number){
     if(!Number.isInteger(offerId)||offerId<1)throw new Error('Vast.ai Offer IDが不正です。');
     if(!Number.isFinite(storageGb)||storageGb<=0)throw new Error('Storageが不正です。');
-    const body={limit:1,type:'ondemand',rentable:{eq:true},rented:{eq:false},id:{eq:offerId},allocated_storage:storageGb};
+    const body={limit:1,type:'on-demand',rentable:{eq:true},rented:{eq:false},id:{eq:offerId},allocated_storage:storageGb};
     const payload=record(await this.request('/api/v0/bundles',{method:'POST',body:JSON.stringify(body)})),rows=Array.isArray(payload.offers)?payload.offers:[];
     if(rows.length===0)throw new Error(`Vast.ai Offer #${offerId} は現在RENTできません。検索結果を更新してください。`);
     return normalizeVastOffer(rows[0]);
