@@ -141,6 +141,7 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
     const marketCalls=[];
     const template={id:101,hash_id:'comfy-hash',name:'ComfyUI',recommended_disk_space:120,count_created:999,extra_filters:{cuda_max_good:{gte:12.6}}};
     const richOffer={id:123,gpu_name:'RTX 5090',num_gpus:1,gpu_ram:32768,gpu_total_ram:32768,total_flops:104.8,gpu_mem_bw:1792,verification:'verified',geolocation:'Tokyo, JP',machine_id:77,host_id:88,mobo_name:'Test Board',pci_gen:5,gpu_lanes:16,pcie_bw:48.2,cpu_name:'EPYC Test',cpu_cores:32,cpu_cores_effective:16,cpu_ram:131072,disk_name:'NVMe',disk_bw:6500,disk_space:900,inet_down:1500,inet_up:900,direct_port_count:64,dlperf:180,cuda_max_good:13.0,duration:604800,reliability:.997,dlperf_per_dphtotal:220,flops_per_dphtotal:130,dph_total:.82,storage_cost:.003,internet_down_cost_per_tb:.02,internet_up_cost_per_tb:.03};
+    const cheapOffer={...richOffer,id:124,gpu_name:'RTX 4090',dph_total:.45};
     const marketFetch=async(url,init={})=>{
       marketCalls.push({url:String(url),init});
       const u=new URL(String(url));
@@ -165,9 +166,10 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
         assert.deepEqual(body.total_flops,{gte:60});
         assert.deepEqual(body.reliability,{gte:.99});
         assert.deepEqual(body.geolocation,{notin:['CN','RU']});
+        assert.deepEqual(body.order,[['dph_total','asc']]);
         assert.deepEqual(body.cuda_max_good,{gte:12.6},'ComfyUI Template extra_filtersを検索条件へ反映する');
         for(const key of ['gpu_name','gpu_ram','dph_total','verification','inet_down','disk_bw'])assert.equal(body[key],undefined,key+' must remain result-only');
-        return response({offers:[richOffer]});
+        return response({offers:[richOffer,cheapOffer]});
       }
       if(u.pathname==='/api/v0/asks/123/'&&init.method==='PUT'){
         const body=JSON.parse(init.body);
@@ -182,10 +184,11 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
     assert.equal(templateResult.hashId,'comfy-hash');
     assert.equal(templateResult.recommendedDiskSpaceGb,120);
     const searchResult=await marketClient.searchOffers({storageGb:120,minTflops:60,gpuCount:1,minReliability:99,excludedCountries:['CN','RU']});
-    assert.equal(searchResult.offers.length,1);
-    assert.equal(searchResult.offers[0].gpuName,'RTX 5090');
-    assert.equal(searchResult.offers[0].totalFlops,104.8);
-    assert.equal(searchResult.offers[0].hourlyCost,.82);
+    assert.equal(searchResult.offers.length,2);
+    assert.deepEqual(searchResult.offers.map(x=>x.id),[124,123],'検索結果は時間単価の安い順に返す');
+    assert.equal(searchResult.offers[0].gpuName,'RTX 4090');
+    assert.equal(searchResult.offers[1].totalFlops,104.8);
+    assert.equal(searchResult.offers[1].hourlyCost,.82);
     const normalized=normalizeVastOffer(richOffer);
     assert.equal(normalized.internetDownMb,1500);
     assert.equal(normalized.diskBandwidthMb,6500);
