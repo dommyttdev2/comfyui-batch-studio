@@ -18,6 +18,9 @@ assert.match(executionSource,/controls\.scheduling==='STOPPED'/,'pending stop sc
 assert.match(executionSource,/controls\.interrupt==='INTERRUPTED'/,'pending force interrupt requests must remain retryable');
 assert.match(executionSource,/Artifact delivery completed/,'generation completion and artifact delivery completion must remain distinct');
 assert.match(executionSource,/Startできない理由/,'blocked Preflight reason must be visible');
+assert.match(executionSource,/既存Runが実行中のため新規Startできません/,'READY banner must not claim Start is possible while a Run is active');
+assert.match(executionSource,/既存Runが未完了です。新規StartではなくResumeで再開してください/,'paused or interrupted Runs must direct the user to Resume');
+assert.match(executionSource,/preflight '\+\(canStart\?'ready':'blocked'\)/,'banner styling must use the same canStart decision as the Start button');
 assert.match(executionSource,/current\?\.lifecycle!==\'COMPLETED\'/,'output directory action must remain gated until completion');
 assert.match(executionSource,/artifactOutputPath\?\?project\.rootPath/,'completed Run must open the configured local artifact output directory with a legacy fallback');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-navigation-'));
