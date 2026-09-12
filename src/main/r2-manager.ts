@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import {
   AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CopyObjectCommand, CreateBucketCommand,
   CreateMultipartUploadCommand, DeleteBucketCommand, DeleteObjectCommand, DeleteObjectsCommand,
@@ -25,6 +26,7 @@ import { R2ConfigStore, type R2ConnectionInput } from './r2-config.js';
 import { R2ObjectIndex } from './r2-object-index.js';
 
 const MIB=1024*1024, DEFAULT_PART=16*MIB, MAX_PARTS=10000, FIVE_GIB=5*1024*1024*1024;
+export const R2_SINGLE_PUT_LIMIT=FIVE_GIB-5*MIB;
 const UPLOAD_CONCURRENCY=3, UPLOAD_RETRIES=3;
 const BUCKET=/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/;
 function partSize(size:number){const required=Math.max(DEFAULT_PART,Math.ceil(Math.max(size,1)/MAX_PARTS));return Math.ceil(required/MIB)*MIB;}
@@ -120,6 +122,52 @@ export class R2Manager {
     const url=await getSignedUrl(await this.clientFor(),command,{expiresIn:expires});
     const fileName=objectName(key),contentTypeArg=contentType?` -H ${quote(`Content-Type: ${contentType}`)}`:'';
     return {key,url,expiresIn:expires,contentType,commands:{url,curl:`curl --fail -X PUT${contentTypeArg} --data-binary ${quote(`@${fileName}`)} ${quote(url)}`}};
+  }
+  async executionPutUrl(bucket:string,rawKey:string,size:number,sha256:string,expiresIn=900){
+    const key=normalizeR2PutObjectKey(rawKey),expires=normalizeR2PresignedExpiresIn(expiresIn),digest=sha256Hex(sha256);
+    if(!bucket)throw new Error('R2 bucket is required for execution artifact upload.');
+    if(!Number.isSafeInteger(size)||size<0)throw new Error('Execution artifact size is invalid.');
+    if(size>R2_SINGLE_PUT_LIMIT)throw new Error('Execution artifact exceeds the R2 single PUT limit.');
+    if(!digest)throw new Error('Execution artifact SHA-256 is invalid.');
+    const contentType='application/zip',metadata={sha256:digest};
+    const command=new PutObjectCommand({Bucket:bucket,Key:key,ContentType:contentType,Metadata:metadata,ContentLength:size});
+    const url=await getSignedUrl(await this.clientFor(),command,{expiresIn:expires});
+    return {key,url,expiresIn:expires,headers:{'content-type':contentType,'x-amz-meta-sha256':digest}};
+  }
+  async beginExecutionMultipart(bucket:string,rawKey:string,size:number,sha256:string){
+    const key=normalizeR2PutObjectKey(rawKey),digest=sha256Hex(sha256);
+    if(!bucket)throw new Error('R2 bucket is required for execution artifact upload.');
+    if(!Number.isSafeInteger(size)||size<=R2_SINGLE_PUT_LIMIT)throw new Error('Multipart execution upload requires a package above the single PUT limit.');
+    if(!digest)throw new Error('Execution artifact SHA-256 is invalid.');
+    const chunk=partSize(size),partCount=Math.ceil(size/chunk);
+    if(partCount<2||partCount>MAX_PARTS)throw new Error('Execution artifact exceeds the supported multipart part count.');
+    const created=await (await this.clientFor()).send(new CreateMultipartUploadCommand({Bucket:bucket,Key:key,ContentType:'application/zip',Metadata:{sha256:digest}}));
+    const uploadId=created.UploadId??'';
+    if(!uploadId)throw new Error('R2 multipart upload did not return an upload ID.');
+    return {bucket,key,uploadId,partSize:chunk,partCount,size,sha256:digest};
+  }
+  async executionMultipartPartUrl(bucket:string,rawKey:string,uploadId:string,partNumber:number,expiresIn=900){
+    const key=normalizeR2PutObjectKey(rawKey),expires=normalizeR2PresignedExpiresIn(expiresIn);
+    if(!uploadId||!Number.isInteger(partNumber)||partNumber<1||partNumber>MAX_PARTS)throw new Error('Invalid R2 multipart upload part.');
+    const command=new UploadPartCommand({Bucket:bucket,Key:key,UploadId:uploadId,PartNumber:partNumber});
+    return {url:await getSignedUrl(await this.clientFor(),command,{expiresIn:expires}),expiresIn:expires};
+  }
+  async completeExecutionMultipart(bucket:string,rawKey:string,uploadId:string,parts:Array<{PartNumber:number;ETag:string}>){
+    const key=normalizeR2PutObjectKey(rawKey);
+    if(!uploadId||!parts.length||parts.some(part=>!Number.isInteger(part.PartNumber)||part.PartNumber<1||!part.ETag))throw new Error('Invalid R2 multipart completion payload.');
+    await (await this.clientFor()).send(new CompleteMultipartUploadCommand({Bucket:bucket,Key:key,UploadId:uploadId,MultipartUpload:{Parts:parts}}));
+  }
+  async abortExecutionMultipart(bucket:string,rawKey:string,uploadId:string){
+    const key=normalizeR2PutObjectKey(rawKey);if(!uploadId)return;
+    await (await this.clientFor()).send(new AbortMultipartUploadCommand({Bucket:bucket,Key:key,UploadId:uploadId}));
+  }
+  async downloadExecutionObject(bucket:string,rawKey:string,target:string){
+    const key=normalizeR2ObjectKey(rawKey),response=await (await this.clientFor()).send(new GetObjectCommand({Bucket:bucket,Key:key}));
+    if(!response.Body)throw new Error('R2 execution artifact download returned an empty body.');
+    await pipeline(response.Body as any,createWriteStream(target,{flags:'w'}));
+  }
+  async deleteExecutionObject(bucket:string,rawKey:string){
+    const key=normalizeR2ObjectKey(rawKey);await (await this.clientFor()).send(new DeleteObjectCommand({Bucket:bucket,Key:key}));this.syncIndex();
   }
   async deleteObjects(bucket:string,keys:string[]){if(!keys.length)throw new Error('削除するファイルを選択してください。');if(keys.length>1000)throw new Error('一度に削除できるのは1,000件までです。');const r=await (await this.clientFor()).send(new DeleteObjectsCommand({Bucket:bucket,Delete:{Objects:keys.map(Key=>({Key})),Quiet:false}}));return {deleted:(r.Deleted??[]).map(x=>x.Key??'').filter(Boolean),errors:r.Errors??[]};}
   async move(bucket:string,sourceKey:string,destinationKey:string,overwrite=false){
