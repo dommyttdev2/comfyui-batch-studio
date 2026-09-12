@@ -465,7 +465,7 @@ ComfyUI releaseは `comfyanonymous/ComfyUI` の `releases/latest` から実行�
 
 workflow依存 custom_nodes はEnvironment Settingsのapp-wide listを正本とする。各entryはGitHub `owner/repo` と任意の `ref` を持つ。未導入ならclone、導入済みならorigin一致を確認してfetch/checkoutする。空listはcustom_node同期をskipする。
 
-model downloadはRemote側の `aria2c` を使用する。presigned URLはprocess argvへ載せずstdinのinput-fileとして渡し、size/SHA-256検証後にatomic renameする。
+model downloadはRemote側の `aria2c` を使用する。presigned URLはprocess argvへ載せずstdinのinput-fileとして渡し、size/SHA-256検証後にatomic renameする。複数モデルが必要な場合は最大4モデルを並列stagingし、各モデル内部ではaria2の最大8接続による分割downloadを行う。
 
 ---
 
@@ -495,6 +495,10 @@ Remote model directory
 ```
 
 モデルbinaryをLocal PC経由のSCPで送らない。
+
+### Concurrent staging
+
+必要モデルは最大4件を同時にstagingする。1モデルごとのdownloadは従来どおりaria2の `--split=8` / `--max-connection-per-server=8` を使用するため、最大4モデル × 8接続で進行する。あるモデルで失敗した場合は未開始モデルの新規stagingを止め、実行中のstagingを終了させてからRunへエラーを返す。
 
 ### Existing file reuse
 
