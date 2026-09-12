@@ -114,5 +114,27 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.ok(puts.every(x=>x.init.headers.Authorization==='Bearer secret-key'));
   assert.ok(calls.filter(x=>new URL(x.url).pathname==='/api/v0/instances/1/'&&(!x.init.method||x.init.method==='GET')).length>=3,'lifecycle操作後にGETで最終状態を確認する');
 
+  {
+    const schedulingCalls=[];
+    const schedulingFetch=async(url,init={})=>{
+      schedulingCalls.push({url:String(url),init});
+      const u=new URL(String(url));
+      if(u.pathname==='/api/v1/instances/')return response({instances:[{id:77,actual_status:'stopped',intended_status:'stopped',cur_state:'stopped',status_msg:null}],next_token:null});
+      if(u.pathname==='/api/v0/instances/77/'&&init.method==='PUT')return response({success:true});
+      if(u.pathname==='/api/v0/instances/77/'&&(!init.method||init.method==='GET'))return response({instances:{id:77,actual_status:'stopped',intended_status:'stopped',cur_state:'stopped',status_msg:null}});
+      return response({msg:'not found'},404);
+    };
+    const schedulingClient=new VastAiClient(async()=>'secret-key',schedulingFetch,'https://example.test');
+    const before=(await schedulingClient.listInstances())[0];
+    assert.equal(before.status,'stopped');
+    await schedulingClient.requestStartInstance(77);
+    const afterStart=(await schedulingClient.listInstances())[0];
+    assert.equal(afterStart.status,'scheduling','accepted start request must stay Scheduling even when Vast API still reports stopped without intent fields');
+    assert.match(afterStart.statusMessage,/起動要求を送信済み/);
+    await schedulingClient.requestStopInstance(77);
+    const afterStop=(await schedulingClient.listInstances())[0];
+    assert.equal(afterStop.status,'stopped','explicit stop request must cancel the local Scheduling intent when provider is already stopped');
+  }
+
   console.log('Vast.ai client tests passed.');
 })().catch(error=>{console.error(error);process.exitCode=1}).finally(()=>{fs.rmSync(runtime,{recursive:true,force:true})});
