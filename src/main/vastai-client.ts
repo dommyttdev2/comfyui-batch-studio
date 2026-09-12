@@ -33,11 +33,16 @@ function containsSshKey(items:unknown[],publicKey:string){return items.some(item
 
 export function normalizeVastStatus(payload:unknown):CloudInstanceStatus{
   const item=record(payload),raw=rawStatusOf(item),intended=String(item.intended_status??'').toLowerCase(),cur=String(item.cur_state??'').toLowerCase(),next=String(item.next_state??'').toLowerCase(),message=String(item.status_msg??'').trim().toLowerCase();
-  if(raw==='running')return'running';
   if(raw==='scheduling')return'scheduling';
+  const runningLike=raw==='running';
+  const stoppingByIntent=runningLike&&(intended==='stopped'||next==='stopped');
+  const stoppingByMessage=runningLike&&/(^|[ ,:;])stopp(?:ed|ing)([ ,:;]|$)/.test(message)&&intended!=='running'&&next!=='running';
+  if(stoppingByIntent||stoppingByMessage)return'stopping';
+  if(raw==='running')return'running';
   const stoppedLike=raw==='stopped'||raw==='exited';
-  const schedulingByIntent=stoppedLike&&(intended==='running'||next==='running'||(cur==='stopped'&&(intended==='running'||next==='running')));
-  const schedulingByMessage=stoppedLike&&/(^|[ ,:;])running([ ,:;]|$)/.test(message)&&next!=='stopped';
+  const schedulingByIntent=stoppedLike&&(intended==='running'||next==='running');
+  const explicitStopTarget=intended==='stopped'&&next!=='running';
+  const schedulingByMessage=stoppedLike&&/(^|[ ,:;])running([ ,:;]|$)/.test(message)&&!explicitStopTarget;
   if(schedulingByIntent||schedulingByMessage)return'scheduling';
   if(raw==='stopped'||(raw==='exited'&&intended==='stopped'&&cur==='stopped'))return'stopped';
   if(['loading','starting','rebooting','restarting','creating','connecting'].includes(raw))return'starting';
