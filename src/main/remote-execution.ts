@@ -9,7 +9,7 @@ import { getExecutionRun, mutateExecutionRun, recordExecutionEvidence, validated
 import { readProjectMeta } from './project-meta.js';
 import type { R2Manager } from './r2-manager.js';
 import { R2_SINGLE_PUT_LIMIT } from './r2-manager.js';
-import { RemoteWorkerRequestError } from './remote-worker.js';
+import { RemoteWorkerRequestError, type WorkerEvent } from './remote-worker.js';
 import type { ApiGraph } from './workflow-api.js';
 import type { RemoteControlPlane } from './remote-control-plane.js';
 import { executionArchiveTimestampJst } from './execution-output.js';
@@ -56,6 +56,26 @@ async function localMatches(file:string,size:number,sha256:string){
 }
 async function pauseForStop(root:string,runId:string){
   return mutateExecutionRun(root,runId,run=>{run.lifecycle='PAUSED';run.controls.scheduling='STOPPED';run.current.promptId=null;});
+}
+
+function applyRemoteProgressEvent(run:ExecutionRun,event:Extract<WorkerEvent,{type:'progress'}>){
+  const overall=Number(event.overallCompleted);
+  if(Number.isFinite(overall))run.progress.overall.completed=Math.max(0,Math.min(run.progress.overall.total,overall));
+  const current=event.current&&typeof event.current==='object'&&!Array.isArray(event.current)?event.current as Record<string,unknown>:null;
+  const branchId=typeof current?.branchId==='string'?current.branchId:null;
+  const leafId=typeof current?.leafId==='string'?current.leafId:null;
+  const promptId=typeof current?.promptId==='string'?current.promptId:(typeof event.promptId==='string'?event.promptId:null);
+  run.current={branchId,leafId,promptId};
+  if(promptId&&!run.promptIds.includes(promptId))run.promptIds.push(promptId);
+  if(branchId){
+    const branch=run.progress.branches.find(item=>item.branchId===branchId);
+    if(branch){
+      const index=Number(current?.index);
+      if(event.stage==='prompt_terminal'&&event.terminal==='success'&&Number.isFinite(index))branch.completed=Math.max(branch.completed,Math.min(branch.total,index));
+      branch.state=branch.completed>=branch.total?'completed':'running';
+    }
+  }
+  if(event.stage==='sequence_completed')for(const branch of run.progress.branches)if(branch.completed>=branch.total)branch.state='completed';
 }
 
 function applyRemoteState(run:ExecutionRun,state:RemoteSequenceState){
@@ -119,7 +139,10 @@ export class RemoteExecutionService {
     currentRun=await getExecutionRun(root,runId);
     if(!currentRun||currentRun.lifecycle!=='RUNNING')return false;
     if(currentRun.controls.scheduling!=='ACTIVE'){await pauseForStop(root,runId);return false;}
-    let response=asResponse((await this.remote.requestWorker(root,runId,'run_scene_sequence',{runId,projectId:run.projectId,outputPrefix,comfyEndpoint:'http://127.0.0.1:8188',workflow,branches})).response);
+    let response=asResponse((await this.remote.requestWorker(root,runId,'run_scene_sequence',{runId,projectId:run.projectId,outputPrefix,comfyEndpoint:'http://127.0.0.1:8188',workflow,branches},async event=>{
+      if(event.type!=='progress')return;
+      await mutateExecutionRun(root,runId,current=>{if(current.lifecycle==='RUNNING')applyRemoteProgressEvent(current,event);});
+    })).response);
     let state=response.state;if(response.alreadyRunning)state=await this.waitExisting(root,runId);
     if(!state){const reconciled=await this.remote.reconcile(root,runId);state=(reconciled.response as any)?.state as RemoteSequenceState|undefined;}
     if(!state)throw new Error('Remote Worker returned no sequence state.');

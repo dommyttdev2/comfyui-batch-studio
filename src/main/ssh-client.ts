@@ -10,8 +10,8 @@ export class SshHostKeyError extends Error { constructor(public readonly code:'H
 
 export class VerifiedSshSession {
   constructor(private readonly client:SshClient,readonly endpoint:SshEndpoint){}
-  exec(command:string,stdin?:string):Promise<{stdout:string;stderr:string;code:number|null}>{return new Promise((resolve,reject)=>this.client.exec(command,(error,stream)=>{
-    if(error)return reject(error);let stdout='',stderr='';stream.on('data',(d:Buffer)=>stdout+=d.toString());stream.stderr.on('data',(d:Buffer)=>stderr+=d.toString());
+  exec(command:string,stdin?:string,onStdoutChunk?:(chunk:string)=>void):Promise<{stdout:string;stderr:string;code:number|null}>{return new Promise((resolve,reject)=>this.client.exec(command,(error,stream)=>{
+    if(error)return reject(error);let stdout='',stderr='';stream.on('data',(d:Buffer)=>{const chunk=d.toString();stdout+=chunk;onStdoutChunk?.(chunk)});stream.stderr.on('data',(d:Buffer)=>stderr+=d.toString());
     stream.on('close',(code:number|null)=>resolve({stdout,stderr,code}));stream.on('error',reject);if(stdin!==undefined){stream.end(stdin);}else stream.end();
   }));}
   sftp():Promise<SFTPWrapper>{return new Promise((resolve,reject)=>this.client.sftp((e,s)=>e?reject(e):resolve(s)));}

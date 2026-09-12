@@ -9,6 +9,7 @@ const repo = path.resolve(__dirname, '..');
 const uiSource=fs.readFileSync(path.join(repo,'src','renderer','ui.tsx'),'utf8');
 const appSource=fs.readFileSync(path.join(repo,'src','renderer','App.tsx'),'utf8');
 const executionSource=fs.readFileSync(path.join(repo,'src','renderer','ExecutionStages.tsx'),'utf8');
+const remoteExecutionSource=fs.readFileSync(path.join(repo,'src','main','remote-execution.ts'),'utf8');
 const mainSource=fs.readFileSync(path.join(repo,'src','main','main.ts'),'utf8');
 assert.match(uiSource,/実行前チェック','実行'/,'Project navigation must place 実行 after 実行前チェック');
 assert.match(appSource,/case'実行':return <ExecutionStage/,'実行 stage must render ExecutionStage');
@@ -35,6 +36,9 @@ assert.match(executionSource,/next_state=/,'scheduling details must expose the r
 assert.match(executionSource,/const remoteInstanceChanged=Boolean/,'Execution UI must detect when Project selection differs from the active Run Instance');
 assert.match(executionSource,/別Instanceで新しく実行/,'Execution UI must expose a distinct replacement-Run action');
 assert.match(executionSource,/execution\.restartRemote/,'replacement action must use dedicated IPC rather than mutating the existing Run');
+assert.match(remoteExecutionSource,/applyRemoteProgressEvent/,'Remote generation progress must be applied from streamed Worker progress events');
+assert.match(remoteExecutionSource,/event\.type!==['"]progress['"]/,'Remote generation must ignore non-progress Worker events during live synchronization');
+assert.match(remoteExecutionSource,/overallCompleted/,'Generation progress must synchronize the Remote Worker overallCompleted counter');
 assert.match(mainSource,/IPC\.EXECUTION_RESTART_REMOTE/,'Main Process must implement replacement-Run IPC');
 assert.match(mainSource,/REMOTE_INSTANCE_REPLACED/,'replacement must terminalize the old Run with an explicit history reason');
 assert.match(mainSource,/isRemotePreGenerationPhase\(current\.phase\)/,'Instance replacement must be limited to pre-generation phases');
