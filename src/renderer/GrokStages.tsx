@@ -1,5 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ArtifactReadResult, CatalogStatus, CivitaiCatalogStatus, DiffusionModelSelection, GrokTask, ImportResult, ModelCatalog, ModelFamily, ModelSelectionBase, ModelsArtifact, ProjectSummary, TextEncoderSelection, VaeSelection, CheckpointSelection } from '../shared/types';
+import type {
+  ArtifactReadResult,
+  CatalogStatus,
+  CivitaiCatalogStatus,
+  DiffusionModelSelection,
+  GrokTask,
+  ImportResult,
+  ModelCatalog,
+  ModelFamily,
+  ModelSelectionBase,
+  ModelsArtifact,
+  ProjectSummary,
+  TextEncoderSelection,
+  VaeSelection,
+  CheckpointSelection,
+} from '../shared/types';
 import type { Runner } from './ui';
 import { issuesView } from './ui';
 import { ModelPicker } from './ModelPicker';
@@ -8,50 +23,857 @@ import { GrokLoraHistory } from './GrokLoraHistory';
 import { StageResetMenu, type ResetScope } from './StageResetMenu';
 import './model-selection.css';
 
-type GrokReturnFile={name:string;accept:string};
-const GROK_RETURN_FILES:Partial<Record<GrokTask['stage'],GrokReturnFile>>={
- 'story-finalize':{name:'story.md',accept:'.md,text/markdown,text/plain'},
- 'story-fix':{name:'story.md',accept:'.md,text/markdown,text/plain'},
- models:{name:'model_loras.json',accept:'.json,application/json,text/plain'},
- 'models-fix':{name:'model_loras.json',accept:'.json,application/json,text/plain'},
- 'prompt-plan':{name:'prompt_plan.json',accept:'.json,application/json,text/plain'},
- 'prompt-plan-fix':{name:'prompt_plan.json',accept:'.json,application/json,text/plain'}
+type GrokReturnFile = { name: string; accept: string };
+const GROK_RETURN_FILES: Partial<Record<GrokTask['stage'], GrokReturnFile>> = {
+  'story-finalize': { name: 'story.md', accept: '.md,text/markdown,text/plain' },
+  'story-fix': { name: 'story.md', accept: '.md,text/markdown,text/plain' },
+  models: { name: 'model_loras.json', accept: '.json,application/json,text/plain' },
+  'models-fix': { name: 'model_loras.json', accept: '.json,application/json,text/plain' },
+  'prompt-plan': { name: 'prompt_plan.json', accept: '.json,application/json,text/plain' },
+  'prompt-plan-fix': { name: 'prompt_plan.json', accept: '.json,application/json,text/plain' },
 };
-function fileSizeLabel(size:number){if(size<1024)return `${size} B`;if(size<1024*1024)return `${(size/1024).toFixed(1)} KB`;return `${(size/1024/1024).toFixed(1)} MB`}
-function importResultView(result:ImportResult|null){return result?<div className="result">{issuesView(result.validation.issues)}{result.missingRequirements.map((m,n)=><div className="issue error" key={n}>✕ {m.role}: {m.requirement} — {m.reason}</div>)}</div>:null}
-
-export function GrokBridge({project,stage,title,onImport,run,receive=true,resetScope,onReset}:{project:ProjectSummary;stage:GrokTask['stage'];title:string;onImport?:(raw:string)=>Promise<ImportResult>;run:Runner;receive?:boolean;resetScope?:ResetScope;onReset?:(scope:ResetScope)=>Promise<void>}){
- const [task,setTask]=useState<GrokTask|null>(null),[raw,setRaw]=useState(''),[result,setResult]=useState<ImportResult|null>(null),[extra,setExtra]=useState(''),[selectedFile,setSelectedFile]=useState<File|null>(null),[fileIssue,setFileIssue]=useState(''),[dragging,setDragging]=useState(false);const fileInput=useRef<HTMLInputElement|null>(null),isFix=stage.endsWith('-fix'),returnFile=GROK_RETURN_FILES[stage];
- const selectReturnFile=(file:File|null)=>{setResult(null);setFileIssue('');if(!file){setSelectedFile(null);return}if(returnFile){const expectedExt=returnFile.name.slice(returnFile.name.lastIndexOf('.')).toLowerCase();if(expectedExt&&!file.name.toLowerCase().endsWith(expectedExt)){setSelectedFile(null);setFileIssue(`Grok返却ファイルは ${returnFile.name} と同じ ${expectedExt} 形式を選択してください。`);return}}setSelectedFile(file)};
- const importReturnFile=()=>selectedFile&&onImport&&run(async()=>{const content=await selectedFile.text();if(!content.trim())throw new Error(`${selectedFile.name} は空です。`);setResult(await onImport(content))});
- return <section className="panel"><div className="panelhead"><h3>{title}</h3>{resetScope&&onReset&&<StageResetMenu scope={resetScope} onReset={onReset}/>}</div>{isFix&&<label>修正条件<textarea value={extra} onChange={e=>setExtra(e.target.value)} placeholder="直したい点を入力（任意）"/></label>}<div className="actions"><button onClick={()=>run(async()=>setTask(await window.batchStudio.grokTask.build(project.rootPath,stage,extra)))}>依頼内容を生成</button>{task&&<button onClick={()=>window.batchStudio.clipboard.writeText(task.prompt)}>コピー</button>}</div>{task&&<><textarea className="promptbox" value={task.prompt} readOnly/><div className="attachments">{task.attachments.map(a=><div className="attachment-row" key={`${a.path}:${a.name}`}><span>{a.exists?'✓':'✕'} {a.name} — {a.purpose}</span><button disabled={!a.exists} onClick={()=>window.batchStudio.file.showInFolder(a.path)}>場所を開く</button></div>)}</div></>}{receive&&returnFile?<><h4>Grok返却ファイルを添付</h4><p className="grok-return-note">Grokからダウンロードした <code>{returnFile.name}</code> を添付してください。チャット本文の貼り付けではなく、このファイルを検証して下書きへ取り込みます。</p><div className={`grok-file-dropzone ${dragging?'dragging':''}`} onDragEnter={e=>{e.preventDefault();e.stopPropagation();setDragging(true)}} onDragOver={e=>{e.preventDefault();e.stopPropagation();setDragging(true)}} onDragLeave={e=>{e.preventDefault();e.stopPropagation();setDragging(false)}} onDrop={e=>{e.preventDefault();e.stopPropagation();setDragging(false);selectReturnFile(e.dataTransfer.files?.[0]??null)}}><input ref={fileInput} type="file" accept={returnFile.accept} onChange={e=>{selectReturnFile(e.currentTarget.files?.[0]??null);e.currentTarget.value=''}}/><strong>{selectedFile?selectedFile.name:`${returnFile.name} をここにドラッグ＆ドロップ`}</strong><span>{selectedFile?`${fileSizeLabel(selectedFile.size)} · 取り込み待ち`:'またはファイルエクスプローラーから選択'}</span><button type="button" onClick={()=>fileInput.current?.click()}>ファイルを選択</button></div>{fileIssue&&<div className="issue error">✕ {fileIssue}</div>}<div className="actions grok-file-actions"><button className="primary" disabled={!selectedFile||!onImport} onClick={()=>void importReturnFile()}>ファイルを解析・取り込む</button>{selectedFile&&<button type="button" onClick={()=>selectReturnFile(null)}>選択を解除</button>}</div>{importResultView(result)}</>:receive?<><h4>Grokの回答を貼り付け</h4><textarea className="raw" value={raw} onChange={e=>setRaw(e.target.value)}/><button className="primary" disabled={!raw.trim()||!onImport} onClick={()=>onImport&&run(async()=>setResult(await onImport(raw)))}>結果を解析・取り込む</button>{importResultView(result)}</>:null}</section>
+function fileSizeLabel(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+function importResultView(result: ImportResult | null) {
+  return result ? (
+    <div className="result">
+      {issuesView(result.validation.issues)}
+      {result.missingRequirements.map((m, n) => (
+        <div className="issue error" key={n}>
+          ✕ {m.role}: {m.requirement} — {m.reason}
+        </div>
+      ))}
+    </div>
+  ) : null;
 }
 
-async function loadEditable(root:string,key:'story'|'models',setter:(r:ArtifactReadResult)=>void){const draft=await window.batchStudio.artifact.read(root,key,'draft');if(draft.exists){setter(draft);return true}const confirmed=await window.batchStudio.artifact.read(root,key,'confirmed');setter(confirmed);return false}
-export function StoryStage({project,setProject,run}:{project:ProjectSummary;setProject:(p:ProjectSummary)=>void;run:Runner}){const [doc,setDoc]=useState<ArtifactReadResult|null>(null),[editing,setEditing]=useState(false);const load=()=>run(async()=>setEditing(await loadEditable(project.rootPath,'story',setDoc)));useEffect(()=>{void load()},[project.rootPath]);const importStory=async(raw:string)=>{const r=await window.batchStudio.artifact.importGrok(project.rootPath,'story',raw);setEditing(true);setDoc(await window.batchStudio.artifact.read(project.rootPath,'story','draft'));return r};return <><GrokBridge project={project} stage="story-initial" title="1. Grokでストーリーを検討" run={run} receive={false}/><GrokBridge project={project} stage="story-finalize" title="2. 完成版 story.md を作成" run={run} onImport={importStory}/>{project.artifacts.find(a=>a.key==='story')?.state!=='missing'&&<GrokBridge project={project} stage="story-fix" title="確定済みストーリーを修正" run={run} onImport={importStory}/>}<section className="panel"><div className="panelhead"><h3>{editing?'story.md 下書き':'story.md 確定版'}</h3>{!editing&&doc?.exists&&<button onClick={()=>run(async()=>{setDoc(await window.batchStudio.artifact.beginEdit(project.rootPath,'story'));setEditing(true)})}>編集を開始</button>}</div><textarea className="editor" readOnly={!editing} value={doc?.content??''} onChange={e=>doc&&setDoc({...doc,content:e.target.value})}/>{editing&&<div className="actions"><button onClick={()=>doc?.content!=null&&run(async()=>setDoc(await window.batchStudio.artifact.saveDraft(project.rootPath,'story',doc.content!)))}>下書き保存</button><button className="primary" disabled={!doc?.content?.trim()} onClick={()=>run(async()=>{const saved=await window.batchStudio.artifact.saveDraft(project.rootPath,'story',doc!.content!);setDoc(saved);if(!saved.validation.valid)throw new Error('検証エラーがあるため確定できません。');setProject(await window.batchStudio.artifact.confirm(project.rootPath,'story'));await load()})}>確定</button></div>}{doc&&issuesView(doc.validation.issues)}</section></>}
+export function GrokBridge({
+  project,
+  stage,
+  title,
+  onImport,
+  run,
+  receive = true,
+  resetScope,
+  onReset,
+}: {
+  project: ProjectSummary;
+  stage: GrokTask['stage'];
+  title: string;
+  onImport?: (raw: string) => Promise<ImportResult>;
+  run: Runner;
+  receive?: boolean;
+  resetScope?: ResetScope;
+  onReset?: (scope: ResetScope) => Promise<void>;
+}) {
+  const [task, setTask] = useState<GrokTask | null>(null),
+    [raw, setRaw] = useState(''),
+    [result, setResult] = useState<ImportResult | null>(null),
+    [extra, setExtra] = useState(''),
+    [selectedFile, setSelectedFile] = useState<File | null>(null),
+    [fileIssue, setFileIssue] = useState(''),
+    [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement | null>(null),
+    isFix = stage.endsWith('-fix'),
+    returnFile = GROK_RETURN_FILES[stage];
+  const selectReturnFile = (file: File | null) => {
+    setResult(null);
+    setFileIssue('');
+    if (!file) {
+      setSelectedFile(null);
+      return;
+    }
+    if (returnFile) {
+      const expectedExt = returnFile.name.slice(returnFile.name.lastIndexOf('.')).toLowerCase();
+      if (expectedExt && !file.name.toLowerCase().endsWith(expectedExt)) {
+        setSelectedFile(null);
+        setFileIssue(
+          `Grok返却ファイルは ${returnFile.name} と同じ ${expectedExt} 形式を選択してください。`,
+        );
+        return;
+      }
+    }
+    setSelectedFile(file);
+  };
+  const importReturnFile = () =>
+    selectedFile &&
+    onImport &&
+    run(async () => {
+      const content = await selectedFile.text();
+      if (!content.trim()) throw new Error(`${selectedFile.name} は空です。`);
+      setResult(await onImport(content));
+    });
+  return (
+    <section className="panel">
+      <div className="panelhead">
+        <h3>{title}</h3>
+        {resetScope && onReset && <StageResetMenu scope={resetScope} onReset={onReset} />}
+      </div>
+      {isFix && (
+        <label>
+          修正条件
+          <textarea
+            value={extra}
+            onChange={(e) => setExtra(e.target.value)}
+            placeholder="直したい点を入力（任意）"
+          />
+        </label>
+      )}
+      <div className="actions">
+        <button
+          onClick={() =>
+            run(async () =>
+              setTask(await window.batchStudio.grokTask.build(project.rootPath, stage, extra)),
+            )
+          }
+        >
+          依頼内容を生成
+        </button>
+        {task && (
+          <button onClick={() => window.batchStudio.clipboard.writeText(task.prompt)}>
+            コピー
+          </button>
+        )}
+      </div>
+      {task && (
+        <>
+          <textarea className="promptbox" value={task.prompt} readOnly />
+          <div className="attachments">
+            {task.attachments.map((a) => (
+              <div className="attachment-row" key={`${a.path}:${a.name}`}>
+                <span>
+                  {a.exists ? '✓' : '✕'} {a.name} — {a.purpose}
+                </span>
+                <button
+                  disabled={!a.exists}
+                  onClick={() => window.batchStudio.file.showInFolder(a.path)}
+                >
+                  場所を開く
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {receive && returnFile ? (
+        <>
+          <h4>Grok返却ファイルを添付</h4>
+          <p className="grok-return-note">
+            Grokからダウンロードした <code>{returnFile.name}</code>{' '}
+            を添付してください。チャット本文の貼り付けではなく、このファイルを検証して下書きへ取り込みます。
+          </p>
+          <div
+            className={`grok-file-dropzone ${dragging ? 'dragging' : ''}`}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setDragging(true);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setDragging(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setDragging(false);
+              selectReturnFile(e.dataTransfer.files?.[0] ?? null);
+            }}
+          >
+            <input
+              ref={fileInput}
+              type="file"
+              accept={returnFile.accept}
+              onChange={(e) => {
+                selectReturnFile(e.currentTarget.files?.[0] ?? null);
+                e.currentTarget.value = '';
+              }}
+            />
+            <strong>
+              {selectedFile ? selectedFile.name : `${returnFile.name} をここにドラッグ＆ドロップ`}
+            </strong>
+            <span>
+              {selectedFile
+                ? `${fileSizeLabel(selectedFile.size)} · 取り込み待ち`
+                : 'またはファイルエクスプローラーから選択'}
+            </span>
+            <button type="button" onClick={() => fileInput.current?.click()}>
+              ファイルを選択
+            </button>
+          </div>
+          {fileIssue && <div className="issue error">✕ {fileIssue}</div>}
+          <div className="actions grok-file-actions">
+            <button
+              className="primary"
+              disabled={!selectedFile || !onImport}
+              onClick={() => void importReturnFile()}
+            >
+              ファイルを解析・取り込む
+            </button>
+            {selectedFile && (
+              <button type="button" onClick={() => selectReturnFile(null)}>
+                選択を解除
+              </button>
+            )}
+          </div>
+          {importResultView(result)}
+        </>
+      ) : receive ? (
+        <>
+          <h4>Grokの回答を貼り付け</h4>
+          <textarea className="raw" value={raw} onChange={(e) => setRaw(e.target.value)} />
+          <button
+            className="primary"
+            disabled={!raw.trim() || !onImport}
+            onClick={() => onImport && run(async () => setResult(await onImport(raw)))}
+          >
+            結果を解析・取り込む
+          </button>
+          {importResultView(result)}
+        </>
+      ) : null}
+    </section>
+  );
+}
 
-function parseModelsArtifact(content:string|null):ModelsArtifact|null{if(!content)return null;try{return JSON.parse(content) as ModelsArtifact}catch{return null}}
-function catalogBaseModel(catalog:ModelCatalog|null,value:ModelSelectionBase|null){if(!catalog||!value)return null;for(const collection of catalog.collections)for(const item of collection.items){if(item.modelId!==value.modelId)continue;const version=item.versions?.find(v=>v.versionId===value.versionId);if(version)return version.baseModel?.trim()||null;if(item.versionId===value.versionId)return item.baseModel?.trim()||null;}return null;}
-function baseModelView(label:string,value:ModelSelectionBase|null,baseModel:string|null,onPick:()=>void){return <div className="base-model-row"><span>{label}</span>{value?<div className="base-model-value"><strong>{value.modelName}</strong><small>{value.versionName} · {value.fileName}</small><small>Base Model: {baseModel??'—'}</small></div>:<div className="base-model-empty">未選択</div>}<button onClick={onPick}>{value?'変更':'Civitai Collectionから選択'}</button></div>}
-function fileSelectionView(label:string,value:TextEncoderSelection|VaeSelection|null,onPick:()=>void){return <div className="base-model-row"><span>{label}</span>{value?<div className="base-model-value"><strong>{value.fileName}</strong><small>ComfyUI / R2 モデルファイル</small></div>:<div className="base-model-empty">未選択</div>}<button onClick={onPick}>{value?'変更':'モデルファイルから選択'}</button></div>}
+async function loadEditable(
+  root: string,
+  key: 'story' | 'models',
+  setter: (r: ArtifactReadResult) => void,
+) {
+  const draft = await window.batchStudio.artifact.read(root, key, 'draft');
+  if (draft.exists) {
+    setter(draft);
+    return true;
+  }
+  const confirmed = await window.batchStudio.artifact.read(root, key, 'confirmed');
+  setter(confirmed);
+  return false;
+}
+export function StoryStage({
+  project,
+  setProject,
+  run,
+}: {
+  project: ProjectSummary;
+  setProject: (p: ProjectSummary) => void;
+  run: Runner;
+}) {
+  const [doc, setDoc] = useState<ArtifactReadResult | null>(null),
+    [editing, setEditing] = useState(false);
+  const load = () =>
+    run(async () => setEditing(await loadEditable(project.rootPath, 'story', setDoc)));
+  useEffect(() => {
+    void load();
+  }, [project.rootPath]);
+  const importStory = async (raw: string) => {
+    const r = await window.batchStudio.artifact.importGrok(project.rootPath, 'story', raw);
+    setEditing(true);
+    setDoc(await window.batchStudio.artifact.read(project.rootPath, 'story', 'draft'));
+    return r;
+  };
+  return (
+    <>
+      <GrokBridge
+        project={project}
+        stage="story-initial"
+        title="1. Grokでストーリーを検討"
+        run={run}
+        receive={false}
+      />
+      <GrokBridge
+        project={project}
+        stage="story-finalize"
+        title="2. 完成版 story.md を作成"
+        run={run}
+        onImport={importStory}
+      />
+      {project.artifacts.find((a) => a.key === 'story')?.state !== 'missing' && (
+        <GrokBridge
+          project={project}
+          stage="story-fix"
+          title="確定済みストーリーを修正"
+          run={run}
+          onImport={importStory}
+        />
+      )}
+      <section className="panel">
+        <div className="panelhead">
+          <h3>{editing ? 'story.md 下書き' : 'story.md 確定版'}</h3>
+          {!editing && doc?.exists && (
+            <button
+              onClick={() =>
+                run(async () => {
+                  setDoc(await window.batchStudio.artifact.beginEdit(project.rootPath, 'story'));
+                  setEditing(true);
+                })
+              }
+            >
+              編集を開始
+            </button>
+          )}
+        </div>
+        <textarea
+          className="editor"
+          readOnly={!editing}
+          value={doc?.content ?? ''}
+          onChange={(e) => doc && setDoc({ ...doc, content: e.target.value })}
+        />
+        {editing && (
+          <div className="actions">
+            <button
+              onClick={() =>
+                doc?.content != null &&
+                run(async () =>
+                  setDoc(
+                    await window.batchStudio.artifact.saveDraft(
+                      project.rootPath,
+                      'story',
+                      doc.content!,
+                    ),
+                  ),
+                )
+              }
+            >
+              下書き保存
+            </button>
+            <button
+              className="primary"
+              disabled={!doc?.content?.trim()}
+              onClick={() =>
+                run(async () => {
+                  const saved = await window.batchStudio.artifact.saveDraft(
+                    project.rootPath,
+                    'story',
+                    doc!.content!,
+                  );
+                  setDoc(saved);
+                  if (!saved.validation.valid)
+                    throw new Error('検証エラーがあるため確定できません。');
+                  setProject(await window.batchStudio.artifact.confirm(project.rootPath, 'story'));
+                  await load();
+                })
+              }
+            >
+              確定
+            </button>
+          </div>
+        )}
+        {doc && issuesView(doc.validation.issues)}
+      </section>
+    </>
+  );
+}
 
-export function ModelsStage({project,setProject,run,resetFrom}:{project:ProjectSummary;setProject:(p:ProjectSummary)=>void;run:Runner;resetFrom:(scope:ResetScope)=>Promise<void>}){
- const [cat,setCat]=useState<CatalogStatus|null>(null),[catalog,setCatalog]=useState<ModelCatalog|null>(null),[doc,setDoc]=useState<ArtifactReadResult|null>(null),[editing,setEditing]=useState(false),[family,setFamily]=useState<ModelFamily|null>(null),[baseModel,setBaseModel]=useState<CheckpointSelection|DiffusionModelSelection|null>(null),[textEncoder,setTextEncoder]=useState<TextEncoderSelection|null>(null),[vae,setVae]=useState<VaeSelection|null>(null),[picker,setPicker]=useState<'base_model'|'text_encoder'|'vae'|null>(null),[baseDirty,setBaseDirty]=useState(false),[migrationNeeded,setMigrationNeeded]=useState(false),[historyRevision,setHistoryRevision]=useState(0),[syncStatus,setSyncStatus]=useState<CivitaiCatalogStatus|null>(null),[hasInitialSelection,setHasInitialSelection]=useState(false);
- const hydrate=(content:string|null)=>{const m=parseModelsArtifact(content);if(!m||m.schemaVersion===1)return false;setFamily(m.modelFamily??null);if(m.schemaVersion===5){setBaseModel((m.modelFamily==='anima'?m.diffusionModel:m.checkpoint)??null);setTextEncoder(m.modelFamily==='anima'?(m.textEncoder??null) as TextEncoderSelection|null:null);setVae(m.modelFamily==='anima'?(m.vae??null):null);setBaseDirty(false);setMigrationNeeded(false);return true}setBaseModel(m.checkpoint??null);if(m.modelFamily==='illustrious'){setTextEncoder(null);setVae(null);setBaseDirty(false);setMigrationNeeded(false);return true}if(m.schemaVersion===4){setTextEncoder((m.textEncoder??null) as TextEncoderSelection|null);setVae(m.vae??null);setBaseDirty(true);setMigrationNeeded(true);return true}setTextEncoder(null);setVae(null);setBaseDirty(true);setMigrationNeeded(true);return true};
- const refreshCatalog=async()=>{const [nextCat,nextCatalog]=await Promise.all([window.batchStudio.catalog.status(project.rootPath),window.batchStudio.catalog.snapshot()]);setCat(nextCat);setCatalog(nextCatalog)};
- const load=()=>run(async()=>{const [nextCat,nextCatalog,nextSync,history]=await Promise.all([window.batchStudio.catalog.status(project.rootPath),window.batchStudio.catalog.snapshot(),window.batchStudio.catalog.integratedStatus(),window.batchStudio.artifact.grokLoraHistory(project.rootPath)]);setCat(nextCat);setCatalog(nextCatalog);setSyncStatus(nextSync);setHasInitialSelection(history.some(x=>x.stage==='models'));const draft=await window.batchStudio.artifact.read(project.rootPath,'models','draft');const confirmed=draft.exists?draft:await window.batchStudio.artifact.read(project.rootPath,'models','confirmed');setDoc(confirmed);setEditing(draft.exists);if(!hydrate(confirmed.content)){const brief=await window.batchStudio.artifact.read(project.rootPath,'projectBrief','confirmed');if(brief.content)try{const b=JSON.parse(brief.content) as {generation?:{modelFamily?:ModelFamily|'Illustrious'}};const f=String(b.generation?.modelFamily??'').toLowerCase();if(f==='illustrious'||f==='anima')setFamily(f as ModelFamily)}catch{}}});
- useEffect(()=>{void load()},[project.rootPath]);
- useEffect(()=>{if(syncStatus?.state!=='running')return;let cancelled=false;const id=window.setInterval(()=>{void window.batchStudio.catalog.integratedStatus().then(async status=>{if(cancelled)return;setSyncStatus(status);if(status.state==='ready'){const [nextCat,nextCatalog]=await Promise.all([window.batchStudio.catalog.status(project.rootPath),window.batchStudio.catalog.snapshot()]);if(cancelled)return;setCat(nextCat);setCatalog(nextCatalog)}}).catch(()=>{})},700);return()=>{cancelled=true;clearInterval(id)}},[syncStatus?.state,project.rootPath]);
- const syncCatalog=()=>run(async()=>{const status=await window.batchStudio.catalog.sync();setSyncStatus(status);if(status.state==='ready')await refreshCatalog()});
- const setModelFamily=(next:ModelFamily)=>{if(next===family)return;setFamily(next);setBaseModel(null);setTextEncoder(null);setVae(null);setMigrationNeeded(false);setBaseDirty(true)};
- const assignBaseModel=(value:ModelSelectionBase)=>{const mapped=family==='anima'?{...value,ref:'diffusion_model.main' as const}:{...value,ref:'checkpoint.main' as const};setBaseModel(mapped);setPicker(null);setMigrationNeeded(false);setBaseDirty(true)};
- const assignFile=(role:'text_encoder'|'vae',value:TextEncoderSelection|VaeSelection)=>{if(role==='text_encoder')setTextEncoder(value as TextEncoderSelection);else setVae(value as VaeSelection);setPicker(null);setMigrationNeeded(false);setBaseDirty(true)};
- const requiredSelected=!!family&&!!baseModel&&(family==='illustrious'||(!!textEncoder&&!!vae));
- const current=parseModelsArtifact(doc?.content??null),baseConfigured=requiredSelected&&!baseDirty&&!!current&&(current.schemaVersion===5||(current.schemaVersion>=2&&current.schemaVersion<=4&&current.modelFamily==='illustrious')),selectedBaseModel=catalogBaseModel(catalog,baseModel),baseRoleLabel=family==='anima'?'Diffusion Model':'Checkpoint';
- const saveBase=async()=>{if(!family||!baseModel||!catalog)throw new Error(`Model系統と${family==='anima'?'Diffusion Model':'Checkpoint'}を選択してください。`);const catalogInfo={schemaVersion:catalog.schemaVersion,generation:catalog.generation,generatedAt:catalog.generatedAt};let value:ModelsArtifact;if(family==='anima'){const selectedTextEncoder=textEncoder,selectedVae=vae;if(!selectedTextEncoder||!selectedVae)throw new Error('AnimaではText EncoderとVAEの選択が必須です。');const diffusionModel:DiffusionModelSelection={...baseModel,ref:'diffusion_model.main'};value={schemaVersion:5,modelFamily:'anima',catalog:catalogInfo,diffusionModel,textEncoder:selectedTextEncoder,vae:selectedVae,loras:[]};}else{const checkpoint:CheckpointSelection={...baseModel,ref:'checkpoint.main'};value={schemaVersion:5,modelFamily:'illustrious',catalog:catalogInfo,checkpoint,loras:[]};}const saved=await window.batchStudio.artifact.saveDraft(project.rootPath,'models',JSON.stringify(value,null,2));setDoc(saved);setEditing(true);if(!saved.validation.valid)throw new Error('基盤モデルの検証に失敗しました。');setBaseDirty(false);setMigrationNeeded(false)};
- const importModels=async(raw:string,stage:'models'|'models-fix')=>{const r=await window.batchStudio.artifact.importGrok(project.rootPath,'models',raw,stage);setEditing(true);const next=await window.batchStudio.artifact.read(project.rootPath,'models','draft');setDoc(next);hydrate(next.content);if(stage==='models')setHasInitialSelection(true);setHistoryRevision(x=>x+1);return r};
- return <><section className="panel"><div className="panelhead"><div><h3>使用するモデルカタログ</h3><p>IllustriousのCheckpoint、AnimaのDiffusion Model、およびLoRAは Civitai Collection に登録されているモデルを対象にします。</p><p>{cat?.exists?<strong>{`登録済みモデル: ${cat.itemCount}件`}</strong>:'モデルカタログがありません。下の更新ボタンからCivitai Collectionを同期してください。'}</p></div><div className="actions"><button disabled={!syncStatus||syncStatus.state==='running'||!syncStatus.apiKeyConfigured} onClick={()=>syncCatalog()}>{syncStatus?.state==='running'?'同期中…':'Civitai モデルカタログを更新'}</button>{cat?.path&&<button onClick={()=>window.batchStudio.file.showInFolder(cat.path!)}>場所を開く</button>}</div></div>{syncStatus?.state==='running'&&<div className="catalog-progress"><div><strong>{syncStatus.phase}</strong><span>{syncStatus.completed} / {syncStatus.total}</span></div><progress value={syncStatus.completed} max={Math.max(syncStatus.total,1)}/><p>{syncStatus.message}</p></div>}{syncStatus?.state==='error'&&<div className="issue error">✕ {syncStatus.error??syncStatus.message}</div>}{syncStatus&&!syncStatus.apiKeyConfigured&&<div className="issue warning">Civitai APIキーが設定されていません。環境設定のCivitai連携設定を確認してください。</div>}{cat?.error&&<div className="issue error">✕ {cat.error}</div>}</section>
- <section className="panel"><div className="panelhead"><h3>基盤モデルを選択</h3>{baseConfigured&&<StageResetMenu scope="base-models" onReset={resetFrom}/>}</div><p className="model-selection-note">IllustriousはCheckpointを使用します。AnimaはDiffusion Modelを <code>models\diffusion_models</code> で読み込み、Text Encoderを <code>models\text_encoders</code>、VAEを <code>models\vae</code> から読み込みます。Text Encoder / VAE はローカルとR2の候補を統合します。</p>{migrationNeeded&&<div className="issue warning">旧Anima基盤モデル設定を検出しました。Diffusion Model / Text Encoder / VAEとして保存し直すとschemaVersion 5へ移行します。</div>}<div className="model-family-grid"><button className={`model-family-card ${family==='illustrious'?'active':''}`} onClick={()=>setModelFamily('illustrious')}><strong>Illustrious</strong><small>通常タグ: looking_at_viewer</small></button><button className={`model-family-card ${family==='anima'?'active':''}`} onClick={()=>setModelFamily('anima')}><strong>Anima</strong><small>通常タグ: looking at viewer</small></button></div>{family&&<div className="base-model-list">{baseModelView(baseRoleLabel,baseModel,selectedBaseModel,()=>setPicker('base_model'))}{family==='anima'&&fileSelectionView('Text Encoder',textEncoder,()=>setPicker('text_encoder'))}{family==='anima'&&fileSelectionView('VAE',vae,()=>setPicker('vae'))}</div>}<div className="actions"><button className="primary" disabled={!catalog||!requiredSelected||!baseDirty} onClick={()=>run(saveBase)}>基盤モデルを保存</button>{baseConfigured?<span className="model-base-ready">✓ 基盤モデル確定済み — GrokはLoRAのみ選定します</span>:family&&<span className="model-base-warning">基盤モデルを保存するとLoRA選定へ進めます</span>}</div></section>
- {baseConfigured&&<><GrokBridge project={project} stage="models" title="GrokでLoRAを選定" run={run} resetScope={hasInitialSelection?'models':undefined} onReset={resetFrom} onImport={raw=>importModels(raw,'models')}/><GrokLoraHistory project={project} stage="models" catalog={catalog} revision={historyRevision}/></>} {baseConfigured&&hasInitialSelection&&<><GrokBridge project={project} stage="models-fix" title="LoRAを再選定" run={run} resetScope="models-fix" onReset={resetFrom} onImport={raw=>importModels(raw,'models-fix')}/><GrokLoraHistory project={project} stage="models-fix" catalog={catalog} revision={historyRevision}/></>}<section className="panel"><div className="panelhead"><h3>{editing?'models.json 下書き':'models.json 確定版'}</h3></div><textarea className="editor code" readOnly value={doc?.content??''}/>{editing&&<div className="actions"><button className="primary" disabled={!doc?.content?.trim()||!doc.validation.valid} onClick={()=>run(async()=>{setProject(await window.batchStudio.artifact.confirm(project.rootPath,'models'));await load()})}>確定</button></div>}{doc&&issuesView(doc.validation.issues)}</section>
- {picker==='base_model'&&catalog&&<ModelPicker catalog={catalog} role="checkpoint" family={family??undefined} label={baseRoleLabel} onSelect={assignBaseModel} onClose={()=>setPicker(null)} onCatalogChange={next=>{setCatalog(next);void window.batchStudio.catalog.status(project.rootPath).then(setCat)}}/>}{(picker==='text_encoder'||picker==='vae')&&<ModelFilePicker project={project} role={picker} onSelect={value=>assignFile(picker,value)} onClose={()=>setPicker(null)}/>}</>;
+function parseModelsArtifact(content: string | null): ModelsArtifact | null {
+  if (!content) return null;
+  try {
+    return JSON.parse(content) as ModelsArtifact;
+  } catch {
+    return null;
+  }
+}
+function catalogBaseModel(catalog: ModelCatalog | null, value: ModelSelectionBase | null) {
+  if (!catalog || !value) return null;
+  for (const collection of catalog.collections)
+    for (const item of collection.items) {
+      if (item.modelId !== value.modelId) continue;
+      const version = item.versions?.find((v) => v.versionId === value.versionId);
+      if (version) return version.baseModel?.trim() || null;
+      if (item.versionId === value.versionId) return item.baseModel?.trim() || null;
+    }
+  return null;
+}
+function baseModelView(
+  label: string,
+  value: ModelSelectionBase | null,
+  baseModel: string | null,
+  onPick: () => void,
+) {
+  return (
+    <div className="base-model-row">
+      <span>{label}</span>
+      {value ? (
+        <div className="base-model-value">
+          <strong>{value.modelName}</strong>
+          <small>
+            {value.versionName} · {value.fileName}
+          </small>
+          <small>Base Model: {baseModel ?? '—'}</small>
+        </div>
+      ) : (
+        <div className="base-model-empty">未選択</div>
+      )}
+      <button onClick={onPick}>{value ? '変更' : 'Civitai Collectionから選択'}</button>
+    </div>
+  );
+}
+function fileSelectionView(
+  label: string,
+  value: TextEncoderSelection | VaeSelection | null,
+  onPick: () => void,
+) {
+  return (
+    <div className="base-model-row">
+      <span>{label}</span>
+      {value ? (
+        <div className="base-model-value">
+          <strong>{value.fileName}</strong>
+          <small>ComfyUI / R2 モデルファイル</small>
+        </div>
+      ) : (
+        <div className="base-model-empty">未選択</div>
+      )}
+      <button onClick={onPick}>{value ? '変更' : 'モデルファイルから選択'}</button>
+    </div>
+  );
+}
+
+export function ModelsStage({
+  project,
+  setProject,
+  run,
+  resetFrom,
+}: {
+  project: ProjectSummary;
+  setProject: (p: ProjectSummary) => void;
+  run: Runner;
+  resetFrom: (scope: ResetScope) => Promise<void>;
+}) {
+  const [cat, setCat] = useState<CatalogStatus | null>(null),
+    [catalog, setCatalog] = useState<ModelCatalog | null>(null),
+    [doc, setDoc] = useState<ArtifactReadResult | null>(null),
+    [editing, setEditing] = useState(false),
+    [family, setFamily] = useState<ModelFamily | null>(null),
+    [baseModel, setBaseModel] = useState<CheckpointSelection | DiffusionModelSelection | null>(
+      null,
+    ),
+    [textEncoder, setTextEncoder] = useState<TextEncoderSelection | null>(null),
+    [vae, setVae] = useState<VaeSelection | null>(null),
+    [picker, setPicker] = useState<'base_model' | 'text_encoder' | 'vae' | null>(null),
+    [baseDirty, setBaseDirty] = useState(false),
+    [migrationNeeded, setMigrationNeeded] = useState(false),
+    [historyRevision, setHistoryRevision] = useState(0),
+    [syncStatus, setSyncStatus] = useState<CivitaiCatalogStatus | null>(null),
+    [hasInitialSelection, setHasInitialSelection] = useState(false);
+  const hydrate = (content: string | null) => {
+    const m = parseModelsArtifact(content);
+    if (!m || m.schemaVersion === 1) return false;
+    setFamily(m.modelFamily ?? null);
+    if (m.schemaVersion === 5) {
+      setBaseModel((m.modelFamily === 'anima' ? m.diffusionModel : m.checkpoint) ?? null);
+      setTextEncoder(
+        m.modelFamily === 'anima' ? ((m.textEncoder ?? null) as TextEncoderSelection | null) : null,
+      );
+      setVae(m.modelFamily === 'anima' ? (m.vae ?? null) : null);
+      setBaseDirty(false);
+      setMigrationNeeded(false);
+      return true;
+    }
+    setBaseModel(m.checkpoint ?? null);
+    if (m.modelFamily === 'illustrious') {
+      setTextEncoder(null);
+      setVae(null);
+      setBaseDirty(false);
+      setMigrationNeeded(false);
+      return true;
+    }
+    if (m.schemaVersion === 4) {
+      setTextEncoder((m.textEncoder ?? null) as TextEncoderSelection | null);
+      setVae(m.vae ?? null);
+      setBaseDirty(true);
+      setMigrationNeeded(true);
+      return true;
+    }
+    setTextEncoder(null);
+    setVae(null);
+    setBaseDirty(true);
+    setMigrationNeeded(true);
+    return true;
+  };
+  const refreshCatalog = async () => {
+    const [nextCat, nextCatalog] = await Promise.all([
+      window.batchStudio.catalog.status(project.rootPath),
+      window.batchStudio.catalog.snapshot(),
+    ]);
+    setCat(nextCat);
+    setCatalog(nextCatalog);
+  };
+  const load = () =>
+    run(async () => {
+      const [nextCat, nextCatalog, nextSync, history] = await Promise.all([
+        window.batchStudio.catalog.status(project.rootPath),
+        window.batchStudio.catalog.snapshot(),
+        window.batchStudio.catalog.integratedStatus(),
+        window.batchStudio.artifact.grokLoraHistory(project.rootPath),
+      ]);
+      setCat(nextCat);
+      setCatalog(nextCatalog);
+      setSyncStatus(nextSync);
+      setHasInitialSelection(history.some((x) => x.stage === 'models'));
+      const draft = await window.batchStudio.artifact.read(project.rootPath, 'models', 'draft');
+      const confirmed = draft.exists
+        ? draft
+        : await window.batchStudio.artifact.read(project.rootPath, 'models', 'confirmed');
+      setDoc(confirmed);
+      setEditing(draft.exists);
+      if (!hydrate(confirmed.content)) {
+        const brief = await window.batchStudio.artifact.read(
+          project.rootPath,
+          'projectBrief',
+          'confirmed',
+        );
+        if (brief.content)
+          try {
+            const b = JSON.parse(brief.content) as {
+              generation?: { modelFamily?: ModelFamily | 'Illustrious' };
+            };
+            const f = String(b.generation?.modelFamily ?? '').toLowerCase();
+            if (f === 'illustrious' || f === 'anima') setFamily(f as ModelFamily);
+          } catch {}
+      }
+    });
+  useEffect(() => {
+    void load();
+  }, [project.rootPath]);
+  useEffect(() => {
+    if (syncStatus?.state !== 'running') return;
+    let cancelled = false;
+    const id = window.setInterval(() => {
+      void window.batchStudio.catalog
+        .integratedStatus()
+        .then(async (status) => {
+          if (cancelled) return;
+          setSyncStatus(status);
+          if (status.state === 'ready') {
+            const [nextCat, nextCatalog] = await Promise.all([
+              window.batchStudio.catalog.status(project.rootPath),
+              window.batchStudio.catalog.snapshot(),
+            ]);
+            if (cancelled) return;
+            setCat(nextCat);
+            setCatalog(nextCatalog);
+          }
+        })
+        .catch(() => {});
+    }, 700);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [syncStatus?.state, project.rootPath]);
+  const syncCatalog = () =>
+    run(async () => {
+      const status = await window.batchStudio.catalog.sync();
+      setSyncStatus(status);
+      if (status.state === 'ready') await refreshCatalog();
+    });
+  const setModelFamily = (next: ModelFamily) => {
+    if (next === family) return;
+    setFamily(next);
+    setBaseModel(null);
+    setTextEncoder(null);
+    setVae(null);
+    setMigrationNeeded(false);
+    setBaseDirty(true);
+  };
+  const assignBaseModel = (value: ModelSelectionBase) => {
+    const mapped =
+      family === 'anima'
+        ? { ...value, ref: 'diffusion_model.main' as const }
+        : { ...value, ref: 'checkpoint.main' as const };
+    setBaseModel(mapped);
+    setPicker(null);
+    setMigrationNeeded(false);
+    setBaseDirty(true);
+  };
+  const assignFile = (role: 'text_encoder' | 'vae', value: TextEncoderSelection | VaeSelection) => {
+    if (role === 'text_encoder') setTextEncoder(value as TextEncoderSelection);
+    else setVae(value as VaeSelection);
+    setPicker(null);
+    setMigrationNeeded(false);
+    setBaseDirty(true);
+  };
+  const requiredSelected =
+    !!family && !!baseModel && (family === 'illustrious' || (!!textEncoder && !!vae));
+  const current = parseModelsArtifact(doc?.content ?? null),
+    baseConfigured =
+      requiredSelected &&
+      !baseDirty &&
+      !!current &&
+      (current.schemaVersion === 5 ||
+        (current.schemaVersion >= 2 &&
+          current.schemaVersion <= 4 &&
+          current.modelFamily === 'illustrious')),
+    selectedBaseModel = catalogBaseModel(catalog, baseModel),
+    baseRoleLabel = family === 'anima' ? 'Diffusion Model' : 'Checkpoint';
+  const saveBase = async () => {
+    if (!family || !baseModel || !catalog)
+      throw new Error(
+        `Model系統と${family === 'anima' ? 'Diffusion Model' : 'Checkpoint'}を選択してください。`,
+      );
+    const catalogInfo = {
+      schemaVersion: catalog.schemaVersion,
+      generation: catalog.generation,
+      generatedAt: catalog.generatedAt,
+    };
+    let value: ModelsArtifact;
+    if (family === 'anima') {
+      const selectedTextEncoder = textEncoder,
+        selectedVae = vae;
+      if (!selectedTextEncoder || !selectedVae)
+        throw new Error('AnimaではText EncoderとVAEの選択が必須です。');
+      const diffusionModel: DiffusionModelSelection = { ...baseModel, ref: 'diffusion_model.main' };
+      value = {
+        schemaVersion: 5,
+        modelFamily: 'anima',
+        catalog: catalogInfo,
+        diffusionModel,
+        textEncoder: selectedTextEncoder,
+        vae: selectedVae,
+        loras: [],
+      };
+    } else {
+      const checkpoint: CheckpointSelection = { ...baseModel, ref: 'checkpoint.main' };
+      value = {
+        schemaVersion: 5,
+        modelFamily: 'illustrious',
+        catalog: catalogInfo,
+        checkpoint,
+        loras: [],
+      };
+    }
+    const saved = await window.batchStudio.artifact.saveDraft(
+      project.rootPath,
+      'models',
+      JSON.stringify(value, null, 2),
+    );
+    setDoc(saved);
+    setEditing(true);
+    if (!saved.validation.valid) throw new Error('基盤モデルの検証に失敗しました。');
+    setBaseDirty(false);
+    setMigrationNeeded(false);
+  };
+  const importModels = async (raw: string, stage: 'models' | 'models-fix') => {
+    const r = await window.batchStudio.artifact.importGrok(project.rootPath, 'models', raw, stage);
+    setEditing(true);
+    const next = await window.batchStudio.artifact.read(project.rootPath, 'models', 'draft');
+    setDoc(next);
+    hydrate(next.content);
+    if (stage === 'models') setHasInitialSelection(true);
+    setHistoryRevision((x) => x + 1);
+    return r;
+  };
+  return (
+    <>
+      <section className="panel">
+        <div className="panelhead">
+          <div>
+            <h3>使用するモデルカタログ</h3>
+            <p>
+              IllustriousのCheckpoint、AnimaのDiffusion Model、およびLoRAは Civitai Collection
+              に登録されているモデルを対象にします。
+            </p>
+            <p>
+              {cat?.exists ? (
+                <strong>{`登録済みモデル: ${cat.itemCount}件`}</strong>
+              ) : (
+                'モデルカタログがありません。下の更新ボタンからCivitai Collectionを同期してください。'
+              )}
+            </p>
+          </div>
+          <div className="actions">
+            <button
+              disabled={
+                !syncStatus || syncStatus.state === 'running' || !syncStatus.apiKeyConfigured
+              }
+              onClick={() => syncCatalog()}
+            >
+              {syncStatus?.state === 'running' ? '同期中…' : 'Civitai モデルカタログを更新'}
+            </button>
+            {cat?.path && (
+              <button onClick={() => window.batchStudio.file.showInFolder(cat.path!)}>
+                場所を開く
+              </button>
+            )}
+          </div>
+        </div>
+        {syncStatus?.state === 'running' && (
+          <div className="catalog-progress">
+            <div>
+              <strong>{syncStatus.phase}</strong>
+              <span>
+                {syncStatus.completed} / {syncStatus.total}
+              </span>
+            </div>
+            <progress value={syncStatus.completed} max={Math.max(syncStatus.total, 1)} />
+            <p>{syncStatus.message}</p>
+          </div>
+        )}
+        {syncStatus?.state === 'error' && (
+          <div className="issue error">✕ {syncStatus.error ?? syncStatus.message}</div>
+        )}
+        {syncStatus && !syncStatus.apiKeyConfigured && (
+          <div className="issue warning">
+            Civitai APIキーが設定されていません。環境設定のCivitai連携設定を確認してください。
+          </div>
+        )}
+        {cat?.error && <div className="issue error">✕ {cat.error}</div>}
+      </section>
+      <section className="panel">
+        <div className="panelhead">
+          <h3>基盤モデルを選択</h3>
+          {baseConfigured && <StageResetMenu scope="base-models" onReset={resetFrom} />}
+        </div>
+        <p className="model-selection-note">
+          IllustriousはCheckpointを使用します。AnimaはDiffusion Modelを{' '}
+          <code>models\diffusion_models</code> で読み込み、Text Encoderを{' '}
+          <code>models\text_encoders</code>、VAEを <code>models\vae</code> から読み込みます。Text
+          Encoder / VAE はローカルとR2の候補を統合します。
+        </p>
+        {migrationNeeded && (
+          <div className="issue warning">
+            旧Anima基盤モデル設定を検出しました。Diffusion Model / Text Encoder /
+            VAEとして保存し直すとschemaVersion 5へ移行します。
+          </div>
+        )}
+        <div className="model-family-grid">
+          <button
+            className={`model-family-card ${family === 'illustrious' ? 'active' : ''}`}
+            onClick={() => setModelFamily('illustrious')}
+          >
+            <strong>Illustrious</strong>
+            <small>通常タグ: looking_at_viewer</small>
+          </button>
+          <button
+            className={`model-family-card ${family === 'anima' ? 'active' : ''}`}
+            onClick={() => setModelFamily('anima')}
+          >
+            <strong>Anima</strong>
+            <small>通常タグ: looking at viewer</small>
+          </button>
+        </div>
+        {family && (
+          <div className="base-model-list">
+            {baseModelView(baseRoleLabel, baseModel, selectedBaseModel, () =>
+              setPicker('base_model'),
+            )}
+            {family === 'anima' &&
+              fileSelectionView('Text Encoder', textEncoder, () => setPicker('text_encoder'))}
+            {family === 'anima' && fileSelectionView('VAE', vae, () => setPicker('vae'))}
+          </div>
+        )}
+        <div className="actions">
+          <button
+            className="primary"
+            disabled={!catalog || !requiredSelected || !baseDirty}
+            onClick={() => run(saveBase)}
+          >
+            基盤モデルを保存
+          </button>
+          {baseConfigured ? (
+            <span className="model-base-ready">
+              ✓ 基盤モデル確定済み — GrokはLoRAのみ選定します
+            </span>
+          ) : (
+            family && (
+              <span className="model-base-warning">基盤モデルを保存するとLoRA選定へ進めます</span>
+            )
+          )}
+        </div>
+      </section>
+      {baseConfigured && (
+        <>
+          <GrokBridge
+            project={project}
+            stage="models"
+            title="GrokでLoRAを選定"
+            run={run}
+            resetScope={hasInitialSelection ? 'models' : undefined}
+            onReset={resetFrom}
+            onImport={(raw) => importModels(raw, 'models')}
+          />
+          <GrokLoraHistory
+            project={project}
+            stage="models"
+            catalog={catalog}
+            revision={historyRevision}
+          />
+        </>
+      )}{' '}
+      {baseConfigured && hasInitialSelection && (
+        <>
+          <GrokBridge
+            project={project}
+            stage="models-fix"
+            title="LoRAを再選定"
+            run={run}
+            resetScope="models-fix"
+            onReset={resetFrom}
+            onImport={(raw) => importModels(raw, 'models-fix')}
+          />
+          <GrokLoraHistory
+            project={project}
+            stage="models-fix"
+            catalog={catalog}
+            revision={historyRevision}
+          />
+        </>
+      )}
+      <section className="panel">
+        <div className="panelhead">
+          <h3>{editing ? 'models.json 下書き' : 'models.json 確定版'}</h3>
+        </div>
+        <textarea className="editor code" readOnly value={doc?.content ?? ''} />
+        {editing && (
+          <div className="actions">
+            <button
+              className="primary"
+              disabled={!doc?.content?.trim() || !doc.validation.valid}
+              onClick={() =>
+                run(async () => {
+                  setProject(await window.batchStudio.artifact.confirm(project.rootPath, 'models'));
+                  await load();
+                })
+              }
+            >
+              確定
+            </button>
+          </div>
+        )}
+        {doc && issuesView(doc.validation.issues)}
+      </section>
+      {picker === 'base_model' && catalog && (
+        <ModelPicker
+          catalog={catalog}
+          role="checkpoint"
+          family={family ?? undefined}
+          label={baseRoleLabel}
+          onSelect={assignBaseModel}
+          onClose={() => setPicker(null)}
+          onCatalogChange={(next) => {
+            setCatalog(next);
+            void window.batchStudio.catalog.status(project.rootPath).then(setCat);
+          }}
+        />
+      )}
+      {(picker === 'text_encoder' || picker === 'vae') && (
+        <ModelFilePicker
+          project={project}
+          role={picker}
+          onSelect={(value) => assignFile(picker, value)}
+          onClose={() => setPicker(null)}
+        />
+      )}
+    </>
+  );
 }

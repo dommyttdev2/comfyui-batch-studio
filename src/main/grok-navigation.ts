@@ -29,7 +29,7 @@ export function isGrokNavigationUrl(target: string) {
     const url = new URL(target);
     if (url.protocol !== 'https:') return false;
     const host = url.hostname.toLowerCase();
-    return [...GROK_HOSTS, ...AUTH_ENTRY_HOSTS].some(allowed => hostMatches(host, allowed));
+    return [...GROK_HOSTS, ...AUTH_ENTRY_HOSTS].some((allowed) => hostMatches(host, allowed));
   } catch {
     return false;
   }
@@ -50,7 +50,10 @@ export function canonicalGrokConversationUrl(target: string): string | null {
 export function isOAuthPopupUrl(target: string) {
   try {
     const url = new URL(target);
-    return url.protocol === 'https:' && AUTH_ENTRY_HOSTS.some(allowed => hostMatches(url.hostname.toLowerCase(), allowed));
+    return (
+      url.protocol === 'https:' &&
+      AUTH_ENTRY_HOSTS.some((allowed) => hostMatches(url.hostname.toLowerCase(), allowed))
+    );
   } catch {
     return false;
   }

@@ -1,1 +1,73 @@
-.stage-reset-menu{position:relative;margin-left:auto}.stage-reset-trigger{min-width:36px;padding:4px 9px;font-size:20px;line-height:1;border-radius:8px}.stage-reset-popover{position:absolute;right:0;top:calc(100% + 6px);z-index:25;min-width:190px;padding:6px;border:1px solid var(--border);border-radius:10px;background:var(--panel);box-shadow:0 12px 30px rgba(0,0,0,.18)}.stage-reset-popover button{width:100%;text-align:left}.stage-reset-modal{z-index:90}.stage-reset-modal .modalcard{max-width:620px}.stage-reset-summary{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}.stage-reset-summary section{padding:12px;border:1px solid var(--border);border-radius:10px}.stage-reset-summary h3{margin:0 0 8px;font-size:14px}.stage-reset-summary ul{margin:0;padding-left:20px}.stage-reset-summary li+li{margin-top:5px}.stage-reset-note,.stage-reset-archive{font-size:13px;opacity:.85}.stage-reset-modal button.danger{border-color:#b94a48;color:#fff;background:#9d3432}.stage-reset-modal button.danger:hover:not(:disabled){background:#b33d3a}@media(max-width:700px){.stage-reset-summary{grid-template-columns:1fr}}
+.stage-reset-menu {
+  position: relative;
+  margin-left: auto;
+}
+.stage-reset-trigger {
+  min-width: 36px;
+  padding: 4px 9px;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 8px;
+}
+.stage-reset-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 25;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+.stage-reset-popover button {
+  width: 100%;
+  text-align: left;
+}
+.stage-reset-modal {
+  z-index: 90;
+}
+.stage-reset-modal .modalcard {
+  max-width: 620px;
+}
+.stage-reset-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+.stage-reset-summary section {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.stage-reset-summary h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.stage-reset-summary ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.stage-reset-summary li + li {
+  margin-top: 5px;
+}
+.stage-reset-note,
+.stage-reset-archive {
+  font-size: 13px;
+  opacity: 0.85;
+}
+.stage-reset-modal button.danger {
+  border-color: #b94a48;
+  color: #fff;
+  background: #9d3432;
+}
+.stage-reset-modal button.danger:hover:not(:disabled) {
+  background: #b33d3a;
+}
+@media (max-width: 700px) {
+  .stage-reset-summary {
+    grid-template-columns: 1fr;
+  }
+}

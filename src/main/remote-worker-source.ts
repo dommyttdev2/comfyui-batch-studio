@@ -1,5 +1,5 @@
-export const REMOTE_WORKER_VERSION='10';
-export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
+export const REMOTE_WORKER_VERSION = '10';
+export const REMOTE_WORKER_FILE = `#!/usr/bin/env python3
 import base64,copy,hashlib,http.client,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,zipfile
 VERSION="10"
 CHUNK_SIZE=8*1024*1024

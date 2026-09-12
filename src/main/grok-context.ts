@@ -3,19 +3,21 @@ import type { GrokTask, ModelFamily } from '../shared/types.js';
 import { exists, readJson } from './fs-utils.js';
 import { catalogPathFor } from './model-catalog.js';
 
-async function attachment(name:string,p:string,purpose:string){return {name,path:p,purpose,exists:await exists(p)}}
-const common=`あなたは ComfyUI Batch Studio の企画工程を支援します。
+async function attachment(name: string, p: string, purpose: string) {
+  return { name, path: p, purpose, exists: await exists(p) };
+}
+const common = `あなたは ComfyUI Batch Studio の企画工程を支援します。
 Batch Studio と Grok の責務境界を守ってください。
 - あなたは意味・創作上の判断を担当します。
 - ComfyUI Workflow JSON、node ID、link ID、group ID、node position、widgets_values は生成しません。
 - 添付ファイルに存在しない Model / Version / File identity を捏造しません。`;
-const artifactFileOutputRules=(fileName:string)=>`## 出力契約
+const artifactFileOutputRules = (fileName: string) => `## 出力契約
 - 最終成果物はチャット本文へ展開せず、\`${fileName}\` という名前のダウンロード可能なファイルとして生成・添付してください。
 - ファイル内容をチャット本文、code block、引用、要約へ再掲しません。
 - チャット本文には説明、挨拶、注釈、要約、注意書き、「以下です」「補足」等の成果物外テキストを付けません。
 - ファイルは UTF-8 のプレーンテキストとして作成してください。
 - 指定された形式・見出し・field以外を追加しません。`;
-const storyDiscussionShape=`## 出力形式
+const storyDiscussionShape = `## 出力形式
 次の見出し順で回答してください。これは検討用回答であり code block には入れません。
 # 調査・前提
 - 確認できた公開情報
@@ -38,7 +40,7 @@ const storyDiscussionShape=`## 出力形式
 
 # 確認事項
 - ユーザーが決めるべき点を箇条書きで示してください。`;
-const storyShape=`${artifactFileOutputRules('story.md')}
+const storyShape = `${artifactFileOutputRules('story.md')}
 story.md 本文を次の見出し順で記述してください。
 
 # <作品タイトル>
@@ -75,7 +77,7 @@ story.md 本文を次の見出し順で記述してください。
 - Prompt Planそのもの、LoRA選定、Checkpoint選定、ComfyUIノード情報は書きません。
 - Scene内で個別画像のpositive/negative promptは書きません。
 - 上記の最上位見出しを省略・改名・追加しません。`;
-const loraFallbackDecisionRules=`## LoRA不足時の必須探索順序
+const loraFallbackDecisionRules = `## LoRA不足時の必須探索順序
 Story上必要な表現ごとに、次の順序を必ず守って解決してください。途中の段階で解決できた場合は、それ以降へ進みません。
 1. まず添付 model_catalog.json 内の LoRA / LoCon / DoRA から、要件を直接満たす候補を探します。
 2. model_catalog.json に適切な候補が無い場合、Web検索を行い、\`civitai.red\` と \`civitai.com\` の両方から代替LoRAを探します。モデル名だけでなく、用途・Base Model・Version・trained words等を確認してください。
@@ -87,7 +89,7 @@ Story上必要な表現ごとに、次の順序を必ず守って解決してく
    - Promptだけで十分に代替可能と判断した場合は promptFallbacks に記録し、その要件を missingRequirements へ入れません。これは解決済みとして扱います。
    - Prompt代替では再現性が不足すると判断した場合だけ missingRequirements に残します。
 5. 「見つからない」だけで直ちに missingRequirements にしてはいけません。必ず 2 → 3 → 4 の調査を完了してください。`;
-const lorasShape=`${artifactFileOutputRules('model_loras.json')}
+const lorasShape = `${artifactFileOutputRules('model_loras.json')}
 model_loras.json は次の形だけにしてください。
 {
   "schemaVersion": 1,
@@ -118,7 +120,7 @@ model_loras.json は次の形だけにしてください。
 - 全探索を行っても解決できない要件、または外部Civitai上に候補が見つかったがカタログ未登録の要件だけ、root の missingRequirements 配列へ {"role":"lora","requirement":"...","reason":"..."} を記載してください。
 - 不足が無い場合は missingRequirements を出力しません。
 - 定義されていない追加フィールドを出力しません。`;
-const planShape=`${artifactFileOutputRules('prompt_plan.json')}
+const planShape = `${artifactFileOutputRules('prompt_plan.json')}
 prompt_plan.json は次の形だけにしてください。
 {
   "schemaVersion": 1,
@@ -147,7 +149,7 @@ prompt_plan.json は次の形だけにしてください。
 - model_prompt_fallbacks.json が添付されている場合、その promptFallbacks はLoRA不足をPromptで解決済みと判断した要件です。各 requirement と Story を照合し、該当する common / Branch / Leaf の positive・negativeへ記録済み文字列を反映してください。無関係なSceneへ一律適用せず、必要な範囲へ配置してください。
 - promptFallbacks の positive / negative は代替策として確定したPromptなので、省略したり反対の意味へ書き換えたりしません。重複だけは適用先Prompt内で1回にまとめて構いません。
 - common / rootLoras / branches / leaves の意味情報だけを出力し、Workflow内部fieldや未知fieldを追加しません。`;
-const danbooruTagRules=`## Danbooruタグ選定ルール
+const danbooruTagRules = `## Danbooruタグ選定ルール
 画像生成に使用する positive / negative prompt の通常タグは、Danbooruで実在するタグを使用してください。
 - 自由作文の英語フレーズや、Danbooruに存在しない独自タグを新しく作ってはいけません。
 - Danbooruのcanonical tagを基準にし、aliasがある場合はalias先のcanonical tagを優先してください。
@@ -167,14 +169,83 @@ const danbooruTagRules=`## Danbooruタグ選定ルール
 ### 例外
 - models.json の trainedWords と、そこから変更せず転記するCheckpoint / LoRA等のトリガーワードにはDanbooruタグ制約を適用しません。
 - trainedWordsはDanbooruに存在しなくても削除・翻訳・正規化・別タグへの置換をせず、models.jsonの文字列をそのまま使用してください。`;
-function dialectRule(family:ModelFamily|undefined){if(family==='anima')return `## Prompt記法 — Anima\n- trainedWordsとしてカタログから転記する文字列を除き、Danbooru系の通常タグは単語間をスペースで記述してください。例: \`looking at viewer\`, \`long hair\`, \`from below\`.\n- 通常タグを underscore 形式へ変換しません。\n- trainedWords は例外で、models.json に記録された文字列を1文字も変更せずそのまま使用します。`;return `## Prompt記法 — Illustrious\n- trainedWordsとしてカタログから転記する文字列を除き、Danbooru系の通常タグは underscore 形式で記述してください。例: \`looking_at_viewer\`, \`long_hair\`, \`from_below\`.\n- 通常タグをスペース区切りへ変換しません。\n- trainedWords は例外で、models.json に記録された文字列を1文字も変更せずそのまま使用します。`;}
+function dialectRule(family: ModelFamily | undefined) {
+  if (family === 'anima')
+    return `## Prompt記法 — Anima\n- trainedWordsとしてカタログから転記する文字列を除き、Danbooru系の通常タグは単語間をスペースで記述してください。例: \`looking at viewer\`, \`long hair\`, \`from below\`.\n- 通常タグを underscore 形式へ変換しません。\n- trainedWords は例外で、models.json に記録された文字列を1文字も変更せずそのまま使用します。`;
+  return `## Prompt記法 — Illustrious\n- trainedWordsとしてカタログから転記する文字列を除き、Danbooru系の通常タグは underscore 形式で記述してください。例: \`looking_at_viewer\`, \`long_hair\`, \`from_below\`.\n- 通常タグをスペース区切りへ変換しません。\n- trainedWords は例外で、models.json に記録された文字列を1文字も変更せずそのまま使用します。`;
+}
 
-export async function buildGrokTask(root:string,stage:GrokTask['stage'],extra=''):Promise<GrokTask>{
-  const brief=path.join(root,'project_brief.json'),story=path.join(root,'story.md'),models=path.join(root,'models.json'),modelsDraft=path.join(root,'._batch_studio','drafts','models.json'),promptFallbacks=path.join(root,'._batch_studio','model_prompt_fallbacks.json');
-  const catalog=await catalogPathFor(root);
-  if(stage==='story-initial')return {stage,title:'ストーリー検討',prompt:`${common}\n\n## Task\n添付した project_brief.json を基に、まだ story.md を確定せず、ユーザーとの対話用に検討材料を提示してください。\n1. 公開情報を調査して前提を整理する。版権キャラクターの不確かな設定は推測で確定しない。\n2. 大まかなStory案を複数提示する。\n3. 各案について画像化しやすさ・展開上の特徴を示す。\n4. ユーザーが決めるべき点や不足情報を質問する。\n\n${storyDiscussionShape}${extra?`\n\nユーザー追加入力:\n${extra}`:''}`,attachments:[await attachment('project_brief.json',brief,'基本設定')]};
-  if(stage==='story-finalize'||stage==='story-fix')return {stage,title:stage==='story-finalize'?'ストーリー完成版':'ストーリー修正',prompt:`${common}\n\n## Task\nこれまでのGrok上の会話と添付された基本設定${stage==='story-fix'?'・現在の story.md':''}を基に、画像生成計画へ展開可能な完成 story.md を作成してください。章・場面・進行が追える構造にし、Prompt PlanそのものやComfyUI内部情報は書かないでください。\n\n${storyShape}${extra?`\n\n修正意図:\n${extra}`:''}`,attachments:[await attachment('project_brief.json',brief,'基本設定'),...(stage==='story-fix'?[await attachment('story.md',story,'現在の確定ストーリー')]:[])]};
-  if(stage==='models'||stage==='models-fix'){const basePath=await exists(modelsDraft)?modelsDraft:models,base=await readJson<any>(basePath),family=base?.modelFamily as ModelFamily|undefined;return {stage,title:stage==='models'?'LoRA選定':'LoRA再選定',prompt:`${common}\n\n## Task\n確定済み story.md と、ユーザーが選択済みの基盤モデルを記録した models.json を前提に、Story上必要なLoRAを選定してください。Checkpoint、Text Encoder、VAE、modelFamily はユーザーの責務であり、変更・再選定・代替提案をしません。trained words、採用理由、用途を考慮してください。\n\n${loraFallbackDecisionRules}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${lorasShape}${extra?`\n\n再選定条件:\n${extra}`:''}`,attachments:[await attachment('story.md',story,'確定ストーリー'),await attachment('models.json',basePath,'ユーザー選択済み基盤モデル（変更禁止）'),...(catalog?[await attachment('model_catalog.json',path.resolve(catalog),'モデルカタログ')]:[]),...(stage==='models-fix'&&await exists(promptFallbacks)?[await attachment('model_prompt_fallbacks.json',promptFallbacks,'現在のPrompt代替策')]:[])]};}
-  const briefData=await readJson<any>(brief),modelData=await readJson<any>(models);const target=briefData?.generation?.target_image_count,family=modelData?.modelFamily as ModelFamily|undefined;
-  return {stage,title:stage==='prompt-plan'?'プロンプト設計':'プロンプト設計修正',prompt:`${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan を作成してください。共通Prompt、全体共通LoRA、意味的なBranch分割、Branch LoRA、各Leafのpositive/negative差分を設計してください。models.json の trainedWords はトリガーワードとして、適用される positive prompt に必ず含めてください。${Number.isInteger(target)?`\n計画上の目標画像枚数は ${target} 枚です。`:''}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${planShape}${extra?`\n\n修正条件:\n${extra}`:''}`,attachments:[await attachment('project_brief.json',brief,'画像枚数などの計画条件'),await attachment('story.md',story,'確定ストーリー'),await attachment('models.json',models,'確定モデル・trainedWords（トリガーワード）'),...(await exists(promptFallbacks)?[await attachment('model_prompt_fallbacks.json',promptFallbacks,'LoRA不足をPromptで解決した代替策')]:[])]};
+export async function buildGrokTask(
+  root: string,
+  stage: GrokTask['stage'],
+  extra = '',
+): Promise<GrokTask> {
+  const brief = path.join(root, 'project_brief.json'),
+    story = path.join(root, 'story.md'),
+    models = path.join(root, 'models.json'),
+    modelsDraft = path.join(root, '._batch_studio', 'drafts', 'models.json'),
+    promptFallbacks = path.join(root, '._batch_studio', 'model_prompt_fallbacks.json');
+  const catalog = await catalogPathFor(root);
+  if (stage === 'story-initial')
+    return {
+      stage,
+      title: 'ストーリー検討',
+      prompt: `${common}\n\n## Task\n添付した project_brief.json を基に、まだ story.md を確定せず、ユーザーとの対話用に検討材料を提示してください。\n1. 公開情報を調査して前提を整理する。版権キャラクターの不確かな設定は推測で確定しない。\n2. 大まかなStory案を複数提示する。\n3. 各案について画像化しやすさ・展開上の特徴を示す。\n4. ユーザーが決めるべき点や不足情報を質問する。\n\n${storyDiscussionShape}${extra ? `\n\nユーザー追加入力:\n${extra}` : ''}`,
+      attachments: [await attachment('project_brief.json', brief, '基本設定')],
+    };
+  if (stage === 'story-finalize' || stage === 'story-fix')
+    return {
+      stage,
+      title: stage === 'story-finalize' ? 'ストーリー完成版' : 'ストーリー修正',
+      prompt: `${common}\n\n## Task\nこれまでのGrok上の会話と添付された基本設定${stage === 'story-fix' ? '・現在の story.md' : ''}を基に、画像生成計画へ展開可能な完成 story.md を作成してください。章・場面・進行が追える構造にし、Prompt PlanそのものやComfyUI内部情報は書かないでください。\n\n${storyShape}${extra ? `\n\n修正意図:\n${extra}` : ''}`,
+      attachments: [
+        await attachment('project_brief.json', brief, '基本設定'),
+        ...(stage === 'story-fix'
+          ? [await attachment('story.md', story, '現在の確定ストーリー')]
+          : []),
+      ],
+    };
+  if (stage === 'models' || stage === 'models-fix') {
+    const basePath = (await exists(modelsDraft)) ? modelsDraft : models,
+      base = await readJson<any>(basePath),
+      family = base?.modelFamily as ModelFamily | undefined;
+    return {
+      stage,
+      title: stage === 'models' ? 'LoRA選定' : 'LoRA再選定',
+      prompt: `${common}\n\n## Task\n確定済み story.md と、ユーザーが選択済みの基盤モデルを記録した models.json を前提に、Story上必要なLoRAを選定してください。Checkpoint、Text Encoder、VAE、modelFamily はユーザーの責務であり、変更・再選定・代替提案をしません。trained words、採用理由、用途を考慮してください。\n\n${loraFallbackDecisionRules}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${lorasShape}${extra ? `\n\n再選定条件:\n${extra}` : ''}`,
+      attachments: [
+        await attachment('story.md', story, '確定ストーリー'),
+        await attachment('models.json', basePath, 'ユーザー選択済み基盤モデル（変更禁止）'),
+        ...(catalog
+          ? [await attachment('model_catalog.json', path.resolve(catalog), 'モデルカタログ')]
+          : []),
+        ...(stage === 'models-fix' && (await exists(promptFallbacks))
+          ? [await attachment('model_prompt_fallbacks.json', promptFallbacks, '現在のPrompt代替策')]
+          : []),
+      ],
+    };
+  }
+  const briefData = await readJson<any>(brief),
+    modelData = await readJson<any>(models);
+  const target = briefData?.generation?.target_image_count,
+    family = modelData?.modelFamily as ModelFamily | undefined;
+  return {
+    stage,
+    title: stage === 'prompt-plan' ? 'プロンプト設計' : 'プロンプト設計修正',
+    prompt: `${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan を作成してください。共通Prompt、全体共通LoRA、意味的なBranch分割、Branch LoRA、各Leafのpositive/negative差分を設計してください。models.json の trainedWords はトリガーワードとして、適用される positive prompt に必ず含めてください。${Number.isInteger(target) ? `\n計画上の目標画像枚数は ${target} 枚です。` : ''}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${planShape}${extra ? `\n\n修正条件:\n${extra}` : ''}`,
+    attachments: [
+      await attachment('project_brief.json', brief, '画像枚数などの計画条件'),
+      await attachment('story.md', story, '確定ストーリー'),
+      await attachment('models.json', models, '確定モデル・trainedWords（トリガーワード）'),
+      ...((await exists(promptFallbacks))
+        ? [
+            await attachment(
+              'model_prompt_fallbacks.json',
+              promptFallbacks,
+              'LoRA不足をPromptで解決した代替策',
+            ),
+          ]
+        : []),
+    ],
+  };
 }
