@@ -28,7 +28,7 @@ function currentRunPath(root:string){return path.join(executionRunsDir(root),CUR
 function assertRunId(runId:string){if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(runId))throw new Error('Invalid Execution Run ID');}
 function clone<T>(value:T):T{return structuredClone(value);}
 function initialPhase(target:'local'|'remote'):ExecutionPhase{return target==='remote'?'CLOUD_INSTANCE_RESOLVING':'LOCAL_COMFYUI_CONNECTING';}
-function terminalLifecycle(lifecycle:ExecutionRunLifecycle){return lifecycle==='FAILED'||lifecycle==='COMPLETED';}
+function terminalLifecycle(lifecycle:ExecutionRunLifecycle){return lifecycle==='FAILED'||lifecycle==='COMPLETED'||lifecycle==='DISCARDED';}
 function resumableLifecycle(lifecycle:ExecutionRunLifecycle){return lifecycle==='PAUSED'||lifecycle==='INTERRUPTED'||lifecycle==='FAILED';}
 
 async function withProjectLock<T>(root:string,fn:()=>Promise<T>):Promise<T>{
@@ -224,6 +224,23 @@ export async function abandonExecutionRunForRemoteReplacement(root:string,runId:
     run.controls.stopSchedulingRequestedAt=null;
     run.controls.forceInterruptRequestedAt=null;
     run.current.promptId=null;
+  });
+}
+
+export async function discardExecutionRun(root:string,runId:string):Promise<ExecutionRun>{
+  return mutateExecutionRun(root,runId,run=>{
+    if(run.lifecycle==='DISCARDED')return;
+    const at=new Date().toISOString();
+    const e={code:'EXECUTION_RUN_DISCARDED',message:'Execution Run was discarded to restart generation from scratch. Local collected artifacts are preserved.',phase:run.phase,at,retryable:false};
+    run.error=e;
+    run.errorHistory.push(e);
+    run.lifecycle='DISCARDED';
+    run.controls.scheduling='STOPPED';
+    run.controls.interrupt='INTERRUPTED';
+    run.controls.stopSchedulingRequestedAt=null;
+    run.controls.forceInterruptRequestedAt=null;
+    run.current={branchId:null,leafId:null,promptId:null};
+    run.completedAt=at;
   });
 }
 

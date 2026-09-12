@@ -92,18 +92,25 @@ function applyRemoteState(run:ExecutionRun,state:RemoteSequenceState){
 
 export class RemoteExecutionService {
   private readonly workers=new Map<string,Promise<void>>();
+  private readonly discardingRuns=new Set<string>();
   constructor(private readonly remote:RemoteControlPlane,private readonly r2:R2Manager,private readonly onSettled?:(root:string,runId:string)=>Promise<void>){}
   start(root:string,runId:string){
     if(this.workers.has(runId))return;
     const task=this.execute(root,runId).catch(async error=>{
+      const current=await getExecutionRun(root,runId);
+      if(current?.lifecycle==='DISCARDED')return;
       await mutateExecutionRun(root,runId,run=>{
+        if(run.lifecycle==='DISCARDED')return;
         const code=error instanceof ArtifactPipelineError?error.code:'REMOTE_EXECUTION_FAILED';
         const failure={code,message:safeError(error),phase:run.phase,at:new Date().toISOString(),retryable:true};
         run.error=failure;run.errorHistory.push(failure);run.lifecycle='FAILED';run.controls.scheduling='STOPPED';
       });
-    }).finally(async()=>{try{await this.onSettled?.(root,runId)}finally{this.remote.disconnect(root,runId);this.workers.delete(runId)}});
+    }).finally(async()=>{const discarding=this.discardingRuns.has(runId);try{if(!discarding)await this.onSettled?.(root,runId)}finally{if(!discarding)this.remote.disconnect(root,runId);this.workers.delete(runId)}});
     this.workers.set(runId,task);
   }
+  beginDiscard(runId:string){this.discardingRuns.add(runId)}
+  endDiscard(runId:string){this.discardingRuns.delete(runId)}
+  async waitForSettled(runId:string){const task=this.workers.get(runId);if(task)await task.catch(()=>{});}
   async stopScheduling(root:string,runId:string){await this.remote.requestWorker(root,runId,'stop_scene_sequence');return true}
   async forceInterrupt(root:string,runId:string){
     const response=await this.remote.requestWorker(root,runId,'force_interrupt_sequence',{comfyEndpoint:'http://127.0.0.1:8188'});
@@ -146,6 +153,8 @@ export class RemoteExecutionService {
     let state=response.state;if(response.alreadyRunning)state=await this.waitExisting(root,runId);
     if(!state){const reconciled=await this.remote.reconcile(root,runId);state=(reconciled.response as any)?.state as RemoteSequenceState|undefined;}
     if(!state)throw new Error('Remote Worker returned no sequence state.');
+    currentRun=await getExecutionRun(root,runId);
+    if(!currentRun||currentRun.lifecycle!=='RUNNING')return false;
     await this.syncState(root,runId,state);
     if(state.status==='paused'){await mutateExecutionRun(root,runId,current=>{current.lifecycle='PAUSED';current.controls.scheduling='STOPPED';current.current.promptId=null;});return false;}
     if(state.status==='interrupted'){await mutateExecutionRun(root,runId,current=>{current.lifecycle='INTERRUPTED';current.controls.scheduling='STOPPED';current.controls.interrupt='INTERRUPTED';current.current.promptId=null;});return false;}
@@ -268,6 +277,25 @@ export class RemoteExecutionService {
     try{if(await this.r2.objectExists(bucket,key))await this.r2.deleteExecutionObject(bucket,key);}catch(error){throw new ArtifactPipelineError('R2_ARTIFACT_CLEANUP_FAILED',safeError(error));}
     await recordExecutionEvidence(root,runId,{kind:'CLEANUP_COMPLETED',scope:'remote-artifacts',data:{remote:true,r2:true}});
   }
+  async discardArtifacts(root:string,runId:string){
+    const run=await getExecutionRun(root,runId);if(!run)throw new Error('Execution Run was not found.');
+    let remoteCleanupAttempted=false,remoteCleanupSucceeded=false,r2CleanupAttempted=false,r2CleanupSucceeded=false;
+    if(run.executionTarget==='remote'&&run.lifecycle==='RUNNING'&&run.phase==='EXECUTING'){
+      remoteCleanupAttempted=true;
+      try{await this.remote.requestWorker(root,runId,'cleanup_artifacts');remoteCleanupSucceeded=true}catch{}
+    }
+    const evidence=latestEvidence(run,'R2_OBJECT_VERIFIED','remote-package');
+    const meta=await readProjectMeta(root);
+    const bucket=(typeof evidence?.data.bucket==='string'&&evidence.data.bucket)||((process.env.BATCH_STUDIO_R2_BUCKET??'').trim()||(meta?.settings.r2Bucket?.trim()??''));
+    const key=(typeof evidence?.data.key==='string'&&evidence.data.key)||`batch-studio/executions/${safeProjectPart(run.projectId)}/${runId}/artifacts.zip`;
+    if(bucket){
+      r2CleanupAttempted=true;
+      if(await this.r2.objectExists(bucket,key)){await this.r2.deleteExecutionObject(bucket,key);}
+      r2CleanupSucceeded=true;
+    }
+    return {remoteCleanupAttempted,remoteCleanupSucceeded,r2CleanupAttempted,r2CleanupSucceeded};
+  }
+
   private async collectArtifacts(root:string,runId:string){
     const pkg=await this.ensurePackage(root,runId);
     let run=await getExecutionRun(root,runId);if(!run)throw new Error('Execution Run was not found.');

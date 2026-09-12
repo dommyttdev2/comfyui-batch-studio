@@ -36,6 +36,13 @@ assert.match(executionSource,/next_state=/,'scheduling details must expose the r
 assert.match(executionSource,/const remoteInstanceChanged=Boolean/,'Execution UI must detect when Project selection differs from the active Run Instance');
 assert.match(executionSource,/別Instanceで新しく実行/,'Execution UI must expose a distinct replacement-Run action');
 assert.match(executionSource,/execution\.restartRemote/,'replacement action must use dedicated IPC rather than mutating the existing Run');
+assert.match(executionSource,/最初からやり直す/,'Execution UI must expose a restart-from-scratch action');
+assert.match(executionSource,/execution\.restartFromScratch/,'fresh restart must use a dedicated IPC action');
+assert.match(executionSource,/canRestartFromScratch/,'fresh restart availability must be derived explicitly');
+assert.match(mainSource,/IPC\.EXECUTION_RESTART_FROM_SCRATCH/,'Main Process must implement restart-from-scratch IPC');
+assert.match(mainSource,/Localへ回収済みの成果物は削除しません/,'fresh restart confirmation must explicitly preserve local collected artifacts');
+assert.match(mainSource,/discardExecutionRun/,'fresh restart must terminalize the old Run before creating a new Run');
+assert.match(remoteExecutionSource,/discardArtifacts/,'fresh restart must clean old Remote\/R2 artifacts separately from Local output');
 assert.match(remoteExecutionSource,/applyRemoteProgressEvent/,'Remote generation progress must be applied from streamed Worker progress events');
 assert.match(remoteExecutionSource,/event\.type!==['"]progress['"]/,'Remote generation must ignore non-progress Worker events during live synchronization');
 assert.match(remoteExecutionSource,/overallCompleted/,'Generation progress must synchronize the Remote Worker overallCompleted counter');

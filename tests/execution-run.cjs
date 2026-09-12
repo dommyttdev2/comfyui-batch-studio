@@ -102,6 +102,18 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
   assert.deepEqual(second.remote,{provider:'vastai',instanceId:456},'replacement Run must snapshot the newly selected Instance');
   await assert.rejects(()=>execution.abandonExecutionRunForRemoteReplacement(root,second.runId,456),/must differ/);
 
+  const discardedRunId=second.runId;
+  const discarded=await execution.discardExecutionRun(root,discardedRunId);
+  assert.equal(discarded.lifecycle,'DISCARDED');
+  assert.equal(discarded.error.code,'EXECUTION_RUN_DISCARDED');
+  assert.equal(discarded.error.retryable,false);
+  assert.equal(discarded.controls.scheduling,'STOPPED');
+  assert.equal(discarded.controls.interrupt,'INTERRUPTED');
+  await assert.rejects(()=>execution.resumeExecutionRun(root,discardedRunId,async()=>ready),/not resumable/);
+  second=await execution.startExecutionRun(root,async()=>ready);
+  assert.notEqual(second.runId,discardedRunId,'discarded Run must allow a brand-new Run');
+  assert.deepEqual(second.remote,{provider:'vastai',instanceId:456});
+
   await execution.recordExecutionEvidence(root,second.runId,{kind:'EXECUTION_COMPLETED',scope:'remote-generation',data:{images:2}});
   await execution.recordExecutionEvidence(root,second.runId,{kind:'PACKAGE_VERIFIED',scope:'remote-package',data:{artifactCount:2,size:100,sha256:'a'.repeat(64),manifestSha256:'b'.repeat(64),outputPrefix:'BatchStudio/execution-project/'+second.runId}});
   await execution.recordExecutionEvidence(root,second.runId,{kind:'R2_OBJECT_VERIFIED',scope:'remote-package',data:{bucket:'test',key:'x.zip',size:100,sha256:'a'.repeat(64)}});
