@@ -92,6 +92,7 @@ function applyRemoteState(run:ExecutionRun,state:RemoteSequenceState){
 
 export class RemoteExecutionService {
   private readonly workers=new Map<string,Promise<void>>();
+  private readonly discardingRuns=new Set<string>();
   constructor(private readonly remote:RemoteControlPlane,private readonly r2:R2Manager,private readonly onSettled?:(root:string,runId:string)=>Promise<void>){}
   start(root:string,runId:string){
     if(this.workers.has(runId))return;
@@ -104,9 +105,12 @@ export class RemoteExecutionService {
         const failure={code,message:safeError(error),phase:run.phase,at:new Date().toISOString(),retryable:true};
         run.error=failure;run.errorHistory.push(failure);run.lifecycle='FAILED';run.controls.scheduling='STOPPED';
       });
-    }).finally(async()=>{try{await this.onSettled?.(root,runId)}finally{this.remote.disconnect(root,runId);this.workers.delete(runId)}});
+    }).finally(async()=>{const discarding=this.discardingRuns.has(runId);try{if(!discarding)await this.onSettled?.(root,runId)}finally{if(!discarding)this.remote.disconnect(root,runId);this.workers.delete(runId)}});
     this.workers.set(runId,task);
   }
+  beginDiscard(runId:string){this.discardingRuns.add(runId)}
+  endDiscard(runId:string){this.discardingRuns.delete(runId)}
+  async waitForSettled(runId:string){const task=this.workers.get(runId);if(task)await task.catch(()=>{});}
   async stopScheduling(root:string,runId:string){await this.remote.requestWorker(root,runId,'stop_scene_sequence');return true}
   async forceInterrupt(root:string,runId:string){
     const response=await this.remote.requestWorker(root,runId,'force_interrupt_sequence',{comfyEndpoint:'http://127.0.0.1:8188'});
