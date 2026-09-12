@@ -1,133 +1,828 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { VastAiComfyUiTemplate, VastAiConnectionInput, VastAiConnectionStatus, VastAiInstance, VastAiOffer, VastAiOfferSearchInput } from '../../shared/types';
+import type {
+  VastAiComfyUiTemplate,
+  VastAiConnectionInput,
+  VastAiConnectionStatus,
+  VastAiInstance,
+  VastAiOffer,
+  VastAiOfferSearchInput,
+} from '../../shared/types';
 import type { Runner } from '../ui';
 
-const EMPTY_VAST:VastAiConnectionInput={apiKey:'',sshPrivateKeyPath:'',sshPublicKeyPath:'',sshUser:'root'};
-const INSTANCE_REFRESH_MS=5_000;
-const SEARCH_DEBOUNCE_MS=400;
-const DEFAULT_SEARCH:VastAiOfferSearchInput={storageGb:8,minTflops:0,gpuCount:1,minReliability:90,excludedCountries:[]};
-type InstanceAction='start'|'stop'|'destroy'|'reboot';
+const EMPTY_VAST: VastAiConnectionInput = {
+  apiKey: '',
+  sshPrivateKeyPath: '',
+  sshPublicKeyPath: '',
+  sshUser: 'root',
+};
+const INSTANCE_REFRESH_MS = 5_000;
+const SEARCH_DEBOUNCE_MS = 400;
+const DEFAULT_SEARCH: VastAiOfferSearchInput = {
+  storageGb: 8,
+  minTflops: 0,
+  gpuCount: 1,
+  minReliability: 90,
+  excludedCountries: [],
+};
+type InstanceAction = 'start' | 'stop' | 'destroy' | 'reboot';
 
-function statusLabel(status:VastAiConnectionStatus|null){if(!status?.configured)return'未設定';return status.source==='environment'?'環境変数を使用':'設定済み';}
-function instanceStatusLabel(status:VastAiInstance['status']){return ({running:'RUNNING',stopped:'STOPPED',starting:'STARTING',scheduling:'SCHEDULING',stopping:'STOPPING',offline:'OFFLINE',error:'ERROR',unknown:'UNKNOWN'} as const)[status];}
-function formatCost(value:number|null){return value==null?'-':`$${value.toFixed(3)}/h`;}
-function formatVram(value:number|null){return value==null?'-':`${Math.round(value/1024)} GB`;}
-function formatNumber(value:number|null,digits=1){return value==null?'-':value.toLocaleString(undefined,{maximumFractionDigits:digits});}
-function formatPercent(value:number|null){return value==null?'-':(value*100).toFixed(2)+'%';}
-function formatDuration(value:number|null){if(value==null)return'-';const days=value/86400;return days>=1?days.toFixed(days>=10?0:1)+' days':(value/3600).toFixed(1)+' hours';}
-function parseCountryCodes(value:string){const codes=value.split(/[\s,]+/).map(x=>x.trim().toUpperCase()).filter(Boolean);const invalid=codes.find(code=>!/^[A-Z]{2}$/.test(code));return invalid?{codes:[] as string[],error:'除外地域は2文字の国コードで指定してください: '+invalid}:{codes:[...new Set(codes)],error:''};}
-function startButtonLabel(status:VastAiInstance['status']){if(status==='scheduling')return'Scheduling';if(status==='running'||status==='starting')return'起動中';return'起動';}
-function statusDetail(instance:VastAiInstance){
-  const details:string[]=[];
-  if(instance.status==='scheduling')details.push('起動要求済み · GPU割り当て待ち');
-  else if(instance.status==='starting')details.push('起動処理中');
-  else if(instance.status==='stopping')details.push('停止処理中');
-  if(instance.statusMessage)details.push(instance.statusMessage);
-  const raw=[`actual=${instance.rawStatus}`,instance.intendedStatus?`intended=${instance.intendedStatus}`:null,instance.curState?`cur=${instance.curState}`:null,instance.nextState?`next=${instance.nextState}`:null].filter(Boolean).join(' / ');
-  if(raw)details.push(raw);
+function statusLabel(status: VastAiConnectionStatus | null) {
+  if (!status?.configured) return '未設定';
+  return status.source === 'environment' ? '環境変数を使用' : '設定済み';
+}
+function instanceStatusLabel(status: VastAiInstance['status']) {
+  return (
+    {
+      running: 'RUNNING',
+      stopped: 'STOPPED',
+      starting: 'STARTING',
+      scheduling: 'SCHEDULING',
+      stopping: 'STOPPING',
+      offline: 'OFFLINE',
+      error: 'ERROR',
+      unknown: 'UNKNOWN',
+    } as const
+  )[status];
+}
+function formatCost(value: number | null) {
+  return value == null ? '-' : `$${value.toFixed(3)}/h`;
+}
+function formatVram(value: number | null) {
+  return value == null ? '-' : `${Math.round(value / 1024)} GB`;
+}
+function formatNumber(value: number | null, digits = 1) {
+  return value == null ? '-' : value.toLocaleString(undefined, { maximumFractionDigits: digits });
+}
+function formatPercent(value: number | null) {
+  return value == null ? '-' : (value * 100).toFixed(2) + '%';
+}
+function formatDuration(value: number | null) {
+  if (value == null) return '-';
+  const days = value / 86400;
+  return days >= 1
+    ? days.toFixed(days >= 10 ? 0 : 1) + ' days'
+    : (value / 3600).toFixed(1) + ' hours';
+}
+function parseCountryCodes(value: string) {
+  const codes = value
+    .split(/[\s,]+/)
+    .map((x) => x.trim().toUpperCase())
+    .filter(Boolean);
+  const invalid = codes.find((code) => !/^[A-Z]{2}$/.test(code));
+  return invalid
+    ? { codes: [] as string[], error: '除外地域は2文字の国コードで指定してください: ' + invalid }
+    : { codes: [...new Set(codes)], error: '' };
+}
+function startButtonLabel(status: VastAiInstance['status']) {
+  if (status === 'scheduling') return 'Scheduling';
+  if (status === 'running' || status === 'starting') return '起動中';
+  return '起動';
+}
+function statusDetail(instance: VastAiInstance) {
+  const details: string[] = [];
+  if (instance.status === 'scheduling') details.push('起動要求済み · GPU割り当て待ち');
+  else if (instance.status === 'starting') details.push('起動処理中');
+  else if (instance.status === 'stopping') details.push('停止処理中');
+  if (instance.statusMessage) details.push(instance.statusMessage);
+  const raw = [
+    `actual=${instance.rawStatus}`,
+    instance.intendedStatus ? `intended=${instance.intendedStatus}` : null,
+    instance.curState ? `cur=${instance.curState}` : null,
+    instance.nextState ? `next=${instance.nextState}` : null,
+  ]
+    .filter(Boolean)
+    .join(' / ');
+  if (raw) details.push(raw);
   return details.join(' · ');
 }
-function canStart(instance:VastAiInstance){return instance.status==='stopped';}
-function canStop(instance:VastAiInstance){return instance.status==='running'||instance.status==='starting'||instance.status==='scheduling'||instance.status==='stopped';}
-function canReboot(instance:VastAiInstance){return instance.status==='running';}
-function StopIcon(){return <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor"/></svg>;}
-function TrashIcon(){return <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2h4l.6 1.5H14v1.5H2V3.5h3.4L6 2Zm-2.5 4h9l-.6 8H4.1l-.6-8Zm2 1.5.35 5h1.2l-.2-5H5.5Zm3 0v5h1.2v-5H8.5Z" fill="currentColor"/></svg>;}
-function RebootIcon(){return <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2a6 6 0 1 0 5.55 8.29l-1.39-.57A4.5 4.5 0 1 1 11.6 5H9.5v1.5H14V2h-1.5v1.77A5.97 5.97 0 0 0 8 2Z" fill="currentColor"/></svg>;}
+function canStart(instance: VastAiInstance) {
+  return instance.status === 'stopped';
+}
+function canStop(instance: VastAiInstance) {
+  return (
+    instance.status === 'running' ||
+    instance.status === 'starting' ||
+    instance.status === 'scheduling' ||
+    instance.status === 'stopped'
+  );
+}
+function canReboot(instance: VastAiInstance) {
+  return instance.status === 'running';
+}
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M6 2h4l.6 1.5H14v1.5H2V3.5h3.4L6 2Zm-2.5 4h9l-.6 8H4.1l-.6-8Zm2 1.5.35 5h1.2l-.2-5H5.5Zm3 0v5h1.2v-5H8.5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+function RebootIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M8 2a6 6 0 1 0 5.55 8.29l-1.39-.57A4.5 4.5 0 1 1 11.6 5H9.5v1.5H14V2h-1.5v1.77A5.97 5.97 0 0 0 8 2Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
 
-export function VastAiIntegrationPanel({run,onBack,onStatus}:{run:Runner;onBack?:()=>void;onStatus?:(s:VastAiConnectionStatus)=>void}){
-  const [status,setStatus]=useState<VastAiConnectionStatus|null>(null),[input,setInput]=useState<VastAiConnectionInput>(EMPTY_VAST),[instances,setInstances]=useState<VastAiInstance[]>([]),[loadingInstances,setLoadingInstances]=useState(false),[busyAction,setBusyAction]=useState<string|null>(null);
-  const [template,setTemplate]=useState<VastAiComfyUiTemplate|null>(null),[search,setSearch]=useState<VastAiOfferSearchInput>(DEFAULT_SEARCH),[excludedCountries,setExcludedCountries]=useState(''),[offers,setOffers]=useState<VastAiOffer[]>([]),[searching,setSearching]=useState(false),[searchError,setSearchError]=useState(''),[searchRevision,setSearchRevision]=useState(0),[rentingOfferId,setRentingOfferId]=useState<number|null>(null),[rentNotice,setRentNotice]=useState(''),[rentError,setRentError]=useState('');
-  const configured=Boolean(status?.configured);
-  const loadInstances=async()=>{setLoadingInstances(true);try{setInstances(await window.batchStudio.vastai.instances());}finally{setLoadingInstances(false);}};
-  const loadTemplate=async()=>{const next=await window.batchStudio.vastai.comfyUiTemplate();setTemplate(next);setSearch(prev=>({...prev,storageGb:template?prev.storageGb:Math.max(8,next.recommendedDiskSpaceGb)}));};
-  const load=async()=>{const s=await window.batchStudio.vastai.settings();setStatus(s);onStatus?.(s);setInput({apiKey:'',sshPrivateKeyPath:s.sshPrivateKeyPath,sshPublicKeyPath:s.sshPublicKeyPath,sshUser:s.sshUser});if(s.configured)await Promise.all([loadInstances(),loadTemplate()]);};
-  useEffect(()=>{void load().catch(()=>{});},[]);
-  useEffect(()=>{if(!configured)return;const timer=window.setInterval(()=>{void loadInstances().catch(()=>{});},INSTANCE_REFRESH_MS);return()=>window.clearInterval(timer);},[configured]);
-  useEffect(()=>{
-    if(!configured||!template)return;
-    const countries=parseCountryCodes(excludedCountries);
-    if(countries.error){setSearchError(countries.error);setSearching(false);return;}
-    const valid=Number.isFinite(search.storageGb)&&search.storageGb>=template.recommendedDiskSpaceGb&&Number.isFinite(search.minTflops)&&search.minTflops>=0&&Number.isInteger(search.gpuCount)&&search.gpuCount>=1&&Number.isFinite(search.minReliability)&&search.minReliability>=0&&search.minReliability<=100;
-    if(!valid){setSearchError('');setSearching(false);return;}
-    let cancelled=false;
+export function VastAiIntegrationPanel({
+  run,
+  onBack,
+  onStatus,
+}: {
+  run: Runner;
+  onBack?: () => void;
+  onStatus?: (s: VastAiConnectionStatus) => void;
+}) {
+  const [status, setStatus] = useState<VastAiConnectionStatus | null>(null),
+    [input, setInput] = useState<VastAiConnectionInput>(EMPTY_VAST),
+    [instances, setInstances] = useState<VastAiInstance[]>([]),
+    [loadingInstances, setLoadingInstances] = useState(false),
+    [busyAction, setBusyAction] = useState<string | null>(null);
+  const [template, setTemplate] = useState<VastAiComfyUiTemplate | null>(null),
+    [search, setSearch] = useState<VastAiOfferSearchInput>(DEFAULT_SEARCH),
+    [excludedCountries, setExcludedCountries] = useState(''),
+    [offers, setOffers] = useState<VastAiOffer[]>([]),
+    [searching, setSearching] = useState(false),
+    [searchError, setSearchError] = useState(''),
+    [searchRevision, setSearchRevision] = useState(0),
+    [rentingOfferId, setRentingOfferId] = useState<number | null>(null),
+    [rentNotice, setRentNotice] = useState(''),
+    [rentError, setRentError] = useState('');
+  const configured = Boolean(status?.configured);
+  const loadInstances = async () => {
+    setLoadingInstances(true);
+    try {
+      setInstances(await window.batchStudio.vastai.instances());
+    } finally {
+      setLoadingInstances(false);
+    }
+  };
+  const loadTemplate = async () => {
+    const next = await window.batchStudio.vastai.comfyUiTemplate();
+    setTemplate(next);
+    setSearch((prev) => ({
+      ...prev,
+      storageGb: template ? prev.storageGb : Math.max(8, next.recommendedDiskSpaceGb),
+    }));
+  };
+  const load = async () => {
+    const s = await window.batchStudio.vastai.settings();
+    setStatus(s);
+    onStatus?.(s);
+    setInput({
+      apiKey: '',
+      sshPrivateKeyPath: s.sshPrivateKeyPath,
+      sshPublicKeyPath: s.sshPublicKeyPath,
+      sshUser: s.sshUser,
+    });
+    if (s.configured) await Promise.all([loadInstances(), loadTemplate()]);
+  };
+  useEffect(() => {
+    void load().catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!configured) return;
+    const timer = window.setInterval(() => {
+      void loadInstances().catch(() => {});
+    }, INSTANCE_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [configured]);
+  useEffect(() => {
+    if (!configured || !template) return;
+    const countries = parseCountryCodes(excludedCountries);
+    if (countries.error) {
+      setSearchError(countries.error);
+      setSearching(false);
+      return;
+    }
+    const valid =
+      Number.isFinite(search.storageGb) &&
+      search.storageGb >= template.recommendedDiskSpaceGb &&
+      Number.isFinite(search.minTflops) &&
+      search.minTflops >= 0 &&
+      Number.isInteger(search.gpuCount) &&
+      search.gpuCount >= 1 &&
+      Number.isFinite(search.minReliability) &&
+      search.minReliability >= 0 &&
+      search.minReliability <= 100;
+    if (!valid) {
+      setSearchError('');
+      setSearching(false);
+      return;
+    }
+    let cancelled = false;
     setSearchError('');
-    const timer=window.setTimeout(()=>{
-      setSearching(true);setRentNotice('');
-      void window.batchStudio.vastai.searchOffers({...search,excludedCountries:countries.codes}).then(result=>{
-        if(cancelled)return;
-        setTemplate(result.template);setOffers(result.offers);
-      }).catch(error=>{if(!cancelled)setSearchError(error instanceof Error?error.message:String(error));}).finally(()=>{if(!cancelled)setSearching(false);});
-    },SEARCH_DEBOUNCE_MS);
-    return()=>{cancelled=true;window.clearTimeout(timer);};
-  },[configured,template?.hashId,template?.recommendedDiskSpaceGb,search.storageGb,search.minTflops,search.gpuCount,search.minReliability,excludedCountries,searchRevision]);
-  const set=(key:keyof VastAiConnectionInput,value:string|number|undefined)=>setInput(prev=>({...prev,[key]:value}));
-  const save=()=>run(async()=>{const next=await window.batchStudio.vastai.saveSettings(input);setStatus(next);onStatus?.(next);setInput(prev=>({...prev,apiKey:''}));await Promise.all([loadInstances(),loadTemplate()]);});
-  const choosePrivateKey=()=>run(async()=>{const selected=await window.batchStudio.vastai.selectPrivateKey();if(selected)set('sshPrivateKeyPath',selected);});
-  const choosePublicKey=()=>run(async()=>{const selected=await window.batchStudio.vastai.selectPublicKey();if(selected)set('sshPublicKeyPath',selected);});
-  const perform=(instance:VastAiInstance,action:InstanceAction)=>run(async()=>{
-    const key=`${instance.id}:${action}`;setBusyAction(key);
-    try{
-      if(action==='start')await window.batchStudio.vastai.startInstance(instance.id);
-      else if(action==='stop')await window.batchStudio.vastai.stopInstance(instance.id);
-      else if(action==='reboot')await window.batchStudio.vastai.rebootInstance(instance.id);
-      else {
-        const destroyed=await window.batchStudio.vastai.destroyInstance(instance.id);
-        if(!destroyed)return;
+    const timer = window.setTimeout(() => {
+      setSearching(true);
+      setRentNotice('');
+      void window.batchStudio.vastai
+        .searchOffers({ ...search, excludedCountries: countries.codes })
+        .then((result) => {
+          if (cancelled) return;
+          setTemplate(result.template);
+          setOffers(result.offers);
+        })
+        .catch((error) => {
+          if (!cancelled) setSearchError(error instanceof Error ? error.message : String(error));
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    configured,
+    template?.hashId,
+    template?.recommendedDiskSpaceGb,
+    search.storageGb,
+    search.minTflops,
+    search.gpuCount,
+    search.minReliability,
+    excludedCountries,
+    searchRevision,
+  ]);
+  const set = (key: keyof VastAiConnectionInput, value: string | number | undefined) =>
+    setInput((prev) => ({ ...prev, [key]: value }));
+  const save = () =>
+    run(async () => {
+      const next = await window.batchStudio.vastai.saveSettings(input);
+      setStatus(next);
+      onStatus?.(next);
+      setInput((prev) => ({ ...prev, apiKey: '' }));
+      await Promise.all([loadInstances(), loadTemplate()]);
+    });
+  const choosePrivateKey = () =>
+    run(async () => {
+      const selected = await window.batchStudio.vastai.selectPrivateKey();
+      if (selected) set('sshPrivateKeyPath', selected);
+    });
+  const choosePublicKey = () =>
+    run(async () => {
+      const selected = await window.batchStudio.vastai.selectPublicKey();
+      if (selected) set('sshPublicKeyPath', selected);
+    });
+  const perform = (instance: VastAiInstance, action: InstanceAction) =>
+    run(async () => {
+      const key = `${instance.id}:${action}`;
+      setBusyAction(key);
+      try {
+        if (action === 'start') await window.batchStudio.vastai.startInstance(instance.id);
+        else if (action === 'stop') await window.batchStudio.vastai.stopInstance(instance.id);
+        else if (action === 'reboot') await window.batchStudio.vastai.rebootInstance(instance.id);
+        else {
+          const destroyed = await window.batchStudio.vastai.destroyInstance(instance.id);
+          if (!destroyed) return;
+        }
+        await loadInstances();
+      } finally {
+        setBusyAction(null);
       }
+    });
+  const rentOffer = async (offer: VastAiOffer) => {
+    if (!template) {
+      setRentError('ComfyUI Templateを取得できていません。');
+      return;
+    }
+    setRentingOfferId(offer.id);
+    setRentNotice('');
+    setRentError('');
+    try {
+      const instanceId = await window.batchStudio.vastai.rentOffer({
+        offerId: offer.id,
+        storageGb: search.storageGb,
+        templateHashId: template.hashId,
+      });
+      if (instanceId == null) return;
+      setRentNotice(
+        'Instance #' + instanceId + ' を作成しました。上のインスタンス一覧へ反映しています。',
+      );
       await loadInstances();
-    }finally{setBusyAction(null);}
-  });
-  const rentOffer=async(offer:VastAiOffer)=>{
-    if(!template){setRentError('ComfyUI Templateを取得できていません。');return;}
-    setRentingOfferId(offer.id);setRentNotice('');setRentError('');
-    try{
-      const instanceId=await window.batchStudio.vastai.rentOffer({offerId:offer.id,storageGb:search.storageGb,templateHashId:template.hashId});
-      if(instanceId==null)return;
-      setRentNotice('Instance #'+instanceId+' を作成しました。上のインスタンス一覧へ反映しています。');
-      await loadInstances();
-    }catch(error){
-      const message=error instanceof Error?error.message:String(error);
-      if(message.includes('現在RENTできません')){
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('現在RENTできません')) {
         setRentError('このOfferは利用できなくなりました。検索結果を自動更新しています。');
-        setOffers(prev=>prev.filter(item=>item.id!==offer.id));
-        setSearchRevision(value=>value+1);
-      }else{
+        setOffers((prev) => prev.filter((item) => item.id !== offer.id));
+        setSearchRevision((value) => value + 1);
+      } else {
         setRentError(message);
       }
-    }finally{setRentingOfferId(null);}
+    } finally {
+      setRentingOfferId(null);
+    }
   };
-  const sorted=useMemo(()=>instances.slice().sort((a,b)=>Number(b.status==='running')-Number(a.status==='running')||b.id-a.id),[instances]);
-  const sortedOffers=useMemo(()=>offers.slice().sort((a,b)=>(a.hourlyCost??Number.POSITIVE_INFINITY)-(b.hourlyCost??Number.POSITIVE_INFINITY)||a.id-b.id),[offers]);
-  return <section className="panel service-page"><div className="service-page-head">{onBack?<button onClick={onBack}>← クラウドインスタンス</button>:<span aria-hidden="true"/>}<div><h3>Vast.ai</h3><p>Vast.ai APIと、リモート環境へ接続するためのSSH設定を管理します。Remote ComfyUIのインストール先は環境設定で管理します。</p></div><b className={configured?'ok':'muted'}>{statusLabel(status)}</b></div>
-    <div className="formgrid service-form"><label className="wide"><span>Vast.ai API Key <code>VASTAI_API_KEY</code></span><input type="password" value={input.apiKey??''} onChange={e=>set('apiKey',e.target.value)} placeholder={configured?'設定済み（変更時のみ入力）':'API Keyを入力'}/></label><label className="wide">SSH秘密鍵<div className="actions"><input style={{flex:1}} value={input.sshPrivateKeyPath??''} readOnly placeholder="秘密鍵ファイルを選択"/><button onClick={()=>void choosePrivateKey()}>選択</button><button disabled={!input.sshPrivateKeyPath} onClick={()=>set('sshPrivateKeyPath','')}>解除</button></div></label><label className="wide">SSH公開鍵<div className="actions"><input style={{flex:1}} value={input.sshPublicKeyPath??''} readOnly placeholder="公開鍵（.pub）ファイルを選択"/><button onClick={()=>void choosePublicKey()}>選択</button><button disabled={!input.sshPublicKeyPath} onClick={()=>set('sshPublicKeyPath','')}>解除</button></div></label><label>SSH User<input value={input.sshUser??''} onChange={e=>set('sshUser',e.target.value)} placeholder="root"/></label></div>
-    <p className="hint">SSHは公開Host/Port + 鍵認証を前提とし、SSH Tunnelは使用しません。SSH接続先PortとRemote ComfyUI Portは選択したInstanceのVast.ai API応答から実行時に解決し、固定設定として保存しません。保存時に秘密鍵と公開鍵が同一キーペアか検証し、Remote Execution開始時に公開鍵をVast.aiアカウントへ登録確認したうえで対象Instanceへattachします。</p>{status?.sshPrivateKeyPath&&status?.sshPublicKeyPath&&<div className="facts"><div>SSH key pair <b>{status.sshKeyPairValid?'✓':'✕'}</b></div><div>秘密鍵 <b>{status.sshPrivateKeyExists?'✓':'✕'}</b></div><div>公開鍵 <b>{status.sshPublicKeyExists?'✓':'✕'}</b></div></div>}<div className="actions service-actions"><button disabled={!configured&&!input.apiKey?.trim()} onClick={()=>void run(()=>window.batchStudio.vastai.test(input))}>API接続テスト</button><button className="primary" disabled={!configured&&!input.apiKey?.trim()} onClick={()=>void save()}>保存</button></div>
-    <div className="service-subsection vast-instance-section"><div className="panelhead"><div><h4>インスタンス</h4><p>既存Instanceの状態確認・起動・停止・削除・再起動を行います。状態は5秒ごとに自動更新します。</p></div><button disabled={!configured||loadingInstances} onClick={()=>void run(loadInstances)}>{loadingInstances?'更新中…':'更新'}</button></div>{configured&&sorted.length===0&&!loadingInstances&&<p className="hint">Vast.ai Instanceがありません。</p>}{sorted.length>0&&<div className="vast-instance-table"><div className="vast-instance-row vast-instance-head"><span>ID / Label</span><span>GPU</span><span>Status</span><span>Cost</span><span>SSH</span><span>操作</span></div>{sorted.map(instance=>{const busy=busyAction?.startsWith(`${instance.id}:`)===true;return <div className="vast-instance-row" key={instance.id}><span><b>#{instance.id}</b><small>{instance.label||'ラベルなし'}</small></span><span>{instance.gpuName??'-'}<small>{instance.gpuCount??'-'} GPU / {formatVram(instance.gpuRamMb)}</small></span><span><b className={`vast-status vast-status-${instance.status}`}>{instanceStatusLabel(instance.status)}</b><small>{statusDetail(instance)}</small></span><span>{formatCost(instance.hourlyCost)}</span><span>{instance.sshHost&&instance.sshPort?<><code>{instance.sshHost}:{instance.sshPort}</code><small>ComfyUI localhost:{instance.comfyUiPort??'未解決'}</small></>:'-'}</span><span className="vast-instance-actions"><button className={`vast-instance-primary-action ${instance.status==='scheduling'?'vast-instance-primary-action-scheduling':''}`} disabled={busy||!canStart(instance)} onClick={()=>void perform(instance,'start')}>{startButtonLabel(instance.status)}</button><button className="vast-instance-icon-action" disabled={busy||!canStop(instance)} title={instance.status==='scheduling'?'Schedulingを停止':'停止 / Schedulingをキャンセル'} aria-label={instance.status==='scheduling'?'Schedulingを停止':'停止 / Schedulingをキャンセル'} onClick={()=>void perform(instance,'stop')}><StopIcon/></button><button className="vast-instance-icon-action vast-instance-icon-action-danger" disabled={busy} title="削除" aria-label="削除" onClick={()=>void perform(instance,'destroy')}><TrashIcon/></button><button className="vast-instance-icon-action" disabled={busy||!canReboot(instance)} title="再起動" aria-label="再起動" onClick={()=>void perform(instance,'reboot')}><RebootIcon/></button></span></div>})}</div>}</div>
-    <div className="service-subsection vast-search-section"><div className="panelhead"><div><h4>GPU検索・RENT</h4><p>Vast.aiのComfyUI Templateを使用するOn-demand Offerだけを検索します。GPU・VRAM・料金などは結果を比較して選択します。</p></div>{template&&<span className="vast-template-pill">ComfyUI · 推奨 {formatNumber(template.recommendedDiskSpaceGb,0)} GB</span>}</div>
-      {!configured?<p className="hint">検索するにはVast.ai API Keyを設定してください。</p>:<><div className="vast-search-form"><label><span className="vast-search-field-title">Storage <em>GB</em></span><input type="number" min={template?.recommendedDiskSpaceGb??1} step="1" value={search.storageGb} onChange={e=>setSearch(prev=>({...prev,storageGb:Number(e.target.value)}))}/><small>RENT時も同じ容量を使用します。</small></label><label><span className="vast-search-field-title">Minimum TFLOPs <em>total</em></span><input type="number" min="0" step="1" value={search.minTflops} onChange={e=>setSearch(prev=>({...prev,minTflops:Number(e.target.value)}))}/><small>0で指定なし。</small></label><label><span className="vast-search-field-title">GPU Count</span><input type="number" min="1" max="64" step="1" value={search.gpuCount} onChange={e=>setSearch(prev=>({...prev,gpuCount:Number(e.target.value)}))}/><small>デフォルトは1。</small></label><label><span className="vast-search-field-title">Reliability <em>%以上</em></span><input type="number" min="0" max="100" step="0.1" value={search.minReliability} onChange={e=>setSearch(prev=>({...prev,minReliability:Number(e.target.value)}))}/><small>ホスト信頼性の下限。</small></label><label className="wide"><span className="vast-search-field-title">除外する国コード</span><input value={excludedCountries} onChange={e=>setExcludedCountries(e.target.value)} placeholder="例: CN, RU, TW"/><small>2文字の国コードをカンマまたは空白区切りで指定します。未入力なら地域を除外しません。</small></label></div><div className="vast-search-status" aria-live="polite">{searching?<span>検索中…</span>:searchError?<span className="error">{searchError}</span>:<span>{sortedOffers.length} offers · コストが低い順</span>}</div></>}
-      {rentNotice&&<div className="vast-rent-notice">{rentNotice}</div>}
-      {rentError&&<div className="vast-rent-error" role="alert">{rentError}</div>}
-      {configured&&!searching&&!searchError&&sortedOffers.length===0&&<p className="hint vast-search-empty">条件に一致するOfferがありません。</p>}
-      {sortedOffers.length>0&&<div className="vast-offer-list">{sortedOffers.map(offer=><article className="vast-offer-card" key={offer.id}>
-        <div className="vast-offer-summary">
-          <div className="vast-offer-gpu"><b>{offer.gpuCount??'-'}x {offer.gpuName??'GPU'}</b><small>{offer.geolocation??'Location不明'} · Offer #{offer.id}</small></div>
-          <div><span>TFLOPs</span><b>{formatNumber(offer.totalFlops)}</b></div>
-          <div><span>VRAM</span><b>{formatVram(offer.gpuRamMb)}</b><small>{offer.gpuTotalRamMb&&offer.gpuCount&&offer.gpuCount>1?'total '+formatVram(offer.gpuTotalRamMb):''}</small></div>
-          <div><span>Reliability</span><b>{formatPercent(offer.reliability)}</b><small>{offer.verification??'unverified'}</small></div>
-          <div><span>Price</span><b>{formatCost(offer.hourlyCost)}</b><small>{offer.dlperfPerDollar==null?'':formatNumber(offer.dlperfPerDollar)+' DLP/$/hr'}</small></div>
-          <button className="primary vast-rent-button" disabled={rentingOfferId!==null} onClick={()=>void rentOffer(offer)}>{rentingOfferId===offer.id?'RENT中…':'RENT'}</button>
+  const sorted = useMemo(
+    () =>
+      instances
+        .slice()
+        .sort(
+          (a, b) => Number(b.status === 'running') - Number(a.status === 'running') || b.id - a.id,
+        ),
+    [instances],
+  );
+  const sortedOffers = useMemo(
+    () =>
+      offers
+        .slice()
+        .sort(
+          (a, b) =>
+            (a.hourlyCost ?? Number.POSITIVE_INFINITY) -
+              (b.hourlyCost ?? Number.POSITIVE_INFINITY) || a.id - b.id,
+        ),
+    [offers],
+  );
+  return (
+    <section className="panel service-page">
+      <div className="service-page-head">
+        {onBack ? (
+          <button onClick={onBack}>← クラウドインスタンス</button>
+        ) : (
+          <span aria-hidden="true" />
+        )}
+        <div>
+          <h3>Vast.ai</h3>
+          <p>
+            Vast.ai APIと、リモート環境へ接続するためのSSH設定を管理します。Remote
+            ComfyUIのインストール先は環境設定で管理します。
+          </p>
         </div>
-        <div className="vast-offer-details">
-          <div><span>GPU</span><b>{formatNumber(offer.gpuMemBandwidthGbps)} GB/s</b><small>Memory BW</small></div>
-          <div><span>PCIe</span><b>{offer.pciGen?'Gen '+formatNumber(offer.pciGen,0):'-'}</b><small>{offer.pcieBandwidthGbps==null?'-':formatNumber(offer.pcieBandwidthGbps)+' GB/s'} · {offer.gpuLanes?offer.gpuLanes+' lanes':'-'}</small></div>
-          <div><span>CPU</span><b>{offer.cpuName??'-'}</b><small>{offer.cpuCoresEffective??offer.cpuCores??'-'} / {offer.cpuCores??'-'} cores · {formatVram(offer.cpuRamMb)} RAM</small></div>
-          <div><span>Disk</span><b>{offer.diskName??'-'}</b><small>{offer.diskBandwidthMb==null?'-':formatNumber(offer.diskBandwidthMb,0)+' MB/s'} · {offer.diskSpaceGb==null?'-':formatNumber(offer.diskSpaceGb,0)+' GB available'}</small></div>
-          <div><span>Network</span><b>↓ {offer.internetDownMb==null?'-':formatNumber(offer.internetDownMb,0)+' MB/s'}</b><small>↑ {offer.internetUpMb==null?'-':formatNumber(offer.internetUpMb,0)+' MB/s'} · {offer.directPortCount??'-'} ports</small></div>
-          <div><span>DLPerf / CUDA</span><b>{formatNumber(offer.dlperf)} / {formatNumber(offer.cudaMaxGood)}</b><small>{offer.flopsPerDollar==null?'-':formatNumber(offer.flopsPerDollar)+' TFLOPs/$/hr'}</small></div>
-          <div><span>Machine</span><b>#{offer.machineId??'-'}</b><small>Host #{offer.hostId??'-'} · {offer.motherboard??'-'}</small></div>
-          <div><span>Max Duration</span><b>{formatDuration(offer.durationSeconds)}</b><small>{offer.storageCostPerGbMonth==null?'':'Storage $'+formatNumber(offer.storageCostPerGbMonth,4)+'/GB/mo'}</small></div>
-          <div><span>Bandwidth cost</span><b>↓ {offer.internetDownCostPerTb==null?'-':'$'+formatNumber(offer.internetDownCostPerTb,2)+'/TB'}</b><small>↑ {offer.internetUpCostPerTb==null?'-':'$'+formatNumber(offer.internetUpCostPerTb,2)+'/TB'}</small></div>
+        <b className={configured ? 'ok' : 'muted'}>{statusLabel(status)}</b>
+      </div>
+      <div className="formgrid service-form">
+        <label className="wide">
+          <span>
+            Vast.ai API Key <code>VASTAI_API_KEY</code>
+          </span>
+          <input
+            type="password"
+            value={input.apiKey ?? ''}
+            onChange={(e) => set('apiKey', e.target.value)}
+            placeholder={configured ? '設定済み（変更時のみ入力）' : 'API Keyを入力'}
+          />
+        </label>
+        <label className="wide">
+          SSH秘密鍵
+          <div className="actions">
+            <input
+              style={{ flex: 1 }}
+              value={input.sshPrivateKeyPath ?? ''}
+              readOnly
+              placeholder="秘密鍵ファイルを選択"
+            />
+            <button onClick={() => void choosePrivateKey()}>選択</button>
+            <button
+              disabled={!input.sshPrivateKeyPath}
+              onClick={() => set('sshPrivateKeyPath', '')}
+            >
+              解除
+            </button>
+          </div>
+        </label>
+        <label className="wide">
+          SSH公開鍵
+          <div className="actions">
+            <input
+              style={{ flex: 1 }}
+              value={input.sshPublicKeyPath ?? ''}
+              readOnly
+              placeholder="公開鍵（.pub）ファイルを選択"
+            />
+            <button onClick={() => void choosePublicKey()}>選択</button>
+            <button disabled={!input.sshPublicKeyPath} onClick={() => set('sshPublicKeyPath', '')}>
+              解除
+            </button>
+          </div>
+        </label>
+        <label>
+          SSH User
+          <input
+            value={input.sshUser ?? ''}
+            onChange={(e) => set('sshUser', e.target.value)}
+            placeholder="root"
+          />
+        </label>
+      </div>
+      <p className="hint">
+        SSHは公開Host/Port + 鍵認証を前提とし、SSH Tunnelは使用しません。SSH接続先PortとRemote
+        ComfyUI Portは選択したInstanceのVast.ai
+        API応答から実行時に解決し、固定設定として保存しません。保存時に秘密鍵と公開鍵が同一キーペアか検証し、Remote
+        Execution開始時に公開鍵をVast.aiアカウントへ登録確認したうえで対象Instanceへattachします。
+      </p>
+      {status?.sshPrivateKeyPath && status?.sshPublicKeyPath && (
+        <div className="facts">
+          <div>
+            SSH key pair <b>{status.sshKeyPairValid ? '✓' : '✕'}</b>
+          </div>
+          <div>
+            秘密鍵 <b>{status.sshPrivateKeyExists ? '✓' : '✕'}</b>
+          </div>
+          <div>
+            公開鍵 <b>{status.sshPublicKeyExists ? '✓' : '✕'}</b>
+          </div>
         </div>
-      </article>)}</div>}
-    </div>
-  </section>;
+      )}
+      <div className="actions service-actions">
+        <button
+          disabled={!configured && !input.apiKey?.trim()}
+          onClick={() => void run(() => window.batchStudio.vastai.test(input))}
+        >
+          API接続テスト
+        </button>
+        <button
+          className="primary"
+          disabled={!configured && !input.apiKey?.trim()}
+          onClick={() => void save()}
+        >
+          保存
+        </button>
+      </div>
+      <div className="service-subsection vast-instance-section">
+        <div className="panelhead">
+          <div>
+            <h4>インスタンス</h4>
+            <p>
+              既存Instanceの状態確認・起動・停止・削除・再起動を行います。状態は5秒ごとに自動更新します。
+            </p>
+          </div>
+          <button
+            disabled={!configured || loadingInstances}
+            onClick={() => void run(loadInstances)}
+          >
+            {loadingInstances ? '更新中…' : '更新'}
+          </button>
+        </div>
+        {configured && sorted.length === 0 && !loadingInstances && (
+          <p className="hint">Vast.ai Instanceがありません。</p>
+        )}
+        {sorted.length > 0 && (
+          <div className="vast-instance-table">
+            <div className="vast-instance-row vast-instance-head">
+              <span>ID / Label</span>
+              <span>GPU</span>
+              <span>Status</span>
+              <span>Cost</span>
+              <span>SSH</span>
+              <span>操作</span>
+            </div>
+            {sorted.map((instance) => {
+              const busy = busyAction?.startsWith(`${instance.id}:`) === true;
+              return (
+                <div className="vast-instance-row" key={instance.id}>
+                  <span>
+                    <b>#{instance.id}</b>
+                    <small>{instance.label || 'ラベルなし'}</small>
+                  </span>
+                  <span>
+                    {instance.gpuName ?? '-'}
+                    <small>
+                      {instance.gpuCount ?? '-'} GPU / {formatVram(instance.gpuRamMb)}
+                    </small>
+                  </span>
+                  <span>
+                    <b className={`vast-status vast-status-${instance.status}`}>
+                      {instanceStatusLabel(instance.status)}
+                    </b>
+                    <small>{statusDetail(instance)}</small>
+                  </span>
+                  <span>{formatCost(instance.hourlyCost)}</span>
+                  <span>
+                    {instance.sshHost && instance.sshPort ? (
+                      <>
+                        <code>
+                          {instance.sshHost}:{instance.sshPort}
+                        </code>
+                        <small>ComfyUI localhost:{instance.comfyUiPort ?? '未解決'}</small>
+                      </>
+                    ) : (
+                      '-'
+                    )}
+                  </span>
+                  <span className="vast-instance-actions">
+                    <button
+                      className={`vast-instance-primary-action ${instance.status === 'scheduling' ? 'vast-instance-primary-action-scheduling' : ''}`}
+                      disabled={busy || !canStart(instance)}
+                      onClick={() => void perform(instance, 'start')}
+                    >
+                      {startButtonLabel(instance.status)}
+                    </button>
+                    <button
+                      className="vast-instance-icon-action"
+                      disabled={busy || !canStop(instance)}
+                      title={
+                        instance.status === 'scheduling'
+                          ? 'Schedulingを停止'
+                          : '停止 / Schedulingをキャンセル'
+                      }
+                      aria-label={
+                        instance.status === 'scheduling'
+                          ? 'Schedulingを停止'
+                          : '停止 / Schedulingをキャンセル'
+                      }
+                      onClick={() => void perform(instance, 'stop')}
+                    >
+                      <StopIcon />
+                    </button>
+                    <button
+                      className="vast-instance-icon-action vast-instance-icon-action-danger"
+                      disabled={busy}
+                      title="削除"
+                      aria-label="削除"
+                      onClick={() => void perform(instance, 'destroy')}
+                    >
+                      <TrashIcon />
+                    </button>
+                    <button
+                      className="vast-instance-icon-action"
+                      disabled={busy || !canReboot(instance)}
+                      title="再起動"
+                      aria-label="再起動"
+                      onClick={() => void perform(instance, 'reboot')}
+                    >
+                      <RebootIcon />
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div className="service-subsection vast-search-section">
+        <div className="panelhead">
+          <div>
+            <h4>GPU検索・RENT</h4>
+            <p>
+              Vast.aiのComfyUI Templateを使用するOn-demand
+              Offerだけを検索します。GPU・VRAM・料金などは結果を比較して選択します。
+            </p>
+          </div>
+          {template && (
+            <span className="vast-template-pill">
+              ComfyUI · 推奨 {formatNumber(template.recommendedDiskSpaceGb, 0)} GB
+            </span>
+          )}
+        </div>
+        {!configured ? (
+          <p className="hint">検索するにはVast.ai API Keyを設定してください。</p>
+        ) : (
+          <>
+            <div className="vast-search-form">
+              <label>
+                <span className="vast-search-field-title">
+                  Storage <em>GB</em>
+                </span>
+                <input
+                  type="number"
+                  min={template?.recommendedDiskSpaceGb ?? 1}
+                  step="1"
+                  value={search.storageGb}
+                  onChange={(e) =>
+                    setSearch((prev) => ({ ...prev, storageGb: Number(e.target.value) }))
+                  }
+                />
+                <small>RENT時も同じ容量を使用します。</small>
+              </label>
+              <label>
+                <span className="vast-search-field-title">
+                  Minimum TFLOPs <em>total</em>
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={search.minTflops}
+                  onChange={(e) =>
+                    setSearch((prev) => ({ ...prev, minTflops: Number(e.target.value) }))
+                  }
+                />
+                <small>0で指定なし。</small>
+              </label>
+              <label>
+                <span className="vast-search-field-title">GPU Count</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="64"
+                  step="1"
+                  value={search.gpuCount}
+                  onChange={(e) =>
+                    setSearch((prev) => ({ ...prev, gpuCount: Number(e.target.value) }))
+                  }
+                />
+                <small>デフォルトは1。</small>
+              </label>
+              <label>
+                <span className="vast-search-field-title">
+                  Reliability <em>%以上</em>
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={search.minReliability}
+                  onChange={(e) =>
+                    setSearch((prev) => ({ ...prev, minReliability: Number(e.target.value) }))
+                  }
+                />
+                <small>ホスト信頼性の下限。</small>
+              </label>
+              <label className="wide">
+                <span className="vast-search-field-title">除外する国コード</span>
+                <input
+                  value={excludedCountries}
+                  onChange={(e) => setExcludedCountries(e.target.value)}
+                  placeholder="例: CN, RU, TW"
+                />
+                <small>
+                  2文字の国コードをカンマまたは空白区切りで指定します。未入力なら地域を除外しません。
+                </small>
+              </label>
+            </div>
+            <div className="vast-search-status" aria-live="polite">
+              {searching ? (
+                <span>検索中…</span>
+              ) : searchError ? (
+                <span className="error">{searchError}</span>
+              ) : (
+                <span>{sortedOffers.length} offers · コストが低い順</span>
+              )}
+            </div>
+          </>
+        )}
+        {rentNotice && <div className="vast-rent-notice">{rentNotice}</div>}
+        {rentError && (
+          <div className="vast-rent-error" role="alert">
+            {rentError}
+          </div>
+        )}
+        {configured && !searching && !searchError && sortedOffers.length === 0 && (
+          <p className="hint vast-search-empty">条件に一致するOfferがありません。</p>
+        )}
+        {sortedOffers.length > 0 && (
+          <div className="vast-offer-list">
+            {sortedOffers.map((offer) => (
+              <article className="vast-offer-card" key={offer.id}>
+                <div className="vast-offer-summary">
+                  <div className="vast-offer-gpu">
+                    <b>
+                      {offer.gpuCount ?? '-'}x {offer.gpuName ?? 'GPU'}
+                    </b>
+                    <small>
+                      {offer.geolocation ?? 'Location不明'} · Offer #{offer.id}
+                    </small>
+                  </div>
+                  <div>
+                    <span>TFLOPs</span>
+                    <b>{formatNumber(offer.totalFlops)}</b>
+                  </div>
+                  <div>
+                    <span>VRAM</span>
+                    <b>{formatVram(offer.gpuRamMb)}</b>
+                    <small>
+                      {offer.gpuTotalRamMb && offer.gpuCount && offer.gpuCount > 1
+                        ? 'total ' + formatVram(offer.gpuTotalRamMb)
+                        : ''}
+                    </small>
+                  </div>
+                  <div>
+                    <span>Reliability</span>
+                    <b>{formatPercent(offer.reliability)}</b>
+                    <small>{offer.verification ?? 'unverified'}</small>
+                  </div>
+                  <div>
+                    <span>Price</span>
+                    <b>{formatCost(offer.hourlyCost)}</b>
+                    <small>
+                      {offer.dlperfPerDollar == null
+                        ? ''
+                        : formatNumber(offer.dlperfPerDollar) + ' DLP/$/hr'}
+                    </small>
+                  </div>
+                  <button
+                    className="primary vast-rent-button"
+                    disabled={rentingOfferId !== null}
+                    onClick={() => void rentOffer(offer)}
+                  >
+                    {rentingOfferId === offer.id ? 'RENT中…' : 'RENT'}
+                  </button>
+                </div>
+                <div className="vast-offer-details">
+                  <div>
+                    <span>GPU</span>
+                    <b>{formatNumber(offer.gpuMemBandwidthGbps)} GB/s</b>
+                    <small>Memory BW</small>
+                  </div>
+                  <div>
+                    <span>PCIe</span>
+                    <b>{offer.pciGen ? 'Gen ' + formatNumber(offer.pciGen, 0) : '-'}</b>
+                    <small>
+                      {offer.pcieBandwidthGbps == null
+                        ? '-'
+                        : formatNumber(offer.pcieBandwidthGbps) + ' GB/s'}{' '}
+                      · {offer.gpuLanes ? offer.gpuLanes + ' lanes' : '-'}
+                    </small>
+                  </div>
+                  <div>
+                    <span>CPU</span>
+                    <b>{offer.cpuName ?? '-'}</b>
+                    <small>
+                      {offer.cpuCoresEffective ?? offer.cpuCores ?? '-'} / {offer.cpuCores ?? '-'}{' '}
+                      cores · {formatVram(offer.cpuRamMb)} RAM
+                    </small>
+                  </div>
+                  <div>
+                    <span>Disk</span>
+                    <b>{offer.diskName ?? '-'}</b>
+                    <small>
+                      {offer.diskBandwidthMb == null
+                        ? '-'
+                        : formatNumber(offer.diskBandwidthMb, 0) + ' MB/s'}{' '}
+                      ·{' '}
+                      {offer.diskSpaceGb == null
+                        ? '-'
+                        : formatNumber(offer.diskSpaceGb, 0) + ' GB available'}
+                    </small>
+                  </div>
+                  <div>
+                    <span>Network</span>
+                    <b>
+                      ↓{' '}
+                      {offer.internetDownMb == null
+                        ? '-'
+                        : formatNumber(offer.internetDownMb, 0) + ' MB/s'}
+                    </b>
+                    <small>
+                      ↑{' '}
+                      {offer.internetUpMb == null
+                        ? '-'
+                        : formatNumber(offer.internetUpMb, 0) + ' MB/s'}{' '}
+                      · {offer.directPortCount ?? '-'} ports
+                    </small>
+                  </div>
+                  <div>
+                    <span>DLPerf / CUDA</span>
+                    <b>
+                      {formatNumber(offer.dlperf)} / {formatNumber(offer.cudaMaxGood)}
+                    </b>
+                    <small>
+                      {offer.flopsPerDollar == null
+                        ? '-'
+                        : formatNumber(offer.flopsPerDollar) + ' TFLOPs/$/hr'}
+                    </small>
+                  </div>
+                  <div>
+                    <span>Machine</span>
+                    <b>#{offer.machineId ?? '-'}</b>
+                    <small>
+                      Host #{offer.hostId ?? '-'} · {offer.motherboard ?? '-'}
+                    </small>
+                  </div>
+                  <div>
+                    <span>Max Duration</span>
+                    <b>{formatDuration(offer.durationSeconds)}</b>
+                    <small>
+                      {offer.storageCostPerGbMonth == null
+                        ? ''
+                        : 'Storage $' + formatNumber(offer.storageCostPerGbMonth, 4) + '/GB/mo'}
+                    </small>
+                  </div>
+                  <div>
+                    <span>Bandwidth cost</span>
+                    <b>
+                      ↓{' '}
+                      {offer.internetDownCostPerTb == null
+                        ? '-'
+                        : '$' + formatNumber(offer.internetDownCostPerTb, 2) + '/TB'}
+                    </b>
+                    <small>
+                      ↑{' '}
+                      {offer.internetUpCostPerTb == null
+                        ? '-'
+                        : '$' + formatNumber(offer.internetUpCostPerTb, 2) + '/TB'}
+                    </small>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }

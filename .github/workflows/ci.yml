@@ -21,6 +21,8 @@ jobs:
           node-version: '22.12.0'
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Lint and format check
+        run: npm run check
       - name: Typecheck
         run: npm run typecheck
       - name: Regression tests

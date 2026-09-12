@@ -1,46 +1,195 @@
-const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const path=require('node:path');
-const src=fs.readFileSync(path.resolve(__dirname,'../src/main/grok-context.ts'),'utf8');
-for(const heading of ['## 作品コンセプト','## 登場人物','## 共通設定','## 全体進行','## シーン構成','## 生成上の一貫性メモ'])assert.match(src,new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')),`story output contract must include ${heading}`);
-assert.match(src,/artifactFileOutputRules\('story\.md'\)/,'story artifact must be returned as story.md file');
-assert.match(src,/artifactFileOutputRules\('model_loras\.json'\)/,'Grok model selection must return the LoRA-only model_loras.json file');
-assert.match(src,/artifactFileOutputRules\('prompt_plan\.json'\)/,'Prompt Plan artifact must be returned as prompt_plan.json file');
-assert.match(src,/ダウンロード可能なファイルとして生成・添付/,'final artifact outputs must be downloadable files');
-assert.match(src,/ファイル内容をチャット本文、code block、引用、要約へ再掲しません/,'artifact file contents must not be repeated in chat');
-assert.match(src,/JSONとしてparse可能な厳密な構文/,'JSON artifacts must require strict parseable JSON');
-assert.match(src,/missingRequirements/,'models draft output must define missingRequirements behavior');
-assert.match(src,/promptFallbacks/,'models draft output must define resolved prompt fallback behavior');
-assert.match(src,/Checkpoint、Text Encoder、VAE、modelFamily は出力しません/,'Grok must not override user-selected base models');
-assert.match(src,/modelType が LoRA \/ LoCon \/ DoRA/,'Grok LoRA selection must be catalog-type constrained');
-assert.match(src,/civitai\.red/,'missing catalog LoRAs must be searched on civitai.red');
-assert.match(src,/civitai\.com/,'missing catalog LoRAs must be searched on civitai.com');
-assert.match(src,/複数LoRAを組み合わせて要件を分解・実現/,'Grok must investigate multi-LoRA composition after external alternatives fail');
-assert.match(src,/positive \/ negative prompt で十分に代替可能か判断/,'Grok must evaluate prompt-only fallback after multi-LoRA composition fails');
-assert.match(src,/Promptだけで十分に代替可能[\s\S]*missingRequirements へ入れません/,'prompt-resolved requirements must not remain blocking missing requirements');
-assert.match(src,/Civitai Collectionへ追加してカタログ再同期が必要/,'external models outside the catalog must remain explicit catalog-add requirements');
-assert.match(src,/model_prompt_fallbacks\.json/,'Prompt Plan must receive persisted prompt fallback decisions');
-assert.match(src,/Prompt記法 — Anima[\s\S]*looking at viewer/,'Anima prompts must use space-separated normal tags');
-assert.match(src,/Prompt記法 — Illustrious[\s\S]*looking_at_viewer/,'Illustrious prompts must use underscore normal tags');
-assert.match(src,/trainedWords は例外[\s\S]*1文字も変更せず/,'trainedWords must remain exact');
-assert.match(src,/1 Leaf = 1 image/,'Prompt Plan output must preserve leaf cardinality');
-assert.match(src,/models\.json の trainedWords はトリガーワードとして扱い/,'Prompt Plan must treat trainedWords as trigger words');
-assert.match(src,/checkpoint\.main\.trainedWords と rootLoras[\s\S]*common\.positive/,'checkpoint and root LoRA trigger words must be applied to common positive');
-assert.match(src,/Branch の loras[\s\S]*すべての Leaf の positive/,'branch LoRA trigger words must be applied to every leaf positive');
-assert.match(src,/trainedWords が空配列ならトリガーワードを捏造しません/,'empty trainedWords must not be invented');
-assert.match(src,/trainedWords を negative prompt へ入れません/,'trigger words must not be applied to negative prompts');
-assert.match(src,/^const danbooruTagRules=/m,'Danbooru tag selection policy must be defined');
-assert.match(src,/positive \/ negative prompt の通常タグ[\s\S]*Danbooruで実在するタグ/,'generated image prompts must require real Danbooru tags');
-assert.match(src,/canonical tag[\s\S]*alias先のcanonical tag/,'Danbooru aliases must prefer canonical tags');
-assert.match(src,/post_countが多いタグを優先/,'semantically equivalent Danbooru tags must prefer higher post counts');
-assert.match(src,/低頻度タグしか正確に意味を表現できない場合は使用可能/,'rare tags must remain allowed when they are the only semantically accurate choice');
-assert.match(src,/post_countを確認できない場合、件数を捏造してはいけません/,'unknown Danbooru post counts must never be invented');
-assert.match(src,/Illustriousではcanonical nameをunderscore形式[\s\S]*Animaでは同じcanonical tag[\s\S]*underscoreをspaceへ変換/,'Danbooru canonical tags must honor model-family prompt dialects');
-assert.match(src,/trainedWords[\s\S]*Danbooruタグ制約を適用しません/,'trainedWords must be exempt from Danbooru validation');
-const danbooruRuleUses=(src.match(/\$\{danbooruTagRules\}/g)||[]).length;
-assert.equal(danbooruRuleUses,2,'Danbooru tag policy must be injected into both LoRA fallback selection and Prompt Plan generation');
-assert.match(src,/positive promptへ追加するDanbooru実在タグ列/,'LoRA prompt fallback positive must require Danbooru tags');
-assert.match(src,/negative promptへ追加するDanbooru実在タグ列/,'LoRA prompt fallback negative must require Danbooru tags');
-assert.match(src,/^const storyDiscussionShape=/m,'story discussion must have a defined response format');
-assert.doesNotMatch(src,/最終成果物は指定された code block 1個だけ/,'final artifacts must no longer be requested inline as code blocks');
+const assert = require('node:assert/strict');
+const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
+const fs = require('node:fs');
+const path = require('node:path');
+const src = fs.readFileSync(path.resolve(__dirname, '../src/main/grok-context.ts'), 'utf8');
+for (const heading of [
+  '## 作品コンセプト',
+  '## 登場人物',
+  '## 共通設定',
+  '## 全体進行',
+  '## シーン構成',
+  '## 生成上の一貫性メモ',
+])
+  matchCode(
+    src,
+    new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    `story output contract must include ${heading}`,
+  );
+matchCode(
+  src,
+  /artifactFileOutputRules\('story\.md'\)/,
+  'story artifact must be returned as story.md file',
+);
+matchCode(
+  src,
+  /artifactFileOutputRules\('model_loras\.json'\)/,
+  'Grok model selection must return the LoRA-only model_loras.json file',
+);
+matchCode(
+  src,
+  /artifactFileOutputRules\('prompt_plan\.json'\)/,
+  'Prompt Plan artifact must be returned as prompt_plan.json file',
+);
+matchCode(
+  src,
+  /ダウンロード可能なファイルとして生成・添付/,
+  'final artifact outputs must be downloadable files',
+);
+matchCode(
+  src,
+  /ファイル内容をチャット本文、code block、引用、要約へ再掲しません/,
+  'artifact file contents must not be repeated in chat',
+);
+matchCode(
+  src,
+  /JSONとしてparse可能な厳密な構文/,
+  'JSON artifacts must require strict parseable JSON',
+);
+matchCode(
+  src,
+  /missingRequirements/,
+  'models draft output must define missingRequirements behavior',
+);
+matchCode(
+  src,
+  /promptFallbacks/,
+  'models draft output must define resolved prompt fallback behavior',
+);
+matchCode(
+  src,
+  /Checkpoint、Text Encoder、VAE、modelFamily は出力しません/,
+  'Grok must not override user-selected base models',
+);
+matchCode(
+  src,
+  /modelType が LoRA \/ LoCon \/ DoRA/,
+  'Grok LoRA selection must be catalog-type constrained',
+);
+matchCode(src, /civitai\.red/, 'missing catalog LoRAs must be searched on civitai.red');
+matchCode(src, /civitai\.com/, 'missing catalog LoRAs must be searched on civitai.com');
+matchCode(
+  src,
+  /複数LoRAを組み合わせて要件を分解・実現/,
+  'Grok must investigate multi-LoRA composition after external alternatives fail',
+);
+matchCode(
+  src,
+  /positive \/ negative prompt で十分に代替可能か判断/,
+  'Grok must evaluate prompt-only fallback after multi-LoRA composition fails',
+);
+matchCode(
+  src,
+  /Promptだけで十分に代替可能[\s\S]*missingRequirements へ入れません/,
+  'prompt-resolved requirements must not remain blocking missing requirements',
+);
+matchCode(
+  src,
+  /Civitai Collectionへ追加してカタログ再同期が必要/,
+  'external models outside the catalog must remain explicit catalog-add requirements',
+);
+matchCode(
+  src,
+  /model_prompt_fallbacks\.json/,
+  'Prompt Plan must receive persisted prompt fallback decisions',
+);
+matchCode(
+  src,
+  /Prompt記法 — Anima[\s\S]*looking at viewer/,
+  'Anima prompts must use space-separated normal tags',
+);
+matchCode(
+  src,
+  /Prompt記法 — Illustrious[\s\S]*looking_at_viewer/,
+  'Illustrious prompts must use underscore normal tags',
+);
+matchCode(src, /trainedWords は例外[\s\S]*1文字も変更せず/, 'trainedWords must remain exact');
+matchCode(src, /1 Leaf = 1 image/, 'Prompt Plan output must preserve leaf cardinality');
+matchCode(
+  src,
+  /models\.json の trainedWords はトリガーワードとして扱い/,
+  'Prompt Plan must treat trainedWords as trigger words',
+);
+matchCode(
+  src,
+  /checkpoint\.main\.trainedWords と rootLoras[\s\S]*common\.positive/,
+  'checkpoint and root LoRA trigger words must be applied to common positive',
+);
+matchCode(
+  src,
+  /Branch の loras[\s\S]*すべての Leaf の positive/,
+  'branch LoRA trigger words must be applied to every leaf positive',
+);
+matchCode(
+  src,
+  /trainedWords が空配列ならトリガーワードを捏造しません/,
+  'empty trainedWords must not be invented',
+);
+matchCode(
+  src,
+  /trainedWords を negative prompt へ入れません/,
+  'trigger words must not be applied to negative prompts',
+);
+matchCode(src, /const danbooruTagRules=/, 'Danbooru tag selection policy must be defined');
+matchCode(
+  src,
+  /positive \/ negative prompt の通常タグ[\s\S]*Danbooruで実在するタグ/,
+  'generated image prompts must require real Danbooru tags',
+);
+matchCode(
+  src,
+  /canonical tag[\s\S]*alias先のcanonical tag/,
+  'Danbooru aliases must prefer canonical tags',
+);
+matchCode(
+  src,
+  /post_countが多いタグを優先/,
+  'semantically equivalent Danbooru tags must prefer higher post counts',
+);
+matchCode(
+  src,
+  /低頻度タグしか正確に意味を表現できない場合は使用可能/,
+  'rare tags must remain allowed when they are the only semantically accurate choice',
+);
+matchCode(
+  src,
+  /post_countを確認できない場合、件数を捏造してはいけません/,
+  'unknown Danbooru post counts must never be invented',
+);
+matchCode(
+  src,
+  /Illustriousではcanonical nameをunderscore形式[\s\S]*Animaでは同じcanonical tag[\s\S]*underscoreをspaceへ変換/,
+  'Danbooru canonical tags must honor model-family prompt dialects',
+);
+matchCode(
+  src,
+  /trainedWords[\s\S]*Danbooruタグ制約を適用しません/,
+  'trainedWords must be exempt from Danbooru validation',
+);
+const danbooruRuleUses = (src.match(/\$\{danbooruTagRules\}/g) || []).length;
+assert.equal(
+  danbooruRuleUses,
+  2,
+  'Danbooru tag policy must be injected into both LoRA fallback selection and Prompt Plan generation',
+);
+matchCode(
+  src,
+  /positive promptへ追加するDanbooru実在タグ列/,
+  'LoRA prompt fallback positive must require Danbooru tags',
+);
+matchCode(
+  src,
+  /negative promptへ追加するDanbooru実在タグ列/,
+  'LoRA prompt fallback negative must require Danbooru tags',
+);
+matchCode(
+  src,
+  /const storyDiscussionShape=/,
+  'story discussion must have a defined response format',
+);
+doesNotMatchCode(
+  src,
+  /最終成果物は指定された code block 1個だけ/,
+  'final artifacts must no longer be requested inline as code blocks',
+);
 console.log('Grok output contract tests passed.');

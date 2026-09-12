@@ -31,7 +31,10 @@ export class UiStateStore {
       schemaVersion: 1,
       lastProjectPath: resolved,
       lastProjectDirectoryPath: resolved,
-      recentProjectPaths: [resolved, ...recent.filter(item => item !== resolved)].slice(0, RECENT_PROJECT_LIMIT),
+      recentProjectPaths: [resolved, ...recent.filter((item) => item !== resolved)].slice(
+        0,
+        RECENT_PROJECT_LIMIT,
+      ),
     });
   }
 
@@ -40,7 +43,10 @@ export class UiStateStore {
     const last = current.lastProjectPath;
     if (last) {
       const recent = Array.isArray(current.recentProjectPaths) ? current.recentProjectPaths : [];
-      current.recentProjectPaths = [last, ...recent.filter(item => item !== last)].slice(0, RECENT_PROJECT_LIMIT);
+      current.recentProjectPaths = [last, ...recent.filter((item) => item !== last)].slice(
+        0,
+        RECENT_PROJECT_LIMIT,
+      );
     }
     delete current.lastProjectPath;
     await writeJsonAtomic(this.filePath, current);
@@ -52,7 +58,7 @@ export class UiStateStore {
     const recent = Array.isArray(current.recentProjectPaths) ? current.recentProjectPaths : [];
     await writeJsonAtomic(this.filePath, {
       ...current,
-      recentProjectPaths: recent.filter(item => item !== resolved),
+      recentProjectPaths: recent.filter((item) => item !== resolved),
     });
   }
 
@@ -73,7 +79,13 @@ export class UiStateStore {
     const recent = Array.isArray(current.recentProjectPaths) ? current.recentProjectPaths : [];
     const valid: string[] = [];
     for (const item of recent) {
-      if (typeof item !== 'string' || !path.isAbsolute(item) || valid.includes(item) || !(await exists(item))) continue;
+      if (
+        typeof item !== 'string' ||
+        !path.isAbsolute(item) ||
+        valid.includes(item) ||
+        !(await exists(item))
+      )
+        continue;
       valid.push(item);
       if (valid.length >= RECENT_PROJECT_LIMIT) break;
     }

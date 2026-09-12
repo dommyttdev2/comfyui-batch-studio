@@ -1,1 +1,33 @@
-.pane-divider{position:fixed;top:0;right:0;bottom:0;width:12px;z-index:18;cursor:col-resize;touch-action:none;background:transparent}.pane-divider::after{content:"";position:absolute;top:0;bottom:0;right:0;width:3px;background:#46505e;opacity:.65;transition:opacity .12s,background .12s}.pane-divider:hover::after,.pane-divider:active::after{opacity:1;background:#60a5fa}body:has(.pane-divider:active){cursor:col-resize;user-select:none}
+.pane-divider {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  z-index: 18;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+.pane-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 3px;
+  background: #46505e;
+  opacity: 0.65;
+  transition:
+    opacity 0.12s,
+    background 0.12s;
+}
+.pane-divider:hover::after,
+.pane-divider:active::after {
+  opacity: 1;
+  background: #60a5fa;
+}
+body:has(.pane-divider:active) {
+  cursor: col-resize;
+  user-select: none;
+}

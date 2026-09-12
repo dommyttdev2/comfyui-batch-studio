@@ -19,7 +19,10 @@ export function isNavigationAbortedError(error: unknown) {
   if (!error || typeof error !== 'object') return false;
   const candidate = error as { code?: unknown; errno?: unknown; message?: unknown };
   if (candidate.code === -3 || candidate.errno === -3) return true;
-  return typeof candidate.message === 'string' && /(?:ERR_ABORTED|\(-3\)\s+loading)/i.test(candidate.message);
+  return (
+    typeof candidate.message === 'string' &&
+    /(?:ERR_ABORTED|\(-3\)\s+loading)/i.test(candidate.message)
+  );
 }
 
 export class GrokNavigationQueue {
@@ -36,7 +39,11 @@ export class GrokNavigationQueue {
       try {
         await contents.loadURL(target);
       } catch (error) {
-        if (isNavigationAbortedError(error) && isSameGrokNavigationTarget(contents.getURL(), target)) return;
+        if (
+          isNavigationAbortedError(error) &&
+          isSameGrokNavigationTarget(contents.getURL(), target)
+        )
+          return;
         throw error;
       }
     });
@@ -44,7 +51,10 @@ export class GrokNavigationQueue {
       if (this.pendingTargets.get(key) === settled) this.pendingTargets.delete(key);
     });
     this.pendingTargets.set(key, settled);
-    this.tail = settled.then(() => undefined, () => undefined);
+    this.tail = settled.then(
+      () => undefined,
+      () => undefined,
+    );
     return settled;
   }
 }
@@ -62,10 +72,17 @@ export class LatestGrokContextQueue<T> {
     const isLatest = () => generation === this.generation;
     const result = this.tail.then(() => task(isLatest));
     this.pending.set(key, result);
-    this.tail = result.then(() => undefined, () => undefined);
+    this.tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
     void result.then(
-      () => { if (this.pending.get(key) === result) this.pending.delete(key); },
-      () => { if (this.pending.get(key) === result) this.pending.delete(key); }
+      () => {
+        if (this.pending.get(key) === result) this.pending.delete(key);
+      },
+      () => {
+        if (this.pending.get(key) === result) this.pending.delete(key);
+      },
     );
     return result;
   }
