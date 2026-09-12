@@ -110,6 +110,8 @@ export class VastAiClient {
   }
   async getInstance(id:number){if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');const payload=record(await this.request(`/api/v0/instances/${id}/`));return normalizeVastInstance(payload.instances??payload);}
   private async setState(id:number,state:'running'|'stopped'){if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');await this.request(`/api/v0/instances/${id}/`,{method:'PUT',body:JSON.stringify({state})});}
+  async requestStartInstance(id:number){await this.setState(id,'running');}
+  async requestStopInstance(id:number){await this.setState(id,'stopped');}
   private async waitForStatus(id:number,target:'running'|'stopped',timeoutMs=LIFECYCLE_TIMEOUT_MS){
     const deadline=Date.now()+timeoutMs;
     while(true){
@@ -120,6 +122,6 @@ export class VastAiClient {
       await delay(LIFECYCLE_POLL_MS);
     }
   }
-  async startInstance(id:number){await this.setState(id,'running');return this.waitForStatus(id,'running');}
-  async stopInstance(id:number){await this.setState(id,'stopped');return this.waitForStatus(id,'stopped');}
+  async startInstance(id:number){await this.requestStartInstance(id);return this.waitForStatus(id,'running');}
+  async stopInstance(id:number){await this.requestStopInstance(id);return this.waitForStatus(id,'stopped');}
 }
