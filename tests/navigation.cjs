@@ -27,6 +27,9 @@ assert.match(executionSource,/REMOTE_COMFYUI_RELEASE_FETCHING/,'ComfyUI release 
 assert.match(executionSource,/REMOTE_COMFYUI_CHECKING_OUT/,'ComfyUI checkout must be visible as its own Execution phase');
 assert.match(executionSource,/REMOTE_COMFYUI_REQUIREMENTS_INSTALLING/,'ComfyUI requirements installation must be visible as its own Execution phase');
 assert.match(executionSource,/REMOTE_COMFYUI_MANAGER_CONFIGURING/,'ComfyUI Manager configuration must be visible as its own Execution phase');
+assert.match(executionSource,/CLOUD INSTANCE STARTING · SCHEDULING/,'scheduling provider state must be visible in the current phase label');
+assert.match(executionSource,/Vast\.ai status: scheduling · GPU Instanceの割り当て待ちです。/,'scheduling provider state must explain that the Instance is waiting for allocation');
+assert.match(executionSource,/remoteLifecycle\?\.latest\?\.status/,'cloud lifecycle status display must use the persisted provider snapshot');
 assert.match(executionSource,/Artifact delivery completed/,'generation completion and artifact delivery completion must remain distinct');
 assert.match(executionSource,/Startできない理由/,'blocked Preflight reason must be visible');
 assert.match(executionSource,/既存Runが実行中のため新規Startできません/,'READY banner must not claim Start is possible while a Run is active');

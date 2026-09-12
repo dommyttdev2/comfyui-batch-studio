@@ -30,6 +30,19 @@ const phaseIndex=(phase:ExecutionPhase)=>EXECUTION_PHASES.indexOf(phase);
 const reached=(phase:ExecutionPhase,target:ExecutionPhase)=>phaseIndex(phase)>=phaseIndex(target);
 const pct=(completed:number,total:number)=>total>0?Math.min(100,Math.round(completed/total*100)):0;
 const phaseLabel=(phase:ExecutionPhase)=>phase.replaceAll('_',' ');
+function executionPhaseLabel(run:ExecutionRun){
+  const providerStatus=run.remoteLifecycle?.latest?.status;
+  if(run.phase==='CLOUD_INSTANCE_STARTING'&&providerStatus==='scheduling')return'CLOUD INSTANCE STARTING · SCHEDULING';
+  return phaseLabel(run.phase);
+}
+function cloudInstanceStatusMessage(run:ExecutionRun){
+  if(run.executionTarget!=='remote'||run.phase!=='CLOUD_INSTANCE_STARTING')return null;
+  const status=run.remoteLifecycle?.latest?.status;
+  if(status==='scheduling')return'Vast.ai status: scheduling · GPU Instanceの割り当て待ちです。';
+  if(status==='starting')return'Vast.ai status: starting · Instanceの起動完了を待っています。';
+  if(status==='stopped')return'Vast.ai status: stopped · Instanceへ起動要求を送信しています。';
+  return status?`Vast.ai status: ${status}`:'Vast.aiのInstance状態を確認しています。';
+}
 function connectionStatus(run:ExecutionRun){
   if(run.lifecycle==='FAILED')return'FAILED';
   if(run.executionTarget==='local')return run.phase==='LOCAL_COMFYUI_CONNECTING'?'ComfyUI 接続中':reached(run.phase,'LOCAL_CAPABILITY_CHECKING')?'ComfyUI 接続済み':'待機';
@@ -93,7 +106,8 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
 
     {!current?<section className="panel execution-empty"><h3>Runはまだありません</h3><p>PreflightがREADYならStartできます。開始後のRun ID・phase・progressはProject内に永続化され、画面再読込後も復元されます。</p></section>:<>
       <section className="panel"><div className="execution-run-head"><div><span className="eyebrow">Current Run ID</span><code>{current.runId}</code></div><span className={'run-lifecycle '+current.lifecycle.toLowerCase()}>{current.lifecycle}</span></div>
-      <div className="facts execution-facts"><div><span>Execution target</span><b>{current.executionTarget==='remote'?'Remote':'Local'}</b></div><div><span>Current phase</span><b>{phaseLabel(current.phase)}</b></div><div><span>Connection status</span><b>{connectionStatus(current)}</b></div><div><span>Model preparation</span><b>{modelStatus(current)}</b></div></div>
+      <div className="facts execution-facts"><div><span>Execution target</span><b>{current.executionTarget==='remote'?'Remote':'Local'}</b></div><div><span>Current phase</span><b>{executionPhaseLabel(current)}</b></div><div><span>Connection status</span><b>{connectionStatus(current)}</b></div><div><span>Model preparation</span><b>{modelStatus(current)}</b></div></div>
+      {cloudInstanceStatusMessage(current)&&<div className="remote-phase-note"><b>Cloud Instance status</b><span>{cloudInstanceStatusMessage(current)}</span></div>}
       {current.executionTarget==='remote'&&<><div className="remote-phase-note"><b>Remote phase separation</b><span>Instance / SSH / model preparation / generation / artifact transfer を独立phaseとして監視します。</span></div>{remoteLifecycle&&<div className="facts execution-facts"><div><span>Vast initial state</span><b>{remoteLifecycle.initialStatus?.toUpperCase()??'RESOLVING'}</b></div><div><span>Vast current state</span><b>{remoteLifecycle.latest?.status.toUpperCase()??'-'}</b></div><div><span>Instance lifecycle owner</span><b>{remoteLifecycle.startedByBatchStudio?'Batch Studio':'Provider / pre-existing'}</b></div><div><span>Initial state restored</span><b>{remoteLifecycle.restoredInitialState?'YES':'NO'}</b></div></div>}</>}
       </section>
       <section className="panel"><div className="panelhead"><div><h3>Generation progress</h3><p>generation completed と artifact delivery completed は別状態です。</p></div><b>{current.progress.overall.completed} / {current.progress.overall.total}</b></div>
