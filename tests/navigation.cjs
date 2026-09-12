@@ -35,6 +35,9 @@ assert.match(executionSource,/next_state=/,'scheduling details must expose the r
 assert.match(executionSource,/const remoteInstanceChanged=Boolean/,'Execution UI must detect when Project selection differs from the active Run Instance');
 assert.match(executionSource,/別Instanceで新しく実行/,'Execution UI must expose a distinct replacement-Run action');
 assert.match(executionSource,/execution\.restartRemote/,'replacement action must use dedicated IPC rather than mutating the existing Run');
+assert.match(executionSource,/applyRemoteProgressEvent/,'Remote generation progress must be applied from streamed Worker progress events');
+assert.match(executionSource,/event\.type!==['"]progress['"]/,'Remote generation must ignore non-progress Worker events during live synchronization');
+assert.match(executionSource,/overallCompleted/,'Generation progress must synchronize the Remote Worker overallCompleted counter');
 assert.match(mainSource,/IPC\.EXECUTION_RESTART_REMOTE/,'Main Process must implement replacement-Run IPC');
 assert.match(mainSource,/REMOTE_INSTANCE_REPLACED/,'replacement must terminalize the old Run with an explicit history reason');
 assert.match(mainSource,/isRemotePreGenerationPhase\(current\.phase\)/,'Instance replacement must be limited to pre-generation phases');
