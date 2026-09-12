@@ -146,7 +146,11 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
       const u=new URL(String(url));
       if(u.pathname==='/api/v0/template/'){
         const filters=JSON.parse(u.searchParams.get('select_filters'));
-        assert.deepEqual(filters,{name:{eq:'ComfyUI'},recommended:{eq:true},use_ssh:{eq:true},ssh_direct:{eq:true}});
+        assert.deepEqual(filters.name,{eq:'ComfyUI'});
+        assert.deepEqual(filters.recommended,{eq:true});
+        assert.deepEqual(filters.use_ssh,{eq:true});
+        assert.deepEqual(filters.ssh_direct,{eq:true});
+        if(filters.hash_id)assert.deepEqual(filters.hash_id,{eq:'comfy-hash'});
         return response({templates:[template]});
       }
       if(u.pathname==='/api/v0/bundles'&&init.method==='POST'){
