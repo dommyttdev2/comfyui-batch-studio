@@ -8,7 +8,7 @@ const LIFECYCLE_POLL_MS=5_000;
 
 type JsonRecord=Record<string,unknown>;
 type FetchLike=typeof fetch;
-interface VastRequestInit { method?:'GET'|'PUT'|'POST'; body?:string; }
+interface VastRequestInit { method?:'GET'|'PUT'|'POST'|'DELETE'; body?:string; }
 
 function record(value:unknown):JsonRecord{return value&&typeof value==='object'&&!Array.isArray(value)?value as JsonRecord:{};}
 function stringValue(value:unknown){return typeof value==='string'&&value.trim()?value.trim():null;}
@@ -32,12 +32,15 @@ function sshKeyValue(value:unknown){const row=record(value);return stringValue(r
 function containsSshKey(items:unknown[],publicKey:string){return items.some(item=>{const value=sshKeyValue(item);if(!value)return false;try{return normalizeOpenSshPublicKey(value)===publicKey}catch{return false}});}
 
 export function normalizeVastStatus(payload:unknown):CloudInstanceStatus{
-  const item=record(payload),raw=rawStatusOf(item),intended=String(item.intended_status??'').toLowerCase(),cur=String(item.cur_state??'').toLowerCase(),next=String(item.next_state??'').toLowerCase();
+  const item=record(payload),raw=rawStatusOf(item),intended=String(item.intended_status??'').toLowerCase(),cur=String(item.cur_state??'').toLowerCase(),next=String(item.next_state??'').toLowerCase(),message=String(item.status_msg??'').trim().toLowerCase();
   if(raw==='running')return'running';
   if(raw==='scheduling')return'scheduling';
-  if((raw==='stopped'||raw==='exited')&&cur==='stopped'&&(intended==='running'||next==='running'))return'scheduling';
+  const stoppedLike=raw==='stopped'||raw==='exited';
+  const schedulingByIntent=stoppedLike&&(intended==='running'||next==='running'||(cur==='stopped'&&(intended==='running'||next==='running')));
+  const schedulingByMessage=stoppedLike&&/(^|[ ,:;])running([ ,:;]|$)/.test(message)&&next!=='stopped';
+  if(schedulingByIntent||schedulingByMessage)return'scheduling';
   if(raw==='stopped'||(raw==='exited'&&intended==='stopped'&&cur==='stopped'))return'stopped';
-  if(['loading','starting','rebooting','restarting'].includes(raw))return'starting';
+  if(['loading','starting','rebooting','restarting','creating','connecting'].includes(raw))return'starting';
   if(['stopping','destroying'].includes(raw))return'stopping';
   if(['offline','unavailable'].includes(raw))return'offline';
   if(['error','failed','failure'].includes(raw))return'error';
@@ -126,6 +129,8 @@ export class VastAiClient {
   private async setState(id:number,state:'running'|'stopped'){if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');await this.request(`/api/v0/instances/${id}/`,{method:'PUT',body:JSON.stringify({state})});}
   async requestStartInstance(id:number){await this.setState(id,'running');}
   async requestStopInstance(id:number){await this.setState(id,'stopped');}
+  async requestRebootInstance(id:number){if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');await this.request(`/api/v0/instances/reboot/${id}/`,{method:'PUT'});}
+  async destroyInstance(id:number){if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');await this.request(`/api/v0/instances/${id}/`,{method:'DELETE'});}
   private async waitForStatus(id:number,target:'running'|'stopped',timeoutMs=LIFECYCLE_TIMEOUT_MS){
     const deadline=Date.now()+timeoutMs;
     while(true){
