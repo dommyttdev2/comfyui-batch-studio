@@ -67,6 +67,7 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
   const canResume=Boolean(current&&['PAUSED','INTERRUPTED','FAILED'].includes(current.lifecycle));
   const branch=current?.progress.branches.find(x=>x.branchId===current.current.branchId)??null;
   const delivery=current?deliveryStatus(current):null;
+  const remoteLifecycle=current?.remoteLifecycle??null;
   const generationDone=Boolean(current&&(reached(current.phase,'EXECUTION_COMPLETED')||current.lifecycle==='COMPLETED'));
   const deliveryDone=Boolean(current&&current.lifecycle==='COMPLETED');
   const blockedReasons=preflight?.state==='BLOCKED'?preflight.blocking:[];
@@ -82,7 +83,7 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
     {!current?<section className="panel execution-empty"><h3>Runはまだありません</h3><p>PreflightがREADYならStartできます。開始後のRun ID・phase・progressはProject内に永続化され、画面再読込後も復元されます。</p></section>:<>
       <section className="panel"><div className="execution-run-head"><div><span className="eyebrow">Current Run ID</span><code>{current.runId}</code></div><span className={'run-lifecycle '+current.lifecycle.toLowerCase()}>{current.lifecycle}</span></div>
       <div className="facts execution-facts"><div><span>Execution target</span><b>{current.executionTarget==='remote'?'Remote':'Local'}</b></div><div><span>Current phase</span><b>{phaseLabel(current.phase)}</b></div><div><span>Connection status</span><b>{connectionStatus(current)}</b></div><div><span>Model preparation</span><b>{modelStatus(current)}</b></div></div>
-      {current.executionTarget==='remote'&&<div className="remote-phase-note"><b>Remote phase separation</b><span>Instance / SSH / model preparation / generation / artifact transfer を独立phaseとして監視します。</span></div>}
+      {current.executionTarget==='remote'&&<><div className="remote-phase-note"><b>Remote phase separation</b><span>Instance / SSH / model preparation / generation / artifact transfer を独立phaseとして監視します。</span></div>{remoteLifecycle&&<div className="facts execution-facts"><div><span>Vast initial state</span><b>{remoteLifecycle.initialStatus?.toUpperCase()??'RESOLVING'}</b></div><div><span>Vast current state</span><b>{remoteLifecycle.latest?.status.toUpperCase()??'-'}</b></div><div><span>Instance lifecycle owner</span><b>{remoteLifecycle.startedByBatchStudio?'Batch Studio':'Provider / pre-existing'}</b></div><div><span>Initial state restored</span><b>{remoteLifecycle.restoredInitialState?'YES':'NO'}</b></div></div>}</>}
       </section>
       <section className="panel"><div className="panelhead"><div><h3>Generation progress</h3><p>generation completed と artifact delivery completed は別状態です。</p></div><b>{current.progress.overall.completed} / {current.progress.overall.total}</b></div>
       <progress className="execution-progress" max={100} value={pct(current.progress.overall.completed,current.progress.overall.total)}/>
