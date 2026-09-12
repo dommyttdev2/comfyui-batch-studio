@@ -167,11 +167,12 @@ export class VastAiClient {
   }
   async searchOffers(input:VastAiOfferSearchInput):Promise<VastAiOfferSearchResult>{
     const template=await this.resolveComfyUiTemplate(),search=this.normalizeOfferSearchInput(input,template);
-    const body:JsonRecord={...template.extraFilters,limit:100,type:'on-demand',rentable:{eq:true},rented:{eq:false},allocated_storage:search.storageGb,num_gpus:{eq:search.gpuCount},reliability:{gte:search.minReliability/100}};
+    const body:JsonRecord={...template.extraFilters,limit:100,type:'on-demand',rentable:{eq:true},rented:{eq:false},allocated_storage:search.storageGb,num_gpus:{eq:search.gpuCount},reliability:{gte:search.minReliability/100},order:[['dph_total','asc']]};
     if(search.minTflops>0)body.total_flops={gte:search.minTflops};
     if(search.excludedCountries.length>0)body.geolocation={notin:search.excludedCountries};
     const payload=record(await this.request('/api/v0/bundles',{method:'POST',body:JSON.stringify(body)})),rows=Array.isArray(payload.offers)?payload.offers:[];
-    return {template,offers:rows.map(normalizeVastOffer)};
+    const offers=rows.map(normalizeVastOffer).sort((a,b)=>(a.hourlyCost??Number.POSITIVE_INFINITY)-(b.hourlyCost??Number.POSITIVE_INFINITY)||a.id-b.id);
+    return {template,offers};
   }
   async getOffer(offerId:number,storageGb:number){
     if(!Number.isInteger(offerId)||offerId<1)throw new Error('Vast.ai Offer IDが不正です。');
