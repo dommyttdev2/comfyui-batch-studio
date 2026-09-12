@@ -1,7 +1,7 @@
-export const REMOTE_WORKER_VERSION='7';
+export const REMOTE_WORKER_VERSION='8';
 export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
-import base64,copy,hashlib,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request
-VERSION="7"
+import base64,copy,hashlib,http.client,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,zipfile
+VERSION="8"
 CHUNK_SIZE=8*1024*1024
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -56,6 +56,31 @@ def sha256_file(target):
    if not chunk: break
    h.update(chunk)
  return h.hexdigest()
+
+def safe_output_dir(comfy_root,prefix,require_exists=True):
+ if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+ output_root=os.path.realpath(os.path.join(comfy_root,"output"))
+ raw=str(prefix or "").replace("\\","/").strip("/")
+ if not raw or raw==".." or raw.startswith("../") or "/../" in raw:raise WorkerError("REMOTE_OUTPUT_PREFIX_INVALID")
+ target=os.path.realpath(os.path.join(output_root,*raw.split("/")))
+ if os.path.commonpath([output_root,target])!=output_root:raise WorkerError("REMOTE_OUTPUT_PREFIX_INVALID")
+ if require_exists and not os.path.isdir(target):raise WorkerError("REMOTE_ARTIFACT_OUTPUT_MISSING",raw)
+ return target
+
+def artifact_package_path(root,run_id):
+ safe=re.sub(r"[^A-Za-z0-9_.-]+","_",str(run_id or "run"))
+ return contained(root,"artifacts/"+safe+".zip")
+
+def list_artifact_files(output_dir):
+ files=[]
+ for base,dirs,names in os.walk(output_dir,followlinks=False):
+  dirs[:]=[name for name in dirs if not os.path.islink(os.path.join(base,name))]
+  for name in names:
+   target=os.path.join(base,name)
+   if os.path.islink(target) or not os.path.isfile(target):continue
+   rel=os.path.relpath(target,output_dir).replace(os.sep,"/")
+   files.append((rel,target))
+ return sorted(files,key=lambda item:item[0])
 
 def inspect_model(model_root,req):
  target=model_path(model_root,req.get("path"))
@@ -408,6 +433,14 @@ def set_expand(graph,expand_node_id,continuous_id,index):
  if not isinstance(node,dict) or node.get("class_type")!="ScenePrompterExpand":raise WorkerError("REMOTE_EXPAND_NODE_MISSING")
  inputs=node.setdefault("inputs",{});inputs["current_index"]=int(index);inputs["run_id"]=continuous_id;inputs["seed_base"]=random.randint(0,0x7fffffff);inputs["seed_base_literal"]=False
 
+def set_output_prefix(graph,output_prefix,branch_id):
+ prefix=str(output_prefix or "").replace("\\","/").strip("/")
+ branch=re.sub(r"[^A-Za-z0-9_.-]+","_",str(branch_id or "branch")).strip("._") or "branch"
+ if not prefix:raise WorkerError("REMOTE_OUTPUT_PREFIX_INVALID")
+ for node in graph.values():
+  if isinstance(node,dict) and node.get("class_type")=="SceneSaveImage":
+   node.setdefault("inputs",{})["path"]=prefix+"/"+branch
+
 def sequence_progress(state,stage,**extra):
  emit("progress",stage=stage,runId=state.get("runId"),status=state.get("status"),current=state.get("current"),overallCompleted=state.get("overallCompleted",0),**extra)
 
@@ -508,6 +541,7 @@ def run_scene_sequence(root,req):
   if read_control(root).get("stopRequested"):
    state["status"]="paused";state["workerPid"]=0;save_state(root,state);sequence_progress(state,"scheduling_stopped");return {"state":state}
   graph=copy.deepcopy(branch.get("graph") or {});continuous_id=run_id+":"+branch_id
+  set_output_prefix(graph,(state.get("artifact") or {}).get("outputPrefix"),branch_id)
   branch_runs=state.setdefault("branchRuns",{});meta=branch_runs.get(branch_id) or {}
   run_handle=str(meta.get("runHandle") or "")
   if not run_handle:
@@ -560,6 +594,97 @@ def force_interrupt_sequence(root,endpoint):
  sequence_progress(state,"interrupt_requested",promptId=prompt_id)
  return {"interrupted":True,"state":state}
 
+def package_artifacts(root,comfy_root,req):
+ state=read_state(root)
+ if not isinstance(state,dict) or state.get("status")!="completed":raise WorkerError("REMOTE_ARTIFACT_GENERATION_INCOMPLETE")
+ run_id=str(state.get("runId") or req.get("runId") or "")
+ prefix=str((state.get("artifact") or {}).get("outputPrefix") or req.get("outputPrefix") or "")
+ output_dir=safe_output_dir(comfy_root,prefix)
+ files=list_artifact_files(output_dir);expected=int(req.get("expectedCount",-1))
+ if expected<0:raise WorkerError("REMOTE_ARTIFACT_EXPECTED_COUNT_REQUIRED")
+ if len(files)!=expected:raise WorkerError("REMOTE_ARTIFACT_COUNT_MISMATCH",f"Expected {expected} artifacts but found {len(files)}.")
+ entries=[]
+ for rel,target in files:entries.append({"path":rel,"size":os.path.getsize(target),"sha256":sha256_file(target)})
+ manifest={"version":1,"runId":run_id,"outputPrefix":prefix,"artifactCount":len(entries),"artifacts":entries}
+ manifest_bytes=(json.dumps(manifest,sort_keys=True,separators=(",",":"))+"\n").encode("utf-8")
+ manifest_sha=hashlib.sha256(manifest_bytes).hexdigest()
+ artifact_dir=contained(root,"artifacts");os.makedirs(artifact_dir,exist_ok=True)
+ manifest_path=contained(root,"artifacts/manifest.json");tmp_manifest=manifest_path+".tmp"
+ with open(tmp_manifest,"wb") as f:f.write(manifest_bytes)
+ os.replace(tmp_manifest,manifest_path)
+ package=artifact_package_path(root,run_id);tmp=package+".part"
+ try:
+  if os.path.exists(tmp):os.unlink(tmp)
+  with zipfile.ZipFile(tmp,"w",compression=zipfile.ZIP_STORED,allowZip64=True) as archive:
+   archive.writestr("manifest.json",manifest_bytes)
+   for rel,target in files:archive.write(target,"artifacts/"+rel)
+  os.replace(tmp,package)
+ finally:
+  if os.path.exists(tmp):os.unlink(tmp)
+ package_size=os.path.getsize(package);package_sha=sha256_file(package)
+ state.setdefault("artifact",{}).update({"manifestSha256":manifest_sha,"artifactCount":len(entries),"package":{"fileName":os.path.basename(package),"size":package_size,"sha256":package_sha}})
+ save_state(root,state);sequence_progress(state,"artifacts_packaged",artifactCount=len(entries),packageSize=package_size)
+ return {"artifactCount":len(entries),"manifestSha256":manifest_sha,"package":{"fileName":os.path.basename(package),"size":package_size,"sha256":package_sha}}
+
+def http_put_file(url,target,offset,length,headers):
+ parsed=urllib.parse.urlparse(str(url or ""))
+ if parsed.scheme not in ("http","https") or not parsed.hostname:raise WorkerError("R2_UPLOAD_URL_INVALID")
+ conn_cls=http.client.HTTPSConnection if parsed.scheme=="https" else http.client.HTTPConnection
+ conn=conn_cls(parsed.hostname,parsed.port,timeout=120)
+ request_path=parsed.path or "/"
+ if parsed.query:request_path+="?"+parsed.query
+ try:
+  conn.putrequest("PUT",request_path)
+  conn.putheader("Content-Length",str(length))
+  for name,value in (headers or {}).items():
+   lower=str(name).lower()
+   if lower in ("host","content-length","transfer-encoding"):continue
+   conn.putheader(str(name),str(value))
+  conn.endheaders()
+  remaining=length
+  with open(target,"rb") as f:
+   f.seek(offset)
+   while remaining>0:
+    chunk=f.read(min(CHUNK_SIZE,remaining))
+    if not chunk:raise WorkerError("R2_UPLOAD_SHORT_READ")
+    conn.send(chunk);remaining-=len(chunk)
+  response=conn.getresponse();body=response.read(4096).decode("utf-8","replace");status=response.status;etag=response.getheader("ETag") or ""
+  if status<200 or status>=300:raise WorkerError("R2_UPLOAD_HTTP_"+str(status),redact(body) or ("HTTP "+str(status)))
+  return {"status":status,"etag":etag}
+ except WorkerError:raise
+ except Exception as e:raise WorkerError("R2_UPLOAD_NETWORK",redact(e))
+ finally:
+  try:conn.close()
+  except Exception:pass
+
+def upload_artifact_package(root,req):
+ state=read_state(root)
+ if not isinstance(state,dict):raise WorkerError("REMOTE_STATE_INVALID")
+ package_meta=((state.get("artifact") or {}).get("package") or {})
+ package=artifact_package_path(root,state.get("runId"))
+ if not os.path.isfile(package):raise WorkerError("REMOTE_ARTIFACT_PACKAGE_MISSING")
+ size=os.path.getsize(package);expected_size=int(package_meta.get("size") or -1)
+ if expected_size>=0 and size!=expected_size:raise WorkerError("REMOTE_ARTIFACT_PACKAGE_SIZE_MISMATCH")
+ offset=int(req.get("offset") or 0);length=int(req.get("length") if req.get("length") is not None else size)
+ if offset<0 or length<0 or offset+length>size:raise WorkerError("REMOTE_ARTIFACT_UPLOAD_RANGE_INVALID")
+ result=http_put_file(req.get("url"),package,offset,length,req.get("headers") or {})
+ emit("progress",stage="artifact_uploaded",offset=offset,length=length,status=result["status"])
+ return {**result,"offset":offset,"length":length,"size":size,"sha256":str(package_meta.get("sha256") or "")}
+
+def cleanup_artifacts(root,comfy_root):
+ state=read_state(root)
+ if not isinstance(state,dict):return {"ok":True,"outputsRemoved":False,"packageRemoved":False}
+ prefix=str((state.get("artifact") or {}).get("outputPrefix") or "")
+ artifact_dir=contained(root,"artifacts");package_removed=False;outputs_removed=False
+ if os.path.exists(artifact_dir):
+  shutil.rmtree(artifact_dir);package_removed=True
+ if prefix:
+  output_dir=safe_output_dir(comfy_root,prefix,require_exists=False)
+  if os.path.exists(output_dir):
+   shutil.rmtree(output_dir);outputs_removed=True
+ emit("progress",stage="artifact_cleanup",outputsRemoved=outputs_removed,packageRemoved=package_removed)
+ return {"ok":True,"outputsRemoved":outputs_removed,"packageRemoved":package_removed}
+
 def handle(req,root,model_root,comfy_root):
  op=req.get("op")
  if op=="health": return {"ok":True,"version":VERSION,"pid":os.getpid()}
@@ -568,6 +693,9 @@ def handle(req,root,model_root,comfy_root):
  if op=="run_scene_sequence": return run_scene_sequence(root,req)
  if op=="stop_scene_sequence": return stop_scene_sequence(root)
  if op=="force_interrupt_sequence": return force_interrupt_sequence(root,str(req.get("comfyEndpoint") or "http://127.0.0.1:8188"))
+ if op=="package_artifacts": return package_artifacts(root,comfy_root,req)
+ if op=="upload_artifact_package": return upload_artifact_package(root,req)
+ if op=="cleanup_artifacts": return cleanup_artifacts(root,comfy_root)
  if op=="write_state":
   state=contained(root,"state.json"); tmp=state+".tmp"
   with open(tmp,"w",encoding="utf-8") as f: json.dump(req.get("state"),f,separators=(",",":"))
