@@ -13,7 +13,7 @@ function retryDelay(attempt:number){
   return new Promise(resolve=>setTimeout(resolve,Math.min(100*(attempt+1),500)));
 }
 async function removeTemp(p:string){
-  try{await unlink(p)}catch(error:any){if(error?.code!=='ENOENT')throw error;}
+  try{await unlink(p)}catch{}
 }
 async function copyOverWithRetry(source:string,target:string){
   for(let attempt=0;;attempt++){
