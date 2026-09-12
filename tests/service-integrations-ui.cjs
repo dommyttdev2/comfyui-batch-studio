@@ -11,6 +11,7 @@ const homeServices=read('src/renderer/HomeConnectedServices.tsx');
 const r2Panel=read('src/renderer/integrations/R2IntegrationPanel.tsx');
 const civitaiPanel=read('src/renderer/integrations/CivitaiIntegrationPanel.tsx');
 const vastPanel=read('src/renderer/integrations/VastAiIntegrationPanel.tsx');
+const serviceCss=read('src/renderer/service-integrations.css');
 const execution=read('src/renderer/ExecutionStages.tsx');
 const config=read('src/main/vastai-config.ts');
 const main=read('src/main/main.ts');
@@ -61,6 +62,8 @@ assert.match(vastPanel,/停止 \/ Schedulingをキャンセル/,'stopped時に�
 assert.match(vastPanel,/statusDetail/,'Vast.aiのraw\/intended\/cur\/nextを診断表示する');
 assert.match(vastPanel,/perform\(instance,'start'\)[\s\S]*perform\(instance,'stop'\)[\s\S]*perform\(instance,'destroy'\)[\s\S]*perform\(instance,'reboot'\)/,'操作は起動・停止・削除・再起動の順で表示する');
 assert.match(vastPanel,/INSTANCE_REFRESH_MS=5_000/,'Instance状態は5秒間隔で自動更新する');
+assert.match(vastPanel,/vast-instance-section/,'Instance一覧は安定した高さを持つ専用sectionにする');
+assert.match(serviceCss,/\.vast-instance-section\{min-height:138px\}/,'Instanceが0件でも更新時にレイアウト高が変わらないよう最低高を確保する');
 assert.match(vastPanel,/GPU検索・RENT/,'Vast.ai画面に検索・RENT導線を追加する');
 assert.match(vastPanel,/DEFAULT_SEARCH:[^\n]*gpuCount:1/,'GPU Countの初期値は1にする');
 assert.match(vastPanel,/SEARCH_DEBOUNCE_MS=400/,'検索条件変更はdebounceしてリアルタイム検索する');
