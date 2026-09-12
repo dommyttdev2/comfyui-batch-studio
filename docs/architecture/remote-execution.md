@@ -310,6 +310,23 @@ Batch Studioがstoppedから起動
 
 将来は成功時/失敗時それぞれ `preserve-initial | stop | keep` をユーザー設定可能にできる。
 
+### Instance replacement before generation
+
+Remote Runがgeneration開始前にScheduling等で待機しており、Project側で別のVast.ai Instanceを選択した場合、既存Runの `remoteInstanceId` を書き換えない。
+
+```text
+old Run / Instance A
+  -> REMOTE_INSTANCE_REPLACED (FAILED, history preserved)
+  -> old Instance lifecycle finalize / disconnect
+
+Project selects Instance B
+  -> new Run ID
+  -> snapshot Instance B
+  -> normal Remote lifecycle from CLOUD_INSTANCE_RESOLVING
+```
+
+UIでは通常の `Resume` と区別して「別Instanceで新しく実行」を提供する。置換はgeneration開始前のphaseに限定し、生成開始後のRunを暗黙に捨てない。
+
 ---
 
 ## 10. SSH Authentication / Host Identity

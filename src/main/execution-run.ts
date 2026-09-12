@@ -208,6 +208,25 @@ export async function recordExecutionEvidence(root:string,runId:string,input:Exe
   });
 }
 
+export async function abandonExecutionRunForRemoteReplacement(root:string,runId:string,replacementInstanceId:number):Promise<ExecutionRun>{
+  if(!Number.isInteger(replacementInstanceId)||replacementInstanceId<1)throw new Error('Invalid replacement Vast.ai Instance ID.');
+  return mutateExecutionRun(root,runId,run=>{
+    if(run.executionTarget!=='remote'||run.remote?.provider!=='vastai'||!Number.isInteger(run.remote.instanceId)||Number(run.remote.instanceId)<1)throw new Error('Execution Run is not a Vast.ai Remote Run.');
+    if(Number(run.remote.instanceId)===replacementInstanceId)throw new Error('Replacement Instance must differ from the current Run Instance.');
+    if(terminalLifecycle(run.lifecycle))throw new Error(`Execution Run ${runId} is already terminal.`);
+    const at=new Date().toISOString();
+    const e={code:'REMOTE_INSTANCE_REPLACED',message:`Execution Run was superseded by Vast.ai Instance ${replacementInstanceId}; original Instance ${run.remote.instanceId} is preserved in this Run history.`,phase:run.phase,at,retryable:false};
+    run.error=e;
+    run.errorHistory.push(e);
+    run.lifecycle='FAILED';
+    run.controls.scheduling='STOPPED';
+    run.controls.interrupt='IDLE';
+    run.controls.stopSchedulingRequestedAt=null;
+    run.controls.forceInterruptRequestedAt=null;
+    run.current.promptId=null;
+  });
+}
+
 export async function requestStopScheduling(root:string,runId:string):Promise<ExecutionRun>{
   return mutateExecutionRun(root,runId,run=>{
     if(run.lifecycle!=='RUNNING')throw new Error(`Execution Run ${runId} is not running.`);

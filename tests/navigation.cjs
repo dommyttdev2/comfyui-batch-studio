@@ -32,6 +32,12 @@ assert.match(executionSource,/Vast\.ai status: scheduling · GPU Instanceの割�
 assert.match(executionSource,/effectiveCloudInstanceStatus/,'cloud lifecycle status display must derive a user-facing provider state');
 assert.match(executionSource,/lifecycle\?\.startRequestedAt/,'accepted Vast start requests must distinguish restart scheduling from a truly stopped Instance');
 assert.match(executionSource,/next_state=/,'scheduling details must expose the raw provider state used for diagnosis');
+assert.match(executionSource,/const remoteInstanceChanged=Boolean/,'Execution UI must detect when Project selection differs from the active Run Instance');
+assert.match(executionSource,/別Instanceで新しく実行/,'Execution UI must expose a distinct replacement-Run action');
+assert.match(executionSource,/execution\.restartRemote/,'replacement action must use dedicated IPC rather than mutating the existing Run');
+assert.match(mainSource,/IPC\.EXECUTION_RESTART_REMOTE/,'Main Process must implement replacement-Run IPC');
+assert.match(mainSource,/REMOTE_INSTANCE_REPLACED/,'replacement must terminalize the old Run with an explicit history reason');
+assert.match(mainSource,/isRemotePreGenerationPhase\(current\.phase\)/,'Instance replacement must be limited to pre-generation phases');
 assert.match(executionSource,/Artifact delivery completed/,'generation completion and artifact delivery completion must remain distinct');
 assert.match(executionSource,/Startできない理由/,'blocked Preflight reason must be visible');
 assert.match(executionSource,/既存Runが実行中のため新規Startできません/,'READY banner must not claim Start is possible while a Run is active');

@@ -84,19 +84,24 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
   },[project.rootPath]);
   const apply=async(action:()=>Promise<ExecutionRun>)=>{const value=await run(action);if(value)setCurrent(value)};
   const active=current?.lifecycle==='RUNNING'||current?.lifecycle==='PAUSED'||current?.lifecycle==='INTERRUPTED';
+  const selectedProjectRemoteInstanceId=project.meta?.settings.remoteProvider==='vastai'?project.meta.settings.remoteInstanceId:null;
+  const remoteInstanceChanged=Boolean(current?.executionTarget==='remote'&&Number.isInteger(selectedProjectRemoteInstanceId)&&Number(selectedProjectRemoteInstanceId)>0&&Number(current.remote?.instanceId)!==Number(selectedProjectRemoteInstanceId));
+  const canRestartRemote=Boolean(active&&remoteInstanceChanged&&phaseIndex(current!.phase)<phaseIndex('EXECUTING'));
   const canStart=preflight?.state==='READY'&&!active;
   const canResume=Boolean(current&&['PAUSED','INTERRUPTED','FAILED'].includes(current.lifecycle));
   const canStopScheduling=Boolean(current&&current.lifecycle==='RUNNING'&&current.controls.scheduling!=='STOPPED'&&!reached(current.phase,'EXECUTION_COMPLETED'));
   const canForceInterrupt=Boolean(current&&current.lifecycle==='RUNNING'&&current.phase==='EXECUTING'&&current.controls.interrupt!=='INTERRUPTED');
   const startBanner=checking
     ? {state:'CHECKING',message:'Preflightを確認しています。'}
-    : preflight?.state!=='READY'
-      ? {state:preflight?.state??'UNKNOWN',message:'StartにはPreflight READYが必要です'}
-      : active
-        ? current?.lifecycle==='RUNNING'
+    : canRestartRemote
+      ? {state:'INSTANCE CHANGED',message:`現在のRunは Vast.ai Instance #${current?.remote?.instanceId??'-'} を使用しています。Projectでは #${selectedProjectRemoteInstanceId??'-'} が選択されています。「別Instanceで新しく実行」で新しいRunを開始できます。`}
+      : preflight?.state!=='READY'
+        ? {state:preflight?.state??'UNKNOWN',message:'StartにはPreflight READYが必要です'}
+        : active
+          ? current?.lifecycle==='RUNNING'
           ? {state:'RUN RUNNING',message:'既存Runが実行中のため新規Startできません。Stop scheduling / Force interruptで既存Runを操作してください。'}
-          : {state:`RUN ${current?.lifecycle??'ACTIVE'}`,message:'既存Runが未完了です。新規StartではなくResumeで再開してください。'}
-        : {state:'READY',message:'Start可能です'};
+            : {state:`RUN ${current?.lifecycle??'ACTIVE'}`,message:'既存Runが未完了です。新規StartではなくResumeで再開してください。'}
+          : {state:'READY',message:'Start可能です'};
   const branch=current?.progress.branches.find(x=>x.branchId===current.current.branchId)??null;
   const delivery=current?deliveryStatus(current):null;
   const remoteLifecycle=current?.remoteLifecycle??null;
@@ -109,14 +114,14 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
     {monitorError&&<div className="errorbar">{monitorError}</div>}
     <div className={'preflight '+(canStart?'ready':'blocked')}><h2>{startBanner.state}</h2><p>{startBanner.message}</p></div>
     {blockedReasons.length>0&&<><h4>Startできない理由</h4>{issuesView(blockedReasons)}</>}
-    <div className="actions execution-actions"><button className="primary" disabled={!canStart} onClick={()=>void apply(()=>window.batchStudio.execution.start(project.rootPath))}>Start</button><button disabled={!canStopScheduling} onClick={()=>current&&void apply(()=>window.batchStudio.execution.stopScheduling(project.rootPath,current.runId))}>Stop scheduling</button><button className="danger" disabled={!canForceInterrupt} onClick={()=>current&&void apply(()=>window.batchStudio.execution.forceInterrupt(project.rootPath,current.runId))}>Force interrupt</button><button disabled={!canResume} onClick={()=>current&&void apply(()=>window.batchStudio.execution.resume(project.rootPath,current.runId))}>Resume</button><button disabled={current?.lifecycle!=='COMPLETED'} onClick={()=>void window.batchStudio.project.openFolder(outputPath)}>Open local output directory</button></div>
+    <div className="actions execution-actions"><button className="primary" disabled={!canStart} onClick={()=>void apply(()=>window.batchStudio.execution.start(project.rootPath))}>Start</button><button className="primary" disabled={!canRestartRemote} onClick={()=>current&&void apply(()=>window.batchStudio.execution.restartRemote(project.rootPath,current.runId))}>別Instanceで新しく実行</button><button disabled={!canStopScheduling} onClick={()=>current&&void apply(()=>window.batchStudio.execution.stopScheduling(project.rootPath,current.runId))}>Stop scheduling</button><button className="danger" disabled={!canForceInterrupt} onClick={()=>current&&void apply(()=>window.batchStudio.execution.forceInterrupt(project.rootPath,current.runId))}>Force interrupt</button><button disabled={!canResume} onClick={()=>current&&void apply(()=>window.batchStudio.execution.resume(project.rootPath,current.runId))}>Resume</button><button disabled={current?.lifecycle!=='COMPLETED'} onClick={()=>void window.batchStudio.project.openFolder(outputPath)}>Open local output directory</button></div>
     </section>
 
     {!current?<section className="panel execution-empty"><h3>Runはまだありません</h3><p>PreflightがREADYならStartできます。開始後のRun ID・phase・progressはProject内に永続化され、画面再読込後も復元されます。</p></section>:<>
       <section className="panel"><div className="execution-run-head"><div><span className="eyebrow">Current Run ID</span><code>{current.runId}</code></div><span className={'run-lifecycle '+current.lifecycle.toLowerCase()}>{current.lifecycle}</span></div>
       <div className="facts execution-facts"><div><span>Execution target</span><b>{current.executionTarget==='remote'?'Remote':'Local'}</b></div><div><span>Current phase</span><b>{executionPhaseLabel(current)}</b></div><div><span>Connection status</span><b>{connectionStatus(current)}</b></div><div><span>Model preparation</span><b>{modelStatus(current)}</b></div></div>
       {cloudInstanceStatusMessage(current)&&<div className="remote-phase-note"><b>Cloud Instance status</b><span>{cloudInstanceStatusMessage(current)}</span></div>}
-      {current.executionTarget==='remote'&&<><div className="remote-phase-note"><b>Remote phase separation</b><span>Instance / SSH / model preparation / generation / artifact transfer を独立phaseとして監視します。</span></div>{remoteLifecycle&&<div className="facts execution-facts"><div><span>Vast initial state</span><b>{remoteLifecycle.initialStatus?.toUpperCase()??'RESOLVING'}</b></div><div><span>Vast current state</span><b>{remoteLifecycle.latest?.status.toUpperCase()??'-'}</b></div><div><span>Instance lifecycle owner</span><b>{remoteLifecycle.startedByBatchStudio?'Batch Studio':'Provider / pre-existing'}</b></div><div><span>Initial state restored</span><b>{remoteLifecycle.restoredInitialState?'YES':'NO'}</b></div></div>}</>}
+      {current.executionTarget==='remote'&&<><div className="remote-phase-note"><b>Remote phase separation</b><span>Instance / SSH / model preparation / generation / artifact transfer を独立phaseとして監視します。</span></div>{remoteInstanceChanged&&<div className="remote-phase-note"><b>Remote Instance changed</b><span>Current Run: #{current.remote?.instanceId??'-'} / Project selection: #{selectedProjectRemoteInstanceId??'-'}. 既存RunのInstance IDは変更せず、新規Runで切り替えます。</span></div>}{remoteLifecycle&&<div className="facts execution-facts"><div><span>Vast initial state</span><b>{remoteLifecycle.initialStatus?.toUpperCase()??'RESOLVING'}</b></div><div><span>Vast current state</span><b>{remoteLifecycle.latest?.status.toUpperCase()??'-'}</b></div><div><span>Instance lifecycle owner</span><b>{remoteLifecycle.startedByBatchStudio?'Batch Studio':'Provider / pre-existing'}</b></div><div><span>Initial state restored</span><b>{remoteLifecycle.restoredInitialState?'YES':'NO'}</b></div></div>}</>}
       </section>
       <section className="panel"><div className="panelhead"><div><h3>Generation progress</h3><p>generation completed と artifact delivery completed は別状態です。</p></div><b>{current.progress.overall.completed} / {current.progress.overall.total}</b></div>
       <progress className="execution-progress" max={100} value={pct(current.progress.overall.completed,current.progress.overall.total)}/>
