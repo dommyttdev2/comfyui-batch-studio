@@ -23,7 +23,7 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 
 (async()=>{
   const {REMOTE_WORKER_FILE,REMOTE_WORKER_VERSION}=await load('remote-worker-source.js');
-  assert.equal(REMOTE_WORKER_VERSION,'8');
+  assert.equal(REMOTE_WORKER_VERSION,'9');
   const workerPath=path.join(runtime,'worker.py');fs.writeFileSync(workerPath,REMOTE_WORKER_FILE);
   const runId='11111111-1111-4111-8111-111111111111',runDir=path.join(runtime,'run'),comfyRoot=path.join(runtime,'ComfyUI');
   const outputPrefix='BatchStudio/test/'+runId,outputDir=path.join(comfyRoot,'output',...outputPrefix.split('/'));
