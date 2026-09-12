@@ -1133,3 +1133,14 @@ provider lifecycle automatic start/wait/finalize
 未実装部分をUI上で成功済みとして扱わない。
 
 Standalone R2 File Managerの一時PUT URL生成は実装済みだが、Remote Runのartifact package/hash生成、Execution専用Object Key管理、Remote WorkerへのURL受け渡し、upload evidence、R2からLocalへのstream回収とhash検証は未実装である。
+
+
+### Restart from scratch
+
+Execution画面の「最初からやり直す」は、現在のRemote Runを `DISCARDED` として終端化し、新しい `runId` で0から開始する。
+
+- 旧RunのRemote生成は停止を要求し、Remote生成物とR2中間成果物をcleanupする。
+- Localへ回収済みの `remote_output/<oldRunId>/` は削除しない。
+- 新RunのRemote出力、R2 object、Local出力はすべて新しい `runId` を名前空間に含むため、旧Run成果物を新Runへ混入させない。
+- `DISCARDED` RunはResume不可。Run JSONは監査・将来の履歴表示に備えて残すが、新Run開始後はcurrent Runではない。
+- RUNNING中のArtifact delivery開始後は、転送との競合を避けるため「最初からやり直す」を無効化し、完了または失敗後に再実行する。
