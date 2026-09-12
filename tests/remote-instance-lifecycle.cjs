@@ -66,6 +66,21 @@ async function scenario(lifecycle,states){
   }
 
   {
+    const {root,client,service}=await scenario(lifecycle,[instance('stopped'),instance('starting'),ready()]);
+    await execution.mutateExecutionRun(root,runId,r=>{
+      r.remoteLifecycle.initialStatus='stopped';
+      r.remoteLifecycle.startedByBatchStudio=true;
+      r.remoteLifecycle.latest={provider:'vastai',instanceId:7,status:'stopped',rawStatus:'stopped',intendedStatus:'stopped',curState:'stopped',statusMessage:null,sshHost:null,sshPort:null,comfyUiPort:null,resolvedAt:new Date().toISOString()};
+    });
+    await service.prepare(root,runId);
+    assert.equal(client.starts,1,'resume must re-issue start once when an owned Instance is stopped again');
+    const run=await execution.getExecutionRun(root,runId);
+    assert.equal(run.remoteLifecycle.initialStatus,'stopped');
+    assert.equal(run.remoteLifecycle.startedByBatchStudio,true);
+    assert.equal(run.remoteLifecycle.latest.status,'running');
+  }
+
+  {
     const {root,client,service}=await scenario(lifecycle,[ready()]);
     await service.prepare(root,runId);
     assert.equal(client.starts,0);

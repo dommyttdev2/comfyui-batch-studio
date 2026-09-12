@@ -78,8 +78,9 @@ export class RemoteInstanceLifecycleService {
     const initialStatus:CloudInstanceStatus=existing?.remoteLifecycle?.initialStatus??current.status;
     await this.persistSnapshot(root,runId,current,'CLOUD_INSTANCE_RESOLVING');
 
-    let startedByBatchStudio=Boolean(existing?.remoteLifecycle?.startedByBatchStudio);
-    if(current.status==='stopped'&&initialStatus==='stopped'&&!startedByBatchStudio){
+    let startRequestedThisPrepare=false;
+    const requestStartIfNeeded=async()=>{
+      if(current.status!=='stopped'||initialStatus!=='stopped'||startRequestedThisPrepare)return;
       await mutateExecutionRun(root,runId,state=>{
         const lifecycle=state.remoteLifecycle??defaultLifecycle();
         lifecycle.startedByBatchStudio=true;
@@ -87,10 +88,11 @@ export class RemoteInstanceLifecycleService {
         state.remoteLifecycle=lifecycle;
         state.phase='CLOUD_INSTANCE_STARTING';
       });
-      startedByBatchStudio=true;
+      startRequestedThisPrepare=true;
       await this.assertRunActive(root,runId);
       await this.client.requestStartInstance(instanceId);
-    }
+    };
+    await requestStartIfNeeded();
 
     const deadline=Date.now()+this.timeoutMs;
     for(;;){
@@ -113,17 +115,7 @@ export class RemoteInstanceLifecycleService {
       await this.sleepImpl(this.pollMs);
       await this.assertRunActive(root,runId);
       current=await this.client.getInstance(instanceId);
-      if(current.status==='stopped'&&initialStatus==='stopped'&&!startedByBatchStudio){
-        await mutateExecutionRun(root,runId,state=>{
-          const lifecycle=state.remoteLifecycle??defaultLifecycle();
-          lifecycle.startedByBatchStudio=true;
-          lifecycle.initialStatus=initialStatus;
-          state.remoteLifecycle=lifecycle;
-          state.phase='CLOUD_INSTANCE_STARTING';
-        });
-        startedByBatchStudio=true;
-        await this.client.requestStartInstance(instanceId);
-      }
+      await requestStartIfNeeded();
     }
   }
 
