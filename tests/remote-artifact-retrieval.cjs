@@ -69,9 +69,9 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 
   const managerSource=fs.readFileSync(path.join(repo,'src/main/r2-manager.ts'),'utf8');
   const executionSource=fs.readFileSync(path.join(repo,'src/main/remote-execution.ts'),'utf8');
-  const remoteExecution=await load('remote-execution.js');
-  assert.equal(remoteExecution.executionArchiveTimestampJst('2026-09-12T14:45:12.000Z'),'20260912_234512');
-  assert.equal(remoteExecution.executionArchiveTimestampJst('2026-09-12T23:30:45.000Z'),'20260913_083045','JST timestamp must cross the UTC date boundary correctly');
+  const executionOutput=await load('execution-output.js');
+  assert.equal(executionOutput.executionArchiveTimestampJst('2026-09-12T14:45:12.000Z'),'20260912_234512');
+  assert.equal(executionOutput.executionArchiveTimestampJst('2026-09-12T23:30:45.000Z'),'20260913_083045','JST timestamp must cross the UTC date boundary correctly');
   assert.match(managerSource,/R2_SINGLE_PUT_LIMIT=FIVE_GIB-5\*MIB/,'single PUT boundary must account for R2 practical limit');
   assert.match(managerSource,/CreateMultipartUploadCommand/);assert.match(managerSource,/executionMultipartPartUrl/);assert.match(managerSource,/CompleteMultipartUploadCommand/);
   assert.match(executionSource,/\.part/,'local download must use a .part file');

@@ -12,6 +12,7 @@ import { R2_SINGLE_PUT_LIMIT } from './r2-manager.js';
 import { RemoteWorkerRequestError } from './remote-worker.js';
 import type { ApiGraph } from './workflow-api.js';
 import type { RemoteControlPlane } from './remote-control-plane.js';
+import { executionArchiveTimestampJst } from './execution-output.js';
 
 type RemoteSequenceState={
   version?:number;
@@ -35,13 +36,6 @@ class ArtifactPipelineError extends Error {
 function asResponse(value:unknown):WorkerSequenceResponse{return value&&typeof value==='object'&&!Array.isArray(value)?value as WorkerSequenceResponse:{};}
 function safeError(error:unknown){return error instanceof Error?error.message:String(error)}
 function safeProjectPart(value:string){return value.replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^\.+|\.+$/g,'')||'project'}
-export function executionArchiveTimestampJst(value:string|Date){
-  const source=value instanceof Date?value:new Date(value);
-  if(Number.isNaN(source.getTime()))throw new Error('Invalid archive timestamp.');
-  const jst=new Date(source.getTime()+9*60*60*1000);
-  const iso=jst.toISOString();
-  return iso.slice(0,10).replaceAll('-','')+'_'+iso.slice(11,19).replaceAll(':','');
-}
 function sha256Text(value:string){return createHash('sha256').update(Buffer.from(value,'utf8')).digest('hex');}
 async function manifestMatches(file:string,manifestJson:string){
   try{return (await readFile(file,'utf8'))===manifestJson}catch{return false}
