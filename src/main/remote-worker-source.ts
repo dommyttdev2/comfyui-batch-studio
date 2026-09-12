@@ -1,7 +1,7 @@
-export const REMOTE_WORKER_VERSION='8';
+export const REMOTE_WORKER_VERSION='9';
 export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
 import base64,copy,hashlib,http.client,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,zipfile
-VERSION="8"
+VERSION="9"
 CHUNK_SIZE=8*1024*1024
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -255,23 +255,57 @@ def patch_manager_startup():
   except OSError:pass
  return True
 
-def update_comfyui(comfy_root,token):
+def validate_comfyui_repository(comfy_root):
  if not comfy_root or not os.path.isdir(comfy_root):raise WorkerError("REMOTE_COMFYUI_DIRECTORY_MISSING")
  if not os.path.isdir(os.path.join(comfy_root,".git")):raise WorkerError("COMFYUI_GIT_REPOSITORY_REQUIRED","Remote ComfyUI directory is not a Git repository.")
  dirty=run_cmd(["git","status","--porcelain","--untracked-files=no"],cwd=comfy_root,error_code="COMFYUI_GIT_STATUS_FAILED").stdout.strip()
  if dirty:raise WorkerError("COMFYUI_GIT_DIRTY","Remote ComfyUI has tracked local changes; automatic release update was stopped.")
- cli_env=github_cli_env(token);git_env=github_git_env(token)
+
+def comfyui_release_check(comfy_root,token):
+ validate_comfyui_repository(comfy_root)
+ cli_env=github_cli_env(token)
  latest=run_cmd(["gh","api","repos/comfyanonymous/ComfyUI/releases/latest","--jq",".tag_name"],env=cli_env,error_code="COMFYUI_RELEASE_LOOKUP_FAILED").stdout.strip()
  if not latest:raise WorkerError("COMFYUI_RELEASE_LOOKUP_FAILED","Latest ComfyUI release tag was empty.")
- run_cmd(["git","fetch","--force","https://github.com/comfyanonymous/ComfyUI.git",f"refs/tags/{latest}:refs/tags/{latest}"],cwd=comfy_root,env=git_env,error_code="COMFYUI_GIT_FETCH_FAILED")
- release=run_cmd(["git","rev-parse","--verify",f"refs/tags/{latest}^{{commit}}"],cwd=comfy_root,error_code="COMFYUI_RELEASE_TAG_MISSING").stdout.strip()
+ if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",latest):raise WorkerError("COMFYUI_RELEASE_TAG_INVALID",latest)
  current=run_cmd(["git","rev-parse","HEAD"],cwd=comfy_root,error_code="COMFYUI_GIT_STATUS_FAILED").stdout.strip()
- changed=current!=release
- if changed:run_cmd(["git","checkout","--detach",release],cwd=comfy_root,error_code="COMFYUI_RELEASE_CHECKOUT_FAILED")
+ return {"tag":latest,"currentCommit":current}
+
+def comfyui_release_fetch(comfy_root,token,tag):
+ validate_comfyui_repository(comfy_root)
+ tag=str(tag or "").strip()
+ if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",tag):raise WorkerError("COMFYUI_RELEASE_TAG_INVALID",tag)
+ git_env=github_git_env(token)
+ run_cmd(["git","fetch","--force","https://github.com/comfyanonymous/ComfyUI.git",f"refs/tags/{tag}:refs/tags/{tag}"],cwd=comfy_root,env=git_env,error_code="COMFYUI_GIT_FETCH_FAILED")
+ release=run_cmd(["git","rev-parse","--verify",f"refs/tags/{tag}^{{commit}}"],cwd=comfy_root,error_code="COMFYUI_RELEASE_TAG_MISSING").stdout.strip()
+ return {"tag":tag,"commit":release}
+
+def comfyui_release_checkout(comfy_root,commit):
+ validate_comfyui_repository(comfy_root)
+ commit=str(commit or "").strip().lower()
+ if not re.match(r"^[0-9a-f]{40}$",commit):raise WorkerError("COMFYUI_RELEASE_COMMIT_INVALID",commit)
+ verified=run_cmd(["git","rev-parse","--verify",commit+"^{commit}"],cwd=comfy_root,error_code="COMFYUI_RELEASE_TAG_MISSING").stdout.strip()
+ current=run_cmd(["git","rev-parse","HEAD"],cwd=comfy_root,error_code="COMFYUI_GIT_STATUS_FAILED").stdout.strip()
+ changed=current!=verified
+ if changed:run_cmd(["git","checkout","--detach",verified],cwd=comfy_root,error_code="COMFYUI_RELEASE_CHECKOUT_FAILED")
+ return {"commit":verified,"previousCommit":current,"changed":changed}
+
+def comfyui_install_requirements(comfy_root):
+ validate_comfyui_repository(comfy_root)
  requirements=[os.path.join(comfy_root,"requirements.txt"),os.path.join(comfy_root,"manager_requirements.txt")]
  installed=install_requirements(comfy_root,requirements,"comfy-requirements.sha256")
- manager=patch_manager_startup()
- return {"tag":latest,"commit":release,"changed":changed,"requirementsInstalled":installed,"managerEnabled":manager}
+ return {"requirementsInstalled":installed}
+
+def comfyui_configure_manager(comfy_root):
+ validate_comfyui_repository(comfy_root)
+ return {"managerEnabled":patch_manager_startup()}
+
+def update_comfyui(comfy_root,token):
+ check=comfyui_release_check(comfy_root,token)
+ fetched=comfyui_release_fetch(comfy_root,token,check["tag"])
+ checkout=comfyui_release_checkout(comfy_root,fetched["commit"])
+ requirements=comfyui_install_requirements(comfy_root)
+ manager=comfyui_configure_manager(comfy_root)
+ return {"tag":check["tag"],"commit":fetched["commit"],"changed":checkout["changed"],"requirementsInstalled":requirements["requirementsInstalled"],"managerEnabled":manager["managerEnabled"]}
 
 def normalize_origin(value):
  raw=str(value or "").strip().replace("\\\\","/")
@@ -723,6 +757,21 @@ def handle(req,root,model_root,comfy_root):
  if op=="update_comfyui":
   if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
   return update_comfyui(comfy_root,req.get("githubToken"))
+ if op=="comfyui_release_check":
+  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+  return comfyui_release_check(comfy_root,req.get("githubToken"))
+ if op=="comfyui_release_fetch":
+  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+  return comfyui_release_fetch(comfy_root,req.get("githubToken"),req.get("tag"))
+ if op=="comfyui_release_checkout":
+  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+  return comfyui_release_checkout(comfy_root,req.get("commit"))
+ if op=="comfyui_install_requirements":
+  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+  return comfyui_install_requirements(comfy_root)
+ if op=="comfyui_configure_manager":
+  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+  return comfyui_configure_manager(comfy_root)
  if op=="sync_custom_nodes":
   if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
   return sync_custom_nodes(comfy_root,req.get("githubToken"),req.get("nodes") or [])

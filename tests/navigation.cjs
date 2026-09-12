@@ -22,6 +22,11 @@ assert.match(executionSource,/canStopScheduling/,'Stop scheduling availability m
 assert.match(mainSource,/isRemotePreGenerationPhase\(run\.phase\)/,'pre-generation remote Stop scheduling must be handled locally');
 assert.match(mainSource,/r\.lifecycle='PAUSED'/,'pre-generation remote Stop scheduling must pause the Run');
 assert.match(mainSource,/Force interrupt is only available while Remote Execution is EXECUTING/,'pre-generation Force interrupt must be rejected without contacting the worker');
+assert.match(executionSource,/REMOTE_COMFYUI_RELEASE_CHECKING/,'ComfyUI release lookup must be visible as its own Execution phase');
+assert.match(executionSource,/REMOTE_COMFYUI_RELEASE_FETCHING/,'ComfyUI release fetch must be visible as its own Execution phase');
+assert.match(executionSource,/REMOTE_COMFYUI_CHECKING_OUT/,'ComfyUI checkout must be visible as its own Execution phase');
+assert.match(executionSource,/REMOTE_COMFYUI_REQUIREMENTS_INSTALLING/,'ComfyUI requirements installation must be visible as its own Execution phase');
+assert.match(executionSource,/REMOTE_COMFYUI_MANAGER_CONFIGURING/,'ComfyUI Manager configuration must be visible as its own Execution phase');
 assert.match(executionSource,/Artifact delivery completed/,'generation completion and artifact delivery completion must remain distinct');
 assert.match(executionSource,/Startできない理由/,'blocked Preflight reason must be visible');
 assert.match(executionSource,/既存Runが実行中のため新規Startできません/,'READY banner must not claim Start is possible while a Run is active');
