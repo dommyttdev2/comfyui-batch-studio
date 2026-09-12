@@ -162,6 +162,7 @@ export async function startExecutionRun(root:string,preflightProvider:PreflightP
       projectId:snapshot.projectId,
       executionTarget:snapshot.target,
       remote:snapshot.remote,
+      remoteLifecycle:snapshot.target==='remote'?{initialStatus:null,startedByBatchStudio:false,latest:null,restorePolicy:'restore-if-started',restoredInitialState:false,finalizedAt:null}:null,
       lifecycle:'RUNNING',
       phase:initialPhase(snapshot.target),
       controls:{scheduling:'ACTIVE',interrupt:'IDLE',stopSchedulingRequestedAt:null,forceInterruptRequestedAt:null},
