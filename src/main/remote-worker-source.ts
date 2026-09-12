@@ -646,7 +646,7 @@ def force_interrupt_sequence(root,endpoint):
  return {"interrupted":True,"state":state}
 
 def archive_artifact_path(rel):
- parts=[part for part in str(rel or "").replace("\\","/").split("/") if part and part not in (".","..")]
+ parts=[part for part in str(rel or "").replace("\\\\","/").split("/") if part and part not in (".","..")]
  if not parts:raise WorkerError("REMOTE_ARTIFACT_PATH_INVALID")
  if len(parts)==1:return parts[0]
  return parts[0]+"/"+parts[-1]
@@ -657,7 +657,7 @@ def package_artifacts(root,comfy_root,req):
  run_id=str(state.get("runId") or req.get("runId") or "")
  prefix=str((state.get("artifact") or {}).get("outputPrefix") or req.get("outputPrefix") or "")
  archive_name=str(req.get("archiveFileName") or "").strip()
- if not re.match(r"^[0-9]{8}_[0-9]{6}\.zip$",archive_name):raise WorkerError("REMOTE_ARTIFACT_ARCHIVE_NAME_INVALID",archive_name or "missing")
+ if not re.match(r"^[0-9]{8}_[0-9]{6}[.]zip$",archive_name):raise WorkerError("REMOTE_ARTIFACT_ARCHIVE_NAME_INVALID",archive_name or "missing")
  output_dir=safe_output_dir(comfy_root,prefix)
  files=list_artifact_files(output_dir);expected=int(req.get("expectedCount",-1))
  if expected<0:raise WorkerError("REMOTE_ARTIFACT_EXPECTED_COUNT_REQUIRED")
