@@ -73,6 +73,10 @@ export function normalizeVastInstance(payload:unknown):VastAiInstance{
 
 function messageFromPayload(payload:unknown){const item=record(payload);return stringValue(item.msg)??stringValue(item.error)??stringValue(item.detail);}
 
+export class VastAiInstanceNotFoundError extends Error {
+  constructor(public readonly instanceId:number){super(`Vast.ai Instance ${instanceId} が見つかりません。`);this.name='VastAiInstanceNotFoundError';}
+}
+
 export class VastAiClient {
   constructor(private readonly apiKeyProvider:()=>Promise<string>,private readonly fetchImpl:FetchLike=fetch,private readonly baseUrl=DEFAULT_BASE_URL){}
   private async request(endpoint:string,init:VastRequestInit={}):Promise<unknown>{
@@ -108,7 +112,16 @@ export class VastAiClient {
     if(!instanceAlreadyAttached)await this.request(`/api/v0/instances/${instanceId}/ssh/`,{method:'POST',body:JSON.stringify({ssh_key:publicKey})});
     return {accountAlreadyRegistered,instanceAlreadyAttached,instanceAttached:true};
   }
-  async getInstance(id:number){if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');const payload=record(await this.request(`/api/v0/instances/${id}/`));return normalizeVastInstance(payload.instances??payload);}
+  async getInstance(id:number){
+    if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');
+    let payload:JsonRecord;
+    try{payload=record(await this.request(`/api/v0/instances/${id}/`));}
+    catch(error){if(error instanceof Error&&/^Vast\\.ai API 404:/.test(error.message))throw new VastAiInstanceNotFoundError(id);throw error;}
+    const raw=payload.instances??payload,item=record(raw),responseId=integerValue(item.id);
+    if(responseId==null)throw new VastAiInstanceNotFoundError(id);
+    if(responseId!==id)throw new Error(`Vast.ai Instance応答のIDが一致しません。requested=${id}, actual=${responseId}`);
+    return normalizeVastInstance(item);
+  }
   private async setState(id:number,state:'running'|'stopped'){if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');await this.request(`/api/v0/instances/${id}/`,{method:'PUT',body:JSON.stringify({state})});}
   async requestStartInstance(id:number){await this.setState(id,'running');}
   async requestStopInstance(id:number){await this.setState(id,'stopped');}

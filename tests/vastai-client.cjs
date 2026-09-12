@@ -14,7 +14,7 @@ const load=relative=>import(pathToFileURL(path.join(runtime,'main',relative)).hr
 function response(payload,status=200){return {ok:status>=200&&status<300,status,statusText:status===200?'OK':'ERR',text:async()=>JSON.stringify(payload)};}
 
 (async()=>{
-  const {VastAiClient,normalizeVastInstance,normalizeVastStatus,resolveVastComfyUiPort}=await load('vastai-client.js');
+  const {VastAiClient,VastAiInstanceNotFoundError,normalizeVastInstance,normalizeVastStatus,resolveVastComfyUiPort}=await load('vastai-client.js');
   const {normalizeOpenSshPublicKey,validateSshKeyPair}=await load('ssh-key-pair.js');
   assert.equal(normalizeVastStatus({actual_status:'running'}),'running');
   assert.equal(normalizeVastStatus({actual_status:'scheduling'}),'scheduling');
@@ -86,6 +86,7 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
 
   const one=await client.getInstance(1);
   assert.equal(one.sshHost,'ssh.vast.ai');
+  await assert.rejects(()=>client.getInstance(999),error=>error instanceof VastAiInstanceNotFoundError&&error.instanceId===999&&/見つかりません/.test(error.message));
   const started=await client.startInstance(1);
   assert.equal(started.status,'running');
   const stopped=await client.stopInstance(1);

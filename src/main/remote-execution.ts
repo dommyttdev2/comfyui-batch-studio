@@ -75,7 +75,7 @@ export class RemoteExecutionService {
     }).finally(async()=>{try{await this.onSettled?.(root,runId)}finally{this.remote.disconnect(root,runId);this.workers.delete(runId)}});
     this.workers.set(runId,task);
   }
-  async stopScheduling(root:string,runId:string){try{await this.remote.requestWorker(root,runId,'stop_scene_sequence');return true}catch{return false}}
+  async stopScheduling(root:string,runId:string){await this.remote.requestWorker(root,runId,'stop_scene_sequence');return true}
   async forceInterrupt(root:string,runId:string){
     const response=await this.remote.requestWorker(root,runId,'force_interrupt_sequence',{comfyEndpoint:'http://127.0.0.1:8188'});
     const result=asResponse(response.response) as WorkerSequenceResponse&{interrupted?:boolean};

@@ -14,6 +14,8 @@ assert.match(appSource,/case'実行':return <ExecutionStage/,'実行 stage must 
 assert.match(executionSource,/execution\.status\(project\.rootPath\)/,'ExecutionStage must restore and poll the persistent current Run');
 assert.match(executionSource,/Stop scheduling/);
 assert.match(executionSource,/Force interrupt/);
+assert.match(executionSource,/controls\.scheduling==='STOPPED'/,'pending stop scheduling requests must remain retryable');
+assert.match(executionSource,/controls\.interrupt==='INTERRUPTED'/,'pending force interrupt requests must remain retryable');
 assert.match(executionSource,/Artifact delivery completed/,'generation completion and artifact delivery completion must remain distinct');
 assert.match(executionSource,/Startできない理由/,'blocked Preflight reason must be visible');
 assert.match(executionSource,/current\?\.lifecycle!==\'COMPLETED\'/,'output directory action must remain gated until completion');
