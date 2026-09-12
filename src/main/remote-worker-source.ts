@@ -60,7 +60,7 @@ def sha256_file(target):
 def safe_output_dir(comfy_root,prefix,require_exists=True):
  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
  output_root=os.path.realpath(os.path.join(comfy_root,"output"))
- raw=str(prefix or "").replace("\\","/").strip("/")
+ raw=str(prefix or "").replace("\\\\","/").strip("/")
  if not raw or raw==".." or raw.startswith("../") or "/../" in raw:raise WorkerError("REMOTE_OUTPUT_PREFIX_INVALID")
  target=os.path.realpath(os.path.join(output_root,*raw.split("/")))
  if os.path.commonpath([output_root,target])!=output_root:raise WorkerError("REMOTE_OUTPUT_PREFIX_INVALID")
@@ -434,7 +434,7 @@ def set_expand(graph,expand_node_id,continuous_id,index):
  inputs=node.setdefault("inputs",{});inputs["current_index"]=int(index);inputs["run_id"]=continuous_id;inputs["seed_base"]=random.randint(0,0x7fffffff);inputs["seed_base_literal"]=False
 
 def set_output_prefix(graph,output_prefix,branch_id):
- prefix=str(output_prefix or "").replace("\\","/").strip("/")
+ prefix=str(output_prefix or "").replace("\\\\","/").strip("/")
  branch=re.sub(r"[^A-Za-z0-9_.-]+","_",str(branch_id or "branch")).strip("._") or "branch"
  if not prefix:raise WorkerError("REMOTE_OUTPUT_PREFIX_INVALID")
  for node in graph.values():
