@@ -46,7 +46,7 @@ async function scenario(lifecycle,states){
   const execution=await load('execution-run.js');
 
   {
-    const {root,client,service}=await scenario(lifecycle,[instance('stopped'),instance('starting'),instance('scheduling'),ready()]);
+    const {root,client,service}=await scenario(lifecycle,[instance('stopped'),instance('starting'),ready()]);
     const result=await service.prepare(root,runId);
     assert.equal(result.status,'running');assert.equal(client.starts,1);
     let run=await execution.getExecutionRun(root,runId);
@@ -90,10 +90,21 @@ async function scenario(lifecycle,states){
 
   {
     const {root,client,service}=await scenario(lifecycle,[instance('scheduling'),instance('starting'),ready()]);
-    await service.prepare(root,runId);
-    assert.equal(client.starts,0,'scheduling instance must be polled instead of replaced');
+    await assert.rejects(()=>service.prepare(root,runId),/is scheduling; Execution Run cannot continue/);
+    assert.equal(client.starts,0,'scheduling instance must fail without a start request');
     const run=await execution.getExecutionRun(root,runId);
     assert.equal(run.remoteLifecycle.initialStatus,'scheduling');
+    assert.equal(run.remoteLifecycle.latest.status,'scheduling');
+  }
+
+  {
+    const {root,client,service}=await scenario(lifecycle,[instance('stopped'),instance('scheduling'),ready()]);
+    await assert.rejects(()=>service.prepare(root,runId),/is scheduling; Execution Run cannot continue/);
+    assert.equal(client.starts,1,'stopped instance may be started once before scheduling is detected');
+    const run=await execution.getExecutionRun(root,runId);
+    assert.equal(run.remoteLifecycle.initialStatus,'stopped');
+    assert.equal(run.remoteLifecycle.startedByBatchStudio,true);
+    assert.equal(run.remoteLifecycle.latest.status,'scheduling');
   }
 
   {
