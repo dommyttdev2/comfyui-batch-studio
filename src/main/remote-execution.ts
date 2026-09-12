@@ -217,11 +217,17 @@ export class RemoteExecutionService {
     if(latestEvidence(run,'CLEANUP_COMPLETED','remote-artifacts'))return;
     await mutateExecutionRun(root,runId,current=>{current.phase='REMOTE_CLEANUP'});
     try{await this.remote.requestWorker(root,runId,'cleanup_artifacts');}catch(error){throw new ArtifactPipelineError('REMOTE_ARTIFACT_CLEANUP_FAILED',safeError(error));}
-    try{await this.r2.deleteExecutionObject(bucket,key);}catch(error){throw new ArtifactPipelineError('R2_ARTIFACT_CLEANUP_FAILED',safeError(error));}
+    try{if(await this.r2.objectExists(bucket,key))await this.r2.deleteExecutionObject(bucket,key);}catch(error){throw new ArtifactPipelineError('R2_ARTIFACT_CLEANUP_FAILED',safeError(error));}
     await recordExecutionEvidence(root,runId,{kind:'CLEANUP_COMPLETED',scope:'remote-artifacts',data:{remote:true,r2:true}});
   }
   private async collectArtifacts(root:string,runId:string){
-    const pkg=await this.ensurePackage(root,runId),object=await this.ensureR2Object(root,runId,pkg);
+    const pkg=await this.ensurePackage(root,runId);
+    let run=await getExecutionRun(root,runId);if(!run)throw new Error('Execution Run was not found.');
+    const local=latestEvidence(run,'LOCAL_FILE_VERIFIED','remote-package'),uploaded=latestEvidence(run,'R2_OBJECT_VERIFIED','remote-package');
+    let object:{bucket:string;key:string};
+    if(local&&uploaded&&Number(local.data.size)===pkg.size&&String(local.data.sha256)===pkg.sha256&&typeof uploaded.data.bucket==='string'&&typeof uploaded.data.key==='string'){
+      object={bucket:uploaded.data.bucket,key:uploaded.data.key};
+    }else object=await this.ensureR2Object(root,runId,pkg);
     await this.ensureLocalFile(root,runId,pkg,object.bucket,object.key);
     await this.cleanup(root,runId,object.bucket,object.key);
     await mutateExecutionRun(root,runId,current=>{current.phase='COMPLETED';current.lifecycle='COMPLETED';current.completedAt=new Date().toISOString();current.current={branchId:null,leafId:null,promptId:null};current.controls.scheduling='STOPPED';});
