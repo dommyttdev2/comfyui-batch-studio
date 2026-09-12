@@ -41,8 +41,7 @@ export function normalizeVastStatus(payload:unknown):CloudInstanceStatus{
   if(raw==='running')return'running';
   const stoppedLike=raw==='stopped'||raw==='exited';
   const schedulingByIntent=stoppedLike&&(intended==='running'||next==='running');
-  const explicitStopTarget=intended==='stopped'&&next!=='running';
-  const schedulingByMessage=stoppedLike&&/(^|[ ,:;])running([ ,:;]|$)/.test(message)&&!explicitStopTarget;
+  const schedulingByMessage=stoppedLike&&/(^|[ ,:;])running([ ,:;]|$)/.test(message)&&next!=='stopped';
   if(schedulingByIntent||schedulingByMessage)return'scheduling';
   if(raw==='stopped'||(raw==='exited'&&intended==='stopped'&&cur==='stopped'))return'stopped';
   if(['loading','starting','rebooting','restarting','creating','connecting'].includes(raw))return'starting';
