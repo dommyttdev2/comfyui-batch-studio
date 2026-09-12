@@ -55,6 +55,8 @@ assert.match(vastPanel,/既存Instanceの状態確認・起動・停止・削除
 assert.match(vastPanel,/startButtonLabel/,'起動ボタン文言は状態から導出する');
 assert.match(vastPanel,/Scheduling/,'Scheduling状態を明示表示する');
 assert.match(vastPanel,/GPU割り当て待ち/,'Schedulingの意味を画面に表示する');
+assert.match(vastPanel,/instance\.status==='stopped'/,'API上stoppedでも外部Schedulingをキャンセルできるよう停止を有効化する');
+assert.match(vastPanel,/停止 \/ Schedulingをキャンセル/,'stopped時にも停止操作の目的をツールチップで明示する');
 assert.match(vastPanel,/statusDetail/,'Vast.aiのraw\/intended\/cur\/nextを診断表示する');
 assert.match(vastPanel,/perform\(instance,'start'\)[\s\S]*perform\(instance,'stop'\)[\s\S]*perform\(instance,'destroy'\)[\s\S]*perform\(instance,'reboot'\)/,'操作は起動・停止・削除・再起動の順で表示する');
 assert.match(vastPanel,/INSTANCE_REFRESH_MS=5_000/,'Instance状態は5秒間隔で自動更新する');
