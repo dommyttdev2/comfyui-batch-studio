@@ -92,6 +92,53 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
     metadata={...metadata,etag:'etag-v2'};
     await assert.rejects(()=>stager.stage(project,runId),/R2_MODEL_CHANGED_DURING_RUN/);
 
+    const parallelProject=path.join(runtime,'parallel-project');fs.mkdirSync(parallelProject,{recursive:true});
+    const parallelLoras=Array.from({length:5},(_,index)=>({
+      ref:'lora.'+(index+1),modelId:10+index,modelName:'LoRA '+(index+1),versionId:20+index,versionName:'v1',fileId:30+index,
+      fileName:'lora-'+(index+1)+'.safetensors',modelUrl:'https://example.com/lora-'+(index+1),trainedWords:[],reason:'parallel test'
+    }));
+    writeJson(path.join(parallelProject,'models.json'),{
+      schemaVersion:1,catalog:{schemaVersion:1,generation:1,generatedAt:'2026-09-13T00:00:00Z'},
+      checkpoint:{ref:'checkpoint.parallel',modelId:101,modelName:'Parallel Base',versionId:102,versionName:'v1',fileId:103,fileName:'parallel-base.safetensors',modelUrl:'https://example.com/parallel-base',trainedWords:[],reason:'parallel test'},
+      loras:parallelLoras
+    });
+    writeJson(path.join(parallelProject,'project_meta.json'),{schemaVersion:1,createdAt:new Date().toISOString(),settings:{executionTarget:'remote',r2Bucket:'models-bucket',r2ModelPrefix:''}});
+    const parallelRunId='00000000-0000-4000-8000-000000000051';
+    writeJson(path.join(parallelProject,'execution_runs',parallelRunId+'.json'),{
+      schemaVersion:1,runId:parallelRunId,projectId:'p51',executionTarget:'remote',remote:{provider:'vastai',instanceId:51},lifecycle:'RUNNING',phase:'REMOTE_ENVIRONMENT_CHECKING',
+      controls:{scheduling:'ACTIVE',interrupt:'IDLE',stopSchedulingRequestedAt:null,forceInterruptRequestedAt:null},
+      current:{branchId:null,leafId:null,promptId:null},progress:{overall:{completed:0,total:1},branches:[],models:[]},promptIds:[],evidence:[],error:null,errorHistory:[],
+      snapshot:{projectId:'p51',target:'remote',remote:{provider:'vastai',instanceId:51},preflight:{state:'READY',plannedImages:1,targetImages:1,blocking:[],warnings:[],sections:[]},workflow:{uiPath:'x',apiPath:'y',uiSha256:'u',apiSha256:'a',workflowIdentity:'w'},plan:{sha256:'p',branches:[]},runIdentity:'run-identity-51'},
+      resume:{attempts:0,lastAttemptAt:null,lastValidatedEvidenceIds:[],lastIgnoredEvidenceIds:[],lastDecisionPhase:null},startedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),completedAt:null
+    });
+    let activeDownloads=0,maxActiveDownloads=0,parallelStageCalls=0;
+    const parallelR2={
+      syncObjectIndex:async()=>{},
+      resolveModelObjectKey:async(_bucket,relativePath)=>'models/'+relativePath,
+      objectMetadata:async(_bucket,key)=>({key,size:payload.length,sha256:expectedSha,etag:'etag-'+key}),
+      downloadInfo:async(_bucket,key,expiresIn)=>({key,url:'https://r2.invalid/'+encodeURIComponent(key)+'?X-Amz-Signature=PARALLEL',public:false,expiresIn,fileName:path.basename(key),commands:{url:'',curl:'',wget:'',aria2c:''}})
+    };
+    const parallelRemote={
+      requestWorker:async(_root,_run,op,payloadReq={})=>{
+        if(op==='model_environment')return {response:{ok:true},events:[]};
+        if(op==='inspect_model')return {response:{exists:false,valid:false,size:0,sha256:null,reason:'missing'},events:[]};
+        if(op==='stage_model'){
+          parallelStageCalls++;activeDownloads++;maxActiveDownloads=Math.max(maxActiveDownloads,activeDownloads);
+          await new Promise(resolve=>setTimeout(resolve,40));
+          activeDownloads--;
+          return {response:{exists:true,valid:true,size:payload.length,sha256:expectedSha,reason:'downloaded',reused:false},events:[{type:'progress',stage:'model_downloading',transferredBytes:payload.length,totalBytes:payload.length}]};
+        }
+        throw new Error('unexpected op '+op);
+      }
+    };
+    await new RemoteModelStager(parallelR2,parallelRemote).stage(parallelProject,parallelRunId);
+    const parallelRun=JSON.parse(fs.readFileSync(path.join(parallelProject,'execution_runs',parallelRunId+'.json'),'utf8'));
+    assert.equal(parallelStageCalls,6,'all required models must be staged');
+    assert.equal(maxActiveDownloads,4,'remote model staging must run up to four model downloads concurrently');
+    assert.equal(parallelRun.phase,'REMOTE_MODELS_READY');
+    assert.ok(parallelRun.progress.models.every(model=>model.state==='ready'));
+    assert.equal(parallelRun.evidence.filter(e=>e.kind==='MODEL_VERIFIED').length,6);
+
     const workerPath=path.join(runtime,'worker.py'),modelsRoot=path.join(runtime,'remote-comfy','models'),runRoot=path.join(runtime,'worker-run');
     fs.mkdirSync(path.join(modelsRoot,'checkpoints'),{recursive:true});fs.mkdirSync(runRoot,{recursive:true});fs.writeFileSync(workerPath,worker.REMOTE_WORKER_FILE);
     const pythonTest=String.raw`
