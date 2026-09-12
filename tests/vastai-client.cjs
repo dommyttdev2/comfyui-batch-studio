@@ -62,6 +62,7 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
       return response({success:true});
     }
     if(u.pathname==='/api/v0/instances/1/'&&(!init.method||init.method==='GET'))return response({instances:{id:1,actual_status:lifecycleState,intended_status:lifecycleState,cur_state:lifecycleState,ssh_host:lifecycleState==='running'?'ssh.vast.ai':null,ssh_port:lifecycleState==='running'?12345:null}});
+    if(u.pathname==='/api/v0/instances/999/'&&(!init.method||init.method==='GET'))return response({instances:{}});
     return response({msg:'not found'},404);
   };
   const client=new VastAiClient(async()=>'secret-key',fakeFetch,'https://example.test');
