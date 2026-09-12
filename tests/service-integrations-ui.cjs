@@ -64,8 +64,7 @@ assert.match(vastPanel,/INSTANCE_REFRESH_MS=5_000/,'Instance状態は5秒間隔�
 assert.match(vastPanel,/GPU検索・RENT/,'Vast.ai画面に検索・RENT導線を追加する');
 assert.match(vastPanel,/DEFAULT_SEARCH:[^\n]*gpuCount:1/,'GPU Countの初期値は1にする');
 for(const label of ['Storage','Minimum TFLOPs','GPU Count','Reliability','除外する国コード'])assert.match(vastPanel,new RegExp(label),`検索条件に${label}を表示する`);
-for(const label of ['<label>GPU<','<label>VRAM<','<label>Max Price','<label>Verified','<label>Download Speed','<label>Disk Speed'])assert.doesNotMatch(vastPanel,new RegExp(label.replace(/[.*+?^$\{\}()|[\]\\]/g,'\\assert.match(vastPanel,/INSTANCE_REFRESH_MS=5_000/,'Instance状態は5秒間隔で自動更新する');
-')),`検索条件に不要な項目を追加しない: ${label}`);
+for(const label of ['<label>GPU<','<label>VRAM<','<label>Max Price','<label>Verified','<label>Download Speed','<label>Disk Speed'])assert.ok(!vastPanel.includes(label),`検索条件に不要な項目を追加しない: ${label}`);
 assert.match(vastPanel,/GPU・VRAM・料金などは結果を比較して選択/,'結果から比較して選ぶ設計を明示する');
 assert.match(vastPanel,/offer\.gpuName/,'検索結果にGPU名を表示する');
 assert.match(vastPanel,/formatVram\(offer\.gpuRamMb\)/,'検索結果にVRAMを表示する');
