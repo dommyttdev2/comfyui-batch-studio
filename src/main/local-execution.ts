@@ -57,7 +57,7 @@ function applyExpandState(graph:ApiGraph,expandNodeId:string,runId:string,index:
 }
 function errorOf(run:ExecutionRun,code:string,error:unknown,retryable=true):ExecutionError{return {code,message:error instanceof Error?error.message:String(error),phase:run.phase,at:new Date().toISOString(),retryable}}
 async function failRun(root:string,runId:string,code:string,error:unknown){
-  return mutateExecutionRun(root,runId,run=>{const next=errorOf(run,code,error);run.error=next;run.errorHistory.push(next);run.lifecycle='FAILED';run.controls.scheduling='STOPPED';run.current.promptId=null;});
+  return mutateExecutionRun(root,runId,run=>{const next=errorOf(run,code,error);run.error=next;run.errorHistory.push(next);run.lifecycle='FAILED';run.controls.scheduling='STOPPED';run.current.promptId=null;clearCurrentGenerationTiming(run);});
 }
 async function pauseForStop(root:string,runId:string){
   return mutateExecutionRun(root,runId,run=>{run.lifecycle='PAUSED';run.controls.scheduling='STOPPED';run.current.promptId=null;clearCurrentGenerationTiming(run);});
