@@ -1,7 +1,7 @@
-export const REMOTE_WORKER_VERSION='6';
+export const REMOTE_WORKER_VERSION='7';
 export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
-import base64,hashlib,json,os,re,shutil,subprocess,sys,tempfile,time,urllib.parse,urllib.request
-VERSION="6"
+import base64,copy,hashlib,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request
+VERSION="7"
 CHUNK_SIZE=8*1024*1024
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -314,12 +314,260 @@ def restart_comfyui():
   time.sleep(2)
  raise WorkerError("COMFYUI_RESTART_TIMEOUT",redact(last) or "ComfyUI did not reach RUNNING state.")
 
+def state_path(root):
+ return contained(root,"state.json")
+
+def read_state(root):
+ target=state_path(root)
+ if not os.path.exists(target):return None
+ try:return json.load(open(target,encoding="utf-8"))
+ except Exception as e:raise WorkerError("REMOTE_STATE_INVALID",redact(e))
+
+def save_state(root,state):
+ target=state_path(root);tmp=target+".tmp"
+ with open(tmp,"w",encoding="utf-8") as f:json.dump(state,f,separators=(",",":"))
+ os.replace(tmp,target)
+
+def control_path(root):
+ return contained(root,"control.json")
+
+def read_control(root):
+ target=control_path(root)
+ if not os.path.exists(target):return {"stopRequested":False,"interruptRequested":False}
+ try:
+  value=json.load(open(target,encoding="utf-8"))
+  return value if isinstance(value,dict) else {"stopRequested":False,"interruptRequested":False}
+ except Exception:return {"stopRequested":False,"interruptRequested":False}
+
+def write_control(root,patch):
+ current=read_control(root);current.update(patch)
+ target=control_path(root);tmp=target+".tmp"
+ with open(tmp,"w",encoding="utf-8") as f:json.dump(current,f,separators=(",",":"))
+ os.replace(tmp,target)
+ return current
+
+def process_alive(pid):
+ try:
+  if int(pid or 0)<=0:return False
+  os.kill(int(pid),0);return True
+ except Exception:return False
+
+def api_request(endpoint,path,method="GET",body=None,timeout=30):
+ url=str(endpoint or "http://127.0.0.1:8188").rstrip("/")+path
+ data=None;headers={"Accept":"application/json","User-Agent":"ComfyUI-Batch-Studio-Remote-Worker/"+VERSION}
+ if body is not None:
+  data=json.dumps(body,separators=(",",":")).encode("utf-8");headers["Content-Type"]="application/json"
+ request=urllib.request.Request(url,data=data,headers=headers,method=method)
+ try:
+  with urllib.request.urlopen(request,timeout=timeout) as response:
+   raw=response.read().decode("utf-8")
+   return response.status,json.loads(raw) if raw else {}
+ except urllib.error.HTTPError as e:
+  raw=e.read().decode("utf-8","replace")
+  try:payload=json.loads(raw) if raw else {}
+  except Exception:payload={"error":raw}
+  return e.code,payload
+ except Exception as e:raise WorkerError("COMFYUI_API_UNAVAILABLE",redact(e))
+
+def require_api(endpoint,path,method="GET",body=None,accepted=(200,)):
+ status,payload=api_request(endpoint,path,method,body)
+ if status not in accepted:
+  message=payload.get("error") if isinstance(payload,dict) else None
+  raise WorkerError("REMOTE_COMFYUI_API_FAILED",f"{path}: HTTP {status}: {message or payload}")
+ return payload
+
+def prompt_history_state(endpoint,prompt_id):
+ payload=require_api(endpoint,"/history/"+urllib.parse.quote(str(prompt_id),safe=""))
+ entry=payload.get(str(prompt_id)) if isinstance(payload,dict) else None
+ status=(entry or {}).get("status") if isinstance(entry,dict) else {}
+ status_str=str((status or {}).get("status_str") or "").lower()
+ if status_str=="error":return "error"
+ if status_str=="success" or (status or {}).get("completed") is True:return "success"
+ return "pending"
+
+def queue_contains(value,prompt_id):
+ if value is None:return False
+ if isinstance(value,(str,int,float)):return str(value)==str(prompt_id)
+ if isinstance(value,list):return any(queue_contains(item,prompt_id) for item in value)
+ if isinstance(value,dict):return any(str(key)==str(prompt_id) or queue_contains(item,prompt_id) for key,item in value.items())
+ return False
+
+def prompt_queue_state(endpoint,prompt_id):
+ queue=require_api(endpoint,"/queue")
+ if queue_contains(queue.get("queue_running"),prompt_id):return "running"
+ if queue_contains(queue.get("queue_pending"),prompt_id):return "pending"
+ return "absent"
+
+def set_run_handle(graph,run_handle):
+ for node in graph.values():
+  if isinstance(node,dict) and node.get("class_type") in ("ScenePrompter","SceneMatrix","ScenePresetReference","ScenePrompterExpand"):
+   inputs=node.setdefault("inputs",{});inputs["run_handle"]=run_handle;inputs.pop("user_id",None)
+
+def set_expand(graph,expand_node_id,continuous_id,index):
+ node=graph.get(str(expand_node_id))
+ if not isinstance(node,dict) or node.get("class_type")!="ScenePrompterExpand":raise WorkerError("REMOTE_EXPAND_NODE_MISSING")
+ inputs=node.setdefault("inputs",{});inputs["current_index"]=int(index);inputs["run_id"]=continuous_id;inputs["seed_base"]=random.randint(0,0x7fffffff);inputs["seed_base_literal"]=False
+
+def sequence_progress(state,stage,**extra):
+ emit("progress",stage=stage,runId=state.get("runId"),status=state.get("status"),current=state.get("current"),overallCompleted=state.get("overallCompleted",0),**extra)
+
+def mark_prompt_success(root,state,branch,index):
+ completed=state.setdefault("completed",{});before=int(completed.get(branch["branchId"],0))
+ if before<=index:
+  completed[branch["branchId"]]=index+1
+  state["overallCompleted"]=int(state.get("overallCompleted",0))+1
+ state["current"]={"branchId":branch["branchId"],"leafId":None,"index":index+1,"promptId":None}
+ save_state(root,state);sequence_progress(state,"prompt_terminal",terminal="success")
+
+def wait_prompt_terminal(root,state,branch,index,endpoint,prompt_id):
+ while True:
+  terminal=prompt_history_state(endpoint,prompt_id)
+  if terminal!="pending":break
+  control=read_control(root)
+  if control.get("interruptRequested"):
+   state["status"]="interrupting";save_state(root,state)
+  time.sleep(0.25)
+ if terminal=="success":
+  mark_prompt_success(root,state,branch,index);return "success"
+ control=read_control(root)
+ state["status"]="interrupted" if control.get("interruptRequested") else "failed"
+ state["error"]=None if state["status"]=="interrupted" else {"code":"REMOTE_PROMPT_FAILED","message":"ComfyUI prompt failed: "+str(prompt_id)}
+ state["current"]={"branchId":branch["branchId"],"leafId":branch["leafIds"][index] if index<len(branch["leafIds"]) else None,"index":index,"promptId":None}
+ save_state(root,state);sequence_progress(state,"prompt_terminal",terminal="error");return "error"
+
+def reconcile_current_prompt(root,state,branches,endpoint):
+ current=state.get("current") or {};prompt_id=current.get("promptId")
+ if not prompt_id:return True
+ branch=next((item for item in branches if item.get("branchId")==current.get("branchId")),None)
+ if not branch:raise WorkerError("REMOTE_RECONCILE_BRANCH_MISSING")
+ index=int(current.get("index") or 0)
+ terminal=prompt_history_state(endpoint,prompt_id)
+ if terminal=="pending":
+  queued=prompt_queue_state(endpoint,prompt_id)
+  if queued=="absent":raise WorkerError("REMOTE_RECONCILE_PROMPT_LOST","Current prompt is absent from both history and queue.")
+  sequence_progress(state,"reconciled",promptId=prompt_id,queueState=queued)
+  return wait_prompt_terminal(root,state,branch,index,endpoint,prompt_id)=="success"
+ if terminal=="success":
+  sequence_progress(state,"reconciled",promptId=prompt_id,historyState="success")
+  mark_prompt_success(root,state,branch,index);return True
+ control=read_control(root)
+ state["status"]="interrupted" if control.get("interruptRequested") else "failed"
+ state["current"]={"branchId":current.get("branchId"),"leafId":current.get("leafId"),"index":index,"promptId":None}
+ if state["status"]=="failed":state["error"]={"code":"REMOTE_PROMPT_FAILED","message":"Recovered prompt is terminal error: "+str(prompt_id)}
+ save_state(root,state);sequence_progress(state,"reconciled",promptId=prompt_id,historyState="error");return False
+
+def scene_prepare(endpoint,graph,expand_node_id,workflow,client_id):
+ payload=require_api(endpoint,"/scene_prompt/runs/prepare","POST",{"api_graph":{"output":graph},"expand_node_id":str(expand_node_id),"workflow":workflow,"client_id":client_id})
+ handle=str(payload.get("run_handle") or "")
+ if not handle:raise WorkerError("REMOTE_SCENE_PREPARE_FAILED","Scene Prompt prepare returned no run_handle.")
+ set_run_handle(graph,handle);return payload
+
+def scene_claim(endpoint,run_handle,prompt_id):
+ payload=require_api(endpoint,"/scene_prompt/runs/claim","POST",{"run_handle":run_handle,"prompt_id":prompt_id})
+ if not payload.get("claimed"):raise WorkerError("REMOTE_SCENE_CLAIM_FAILED")
+ return True
+
+def scene_finalize(endpoint,run_handle,expand_node_id,prompt_id):
+ for _ in range(120):
+  status,payload=api_request(endpoint,"/scene_prompt/runs/finalize","POST",{"run_handle":run_handle,"expand_node_id":str(expand_node_id),"prompt_id":prompt_id})
+  state=str(payload.get("state") or "") if isinstance(payload,dict) else ""
+  if status==200 and state=="finalized":return True
+  if status==202 or state in ("pending","in_progress"):time.sleep(0.25);continue
+  raise WorkerError("REMOTE_SCENE_FINALIZE_FAILED",f"state={state or 'unknown'} status={status}")
+ raise WorkerError("REMOTE_SCENE_FINALIZE_TIMEOUT")
+
+def scene_release(endpoint,run_handle):
+ status,payload=api_request(endpoint,"/scene_prompt/runs/release","POST",{"run_handle":run_handle})
+ return status==200 and bool((payload or {}).get("released"))
+
+def initialize_sequence(root,req):
+ previous=read_state(root)
+ run_id=str(req.get("runId") or "")
+ if not run_id:raise WorkerError("REMOTE_RUN_ID_REQUIRED")
+ if isinstance(previous,dict) and previous.get("runId")==run_id and previous.get("status") in ("running","interrupting","paused","interrupted","completed","failed"):
+  return previous
+ branches=req.get("branches") or []
+ total=sum(len(item.get("leafIds") or []) for item in branches)
+ state={"version":1,"runId":run_id,"status":"running","workerPid":os.getpid(),"current":{"branchId":None,"leafId":None,"index":0,"promptId":None},"completed":{},"overallCompleted":0,"overallTotal":total,"promptIds":[],"branchRuns":{},"artifact":{"outputPrefix":str(req.get("outputPrefix") or ""),"capturedAt":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime())},"error":None}
+ save_state(root,state);write_control(root,{"stopRequested":False,"interruptRequested":False});return state
+
+def run_scene_sequence(root,req):
+ endpoint=str(req.get("comfyEndpoint") or "http://127.0.0.1:8188")
+ require_api(endpoint,"/system_stats");require_api(endpoint,"/object_info")
+ branches=req.get("branches") or [];workflow=req.get("workflow");run_id=str(req.get("runId") or "")
+ state=initialize_sequence(root,req)
+ if state.get("status") in ("completed","paused","interrupted","failed"):return {"state":state}
+ owner_pid=int(state.get("workerPid") or 0)
+ if owner_pid and owner_pid!=os.getpid() and process_alive(owner_pid):return {"state":state,"alreadyRunning":True}
+ state["workerPid"]=os.getpid();state["status"]="running";save_state(root,state)
+ if not reconcile_current_prompt(root,state,branches,endpoint):return {"state":read_state(root)}
+ for branch in branches:
+  branch_id=str(branch.get("branchId") or "");leaf_ids=branch.get("leafIds") or [];expand_id=str(branch.get("expandNodeId") or "")
+  completed=int((state.get("completed") or {}).get(branch_id,0))
+  if completed>=len(leaf_ids):continue
+  if read_control(root).get("stopRequested"):
+   state["status"]="paused";state["workerPid"]=0;save_state(root,state);sequence_progress(state,"scheduling_stopped");return {"state":state}
+  graph=copy.deepcopy(branch.get("graph") or {});continuous_id=run_id+":"+branch_id
+  branch_runs=state.setdefault("branchRuns",{});meta=branch_runs.get(branch_id) or {}
+  run_handle=str(meta.get("runHandle") or "")
+  if not run_handle:
+   set_expand(graph,expand_id,continuous_id,completed)
+   prepared=scene_prepare(endpoint,graph,expand_id,workflow,run_id);run_handle=str(prepared["run_handle"])
+   expected=len(leaf_ids)
+   if int(prepared.get("total_batches",expected))!=expected:raise WorkerError("REMOTE_SCENE_PLAN_MISMATCH")
+   meta={"runHandle":run_handle,"claimed":False,"lastPromptId":""};branch_runs[branch_id]=meta;save_state(root,state)
+  else:set_run_handle(graph,run_handle)
+  try:
+   for index in range(completed,len(leaf_ids)):
+    if read_control(root).get("stopRequested"):
+     state["status"]="paused";state["workerPid"]=0;save_state(root,state);sequence_progress(state,"scheduling_stopped");return {"state":state}
+    set_expand(graph,expand_id,continuous_id,index)
+    state["current"]={"branchId":branch_id,"leafId":leaf_ids[index],"index":index,"promptId":None};save_state(root,state);sequence_progress(state,"prompt_submitting")
+    submitted=require_api(endpoint,"/prompt","POST",{"prompt":graph,"client_id":run_id});prompt_id=str(submitted.get("prompt_id") or "")
+    if not prompt_id:raise WorkerError("REMOTE_PROMPT_SUBMIT_FAILED")
+    state["current"]["promptId"]=prompt_id
+    if prompt_id not in state["promptIds"]:state["promptIds"].append(prompt_id)
+    meta["lastPromptId"]=prompt_id;save_state(root,state);sequence_progress(state,"prompt_submitted",promptId=prompt_id)
+    if not meta.get("claimed"):
+     scene_claim(endpoint,run_handle,prompt_id);meta["claimed"]=True;save_state(root,state)
+    if wait_prompt_terminal(root,state,branch,index,endpoint,prompt_id)!="success":return {"state":read_state(root)}
+   last_prompt=str(meta.get("lastPromptId") or "")
+   if last_prompt:scene_finalize(endpoint,run_handle,expand_id,last_prompt)
+   sequence_progress(state,"branch_completed",branchId=branch_id)
+  finally:
+   try:scene_release(endpoint,run_handle)
+   except Exception:pass
+   branch_runs.pop(branch_id,None);save_state(root,state)
+ state["status"]="completed";state["workerPid"]=0;state["current"]={"branchId":None,"leafId":None,"index":0,"promptId":None};save_state(root,state);sequence_progress(state,"sequence_completed")
+ return {"state":state}
+
+def stop_scene_sequence(root):
+ state=read_state(root)
+ if not isinstance(state,dict):return {"ok":False,"state":None}
+ write_control(root,{"stopRequested":True})
+ return {"ok":True,"state":state}
+
+def force_interrupt_sequence(root,endpoint):
+ state=read_state(root)
+ if not isinstance(state,dict):return {"interrupted":False,"state":None}
+ prompt_id=str(((state.get("current") or {}).get("promptId")) or "")
+ if not prompt_id:return {"interrupted":False,"state":state}
+ queue=require_api(endpoint,"/queue")
+ if not queue_contains(queue.get("queue_running"),prompt_id):return {"interrupted":False,"state":state}
+ write_control(root,{"interruptRequested":True})
+ require_api(endpoint,"/interrupt","POST",{},accepted=(200,))
+ state["status"]="interrupting";save_state(root,state)
+ sequence_progress(state,"interrupt_requested",promptId=prompt_id)
+ return {"interrupted":True,"state":state}
+
 def handle(req,root,model_root,comfy_root):
  op=req.get("op")
  if op=="health": return {"ok":True,"version":VERSION,"pid":os.getpid()}
  if op=="status":
-  state=contained(root,"state.json")
-  return {"ok":True,"state":json.load(open(state,encoding="utf-8")) if os.path.exists(state) else None}
+  return {"ok":True,"state":read_state(root)}
+ if op=="run_scene_sequence": return run_scene_sequence(root,req)
+ if op=="stop_scene_sequence": return stop_scene_sequence(root)
+ if op=="force_interrupt_sequence": return force_interrupt_sequence(root,str(req.get("comfyEndpoint") or "http://127.0.0.1:8188"))
  if op=="write_state":
   state=contained(root,"state.json"); tmp=state+".tmp"
   with open(tmp,"w",encoding="utf-8") as f: json.dump(req.get("state"),f,separators=(",",":"))
