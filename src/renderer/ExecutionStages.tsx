@@ -30,17 +30,25 @@ const phaseIndex=(phase:ExecutionPhase)=>EXECUTION_PHASES.indexOf(phase);
 const reached=(phase:ExecutionPhase,target:ExecutionPhase)=>phaseIndex(phase)>=phaseIndex(target);
 const pct=(completed:number,total:number)=>total>0?Math.min(100,Math.round(completed/total*100)):0;
 const phaseLabel=(phase:ExecutionPhase)=>phase.replaceAll('_',' ');
+function effectiveCloudInstanceStatus(run:ExecutionRun){
+  const lifecycle=run.remoteLifecycle,latest=lifecycle?.latest;
+  if(run.phase==='CLOUD_INSTANCE_STARTING'&&latest?.status==='stopped'&&lifecycle?.startRequestedAt)return'scheduling';
+  return latest?.status??null;
+}
 function executionPhaseLabel(run:ExecutionRun){
-  const providerStatus=run.remoteLifecycle?.latest?.status;
+  const providerStatus=effectiveCloudInstanceStatus(run);
   if(run.phase==='CLOUD_INSTANCE_STARTING'&&providerStatus==='scheduling')return'CLOUD INSTANCE STARTING · SCHEDULING';
   return phaseLabel(run.phase);
 }
 function cloudInstanceStatusMessage(run:ExecutionRun){
   if(run.executionTarget!=='remote'||run.phase!=='CLOUD_INSTANCE_STARTING')return null;
-  const status=run.remoteLifecycle?.latest?.status;
-  if(status==='scheduling')return'Vast.ai status: scheduling · GPU Instanceの割り当て待ちです。';
+  const lifecycle=run.remoteLifecycle,latest=lifecycle?.latest,status=effectiveCloudInstanceStatus(run);
+  if(status==='scheduling'){
+    const observed=latest?.status==='stopped'?` API observed: actual_status=${latest.rawStatus}, intended_status=${latest.intendedStatus??'-'}, cur_state=${latest.curState??'-'}, next_state=${latest.nextState??'-'}.`:'';
+    return`Vast.ai status: scheduling · GPU Instanceの割り当て待ちです。${observed}`;
+  }
   if(status==='starting')return'Vast.ai status: starting · Instanceの起動完了を待っています。';
-  if(status==='stopped')return'Vast.ai status: stopped · Instanceへ起動要求を送信しています。';
+  if(status==='stopped')return'Vast.ai status: stopped · Instanceは停止状態です。';
   return status?`Vast.ai status: ${status}`:'Vast.aiのInstance状態を確認しています。';
 }
 function connectionStatus(run:ExecutionRun){

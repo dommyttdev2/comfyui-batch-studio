@@ -32,10 +32,11 @@ function sshKeyValue(value:unknown){const row=record(value);return stringValue(r
 function containsSshKey(items:unknown[],publicKey:string){return items.some(item=>{const value=sshKeyValue(item);if(!value)return false;try{return normalizeOpenSshPublicKey(value)===publicKey}catch{return false}});}
 
 export function normalizeVastStatus(payload:unknown):CloudInstanceStatus{
-  const item=record(payload),raw=rawStatusOf(item),intended=String(item.intended_status??'').toLowerCase(),cur=String(item.cur_state??'').toLowerCase();
+  const item=record(payload),raw=rawStatusOf(item),intended=String(item.intended_status??'').toLowerCase(),cur=String(item.cur_state??'').toLowerCase(),next=String(item.next_state??'').toLowerCase();
   if(raw==='running')return'running';
-  if(raw==='stopped'||(raw==='exited'&&intended==='stopped'&&cur==='stopped'))return'stopped';
   if(raw==='scheduling')return'scheduling';
+  if((raw==='stopped'||raw==='exited')&&cur==='stopped'&&(intended==='running'||next==='running'))return'scheduling';
+  if(raw==='stopped'||(raw==='exited'&&intended==='stopped'&&cur==='stopped'))return'stopped';
   if(['loading','starting','rebooting','restarting'].includes(raw))return'starting';
   if(['stopping','destroying'].includes(raw))return'stopping';
   if(['offline','unavailable'].includes(raw))return'offline';
@@ -68,7 +69,7 @@ export function normalizeVastInstance(payload:unknown):VastAiInstance{
   if(id==null||id<1)throw new Error('Vast.ai Instance応答に有効なIDがありません。');
   const status=normalizeVastStatus(item),mapped=status==='running'?publicSshEndpoint(item):null;
   const sshHost=status==='running'?(mapped?.host??stringValue(item.ssh_host)??stringValue(item.public_ipaddr)):null,sshPort=status==='running'?(mapped?.port??integerValue(item.ssh_port)??null):null,comfyUiPort=status==='running'?resolveVastComfyUiPort(item):null;
-  return {provider:'vastai',id,label:stringValue(item.label),status,rawStatus:rawStatusOf(item),intendedStatus:stringValue(item.intended_status),curState:stringValue(item.cur_state),statusMessage:stringValue(item.status_msg),gpuName:stringValue(item.gpu_name),gpuCount:integerValue(item.num_gpus),gpuRamMb:integerValue(item.gpu_ram)??integerValue(item.gpu_totalram),hourlyCost:numberValue(item.dph_total),sshHost,sshPort,comfyUiPort};
+  return {provider:'vastai',id,label:stringValue(item.label),status,rawStatus:rawStatusOf(item),intendedStatus:stringValue(item.intended_status),curState:stringValue(item.cur_state),nextState:stringValue(item.next_state),statusMessage:stringValue(item.status_msg),gpuName:stringValue(item.gpu_name),gpuCount:integerValue(item.num_gpus),gpuRamMb:integerValue(item.gpu_ram)??integerValue(item.gpu_totalram),hourlyCost:numberValue(item.dph_total),sshHost,sshPort,comfyUiPort};
 }
 
 function messageFromPayload(payload:unknown){const item=record(payload);return stringValue(item.msg)??stringValue(item.error)??stringValue(item.detail);}
@@ -116,7 +117,7 @@ export class VastAiClient {
     if(!Number.isInteger(id)||id<1)throw new Error('Vast.ai Instance IDが不正です。');
     let payload:JsonRecord;
     try{payload=record(await this.request(`/api/v0/instances/${id}/`));}
-    catch(error){if(error instanceof Error&&/^Vast\\.ai API 404:/.test(error.message))throw new VastAiInstanceNotFoundError(id);throw error;}
+    catch(error){if(error instanceof Error&&error.message.startsWith('Vast.ai API 404:'))throw new VastAiInstanceNotFoundError(id);throw error;}
     const raw=payload.instances??payload,item=record(raw),responseId=integerValue(item.id);
     if(responseId==null)throw new VastAiInstanceNotFoundError(id);
     if(responseId!==id)throw new Error(`Vast.ai Instance応答のIDが一致しません。requested=${id}, actual=${responseId}`);

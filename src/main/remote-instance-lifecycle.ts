@@ -17,6 +17,7 @@ function snapshot(instance:VastAiInstance):ExecutionRemoteInstanceSnapshot{
     rawStatus:instance.rawStatus,
     intendedStatus:instance.intendedStatus,
     curState:instance.curState,
+    nextState:instance.nextState,
     statusMessage:instance.statusMessage,
     sshHost:instance.sshHost,
     sshPort:instance.sshPort,
@@ -26,7 +27,7 @@ function snapshot(instance:VastAiInstance):ExecutionRemoteInstanceSnapshot{
 }
 
 function defaultLifecycle():ExecutionRemoteLifecycleState{
-  return {initialStatus:null,startedByBatchStudio:false,latest:null,restorePolicy:'restore-if-started',restoredInitialState:false,finalizedAt:null};
+  return {initialStatus:null,startedByBatchStudio:false,startRequestedAt:null,latest:null,restorePolicy:'restore-if-started',restoredInitialState:false,finalizedAt:null};
 }
 
 function unavailable(instance:VastAiInstance){
@@ -91,6 +92,11 @@ export class RemoteInstanceLifecycleService {
       startRequestedThisPrepare=true;
       await this.assertRunActive(root,runId);
       await this.client.requestStartInstance(instanceId);
+      await mutateExecutionRun(root,runId,state=>{
+        const lifecycle=state.remoteLifecycle??defaultLifecycle();
+        lifecycle.startRequestedAt=new Date().toISOString();
+        state.remoteLifecycle=lifecycle;
+      });
     };
     await requestStartIfNeeded();
 
@@ -105,6 +111,7 @@ export class RemoteInstanceLifecycleService {
       }
       if(current.status==='running'&&current.sshHost&&current.sshPort){
         await this.persistSnapshot(root,runId,current,'CLOUD_INSTANCE_READY');
+        await mutateExecutionRun(root,runId,state=>{if(state.remoteLifecycle)state.remoteLifecycle.startRequestedAt=null;});
         return current;
       }
       if(current.status==='stopped'&&initialStatus!=='stopped'){

@@ -19,6 +19,8 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.equal(normalizeVastStatus({actual_status:'running'}),'running');
   assert.equal(normalizeVastStatus({actual_status:'scheduling'}),'scheduling');
   assert.equal(normalizeVastStatus({actual_status:'exited',intended_status:'stopped',cur_state:'stopped'}),'stopped');
+  assert.equal(normalizeVastStatus({actual_status:'exited',intended_status:'stopped',cur_state:'stopped',next_state:'running'}),'scheduling','restart scheduling must be derived from next_state=running even while actual_status remains exited');
+  assert.equal(normalizeVastStatus({actual_status:'stopped',intended_status:'running',cur_state:'stopped'}),'scheduling','restart scheduling must be derived from intended_status=running while allocation is pending');
   assert.equal(normalizeVastStatus({actual_status:'loading'}),'starting');
   assert.equal(normalizeVastStatus({actual_status:'offline'}),'offline');
 
@@ -36,6 +38,9 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.equal(proxyFallback.sshPort,10444);
   assert.equal(mapped.gpuName,'RTX 5090');
   assert.equal(mapped.hourlyCost,0.75);
+  const schedulingMapped=normalizeVastInstance({id:45,actual_status:'exited',intended_status:'stopped',cur_state:'stopped',next_state:'running'});
+  assert.equal(schedulingMapped.status,'scheduling');
+  assert.equal(schedulingMapped.nextState,'running');
 
   const pair=utils.generateKeyPairSync('ed25519');
   const otherPair=utils.generateKeyPairSync('ed25519');
