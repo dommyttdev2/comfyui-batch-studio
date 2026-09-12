@@ -152,7 +152,7 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
       if(u.pathname==='/api/v0/bundles'&&init.method==='POST'){
         const body=JSON.parse(init.body);
         if(body.id?.eq===123)return response({offers:[richOffer]});
-        assert.equal(body.type,'ondemand');
+        assert.equal(body.type,'on-demand');
         assert.equal(body.limit,100);
         assert.deepEqual(body.rentable,{eq:true});
         assert.deepEqual(body.rented,{eq:false});
