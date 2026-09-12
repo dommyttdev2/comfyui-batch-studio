@@ -11,6 +11,7 @@ import { RemoteWorkerRequestError } from './remote-worker.js';
 const MIN_MODEL_URL_EXPIRY_SECONDS=6*60*60;
 const MAX_MODEL_URL_EXPIRY_SECONDS=7*24*60*60;
 const MODEL_URL_RETRIES=3;
+const MODEL_STAGE_CONCURRENCY=4;
 
 type R2Meta={key:string;size:number;sha256:string|null;etag:string};
 type WorkerModelResult={exists?:boolean;valid?:boolean;size?:number;sha256?:string|null;reason?:string;reused?:boolean};
@@ -35,6 +36,20 @@ function evidenceForModel(evidence:ExecutionEvidence[],ref:string,objectKey:stri
   return evidence.find(item=>item.kind==='MODEL_VERIFIED'&&item.scope===ref&&String(item.data.objectKey??'')===objectKey&&String(item.data.destination??'')===destination)??null;
 }
 function samePrimitive(a:unknown,b:unknown){return String(a??'')===String(b??'');}
+async function runConcurrent<T>(items:T[],concurrency:number,worker:(item:T)=>Promise<void>){
+  let cursor=0,firstError:unknown=null;
+  const runner=async()=>{
+    for(;;){
+      if(firstError)return;
+      const index=cursor++;
+      if(index>=items.length)return;
+      try{await worker(items[index]);}
+      catch(error){firstError??=error;return;}
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(concurrency,items.length)},()=>runner()));
+  if(firstError)throw firstError;
+}
 
 export class RemoteModelStager {
   constructor(private readonly r2:R2Manager,private readonly remote:RemoteControlPlane){}
@@ -104,7 +119,7 @@ export class RemoteModelStager {
     if(!refreshed)throw new Error('Execution Run disappeared during remote model staging.');
     const validated=validatedExecutionEvidence(refreshed).valid;
 
-    for(const item of resolved){
+    await runConcurrent(resolved,MODEL_STAGE_CONCURRENCY,async item=>{
       await this.assertRunActive(root,runId);
       const existingEvidence=evidenceForModel(validated,item.ref,item.objectKey,item.destination);
       if(existingEvidence){
@@ -125,7 +140,7 @@ export class RemoteModelStager {
         const sha256=typeof inspected.sha256==='string'?inspected.sha256:null;
         await this.setModelProgress(root,runId,item.ref,{state:existingEvidence?'skipped':'ready',transferredBytes:item.meta.size,totalBytes:item.meta.size,reused:true,sha256,error:null});
         await this.recordVerified(root,runId,item,item.meta,inspected,true,existingEvidence);
-        continue;
+        return;
       }
 
       await this.assertRunActive(root,runId);
@@ -157,7 +172,7 @@ export class RemoteModelStager {
       const sha256=typeof staged.sha256==='string'?staged.sha256:null;
       await this.setModelProgress(root,runId,item.ref,{state:'ready',transferredBytes:item.meta.size,totalBytes:item.meta.size,reused:Boolean(staged.reused),sha256,error:null});
       await this.recordVerified(root,runId,item,item.meta,staged,Boolean(staged.reused),existingEvidence);
-    }
+    });
 
     await this.assertRunActive(root,runId);
     const completed=await getExecutionRun(root,runId);
