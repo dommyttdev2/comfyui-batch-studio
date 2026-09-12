@@ -14,7 +14,7 @@ const load=relative=>import(pathToFileURL(path.join(runtime,'main',relative)).hr
 function response(payload,status=200){return {ok:status>=200&&status<300,status,statusText:status===200?'OK':'ERR',text:async()=>JSON.stringify(payload)};}
 
 (async()=>{
-  const {VastAiClient,VastAiInstanceNotFoundError,normalizeVastInstance,normalizeVastStatus,resolveVastComfyUiPort}=await load('vastai-client.js');
+  const {VastAiClient,VastAiInstanceNotFoundError,normalizeVastInstance,normalizeVastOffer,normalizeVastStatus,resolveVastComfyUiPort}=await load('vastai-client.js');
   const {normalizeOpenSshPublicKey,validateSshKeyPair}=await load('ssh-key-pair.js');
   assert.equal(normalizeVastStatus({actual_status:'running'}),'running');
   assert.equal(normalizeVastStatus({actual_status:'scheduling'}),'scheduling');
@@ -134,6 +134,65 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
     await schedulingClient.requestStopInstance(77);
     const afterStop=(await schedulingClient.listInstances())[0];
     assert.equal(afterStop.status,'stopped','explicit stop request must cancel the local Scheduling intent when provider is already stopped');
+  }
+
+
+  {
+    const marketCalls=[];
+    const template={id:101,hash_id:'comfy-hash',name:'ComfyUI',recommended_disk_space:120,count_created:999,extra_filters:{cuda_max_good:{gte:12.6}}};
+    const richOffer={id:123,gpu_name:'RTX 5090',num_gpus:1,gpu_ram:32768,gpu_total_ram:32768,total_flops:104.8,gpu_mem_bw:1792,verification:'verified',geolocation:'Tokyo, JP',machine_id:77,host_id:88,mobo_name:'Test Board',pci_gen:5,gpu_lanes:16,pcie_bw:48.2,cpu_name:'EPYC Test',cpu_cores:32,cpu_cores_effective:16,cpu_ram:131072,disk_name:'NVMe',disk_bw:6500,disk_space:900,inet_down:1500,inet_up:900,direct_port_count:64,dlperf:180,cuda_max_good:13.0,duration:604800,reliability:.997,dlperf_per_dphtotal:220,flops_per_dphtotal:130,dph_total:.82,storage_cost:.003,internet_down_cost_per_tb:.02,internet_up_cost_per_tb:.03};
+    const marketFetch=async(url,init={})=>{
+      marketCalls.push({url:String(url),init});
+      const u=new URL(String(url));
+      if(u.pathname==='/api/v0/template/'){
+        const filters=JSON.parse(u.searchParams.get('select_filters'));
+        assert.deepEqual(filters.name,{eq:'ComfyUI'});
+        assert.deepEqual(filters.recommended,{eq:true});
+        assert.deepEqual(filters.use_ssh,{eq:true});
+        assert.deepEqual(filters.ssh_direct,{eq:true});
+        if(filters.hash_id)assert.deepEqual(filters.hash_id,{eq:'comfy-hash'});
+        return response({templates:[template]});
+      }
+      if(u.pathname==='/api/v0/bundles'&&init.method==='POST'){
+        const body=JSON.parse(init.body);
+        if(body.id?.eq===123)return response({offers:[richOffer]});
+        assert.equal(body.type,'on-demand');
+        assert.equal(body.limit,100);
+        assert.deepEqual(body.rentable,{eq:true});
+        assert.deepEqual(body.rented,{eq:false});
+        assert.equal(body.allocated_storage,120);
+        assert.deepEqual(body.num_gpus,{eq:1});
+        assert.deepEqual(body.total_flops,{gte:60});
+        assert.deepEqual(body.reliability,{gte:.99});
+        assert.deepEqual(body.geolocation,{notin:['CN','RU']});
+        assert.deepEqual(body.cuda_max_good,{gte:12.6},'ComfyUI Template extra_filtersを検索条件へ反映する');
+        for(const key of ['gpu_name','gpu_ram','dph_total','verification','inet_down','disk_bw'])assert.equal(body[key],undefined,key+' must remain result-only');
+        return response({offers:[richOffer]});
+      }
+      if(u.pathname==='/api/v0/asks/123/'&&init.method==='PUT'){
+        const body=JSON.parse(init.body);
+        assert.deepEqual(body,{template_hash_id:'comfy-hash',disk:120,target_state:'running',label:'ComfyUI Batch Studio'});
+        assert.equal(body.price,undefined,'On-demand RENTにbid priceを送らない');
+        return response({success:true,new_contract:456});
+      }
+      return response({msg:'not found'},404);
+    };
+    const marketClient=new VastAiClient(async()=>'secret-key',marketFetch,'https://example.test');
+    const templateResult=await marketClient.comfyUiTemplate();
+    assert.equal(templateResult.hashId,'comfy-hash');
+    assert.equal(templateResult.recommendedDiskSpaceGb,120);
+    const searchResult=await marketClient.searchOffers({storageGb:120,minTflops:60,gpuCount:1,minReliability:99,excludedCountries:['CN','RU']});
+    assert.equal(searchResult.offers.length,1);
+    assert.equal(searchResult.offers[0].gpuName,'RTX 5090');
+    assert.equal(searchResult.offers[0].totalFlops,104.8);
+    assert.equal(searchResult.offers[0].hourlyCost,.82);
+    const normalized=normalizeVastOffer(richOffer);
+    assert.equal(normalized.internetDownMb,1500);
+    assert.equal(normalized.diskBandwidthMb,6500);
+    await assert.rejects(()=>marketClient.searchOffers({storageGb:100,minTflops:0,gpuCount:1,minReliability:90,excludedCountries:[]}),/推奨Storageは 120 GB以上/);
+    const instanceId=await marketClient.rentOffer({offerId:123,storageGb:120,templateHashId:'comfy-hash'});
+    assert.equal(instanceId,456);
+    assert.ok(marketCalls.some(x=>new URL(x.url).pathname==='/api/v0/asks/123/'&&x.init.method==='PUT'));
   }
 
   console.log('Vast.ai client tests passed.');

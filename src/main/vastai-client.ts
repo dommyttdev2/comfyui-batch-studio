@@ -1,4 +1,4 @@
-import type { CloudInstanceStatus, VastAiInstance } from '../shared/types.js';
+import type { CloudInstanceStatus, VastAiComfyUiTemplate, VastAiInstance, VastAiOffer, VastAiOfferSearchInput, VastAiOfferSearchResult, VastAiRentRequest } from '../shared/types.js';
 import { normalizeOpenSshPublicKey } from './ssh-key-pair.js';
 
 const DEFAULT_BASE_URL='https://console.vast.ai';
@@ -21,6 +21,17 @@ function arrayValue(value:unknown):unknown[]|null{
   if(Array.isArray(value))return value;
   if(typeof value==='string'&&value.trim()){try{const parsed=JSON.parse(value);return Array.isArray(parsed)?parsed:null}catch{return null}}
   return null;
+}
+function objectValue(value:unknown):JsonRecord{
+  if(value&&typeof value==='object'&&!Array.isArray(value))return value as JsonRecord;
+  if(typeof value==='string'&&value.trim()){try{return record(JSON.parse(value));}catch{return {};}}
+  return {};
+}
+function normalizedCountryCodes(values:unknown){
+  if(!Array.isArray(values))return [] as string[];
+  const result:string[]=[];
+  for(const value of values){const code=String(value??'').trim().toUpperCase();if(!code)continue;if(!/^[A-Z]{2}$/.test(code))throw new Error(`除外地域は2文字の国コードで指定してください: ${code}`);if(!result.includes(code))result.push(code);}
+  return result;
 }
 function sshKeyItems(payload:unknown):unknown[]{
   const direct=arrayValue(payload);if(direct)return direct;
@@ -61,6 +72,16 @@ function mappedTcpEndpoint(payload:JsonRecord,internalPort:number){
     if(host&&host!=='0.0.0.0'&&host!=='::'&&port&&port>0)return {host,port,internalPort};
   }
   return null;
+}
+function normalizeComfyUiTemplate(payload:unknown):VastAiComfyUiTemplate{
+  const item=record(payload),hashId=stringValue(item.hash_id),name=stringValue(item.name);
+  if(!hashId||!name)throw new Error('Vast.ai ComfyUI Template応答が不正です。');
+  return {id:integerValue(item.id),hashId,name,recommendedDiskSpaceGb:numberValue(item.recommended_disk_space)??8,countCreated:integerValue(item.count_created),extraFilters:objectValue(item.extra_filters)};
+}
+export function normalizeVastOffer(payload:unknown):VastAiOffer{
+  const item=record(payload),id=integerValue(item.id)??integerValue(item.ask_contract_id);
+  if(id==null||id<1)throw new Error('Vast.ai Offer応答に有効なIDがありません。');
+  return {id,gpuName:stringValue(item.gpu_name),gpuCount:integerValue(item.num_gpus),gpuRamMb:numberValue(item.gpu_ram),gpuTotalRamMb:numberValue(item.gpu_total_ram),totalFlops:numberValue(item.total_flops),gpuMemBandwidthGbps:numberValue(item.gpu_mem_bw),verification:stringValue(item.verification),geolocation:stringValue(item.geolocation),machineId:integerValue(item.machine_id),hostId:integerValue(item.host_id),motherboard:stringValue(item.mobo_name),pciGen:numberValue(item.pci_gen),gpuLanes:integerValue(item.gpu_lanes),pcieBandwidthGbps:numberValue(item.pcie_bw),cpuName:stringValue(item.cpu_name),cpuCores:integerValue(item.cpu_cores),cpuCoresEffective:numberValue(item.cpu_cores_effective),cpuRamMb:numberValue(item.cpu_ram),diskName:stringValue(item.disk_name),diskBandwidthMb:numberValue(item.disk_bw),diskSpaceGb:numberValue(item.disk_space),internetDownMb:numberValue(item.inet_down),internetUpMb:numberValue(item.inet_up),directPortCount:integerValue(item.direct_port_count),dlperf:numberValue(item.dlperf),cudaMaxGood:numberValue(item.cuda_max_good),durationSeconds:numberValue(item.duration),reliability:numberValue(item.reliability),dlperfPerDollar:numberValue(item.dlperf_per_dphtotal),flopsPerDollar:numberValue(item.flops_per_dphtotal),hourlyCost:numberValue(item.dph_total),storageCostPerGbMonth:numberValue(item.storage_cost),internetDownCostPerTb:numberValue(item.internet_down_cost_per_tb),internetUpCostPerTb:numberValue(item.internet_up_cost_per_tb)};
 }
 function publicSshEndpoint(payload:JsonRecord){return mappedTcpEndpoint(payload,22);}
 export function resolveVastComfyUiPort(payload:unknown){
@@ -124,6 +145,54 @@ export class VastAiClient {
     }catch(error){if(error instanceof Error&&error.name==='AbortError')throw new Error('Vast.ai APIへの接続がタイムアウトしました。');throw error;}finally{clearTimeout(timer);}
   }
   async testConnection(){await this.request('/api/v1/instances/?limit=1');}
+  private async resolveComfyUiTemplate(hashId?:string):Promise<VastAiComfyUiTemplate>{
+    const filters:JsonRecord={name:{eq:'ComfyUI'},recommended:{eq:true},use_ssh:{eq:true},ssh_direct:{eq:true}};
+    if(hashId)filters.hash_id={eq:hashId};
+    const params=new URLSearchParams({select_filters:JSON.stringify(filters)}),payload=record(await this.request(`/api/v0/template/?${params.toString()}`));
+    const rows=Array.isArray(payload.templates)?payload.templates:[];
+    if(rows.length===0)throw new Error(hashId?'指定したVast.ai ComfyUI Templateが利用できません。':'Vast.aiの推奨ComfyUI Template（SSH Direct対応）が見つかりません。');
+    const templates=rows.map(normalizeComfyUiTemplate).sort((a,b)=>(b.countCreated??0)-(a.countCreated??0)||b.recommendedDiskSpaceGb-a.recommendedDiskSpaceGb);
+    return templates[0];
+  }
+  async comfyUiTemplate(){return this.resolveComfyUiTemplate();}
+  async comfyUiTemplateByHash(hashId:string){return this.resolveComfyUiTemplate(hashId);}
+  private normalizeOfferSearchInput(input:VastAiOfferSearchInput,template:VastAiComfyUiTemplate){
+    const storageGb=numberValue(input?.storageGb),minTflops=numberValue(input?.minTflops),gpuCount=integerValue(input?.gpuCount),minReliability=numberValue(input?.minReliability),excludedCountries=normalizedCountryCodes(input?.excludedCountries);
+    if(storageGb==null||storageGb<=0)throw new Error('Storageは0より大きいGB値を指定してください。');
+    if(storageGb<template.recommendedDiskSpaceGb)throw new Error(`ComfyUI Templateの推奨Storageは ${template.recommendedDiskSpaceGb} GB以上です。`);
+    if(minTflops==null||minTflops<0)throw new Error('Minimum TFLOPsは0以上で指定してください。');
+    if(gpuCount==null||gpuCount<1||gpuCount>64)throw new Error('GPU Countは1〜64の整数で指定してください。');
+    if(minReliability==null||minReliability<0||minReliability>100)throw new Error('Reliabilityは0〜100%で指定してください。');
+    return {storageGb,minTflops,gpuCount,minReliability,excludedCountries};
+  }
+  async searchOffers(input:VastAiOfferSearchInput):Promise<VastAiOfferSearchResult>{
+    const template=await this.resolveComfyUiTemplate(),search=this.normalizeOfferSearchInput(input,template);
+    const body:JsonRecord={...template.extraFilters,limit:100,type:'on-demand',rentable:{eq:true},rented:{eq:false},allocated_storage:search.storageGb,num_gpus:{eq:search.gpuCount},reliability:{gte:search.minReliability/100}};
+    if(search.minTflops>0)body.total_flops={gte:search.minTflops};
+    if(search.excludedCountries.length>0)body.geolocation={notin:search.excludedCountries};
+    const payload=record(await this.request('/api/v0/bundles',{method:'POST',body:JSON.stringify(body)})),rows=Array.isArray(payload.offers)?payload.offers:[];
+    return {template,offers:rows.map(normalizeVastOffer)};
+  }
+  async getOffer(offerId:number,storageGb:number){
+    if(!Number.isInteger(offerId)||offerId<1)throw new Error('Vast.ai Offer IDが不正です。');
+    if(!Number.isFinite(storageGb)||storageGb<=0)throw new Error('Storageが不正です。');
+    const body={limit:1,type:'on-demand',rentable:{eq:true},rented:{eq:false},id:{eq:offerId},allocated_storage:storageGb};
+    const payload=record(await this.request('/api/v0/bundles',{method:'POST',body:JSON.stringify(body)})),rows=Array.isArray(payload.offers)?payload.offers:[];
+    if(rows.length===0)throw new Error(`Vast.ai Offer #${offerId} は現在RENTできません。検索結果を更新してください。`);
+    return normalizeVastOffer(rows[0]);
+  }
+  async rentOffer(input:VastAiRentRequest){
+    const offerId=integerValue(input?.offerId),storageGb=numberValue(input?.storageGb),templateHashId=stringValue(input?.templateHashId);
+    if(offerId==null||offerId<1)throw new Error('Vast.ai Offer IDが不正です。');
+    if(storageGb==null||storageGb<=0)throw new Error('Storageが不正です。');
+    if(!templateHashId)throw new Error('ComfyUI Template IDがありません。');
+    const template=await this.resolveComfyUiTemplate(templateHashId);
+    if(storageGb<template.recommendedDiskSpaceGb)throw new Error(`ComfyUI Templateの推奨Storageは ${template.recommendedDiskSpaceGb} GB以上です。`);
+    await this.getOffer(offerId,storageGb);
+    const payload=record(await this.request(`/api/v0/asks/${offerId}/`,{method:'PUT',body:JSON.stringify({template_hash_id:template.hashId,disk:storageGb,target_state:'running',label:'ComfyUI Batch Studio'})})),instanceId=integerValue(payload.new_contract);
+    if(payload.success===false||instanceId==null||instanceId<1)throw new Error(messageFromPayload(payload)??'Vast.ai Instanceを作成できませんでした。');
+    return instanceId;
+  }
   async listInstances():Promise<VastAiInstance[]>{
     const instances:VastAiInstance[]=[];let token:string|null=null,pages=0;
     do{
