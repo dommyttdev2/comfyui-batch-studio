@@ -4,7 +4,7 @@ import type { VastAiClient } from './vastai-client.js';
 
 const DEFAULT_TIMEOUT_MS=15*60_000;
 const DEFAULT_POLL_MS=5_000;
-const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
 
 type LifecycleClient=Pick<VastAiClient,'getInstance'|'requestStartInstance'|'stopInstance'>;
 type LifecycleOptions={timeoutMs?:number;pollMs?:number;sleep?:(ms:number)=>Promise<void>};
