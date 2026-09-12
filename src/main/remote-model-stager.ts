@@ -39,6 +39,11 @@ function samePrimitive(a:unknown,b:unknown){return String(a??'')===String(b??'')
 export class RemoteModelStager {
   constructor(private readonly r2:R2Manager,private readonly remote:RemoteControlPlane){}
 
+  private async assertRunActive(root:string,runId:string){
+    const run=await getExecutionRun(root,runId);
+    if(!run||run.lifecycle!=='RUNNING')throw new Error(`Execution Run ${runId} is not running.`);
+  }
+
   private async r2Location(root:string){
     const meta=await readProjectMeta(root);
     const bucket=(process.env.BATCH_STUDIO_R2_BUCKET??'').trim()||(meta?.settings.r2Bucket?.trim()??'');
@@ -64,9 +69,11 @@ export class RemoteModelStager {
   }
 
   async stage(root:string,runId:string){
+    await this.assertRunActive(root,runId);
     const run=await getExecutionRun(root,runId);
     if(!run||run.executionTarget!=='remote')throw new Error('Remote Execution Run is required for model staging.');
     await mutateExecutionRun(root,runId,current=>{current.phase='REMOTE_MODELS_CHECKING';current.error=null;});
+    await this.assertRunActive(root,runId);
     await this.remote.requestWorker(root,runId,'model_environment');
 
     const models=await readJson<ModelsArtifact>(path.join(root,'models.json'));
@@ -98,6 +105,7 @@ export class RemoteModelStager {
     const validated=validatedExecutionEvidence(refreshed).valid;
 
     for(const item of resolved){
+      await this.assertRunActive(root,runId);
       const existingEvidence=evidenceForModel(validated,item.ref,item.objectKey,item.destination);
       if(existingEvidence){
         const previousSize=Number(existingEvidence.data.size??-1),previousEtag=String(existingEvidence.data.objectEtag??'');
@@ -109,6 +117,7 @@ export class RemoteModelStager {
       const expectedSha=item.meta.sha256??evidenceSha;
 
       await this.setModelProgress(root,runId,item.ref,{state:'checking',transferredBytes:0,totalBytes:item.meta.size,error:null});
+      await this.assertRunActive(root,runId);
       const inspected=workerResult((await this.remote.requestWorker(root,runId,'inspect_model',{
         path:item.relativePath,expectedSize:item.meta.size,expectedSha256:expectedSha,computeSha256:true
       })).response);
@@ -119,9 +128,11 @@ export class RemoteModelStager {
         continue;
       }
 
+      await this.assertRunActive(root,runId);
       await mutateExecutionRun(root,runId,current=>{current.phase='REMOTE_MODELS_DOWNLOADING';});
       let staged:WorkerModelResult|null=null,lastError:unknown=null;
       for(let attempt=1;attempt<=MODEL_URL_RETRIES;attempt++){
+        await this.assertRunActive(root,runId);
         const download=await this.r2.downloadInfo(bucket,item.objectKey,modelUrlExpiry(item.meta.size));
         await this.setModelProgress(root,runId,item.ref,{state:'downloading',transferredBytes:0,totalBytes:item.meta.size,reused:false,error:null});
         try{
@@ -148,6 +159,7 @@ export class RemoteModelStager {
       await this.recordVerified(root,runId,item,item.meta,staged,Boolean(staged.reused),existingEvidence);
     }
 
+    await this.assertRunActive(root,runId);
     const completed=await getExecutionRun(root,runId);
     const currentEvidence=completed?validatedExecutionEvidence(completed).valid:[];
     if(!currentEvidence.some(item=>item.kind==='MODELS_VERIFIED'&&item.scope==='remote-models')){

@@ -14,11 +14,13 @@ const load=relative=>import(pathToFileURL(path.join(runtime,'main',relative)).hr
 function response(payload,status=200){return {ok:status>=200&&status<300,status,statusText:status===200?'OK':'ERR',text:async()=>JSON.stringify(payload)};}
 
 (async()=>{
-  const {VastAiClient,normalizeVastInstance,normalizeVastStatus,resolveVastComfyUiPort}=await load('vastai-client.js');
+  const {VastAiClient,VastAiInstanceNotFoundError,normalizeVastInstance,normalizeVastStatus,resolveVastComfyUiPort}=await load('vastai-client.js');
   const {normalizeOpenSshPublicKey,validateSshKeyPair}=await load('ssh-key-pair.js');
   assert.equal(normalizeVastStatus({actual_status:'running'}),'running');
   assert.equal(normalizeVastStatus({actual_status:'scheduling'}),'scheduling');
   assert.equal(normalizeVastStatus({actual_status:'exited',intended_status:'stopped',cur_state:'stopped'}),'stopped');
+  assert.equal(normalizeVastStatus({actual_status:'exited',intended_status:'stopped',cur_state:'stopped',next_state:'running'}),'scheduling','restart scheduling must be derived from next_state=running even while actual_status remains exited');
+  assert.equal(normalizeVastStatus({actual_status:'stopped',intended_status:'running',cur_state:'stopped'}),'scheduling','restart scheduling must be derived from intended_status=running while allocation is pending');
   assert.equal(normalizeVastStatus({actual_status:'loading'}),'starting');
   assert.equal(normalizeVastStatus({actual_status:'offline'}),'offline');
 
@@ -36,6 +38,9 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
   assert.equal(proxyFallback.sshPort,10444);
   assert.equal(mapped.gpuName,'RTX 5090');
   assert.equal(mapped.hourlyCost,0.75);
+  const schedulingMapped=normalizeVastInstance({id:45,actual_status:'exited',intended_status:'stopped',cur_state:'stopped',next_state:'running'});
+  assert.equal(schedulingMapped.status,'scheduling');
+  assert.equal(schedulingMapped.nextState,'running');
 
   const pair=utils.generateKeyPairSync('ed25519');
   const otherPair=utils.generateKeyPairSync('ed25519');
@@ -62,6 +67,7 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
       return response({success:true});
     }
     if(u.pathname==='/api/v0/instances/1/'&&(!init.method||init.method==='GET'))return response({instances:{id:1,actual_status:lifecycleState,intended_status:lifecycleState,cur_state:lifecycleState,ssh_host:lifecycleState==='running'?'ssh.vast.ai':null,ssh_port:lifecycleState==='running'?12345:null}});
+    if(u.pathname==='/api/v0/instances/999/'&&(!init.method||init.method==='GET'))return response({instances:{}});
     return response({msg:'not found'},404);
   };
   const client=new VastAiClient(async()=>'secret-key',fakeFetch,'https://example.test');
@@ -86,6 +92,7 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
 
   const one=await client.getInstance(1);
   assert.equal(one.sshHost,'ssh.vast.ai');
+  await assert.rejects(()=>client.getInstance(999),error=>error instanceof VastAiInstanceNotFoundError&&error.instanceId===999&&/見つかりません/.test(error.message));
   const started=await client.startInstance(1);
   assert.equal(started.status,'running');
   const stopped=await client.stopInstance(1);

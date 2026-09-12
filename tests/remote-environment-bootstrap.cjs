@@ -28,13 +28,22 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
   const token='github_pat_SUPER_SECRET_TEST_TOKEN';
   const nodes=[{repository:'toshiki-takedomi/comfyui-batch-orchestrator'},{repository:'norqis/ComfyUI-Scene-Prompt-Tools',ref:'main'}];
   const calls=[];
-  const remote={requestWorker:async(_root,_run,op,payload={})=>{calls.push({op,payload});return {response:{ok:true,op},events:[]}}};
+  const remote={requestWorker:async(_root,_run,op,payload={})=>{
+    const phase=JSON.parse(fs.readFileSync(path.join(project,'execution_runs',runId+'.json'),'utf8')).phase;
+    calls.push({op,payload,phase});
+    const response=op==='comfyui_release_check'?{tag:'v9.9.9',currentCommit:'1111111111111111111111111111111111111111'}:
+      op==='comfyui_release_fetch'?{tag:'v9.9.9',commit:'2222222222222222222222222222222222222222'}:{ok:true,op};
+    return {response,events:[]};
+  }};
   const bootstrap=new RemoteEnvironmentBootstrap(remote);
   await bootstrap.prepare(project,runId,{githubToken:token,customNodes:nodes});
-  assert.deepEqual(calls.map(x=>x.op),['ensure_tools','github_auth','update_comfyui','sync_custom_nodes','restart_comfyui']);
+  assert.deepEqual(calls.map(x=>x.op),['ensure_tools','github_auth','comfyui_release_check','comfyui_release_fetch','comfyui_release_checkout','comfyui_install_requirements','comfyui_configure_manager','sync_custom_nodes','restart_comfyui']);
+  assert.deepEqual(calls.map(x=>x.phase),['REMOTE_DEPENDENCIES_INSTALLING','REMOTE_GITHUB_AUTHENTICATING','REMOTE_COMFYUI_RELEASE_CHECKING','REMOTE_COMFYUI_RELEASE_FETCHING','REMOTE_COMFYUI_CHECKING_OUT','REMOTE_COMFYUI_REQUIREMENTS_INSTALLING','REMOTE_COMFYUI_MANAGER_CONFIGURING','REMOTE_CUSTOM_NODES_SYNCING','REMOTE_COMFYUI_RESTARTING']);
   assert.equal(calls[1].payload.githubToken,token);
   assert.equal(calls[2].payload.githubToken,token);
-  assert.deepEqual(calls[3].payload.nodes,nodes);
+  assert.equal(calls[3].payload.tag,'v9.9.9');
+  assert.equal(calls[4].payload.commit,'2222222222222222222222222222222222222222');
+  assert.deepEqual(calls[7].payload.nodes,nodes);
   const persisted=fs.readFileSync(path.join(project,'execution_runs',runId+'.json'),'utf8');
   assert.doesNotMatch(persisted,/SUPER_SECRET_TEST_TOKEN|githubToken/,'GitHub PAT must never be persisted in Execution Run state');
   assert.equal(JSON.parse(persisted).phase,'REMOTE_ENVIRONMENT_READY');
@@ -43,6 +52,11 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
   assert.match(worker.REMOTE_WORKER_FILE,/aria2c/,'worker must use aria2c for model staging');
   assert.match(worker.REMOTE_WORKER_FILE,/repos\/comfyanonymous\/ComfyUI\/releases\/latest/,'worker must resolve the latest official ComfyUI release');
   assert.match(worker.REMOTE_WORKER_FILE,/https:\/\/github\.com\/comfyanonymous\/ComfyUI\.git/,'worker must fetch the release tag from the official ComfyUI repository');
+  assert.match(worker.REMOTE_WORKER_FILE,/comfyui_release_check/,'ComfyUI release lookup must be a distinct worker operation');
+  assert.match(worker.REMOTE_WORKER_FILE,/comfyui_release_fetch/,'ComfyUI release fetch must be a distinct worker operation');
+  assert.match(worker.REMOTE_WORKER_FILE,/comfyui_release_checkout/,'ComfyUI checkout must be a distinct worker operation');
+  assert.match(worker.REMOTE_WORKER_FILE,/comfyui_install_requirements/,'ComfyUI requirements installation must be a distinct worker operation');
+  assert.match(worker.REMOTE_WORKER_FILE,/comfyui_configure_manager/,'ComfyUI Manager configuration must be a distinct worker operation');
   assert.match(worker.REMOTE_WORKER_FILE,/GIT_CONFIG_VALUE_0/,'private git fetch authentication must stay ephemeral in process environment');
   assert.match(worker.REMOTE_WORKER_FILE,/gh","auth","status/,'worker must verify non-interactive GitHub auth');
   assert.doesNotMatch(worker.REMOTE_WORKER_FILE,/gh","auth","login/,'worker must not start interactive gh auth login');
@@ -52,7 +66,7 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
   assert.match(worker.REMOTE_WORKER_FILE,/custom-node-backups/,'mismatched clean custom-node repositories must be archived before replacement');
   assert.match(worker.REMOTE_WORKER_FILE,/shutil\.move\(dest,backup\)/,'mismatched clean custom-node repositories must be moved aside, not deleted');
   assert.match(worker.REMOTE_WORKER_FILE,/automatic repository replacement was stopped/,'tracked local changes must still block automatic replacement');
-  assert.equal(worker.REMOTE_WORKER_VERSION,'8','worker version must advance when remote worker behavior changes');
+  assert.equal(worker.REMOTE_WORKER_VERSION,'10','worker version must advance when remote worker behavior changes');
   assert.match(worker.REMOTE_WORKER_FILE,/RECORD file not found/,'worker must detect Debian packages without pip RECORD metadata');
   assert.match(worker.REMOTE_WORKER_FILE,/installed by debian/,'worker must scope the retry to Debian-managed package conflicts');
   assert.match(worker.REMOTE_WORKER_FILE,/--ignore-installed/,'worker must retry only the affected requirements install without uninstalling Debian package metadata');

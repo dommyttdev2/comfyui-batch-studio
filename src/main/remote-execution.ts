@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ExecutionEvidence, ExecutionEvidenceKind, ExecutionRun } from '../shared/types.js';
 import { exists, readJson } from './fs-utils.js';
@@ -12,6 +12,7 @@ import { R2_SINGLE_PUT_LIMIT } from './r2-manager.js';
 import { RemoteWorkerRequestError } from './remote-worker.js';
 import type { ApiGraph } from './workflow-api.js';
 import type { RemoteControlPlane } from './remote-control-plane.js';
+import { executionArchiveTimestampJst } from './execution-output.js';
 
 type RemoteSequenceState={
   version?:number;
@@ -26,7 +27,7 @@ type RemoteSequenceState={
   error?:{code?:string;message?:string}|null;
 };
 type WorkerSequenceResponse={state?:RemoteSequenceState;alreadyRunning?:boolean};
-type PackageEvidence={artifactCount:number;size:number;sha256:string;manifestSha256:string;outputPrefix:string};
+type PackageEvidence={artifactCount:number;size:number;sha256:string;manifestSha256:string;manifestJson:string;outputPrefix:string;archiveFileName:string};
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 
 class ArtifactPipelineError extends Error {
@@ -35,6 +36,10 @@ class ArtifactPipelineError extends Error {
 function asResponse(value:unknown):WorkerSequenceResponse{return value&&typeof value==='object'&&!Array.isArray(value)?value as WorkerSequenceResponse:{};}
 function safeError(error:unknown){return error instanceof Error?error.message:String(error)}
 function safeProjectPart(value:string){return value.replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^\.+|\.+$/g,'')||'project'}
+function sha256Text(value:string){return createHash('sha256').update(Buffer.from(value,'utf8')).digest('hex');}
+async function manifestMatches(file:string,manifestJson:string){
+  try{return (await readFile(file,'utf8'))===manifestJson}catch{return false}
+}
 function latestEvidence(run:ExecutionRun,kind:ExecutionEvidenceKind,scope?:string):ExecutionEvidence|null{
   const rows=validatedExecutionEvidence(run).valid.filter(item=>item.kind===kind&&(!scope||item.scope===scope));
   return rows.at(-1)??null;
@@ -49,6 +54,10 @@ async function localMatches(file:string,size:number,sha256:string){
   const info=await stat(file);if(info.size!==size)return false;
   return (await sha256File(file))===sha256;
 }
+async function pauseForStop(root:string,runId:string){
+  return mutateExecutionRun(root,runId,run=>{run.lifecycle='PAUSED';run.controls.scheduling='STOPPED';run.current.promptId=null;});
+}
+
 function applyRemoteState(run:ExecutionRun,state:RemoteSequenceState){
   const completed=state.completed??{};
   for(const branch of run.progress.branches){
@@ -63,7 +72,7 @@ function applyRemoteState(run:ExecutionRun,state:RemoteSequenceState){
 
 export class RemoteExecutionService {
   private readonly workers=new Map<string,Promise<void>>();
-  constructor(private readonly remote:RemoteControlPlane,private readonly r2:R2Manager){}
+  constructor(private readonly remote:RemoteControlPlane,private readonly r2:R2Manager,private readonly onSettled?:(root:string,runId:string)=>Promise<void>){}
   start(root:string,runId:string){
     if(this.workers.has(runId))return;
     const task=this.execute(root,runId).catch(async error=>{
@@ -72,10 +81,10 @@ export class RemoteExecutionService {
         const failure={code,message:safeError(error),phase:run.phase,at:new Date().toISOString(),retryable:true};
         run.error=failure;run.errorHistory.push(failure);run.lifecycle='FAILED';run.controls.scheduling='STOPPED';
       });
-    }).finally(()=>{this.remote.disconnect(root,runId);this.workers.delete(runId)});
+    }).finally(async()=>{try{await this.onSettled?.(root,runId)}finally{this.remote.disconnect(root,runId);this.workers.delete(runId)}});
     this.workers.set(runId,task);
   }
-  async stopScheduling(root:string,runId:string){try{await this.remote.requestWorker(root,runId,'stop_scene_sequence');return true}catch{return false}}
+  async stopScheduling(root:string,runId:string){await this.remote.requestWorker(root,runId,'stop_scene_sequence');return true}
   async forceInterrupt(root:string,runId:string){
     const response=await this.remote.requestWorker(root,runId,'force_interrupt_sequence',{comfyEndpoint:'http://127.0.0.1:8188'});
     const result=asResponse(response.response) as WorkerSequenceResponse&{interrupted?:boolean};
@@ -93,6 +102,9 @@ export class RemoteExecutionService {
     }
   }
   private async runGeneration(root:string,runId:string,run:ExecutionRun){
+    let currentRun=await getExecutionRun(root,runId);
+    if(!currentRun||currentRun.lifecycle!=='RUNNING')return false;
+    if(currentRun.controls.scheduling!=='ACTIVE'){await pauseForStop(root,runId);return false;}
     const graph=await readJson<ApiGraph>(path.join(root,run.snapshot.workflow.apiPath));
     const workflow=await readJson<unknown>(path.join(root,run.snapshot.workflow.uiPath));
     if(!graph||!workflow)throw new Error('Execution workflow snapshot files are missing.');
@@ -100,7 +112,13 @@ export class RemoteExecutionService {
     const branches=bindings.map(binding=>({branchId:binding.branchId,leafIds:binding.leafIds,expandNodeId:binding.expandNodeId,graph:sliceSceneBranchGraph(graph,binding.expandNodeId)}));
     const outputPrefix=`BatchStudio/${safeProjectPart(run.projectId)}/${runId}`;
     await mutateExecutionRun(root,runId,current=>{current.phase='WORKFLOW_PREPARING';current.error=null;});
+    currentRun=await getExecutionRun(root,runId);
+    if(!currentRun||currentRun.lifecycle!=='RUNNING')return false;
+    if(currentRun.controls.scheduling!=='ACTIVE'){await pauseForStop(root,runId);return false;}
     await mutateExecutionRun(root,runId,current=>{current.phase='EXECUTING'});
+    currentRun=await getExecutionRun(root,runId);
+    if(!currentRun||currentRun.lifecycle!=='RUNNING')return false;
+    if(currentRun.controls.scheduling!=='ACTIVE'){await pauseForStop(root,runId);return false;}
     let response=asResponse((await this.remote.requestWorker(root,runId,'run_scene_sequence',{runId,projectId:run.projectId,outputPrefix,comfyEndpoint:'http://127.0.0.1:8188',workflow,branches})).response);
     let state=response.state;if(response.alreadyRunning)state=await this.waitExisting(root,runId);
     if(!state){const reconciled=await this.remote.reconcile(root,runId);state=(reconciled.response as any)?.state as RemoteSequenceState|undefined;}
@@ -121,9 +139,10 @@ export class RemoteExecutionService {
   }
   private packageFromEvidence(evidence:ExecutionEvidence|null):PackageEvidence|null{
     if(!evidence)return null;
-    const artifactCount=Number(evidence.data.artifactCount),size=Number(evidence.data.size),sha256=String(evidence.data.sha256??''),manifestSha256=String(evidence.data.manifestSha256??''),outputPrefix=String(evidence.data.outputPrefix??'');
-    if(!Number.isSafeInteger(artifactCount)||artifactCount<0||!Number.isSafeInteger(size)||size<0||!/^[0-9a-f]{64}$/i.test(sha256)||!/^[0-9a-f]{64}$/i.test(manifestSha256)||!outputPrefix)return null;
-    return {artifactCount,size,sha256:sha256.toLowerCase(),manifestSha256:manifestSha256.toLowerCase(),outputPrefix};
+    const artifactCount=Number(evidence.data.artifactCount),size=Number(evidence.data.size),sha256=String(evidence.data.sha256??''),manifestSha256=String(evidence.data.manifestSha256??''),manifestJson=String(evidence.data.manifestJson??''),outputPrefix=String(evidence.data.outputPrefix??'');
+    const archiveFileName=String(evidence.data.archiveFileName??`${executionArchiveTimestampJst(evidence.recordedAt)}.zip`);
+    if(!Number.isSafeInteger(artifactCount)||artifactCount<0||!Number.isSafeInteger(size)||size<0||!/^[0-9a-f]{64}$/i.test(sha256)||!/^[0-9a-f]{64}$/i.test(manifestSha256)||!manifestJson||sha256Text(manifestJson)!==manifestSha256.toLowerCase()||!/^[0-9]{8}_[0-9]{6}\.zip$/.test(archiveFileName)||!outputPrefix)return null;
+    return {artifactCount,size,sha256:sha256.toLowerCase(),manifestSha256:manifestSha256.toLowerCase(),manifestJson,outputPrefix,archiveFileName};
   }
   private async ensurePackage(root:string,runId:string){
     let run=await getExecutionRun(root,runId);if(!run)throw new Error('Execution Run was not found.');
@@ -134,12 +153,15 @@ export class RemoteExecutionService {
     if(completed!==expected)throw new ArtifactPipelineError('REMOTE_ARTIFACT_COUNT_MISMATCH',`Expected ${expected} generated artifacts but execution evidence reports ${completed}.`);
     await mutateExecutionRun(root,runId,current=>{current.phase='ARTIFACTS_COLLECTING'});
     await mutateExecutionRun(root,runId,current=>{current.phase='ARTIFACTS_PACKAGING'});
-    const response=await this.remote.requestWorker(root,runId,'package_artifacts',{runId,expectedCount:expected});
-    const value=response.response as any,artifactCount=Number(value?.artifactCount),size=Number(value?.package?.size),sha256=String(value?.package?.sha256??''),manifestSha256=String(value?.manifestSha256??''),outputPrefix=String(execution.data.outputPrefix??'');
+    const archiveFileName=`${executionArchiveTimestampJst(new Date())}.zip`;
+    const response=await this.remote.requestWorker(root,runId,'package_artifacts',{runId,expectedCount:expected,archiveFileName});
+    const value=response.response as any,artifactCount=Number(value?.artifactCount),size=Number(value?.package?.size),sha256=String(value?.package?.sha256??''),manifestSha256=String(value?.manifestSha256??''),manifestJson=String(value?.manifestJson??''),outputPrefix=String(execution.data.outputPrefix??'');
     if(artifactCount!==expected)throw new ArtifactPipelineError('REMOTE_ARTIFACT_COUNT_MISMATCH',`Expected ${expected} packaged artifacts but found ${artifactCount}.`);
-    if(!Number.isSafeInteger(size)||size<0||!/^[0-9a-f]{64}$/i.test(sha256)||!/^[0-9a-f]{64}$/i.test(manifestSha256))throw new ArtifactPipelineError('REMOTE_ARTIFACT_PACKAGE_INVALID','Remote Worker returned invalid package evidence.');
-    await recordExecutionEvidence(root,runId,{kind:'PACKAGE_VERIFIED',scope:'remote-package',data:{artifactCount,expectedArtifactCount:expected,size,sha256:sha256.toLowerCase(),manifestSha256:manifestSha256.toLowerCase(),outputPrefix}});
-    return {artifactCount,size,sha256:sha256.toLowerCase(),manifestSha256:manifestSha256.toLowerCase(),outputPrefix};
+    if(!Number.isSafeInteger(size)||size<0||!/^[0-9a-f]{64}$/i.test(sha256)||!/^[0-9a-f]{64}$/i.test(manifestSha256)||!manifestJson||sha256Text(manifestJson)!==manifestSha256.toLowerCase())throw new ArtifactPipelineError('REMOTE_ARTIFACT_PACKAGE_INVALID','Remote Worker returned invalid package evidence.');
+    let manifest:any;try{manifest=JSON.parse(manifestJson)}catch{throw new ArtifactPipelineError('REMOTE_ARTIFACT_MANIFEST_INVALID','Remote Worker returned invalid artifact manifest JSON.');}
+    if(manifest?.artifactCount!==artifactCount||manifest?.package?.fileName!==archiveFileName||manifest?.package?.size!==size||String(manifest?.package?.sha256??'').toLowerCase()!==sha256.toLowerCase())throw new ArtifactPipelineError('REMOTE_ARTIFACT_MANIFEST_INVALID','Remote artifact manifest does not match the verified package.');
+    await recordExecutionEvidence(root,runId,{kind:'PACKAGE_VERIFIED',scope:'remote-package',data:{artifactCount,expectedArtifactCount:expected,size,sha256:sha256.toLowerCase(),manifestSha256:manifestSha256.toLowerCase(),manifestJson,archiveFileName,outputPrefix}});
+    return {artifactCount,size,sha256:sha256.toLowerCase(),manifestSha256:manifestSha256.toLowerCase(),manifestJson,archiveFileName,outputPrefix};
   }
   private async putWithFreshUrl(root:string,runId:string,offset:number,length:number,urlFactory:()=>Promise<{url:string;headers?:Record<string,string>}>){
     let last:unknown;
@@ -190,26 +212,29 @@ export class RemoteExecutionService {
   }
   private async ensureLocalFile(root:string,runId:string,pkg:PackageEvidence,bucket:string,key:string){
     let run=await getExecutionRun(root,runId);if(!run)throw new Error('Execution Run was not found.');
+    const meta=await readProjectMeta(root),base=(meta?.settings.artifactOutputPath?.trim()||root),dir=path.join(base,'remote_output',runId),finalPath=path.join(dir,pkg.archiveFileName),partPath=finalPath+'.part',manifestPath=path.join(dir,'manifest.json'),manifestPart=manifestPath+'.part';
     const existing=latestEvidence(run,'LOCAL_FILE_VERIFIED','remote-package');
-    if(existing&&Number(existing.data.size)===pkg.size&&String(existing.data.sha256)===pkg.sha256&&typeof existing.data.path==='string'&&await localMatches(String(existing.data.path),pkg.size,pkg.sha256))return String(existing.data.path);
-    const meta=await readProjectMeta(root),base=(meta?.settings.artifactOutputPath?.trim()||path.join(root,'artifacts')),dir=path.join(base,'execution_runs',runId),finalPath=path.join(dir,`${runId}.zip`),partPath=finalPath+'.part';
+    if(existing&&Number(existing.data.size)===pkg.size&&String(existing.data.sha256)===pkg.sha256&&String(existing.data.path??'')===finalPath&&String(existing.data.manifestPath??'')===manifestPath&&await localMatches(finalPath,pkg.size,pkg.sha256)&&await manifestMatches(manifestPath,pkg.manifestJson))return finalPath;
     await mkdir(dir,{recursive:true});
-    if(await localMatches(finalPath,pkg.size,pkg.sha256)){
-      await recordExecutionEvidence(root,runId,{kind:'LOCAL_FILE_VERIFIED',scope:'remote-package',data:{path:finalPath,size:pkg.size,sha256:pkg.sha256,artifactCount:pkg.artifactCount}});return finalPath;
-    }
-    await rm(finalPath,{force:true}).catch(()=>{});await rm(partPath,{force:true}).catch(()=>{});
-    await mutateExecutionRun(root,runId,current=>{current.phase='LOCAL_DOWNLOADING'});
-    let last:unknown;
-    for(let attempt=0;attempt<3;attempt++){
-      try{await this.r2.downloadExecutionObject(bucket,key,partPath);last=null;break}
-      catch(error){last=error;await rm(partPath,{force:true}).catch(()=>{});if(attempt<2)await sleep(250*(attempt+1));}
-    }
-    if(last)throw last;
-    await mutateExecutionRun(root,runId,current=>{current.phase='LOCAL_VERIFYING'});
-    const info=await stat(partPath),digest=await sha256File(partPath);
-    if(info.size!==pkg.size||digest!==pkg.sha256){await rm(partPath,{force:true}).catch(()=>{});throw new ArtifactPipelineError('REMOTE_ARTIFACT_HASH_MISMATCH','Downloaded artifact package SHA-256 does not match the Remote package.');}
-    await rename(partPath,finalPath);
-    await recordExecutionEvidence(root,runId,{kind:'LOCAL_FILE_VERIFIED',scope:'remote-package',data:{path:finalPath,size:pkg.size,sha256:pkg.sha256,artifactCount:pkg.artifactCount}});
+    if(!(await localMatches(finalPath,pkg.size,pkg.sha256))){
+      await rm(finalPath,{force:true}).catch(()=>{});await rm(partPath,{force:true}).catch(()=>{});
+      await mutateExecutionRun(root,runId,current=>{current.phase='LOCAL_DOWNLOADING'});
+      let last:unknown;
+      for(let attempt=0;attempt<3;attempt++){
+        try{await this.r2.downloadExecutionObject(bucket,key,partPath);last=null;break}
+        catch(error){last=error;await rm(partPath,{force:true}).catch(()=>{});if(attempt<2)await sleep(250*(attempt+1));}
+      }
+      if(last)throw last;
+      await mutateExecutionRun(root,runId,current=>{current.phase='LOCAL_VERIFYING'});
+      const info=await stat(partPath),digest=await sha256File(partPath);
+      if(info.size!==pkg.size||digest!==pkg.sha256){await rm(partPath,{force:true}).catch(()=>{});throw new ArtifactPipelineError('REMOTE_ARTIFACT_HASH_MISMATCH','Downloaded artifact package SHA-256 does not match the Remote package.');}
+      await rename(partPath,finalPath);
+    }else await mutateExecutionRun(root,runId,current=>{current.phase='LOCAL_VERIFYING'});
+    await rm(manifestPart,{force:true}).catch(()=>{});
+    await writeFile(manifestPart,pkg.manifestJson,'utf8');
+    if(sha256Text(await readFile(manifestPart,'utf8'))!==pkg.manifestSha256){await rm(manifestPart,{force:true}).catch(()=>{});throw new ArtifactPipelineError('REMOTE_ARTIFACT_MANIFEST_HASH_MISMATCH','Local artifact manifest SHA-256 does not match the Remote manifest.');}
+    await rename(manifestPart,manifestPath);
+    await recordExecutionEvidence(root,runId,{kind:'LOCAL_FILE_VERIFIED',scope:'remote-package',data:{path:finalPath,manifestPath,size:pkg.size,sha256:pkg.sha256,manifestSha256:pkg.manifestSha256,artifactCount:pkg.artifactCount,archiveFileName:pkg.archiveFileName}});
     return finalPath;
   }
   private async cleanup(root:string,runId:string,bucket:string,key:string){

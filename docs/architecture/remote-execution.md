@@ -310,6 +310,23 @@ Batch Studioがstoppedから起動
 
 将来は成功時/失敗時それぞれ `preserve-initial | stop | keep` をユーザー設定可能にできる。
 
+### Instance replacement before generation
+
+Remote Runがgeneration開始前にScheduling等で待機しており、Project側で別のVast.ai Instanceを選択した場合、既存Runの `remoteInstanceId` を書き換えない。
+
+```text
+old Run / Instance A
+  -> REMOTE_INSTANCE_REPLACED (FAILED, history preserved)
+  -> old Instance lifecycle finalize / disconnect
+
+Project selects Instance B
+  -> new Run ID
+  -> snapshot Instance B
+  -> normal Remote lifecycle from CLOUD_INSTANCE_RESOLVING
+```
+
+UIでは通常の `Resume` と区別して「別Instanceで新しく実行」を提供する。置換はgeneration開始前のphaseに限定し、生成開始後のRunを暗黙に捨てない。
+
 ---
 
 ## 10. SSH Authentication / Host Identity
@@ -655,12 +672,23 @@ RemoteからR2へ1 image=1 uploadとせず、原則1 Run=1 packageとする。
 
 ```text
 Remote outputs
-  -> manifest
-  -> ZIP
-  -> SHA-256
+  -> artifact manifest作成
+  -> 成果物だけをZIP化
+  -> ZIP SHA-256
+  -> R2一時転送
 ```
 
-ZIP内にもmanifestを含める。
+ZIP内には `manifest.json` を含めない。ZIP entryはユーザー向け成果物構造に正規化し、Remote ComfyUI側の内部階層を露出させない。
+
+```text
+{yyyymmdd_hhmmss}.zip
+├─ b01/
+│  └─ s1-01-c100001.png
+└─ b02/
+   └─ s2-01-c100001.png
+```
+
+`artifacts/` prefixや `{runId}_b01/` のようなRemote内部用の重複階層はpackageから除去する。
 
 ---
 
@@ -706,6 +734,20 @@ R2 object
   -> size / SHA-256 verification
   -> atomic rename
 ```
+
+Remote成果物の最終Local配置は、Projectの `artifactOutputPath` があればそのProject成果物ディレクトリを基準とし、未設定時はProject rootを基準とする。
+
+```text
+<artifact-project-root>/
+└─ remote_output/
+   └─ {runId}/
+      ├─ {yyyymmdd_hhmmss}.zip
+      └─ manifest.json
+```
+
+ZIP名のtimestampはOS timezoneに依存させず、明示的に日本標準時（JST / UTC+9）で生成する。timestampはpackage evidenceへ保存し、Resumeでも同じfilenameを再利用する。
+
+`manifest.json` はZIP外へatomicに保存し、Remote Workerが算出したmanifest SHA-256とLocal bytesを照合する。Local ZIPとmanifestの検証完了後、R2上のExecution一時objectとRemote側一時成果物をcleanupする。
 
 外部`wget` / `curl`を必須依存にしない。
 

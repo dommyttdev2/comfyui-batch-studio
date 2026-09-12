@@ -25,11 +25,32 @@ export function AvailabilityStage({project,setProject,run}:{project:ProjectSumma
 
 export function PreflightStage({project,run}:{project:ProjectSummary;run:Runner}){const [r,setR]=useState<PreflightResult|null>(null);const hiddenBlocking=r?r.blocking.filter(issue=>!r.sections.some(section=>section.issues.some(item=>item.severity===issue.severity&&item.code===issue.code&&item.path===issue.path&&item.message===issue.message))):[];return <section className="panel"><button className="primary" onClick={()=>run(async()=>setR(await window.batchStudio.preflight.run(project.rootPath)))}>実行前チェック</button>{r&&<><div className={`preflight ${r.state.toLowerCase()}`}><h2>{r.state}</h2><p>{r.plannedImages}枚予定 / 目標 {r.targetImages??'-'}枚</p></div>{hiddenBlocking.length>0&&<><h3>BLOCKED理由</h3>{issuesView(hiddenBlocking)}</>}{r.sections.map(s=><div className="sectioncheck" key={s.name}><h4>{s.valid?'✓':'✕'} {s.name}</h4>{issuesView(s.issues)}</div>)}{r.warnings.length>0&&<><h3>注意</h3>{issuesView(r.warnings)}</>}</>}</section>}
 
-const EXECUTION_PHASES:ExecutionPhase[]=['LOCAL_COMFYUI_CONNECTING','LOCAL_CAPABILITY_CHECKING','CLOUD_INSTANCE_RESOLVING','CLOUD_INSTANCE_STARTING','CLOUD_INSTANCE_READY','SSH_CONNECTING','SSH_CONNECTED','REMOTE_WORKER_PREPARING','REMOTE_ENVIRONMENT_CHECKING','REMOTE_DEPENDENCIES_INSTALLING','REMOTE_GITHUB_AUTHENTICATING','REMOTE_COMFYUI_UPDATING','REMOTE_CUSTOM_NODES_SYNCING','REMOTE_COMFYUI_RESTARTING','REMOTE_ENVIRONMENT_READY','REMOTE_MODELS_CHECKING','REMOTE_MODELS_DOWNLOADING','REMOTE_MODELS_READY','WORKFLOW_PREPARING','EXECUTING','EXECUTION_COMPLETED','ARTIFACTS_COLLECTING','ARTIFACTS_PACKAGING','R2_UPLOAD_URL_ISSUED','R2_UPLOADING','R2_UPLOADED','LOCAL_DOWNLOADING','LOCAL_VERIFYING','LOCAL_OUTPUT_VERIFYING','REMOTE_CLEANUP','CLOUD_INSTANCE_FINALIZING','COMPLETED'];
+const EXECUTION_PHASES:ExecutionPhase[]=['LOCAL_COMFYUI_CONNECTING','LOCAL_CAPABILITY_CHECKING','CLOUD_INSTANCE_RESOLVING','CLOUD_INSTANCE_STARTING','CLOUD_INSTANCE_READY','SSH_CONNECTING','SSH_CONNECTED','REMOTE_WORKER_PREPARING','REMOTE_ENVIRONMENT_CHECKING','REMOTE_DEPENDENCIES_INSTALLING','REMOTE_GITHUB_AUTHENTICATING','REMOTE_COMFYUI_UPDATING','REMOTE_COMFYUI_RELEASE_CHECKING','REMOTE_COMFYUI_RELEASE_FETCHING','REMOTE_COMFYUI_CHECKING_OUT','REMOTE_COMFYUI_REQUIREMENTS_INSTALLING','REMOTE_COMFYUI_MANAGER_CONFIGURING','REMOTE_CUSTOM_NODES_SYNCING','REMOTE_COMFYUI_RESTARTING','REMOTE_ENVIRONMENT_READY','REMOTE_MODELS_CHECKING','REMOTE_MODELS_DOWNLOADING','REMOTE_MODELS_READY','WORKFLOW_PREPARING','EXECUTING','EXECUTION_COMPLETED','ARTIFACTS_COLLECTING','ARTIFACTS_PACKAGING','R2_UPLOAD_URL_ISSUED','R2_UPLOADING','R2_UPLOADED','LOCAL_DOWNLOADING','LOCAL_VERIFYING','LOCAL_OUTPUT_VERIFYING','REMOTE_CLEANUP','CLOUD_INSTANCE_FINALIZING','COMPLETED'];
 const phaseIndex=(phase:ExecutionPhase)=>EXECUTION_PHASES.indexOf(phase);
 const reached=(phase:ExecutionPhase,target:ExecutionPhase)=>phaseIndex(phase)>=phaseIndex(target);
 const pct=(completed:number,total:number)=>total>0?Math.min(100,Math.round(completed/total*100)):0;
 const phaseLabel=(phase:ExecutionPhase)=>phase.replaceAll('_',' ');
+function effectiveCloudInstanceStatus(run:ExecutionRun){
+  const lifecycle=run.remoteLifecycle,latest=lifecycle?.latest;
+  if(run.phase==='CLOUD_INSTANCE_STARTING'&&latest?.status==='stopped'&&lifecycle?.startRequestedAt)return'scheduling';
+  return latest?.status??null;
+}
+function executionPhaseLabel(run:ExecutionRun){
+  const providerStatus=effectiveCloudInstanceStatus(run);
+  if(run.phase==='CLOUD_INSTANCE_STARTING'&&providerStatus==='scheduling')return'CLOUD INSTANCE STARTING · SCHEDULING';
+  return phaseLabel(run.phase);
+}
+function cloudInstanceStatusMessage(run:ExecutionRun){
+  if(run.executionTarget!=='remote'||run.phase!=='CLOUD_INSTANCE_STARTING')return null;
+  const lifecycle=run.remoteLifecycle,latest=lifecycle?.latest,status=effectiveCloudInstanceStatus(run);
+  if(status==='scheduling'){
+    const observed=latest?.status==='stopped'?` API observed: actual_status=${latest.rawStatus}, intended_status=${latest.intendedStatus??'-'}, cur_state=${latest.curState??'-'}, next_state=${latest.nextState??'-'}.`:'';
+    return`Vast.ai status: scheduling · GPU Instanceの割り当て待ちです。${observed}`;
+  }
+  if(status==='starting')return'Vast.ai status: starting · Instanceの起動完了を待っています。';
+  if(status==='stopped')return'Vast.ai status: stopped · Instanceは停止状態です。';
+  return status?`Vast.ai status: ${status}`:'Vast.aiのInstance状態を確認しています。';
+}
 function connectionStatus(run:ExecutionRun){
   if(run.lifecycle==='FAILED')return'FAILED';
   if(run.executionTarget==='local')return run.phase==='LOCAL_COMFYUI_CONNECTING'?'ComfyUI 接続中':reached(run.phase,'LOCAL_CAPABILITY_CHECKING')?'ComfyUI 接続済み':'待機';
@@ -39,7 +60,7 @@ function connectionStatus(run:ExecutionRun){
 }
 function modelStatus(run:ExecutionRun){
   if(run.executionTarget==='local')return reached(run.phase,'WORKFLOW_PREPARING')?'準備完了':run.phase==='LOCAL_CAPABILITY_CHECKING'?'確認中':'待機';
-  if(['REMOTE_ENVIRONMENT_CHECKING','REMOTE_DEPENDENCIES_INSTALLING','REMOTE_GITHUB_AUTHENTICATING','REMOTE_COMFYUI_UPDATING','REMOTE_CUSTOM_NODES_SYNCING','REMOTE_COMFYUI_RESTARTING'].includes(run.phase))return'Remote環境整備中';
+  if(['REMOTE_ENVIRONMENT_CHECKING','REMOTE_DEPENDENCIES_INSTALLING','REMOTE_GITHUB_AUTHENTICATING','REMOTE_COMFYUI_UPDATING','REMOTE_COMFYUI_RELEASE_CHECKING','REMOTE_COMFYUI_RELEASE_FETCHING','REMOTE_COMFYUI_CHECKING_OUT','REMOTE_COMFYUI_REQUIREMENTS_INSTALLING','REMOTE_COMFYUI_MANAGER_CONFIGURING','REMOTE_CUSTOM_NODES_SYNCING','REMOTE_COMFYUI_RESTARTING'].includes(run.phase))return'Remote環境整備中';
   if(run.phase==='REMOTE_MODELS_DOWNLOADING')return'R2 → Remote 転送中 (aria2)';
   if(run.phase==='REMOTE_MODELS_CHECKING')return'配置確認中';
   return reached(run.phase,'REMOTE_MODELS_READY')?'準備完了':'待機';
@@ -63,10 +84,27 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
   },[project.rootPath]);
   const apply=async(action:()=>Promise<ExecutionRun>)=>{const value=await run(action);if(value)setCurrent(value)};
   const active=current?.lifecycle==='RUNNING'||current?.lifecycle==='PAUSED'||current?.lifecycle==='INTERRUPTED';
+  const selectedProjectRemoteInstanceId=project.meta?.settings.remoteProvider==='vastai'?project.meta.settings.remoteInstanceId:null;
+  const remoteInstanceChanged=Boolean(current?.executionTarget==='remote'&&Number.isInteger(selectedProjectRemoteInstanceId)&&Number(selectedProjectRemoteInstanceId)>0&&Number(current.remote?.instanceId)!==Number(selectedProjectRemoteInstanceId));
+  const canRestartRemote=Boolean(active&&remoteInstanceChanged&&phaseIndex(current!.phase)<phaseIndex('EXECUTING'));
   const canStart=preflight?.state==='READY'&&!active;
   const canResume=Boolean(current&&['PAUSED','INTERRUPTED','FAILED'].includes(current.lifecycle));
+  const canStopScheduling=Boolean(current&&current.lifecycle==='RUNNING'&&current.controls.scheduling!=='STOPPED'&&!reached(current.phase,'EXECUTION_COMPLETED'));
+  const canForceInterrupt=Boolean(current&&current.lifecycle==='RUNNING'&&current.phase==='EXECUTING'&&current.controls.interrupt!=='INTERRUPTED');
+  const startBanner=checking
+    ? {state:'CHECKING',message:'Preflightを確認しています。'}
+    : canRestartRemote
+      ? {state:'INSTANCE CHANGED',message:`現在のRunは Vast.ai Instance #${current?.remote?.instanceId??'-'} を使用しています。Projectでは #${selectedProjectRemoteInstanceId??'-'} が選択されています。「別Instanceで新しく実行」で新しいRunを開始できます。`}
+      : preflight?.state!=='READY'
+        ? {state:preflight?.state??'UNKNOWN',message:'StartにはPreflight READYが必要です'}
+        : active
+          ? current?.lifecycle==='RUNNING'
+          ? {state:'RUN RUNNING',message:'既存Runが実行中のため新規Startできません。Stop scheduling / Force interruptで既存Runを操作してください。'}
+            : {state:`RUN ${current?.lifecycle??'ACTIVE'}`,message:'既存Runが未完了です。新規StartではなくResumeで再開してください。'}
+          : {state:'READY',message:'Start可能です'};
   const branch=current?.progress.branches.find(x=>x.branchId===current.current.branchId)??null;
   const delivery=current?deliveryStatus(current):null;
+  const remoteLifecycle=current?.remoteLifecycle??null;
   const generationDone=Boolean(current&&(reached(current.phase,'EXECUTION_COMPLETED')||current.lifecycle==='COMPLETED'));
   const deliveryDone=Boolean(current&&current.lifecycle==='COMPLETED');
   const blockedReasons=preflight?.state==='BLOCKED'?preflight.blocking:[];
@@ -74,15 +112,16 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
   return <div className="execution-screen">
     <section className="panel"><div className="panelhead"><div><h3>Execution Run</h3><p>永続化された Run State を監視し、Start / Stop scheduling / Force interrupt / Resume を操作します。</p></div><button onClick={()=>void refreshPreflight()} disabled={checking}>{checking?'確認中…':'Preflight再確認'}</button></div>
     {monitorError&&<div className="errorbar">{monitorError}</div>}
-    <div className={'preflight '+(preflight?.state==='READY'?'ready':'blocked')}><h2>{checking?'CHECKING':preflight?.state??'UNKNOWN'}</h2><p>{preflight?.state==='READY'?'Start可能です':'StartにはPreflight READYが必要です'}</p></div>
+    <div className={'preflight '+(canStart?'ready':'blocked')}><h2>{startBanner.state}</h2><p>{startBanner.message}</p></div>
     {blockedReasons.length>0&&<><h4>Startできない理由</h4>{issuesView(blockedReasons)}</>}
-    <div className="actions execution-actions"><button className="primary" disabled={!canStart} onClick={()=>void apply(()=>window.batchStudio.execution.start(project.rootPath))}>Start</button><button disabled={!current||current.lifecycle!=='RUNNING'||current.controls.scheduling!=='ACTIVE'} onClick={()=>current&&void apply(()=>window.batchStudio.execution.stopScheduling(project.rootPath,current.runId))}>Stop scheduling</button><button className="danger" disabled={!current||current.lifecycle!=='RUNNING'||current.controls.interrupt!=='IDLE'} onClick={()=>current&&void apply(()=>window.batchStudio.execution.forceInterrupt(project.rootPath,current.runId))}>Force interrupt</button><button disabled={!canResume} onClick={()=>current&&void apply(()=>window.batchStudio.execution.resume(project.rootPath,current.runId))}>Resume</button><button disabled={current?.lifecycle!=='COMPLETED'} onClick={()=>void window.batchStudio.project.openFolder(outputPath)}>Open local output directory</button></div>
+    <div className="actions execution-actions"><button className="primary" disabled={!canStart} onClick={()=>void apply(()=>window.batchStudio.execution.start(project.rootPath))}>Start</button><button className="primary" disabled={!canRestartRemote} onClick={()=>current&&void apply(()=>window.batchStudio.execution.restartRemote(project.rootPath,current.runId))}>別Instanceで新しく実行</button><button disabled={!canStopScheduling} onClick={()=>current&&void apply(()=>window.batchStudio.execution.stopScheduling(project.rootPath,current.runId))}>Stop scheduling</button><button className="danger" disabled={!canForceInterrupt} onClick={()=>current&&void apply(()=>window.batchStudio.execution.forceInterrupt(project.rootPath,current.runId))}>Force interrupt</button><button disabled={!canResume} onClick={()=>current&&void apply(()=>window.batchStudio.execution.resume(project.rootPath,current.runId))}>Resume</button><button disabled={current?.lifecycle!=='COMPLETED'} onClick={()=>void window.batchStudio.project.openFolder(outputPath)}>Open local output directory</button></div>
     </section>
 
     {!current?<section className="panel execution-empty"><h3>Runはまだありません</h3><p>PreflightがREADYならStartできます。開始後のRun ID・phase・progressはProject内に永続化され、画面再読込後も復元されます。</p></section>:<>
       <section className="panel"><div className="execution-run-head"><div><span className="eyebrow">Current Run ID</span><code>{current.runId}</code></div><span className={'run-lifecycle '+current.lifecycle.toLowerCase()}>{current.lifecycle}</span></div>
-      <div className="facts execution-facts"><div><span>Execution target</span><b>{current.executionTarget==='remote'?'Remote':'Local'}</b></div><div><span>Current phase</span><b>{phaseLabel(current.phase)}</b></div><div><span>Connection status</span><b>{connectionStatus(current)}</b></div><div><span>Model preparation</span><b>{modelStatus(current)}</b></div></div>
-      {current.executionTarget==='remote'&&<div className="remote-phase-note"><b>Remote phase separation</b><span>Instance / SSH / model preparation / generation / artifact transfer を独立phaseとして監視します。</span></div>}
+      <div className="facts execution-facts"><div><span>Execution target</span><b>{current.executionTarget==='remote'?'Remote':'Local'}</b></div><div><span>Current phase</span><b>{executionPhaseLabel(current)}</b></div><div><span>Connection status</span><b>{connectionStatus(current)}</b></div><div><span>Model preparation</span><b>{modelStatus(current)}</b></div></div>
+      {cloudInstanceStatusMessage(current)&&<div className="remote-phase-note"><b>Cloud Instance status</b><span>{cloudInstanceStatusMessage(current)}</span></div>}
+      {current.executionTarget==='remote'&&<><div className="remote-phase-note"><b>Remote phase separation</b><span>Instance / SSH / model preparation / generation / artifact transfer を独立phaseとして監視します。</span></div>{remoteInstanceChanged&&<div className="remote-phase-note"><b>Remote Instance changed</b><span>Current Run: #{current.remote?.instanceId??'-'} / Project selection: #{selectedProjectRemoteInstanceId??'-'}. 既存RunのInstance IDは変更せず、新規Runで切り替えます。</span></div>}{remoteLifecycle&&<div className="facts execution-facts"><div><span>Vast initial state</span><b>{remoteLifecycle.initialStatus?.toUpperCase()??'RESOLVING'}</b></div><div><span>Vast current state</span><b>{remoteLifecycle.latest?.status.toUpperCase()??'-'}</b></div><div><span>Instance lifecycle owner</span><b>{remoteLifecycle.startedByBatchStudio?'Batch Studio':'Provider / pre-existing'}</b></div><div><span>Initial state restored</span><b>{remoteLifecycle.restoredInitialState?'YES':'NO'}</b></div></div>}</>}
       </section>
       <section className="panel"><div className="panelhead"><div><h3>Generation progress</h3><p>generation completed と artifact delivery completed は別状態です。</p></div><b>{current.progress.overall.completed} / {current.progress.overall.total}</b></div>
       <progress className="execution-progress" max={100} value={pct(current.progress.overall.completed,current.progress.overall.total)}/>

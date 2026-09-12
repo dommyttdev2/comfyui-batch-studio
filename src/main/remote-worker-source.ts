@@ -1,7 +1,7 @@
-export const REMOTE_WORKER_VERSION='8';
+export const REMOTE_WORKER_VERSION='10';
 export const REMOTE_WORKER_FILE=`#!/usr/bin/env python3
 import base64,copy,hashlib,http.client,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,zipfile
-VERSION="8"
+VERSION="10"
 CHUNK_SIZE=8*1024*1024
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -255,23 +255,57 @@ def patch_manager_startup():
   except OSError:pass
  return True
 
-def update_comfyui(comfy_root,token):
+def validate_comfyui_repository(comfy_root):
  if not comfy_root or not os.path.isdir(comfy_root):raise WorkerError("REMOTE_COMFYUI_DIRECTORY_MISSING")
  if not os.path.isdir(os.path.join(comfy_root,".git")):raise WorkerError("COMFYUI_GIT_REPOSITORY_REQUIRED","Remote ComfyUI directory is not a Git repository.")
  dirty=run_cmd(["git","status","--porcelain","--untracked-files=no"],cwd=comfy_root,error_code="COMFYUI_GIT_STATUS_FAILED").stdout.strip()
  if dirty:raise WorkerError("COMFYUI_GIT_DIRTY","Remote ComfyUI has tracked local changes; automatic release update was stopped.")
- cli_env=github_cli_env(token);git_env=github_git_env(token)
+
+def comfyui_release_check(comfy_root,token):
+ validate_comfyui_repository(comfy_root)
+ cli_env=github_cli_env(token)
  latest=run_cmd(["gh","api","repos/comfyanonymous/ComfyUI/releases/latest","--jq",".tag_name"],env=cli_env,error_code="COMFYUI_RELEASE_LOOKUP_FAILED").stdout.strip()
  if not latest:raise WorkerError("COMFYUI_RELEASE_LOOKUP_FAILED","Latest ComfyUI release tag was empty.")
- run_cmd(["git","fetch","--force","https://github.com/comfyanonymous/ComfyUI.git",f"refs/tags/{latest}:refs/tags/{latest}"],cwd=comfy_root,env=git_env,error_code="COMFYUI_GIT_FETCH_FAILED")
- release=run_cmd(["git","rev-parse","--verify",f"refs/tags/{latest}^{{commit}}"],cwd=comfy_root,error_code="COMFYUI_RELEASE_TAG_MISSING").stdout.strip()
+ if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",latest):raise WorkerError("COMFYUI_RELEASE_TAG_INVALID",latest)
  current=run_cmd(["git","rev-parse","HEAD"],cwd=comfy_root,error_code="COMFYUI_GIT_STATUS_FAILED").stdout.strip()
- changed=current!=release
- if changed:run_cmd(["git","checkout","--detach",release],cwd=comfy_root,error_code="COMFYUI_RELEASE_CHECKOUT_FAILED")
+ return {"tag":latest,"currentCommit":current}
+
+def comfyui_release_fetch(comfy_root,token,tag):
+ validate_comfyui_repository(comfy_root)
+ tag=str(tag or "").strip()
+ if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",tag):raise WorkerError("COMFYUI_RELEASE_TAG_INVALID",tag)
+ git_env=github_git_env(token)
+ run_cmd(["git","fetch","--force","https://github.com/comfyanonymous/ComfyUI.git",f"refs/tags/{tag}:refs/tags/{tag}"],cwd=comfy_root,env=git_env,error_code="COMFYUI_GIT_FETCH_FAILED")
+ release=run_cmd(["git","rev-parse","--verify",f"refs/tags/{tag}^{{commit}}"],cwd=comfy_root,error_code="COMFYUI_RELEASE_TAG_MISSING").stdout.strip()
+ return {"tag":tag,"commit":release}
+
+def comfyui_release_checkout(comfy_root,commit):
+ validate_comfyui_repository(comfy_root)
+ commit=str(commit or "").strip().lower()
+ if not re.match(r"^[0-9a-f]{40}$",commit):raise WorkerError("COMFYUI_RELEASE_COMMIT_INVALID",commit)
+ verified=run_cmd(["git","rev-parse","--verify",commit+"^{commit}"],cwd=comfy_root,error_code="COMFYUI_RELEASE_TAG_MISSING").stdout.strip()
+ current=run_cmd(["git","rev-parse","HEAD"],cwd=comfy_root,error_code="COMFYUI_GIT_STATUS_FAILED").stdout.strip()
+ changed=current!=verified
+ if changed:run_cmd(["git","checkout","--detach",verified],cwd=comfy_root,error_code="COMFYUI_RELEASE_CHECKOUT_FAILED")
+ return {"commit":verified,"previousCommit":current,"changed":changed}
+
+def comfyui_install_requirements(comfy_root):
+ validate_comfyui_repository(comfy_root)
  requirements=[os.path.join(comfy_root,"requirements.txt"),os.path.join(comfy_root,"manager_requirements.txt")]
  installed=install_requirements(comfy_root,requirements,"comfy-requirements.sha256")
- manager=patch_manager_startup()
- return {"tag":latest,"commit":release,"changed":changed,"requirementsInstalled":installed,"managerEnabled":manager}
+ return {"requirementsInstalled":installed}
+
+def comfyui_configure_manager(comfy_root):
+ validate_comfyui_repository(comfy_root)
+ return {"managerEnabled":patch_manager_startup()}
+
+def update_comfyui(comfy_root,token):
+ check=comfyui_release_check(comfy_root,token)
+ fetched=comfyui_release_fetch(comfy_root,token,check["tag"])
+ checkout=comfyui_release_checkout(comfy_root,fetched["commit"])
+ requirements=comfyui_install_requirements(comfy_root)
+ manager=comfyui_configure_manager(comfy_root)
+ return {"tag":check["tag"],"commit":fetched["commit"],"changed":checkout["changed"],"requirementsInstalled":requirements["requirementsInstalled"],"managerEnabled":manager["managerEnabled"]}
 
 def normalize_origin(value):
  raw=str(value or "").strip().replace("\\\\","/")
@@ -611,37 +645,48 @@ def force_interrupt_sequence(root,endpoint):
  sequence_progress(state,"interrupt_requested",promptId=prompt_id)
  return {"interrupted":True,"state":state}
 
+def archive_artifact_path(rel):
+ parts=[part for part in str(rel or "").replace("\\\\","/").split("/") if part and part not in (".","..")]
+ if not parts:raise WorkerError("REMOTE_ARTIFACT_PATH_INVALID")
+ if len(parts)==1:return parts[0]
+ return parts[0]+"/"+parts[-1]
+
 def package_artifacts(root,comfy_root,req):
  state=read_state(root)
  if not isinstance(state,dict) or state.get("status")!="completed":raise WorkerError("REMOTE_ARTIFACT_GENERATION_INCOMPLETE")
  run_id=str(state.get("runId") or req.get("runId") or "")
  prefix=str((state.get("artifact") or {}).get("outputPrefix") or req.get("outputPrefix") or "")
+ archive_name=str(req.get("archiveFileName") or "").strip()
+ if not re.match(r"^[0-9]{8}_[0-9]{6}[.]zip$",archive_name):raise WorkerError("REMOTE_ARTIFACT_ARCHIVE_NAME_INVALID",archive_name or "missing")
  output_dir=safe_output_dir(comfy_root,prefix)
  files=list_artifact_files(output_dir);expected=int(req.get("expectedCount",-1))
  if expected<0:raise WorkerError("REMOTE_ARTIFACT_EXPECTED_COUNT_REQUIRED")
  if len(files)!=expected:raise WorkerError("REMOTE_ARTIFACT_COUNT_MISMATCH",f"Expected {expected} artifacts but found {len(files)}.")
- entries=[]
- for rel,target in files:entries.append({"path":rel,"size":os.path.getsize(target),"sha256":sha256_file(target)})
- manifest={"version":1,"runId":run_id,"outputPrefix":prefix,"artifactCount":len(entries),"artifacts":entries}
- manifest_bytes=(json.dumps(manifest,sort_keys=True,separators=(",",":"))+"\\n").encode("utf-8")
- manifest_sha=hashlib.sha256(manifest_bytes).hexdigest()
+ packaged=[];seen=set()
+ for rel,target in files:
+  archive_path=archive_artifact_path(rel)
+  if archive_path in seen:raise WorkerError("REMOTE_ARTIFACT_ARCHIVE_PATH_COLLISION",archive_path)
+  seen.add(archive_path);packaged.append((archive_path,target))
  artifact_dir=contained(root,"artifacts");os.makedirs(artifact_dir,exist_ok=True)
- manifest_path=contained(root,"artifacts/manifest.json");tmp_manifest=manifest_path+".tmp"
- with open(tmp_manifest,"wb") as f:f.write(manifest_bytes)
- os.replace(tmp_manifest,manifest_path)
  package=artifact_package_path(root,run_id);tmp=package+".part"
  try:
   if os.path.exists(tmp):os.unlink(tmp)
   with zipfile.ZipFile(tmp,"w",compression=zipfile.ZIP_STORED,allowZip64=True) as archive:
-   archive.writestr("manifest.json",manifest_bytes)
-   for rel,target in files:archive.write(target,"artifacts/"+rel)
+   for archive_path,target in packaged:archive.write(target,archive_path)
   os.replace(tmp,package)
  finally:
   if os.path.exists(tmp):os.unlink(tmp)
  package_size=os.path.getsize(package);package_sha=sha256_file(package)
+ entries=[{"path":archive_path,"size":os.path.getsize(target),"sha256":sha256_file(target)} for archive_path,target in packaged]
+ manifest={"version":2,"runId":run_id,"outputPrefix":prefix,"artifactCount":len(entries),"package":{"fileName":archive_name,"size":package_size,"sha256":package_sha},"artifacts":entries}
+ manifest_json=json.dumps(manifest,sort_keys=True,separators=(",",":"))+chr(10)
+ manifest_bytes=manifest_json.encode("utf-8");manifest_sha=hashlib.sha256(manifest_bytes).hexdigest()
+ manifest_path=contained(root,"artifacts/manifest.json");tmp_manifest=manifest_path+".tmp"
+ with open(tmp_manifest,"wb") as f:f.write(manifest_bytes)
+ os.replace(tmp_manifest,manifest_path)
  state.setdefault("artifact",{}).update({"manifestSha256":manifest_sha,"artifactCount":len(entries),"package":{"fileName":os.path.basename(package),"size":package_size,"sha256":package_sha}})
  save_state(root,state);sequence_progress(state,"artifacts_packaged",artifactCount=len(entries),packageSize=package_size)
- return {"artifactCount":len(entries),"manifestSha256":manifest_sha,"package":{"fileName":os.path.basename(package),"size":package_size,"sha256":package_sha}}
+ return {"artifactCount":len(entries),"manifestSha256":manifest_sha,"manifestJson":manifest_json,"package":{"fileName":os.path.basename(package),"size":package_size,"sha256":package_sha}}
 
 def http_put_file(url,target,offset,length,headers):
  parsed=urllib.parse.urlparse(str(url or ""))
@@ -723,6 +768,21 @@ def handle(req,root,model_root,comfy_root):
  if op=="update_comfyui":
   if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
   return update_comfyui(comfy_root,req.get("githubToken"))
+ if op=="comfyui_release_check":
+  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+  return comfyui_release_check(comfy_root,req.get("githubToken"))
+ if op=="comfyui_release_fetch":
+  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+  return comfyui_release_fetch(comfy_root,req.get("githubToken"),req.get("tag"))
+ if op=="comfyui_release_checkout":
+  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+  return comfyui_release_checkout(comfy_root,req.get("commit"))
+ if op=="comfyui_install_requirements":
+  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+  return comfyui_install_requirements(comfy_root)
+ if op=="comfyui_configure_manager":
+  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
+  return comfyui_configure_manager(comfy_root)
  if op=="sync_custom_nodes":
   if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
   return sync_custom_nodes(comfy_root,req.get("githubToken"),req.get("nodes") or [])

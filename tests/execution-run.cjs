@@ -82,11 +82,25 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
   remoteMeta.settings.remoteProvider='vastai';
   remoteMeta.settings.remoteInstanceId=123;
   writeJson(path.join(root,'project_meta.json'),remoteMeta);
-  const second=await execution.startExecutionRun(root,async()=>ready);
+  let second=await execution.startExecutionRun(root,async()=>ready);
   assert.notEqual(second.runId,started.runId,'a completed run must allow a new unique run');
   assert.equal(second.executionTarget,'remote');
   assert.equal(second.phase,'CLOUD_INSTANCE_RESOLVING');
   assert.deepEqual(second.remote,{provider:'vastai',instanceId:123});
+
+  remoteMeta.settings.remoteInstanceId=456;
+  writeJson(path.join(root,'project_meta.json'),remoteMeta);
+  const abandoned=await execution.abandonExecutionRunForRemoteReplacement(root,second.runId,456);
+  assert.equal(abandoned.lifecycle,'FAILED');
+  assert.equal(abandoned.error.code,'REMOTE_INSTANCE_REPLACED');
+  assert.equal(abandoned.error.retryable,false);
+  assert.deepEqual(abandoned.remote,{provider:'vastai',instanceId:123},'old Run must preserve its original Instance identity');
+  assert.equal(abandoned.controls.scheduling,'STOPPED');
+  const abandonedRunId=second.runId;
+  second=await execution.startExecutionRun(root,async()=>ready);
+  assert.notEqual(second.runId,abandonedRunId,'replacement must create a new Run ID');
+  assert.deepEqual(second.remote,{provider:'vastai',instanceId:456},'replacement Run must snapshot the newly selected Instance');
+  await assert.rejects(()=>execution.abandonExecutionRunForRemoteReplacement(root,second.runId,456),/must differ/);
 
   await execution.recordExecutionEvidence(root,second.runId,{kind:'EXECUTION_COMPLETED',scope:'remote-generation',data:{images:2}});
   await execution.recordExecutionEvidence(root,second.runId,{kind:'PACKAGE_VERIFIED',scope:'remote-package',data:{artifactCount:2,size:100,sha256:'a'.repeat(64),manifestSha256:'b'.repeat(64),outputPrefix:'BatchStudio/execution-project/'+second.runId}});

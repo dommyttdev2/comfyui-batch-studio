@@ -14,6 +14,7 @@ export class RemoteControlPlane {
   private key(root:string,runId:string){return `${root}\0${runId}`;}
   async connect(root:string,runId:string){
     const run=await getExecutionRun(root,runId);if(!run||run.executionTarget!=='remote'||run.remote?.provider!=='vastai'||!run.remote.instanceId)throw new Error('Remote Vast.ai Execution Run is required.');
+    if(run.lifecycle!=='RUNNING')throw new Error(`Execution Run ${runId} is not running (${run.lifecycle}).`);
     await mutateExecutionRun(root,runId,r=>{r.phase='CLOUD_INSTANCE_RESOLVING'});const endpoint=await this.resolveEndpoint(run.remote.instanceId);
     await mutateExecutionRun(root,runId,r=>{r.phase='SSH_CONNECTING'});const session=await this.ssh.connect({host:endpoint.host,port:endpoint.port,user:endpoint.user,privateKeyPath:endpoint.privateKeyPath});
     await mutateExecutionRun(root,runId,r=>{r.phase='SSH_CONNECTED'});try{
@@ -23,7 +24,7 @@ export class RemoteControlPlane {
       await mutateExecutionRun(root,runId,r=>{r.phase='REMOTE_ENVIRONMENT_CHECKING'});return {endpoint:{host:endpoint.host,port:endpoint.port,user:endpoint.user},deployment,health:health.response};
     }catch(error){session.close();throw error;}
   }
-  private async requestWithReconnect(root:string,runId:string,op:string,payload:Record<string,unknown>={}){const key=this.key(root,runId);let handle=this.handles.get(key);if(!handle){await this.connect(root,runId);handle=this.handles.get(key);}if(!handle)throw new Error('Remote session unavailable');try{return await this.worker.request(handle.session,handle.deployment,op,remoteWorkerPayload(handle.endpoint,op,payload));}catch(firstError){if(firstError instanceof RemoteWorkerRequestError)throw firstError;handle.session.close();this.handles.delete(key);await this.connect(root,runId);const reconnected=this.handles.get(key);if(!reconnected)throw firstError;return this.worker.request(reconnected.session,reconnected.deployment,op,remoteWorkerPayload(reconnected.endpoint,op,payload));}}
+  private async requestWithReconnect(root:string,runId:string,op:string,payload:Record<string,unknown>={}){const run=await getExecutionRun(root,runId);if(!run||run.lifecycle!=='RUNNING')throw new Error(`Execution Run ${runId} is not running.`);const key=this.key(root,runId);let handle=this.handles.get(key);if(!handle){await this.connect(root,runId);handle=this.handles.get(key);}if(!handle)throw new Error('Remote session unavailable');try{return await this.worker.request(handle.session,handle.deployment,op,remoteWorkerPayload(handle.endpoint,op,payload));}catch(firstError){if(firstError instanceof RemoteWorkerRequestError)throw firstError;handle.session.close();this.handles.delete(key);await this.connect(root,runId);const reconnected=this.handles.get(key);if(!reconnected)throw firstError;return this.worker.request(reconnected.session,reconnected.deployment,op,remoteWorkerPayload(reconnected.endpoint,op,payload));}}
   async requestWorker(root:string,runId:string,op:string,payload:Record<string,unknown>={}){return this.requestWithReconnect(root,runId,op,payload);}
   async reconcile(root:string,runId:string){return this.requestWithReconnect(root,runId,'status');}
   async writeState(root:string,runId:string,state:Record<string,unknown>){return this.requestWithReconnect(root,runId,'write_state',{state});}
