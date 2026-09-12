@@ -73,7 +73,7 @@ assert.match(vastPanel,/formatCost\(offer\.hourlyCost\)/,'検索結果に価格�
 assert.match(vastPanel,/offer\.verification/,'検索結果にVerified情報を表示する');
 assert.match(vastPanel,/offer\.internetDownMb/,'検索結果にDownload性能を表示する');
 assert.match(vastPanel,/offer\.diskBandwidthMb/,'検索結果にDisk性能を表示する');
-assert.match(vastClient,/type:'ondemand'/,'Offer検索とRENTはOn-demand固定にする');
+assert.match(vastClient,/type:'on-demand'/,'Offer検索とRENTはOn-demand固定にする');
 assert.match(vastClient,/allocated_storage:search\.storageGb/,'検索価格計算へStorage容量を反映する');
 assert.match(vastClient,/num_gpus:\{eq:search\.gpuCount\}/,'GPU枚数を完全一致で検索する');
 assert.match(vastClient,/total_flops=\{gte:search\.minTflops\}|body\.total_flops=\{gte:search\.minTflops\}/,'Minimum TFLOPsを検索へ反映する');
