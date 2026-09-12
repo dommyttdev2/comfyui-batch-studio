@@ -65,6 +65,12 @@ assert.match(vastPanel,/INSTANCE_REFRESH_MS=5_000/,'Instance状態は5秒間隔�
 assert.match(vastPanel,/vast-instance-section/,'Instance一覧は安定した高さを持つ専用sectionにする');
 assert.match(serviceCss,/\.vast-instance-section\{min-height:138px\}/,'Instanceが0件でも更新時にレイアウト高が変わらないよう最低高を確保する');
 assert.match(vastPanel,/GPU検索・RENT/,'Vast.ai画面に検索・RENT導線を追加する');
+assert.match(vastPanel,/rentError/,'RENT失敗はVast.ai検索領域内で表示する');
+assert.match(vastPanel,/このOfferは利用できなくなりました。検索結果を自動更新しています。/,'失効Offerを分かりやすく通知する');
+assert.match(vastPanel,/setSearchRevision\(value=>value\+1\)/,'失効Offer検知時に検索を即時再実行する');
+assert.match(vastPanel,/setOffers\(prev=>prev\.filter\(item=>item\.id!==offer\.id\)\)/,'失効Offerを現在の一覧から除外する');
+assert.match(vastPanel,/role="alert"/,'RENTエラーを検索結果付近のalertとして表示する');
+assert.match(serviceCss,/\.vast-rent-error\{/,'RENTエラー専用のインライン表示を持つ');
 assert.match(vastPanel,/DEFAULT_SEARCH:[^\n]*gpuCount:1/,'GPU Countの初期値は1にする');
 assert.match(vastPanel,/SEARCH_DEBOUNCE_MS=400/,'検索条件変更はdebounceしてリアルタイム検索する');
 assert.match(vastPanel,/window\.setTimeout/,'検索は入力変更後に自動実行する');

@@ -36,7 +36,7 @@ function RebootIcon(){return <svg viewBox="0 0 16 16" aria-hidden="true"><path d
 
 export function VastAiIntegrationPanel({run,onBack,onStatus}:{run:Runner;onBack?:()=>void;onStatus?:(s:VastAiConnectionStatus)=>void}){
   const [status,setStatus]=useState<VastAiConnectionStatus|null>(null),[input,setInput]=useState<VastAiConnectionInput>(EMPTY_VAST),[instances,setInstances]=useState<VastAiInstance[]>([]),[loadingInstances,setLoadingInstances]=useState(false),[busyAction,setBusyAction]=useState<string|null>(null);
-  const [template,setTemplate]=useState<VastAiComfyUiTemplate|null>(null),[search,setSearch]=useState<VastAiOfferSearchInput>(DEFAULT_SEARCH),[excludedCountries,setExcludedCountries]=useState(''),[offers,setOffers]=useState<VastAiOffer[]>([]),[searching,setSearching]=useState(false),[searchError,setSearchError]=useState(''),[rentingOfferId,setRentingOfferId]=useState<number|null>(null),[rentNotice,setRentNotice]=useState('');
+  const [template,setTemplate]=useState<VastAiComfyUiTemplate|null>(null),[search,setSearch]=useState<VastAiOfferSearchInput>(DEFAULT_SEARCH),[excludedCountries,setExcludedCountries]=useState(''),[offers,setOffers]=useState<VastAiOffer[]>([]),[searching,setSearching]=useState(false),[searchError,setSearchError]=useState(''),[searchRevision,setSearchRevision]=useState(0),[rentingOfferId,setRentingOfferId]=useState<number|null>(null),[rentNotice,setRentNotice]=useState(''),[rentError,setRentError]=useState('');
   const configured=Boolean(status?.configured);
   const loadInstances=async()=>{setLoadingInstances(true);try{setInstances(await window.batchStudio.vastai.instances());}finally{setLoadingInstances(false);}};
   const loadTemplate=async()=>{const next=await window.batchStudio.vastai.comfyUiTemplate();setTemplate(next);setSearch(prev=>({...prev,storageGb:template?prev.storageGb:Math.max(8,next.recommendedDiskSpaceGb)}));};
@@ -59,7 +59,7 @@ export function VastAiIntegrationPanel({run,onBack,onStatus}:{run:Runner;onBack?
       }).catch(error=>{if(!cancelled)setSearchError(error instanceof Error?error.message:String(error));}).finally(()=>{if(!cancelled)setSearching(false);});
     },SEARCH_DEBOUNCE_MS);
     return()=>{cancelled=true;window.clearTimeout(timer);};
-  },[configured,template?.hashId,template?.recommendedDiskSpaceGb,search.storageGb,search.minTflops,search.gpuCount,search.minReliability,excludedCountries]);
+  },[configured,template?.hashId,template?.recommendedDiskSpaceGb,search.storageGb,search.minTflops,search.gpuCount,search.minReliability,excludedCountries,searchRevision]);
   const set=(key:keyof VastAiConnectionInput,value:string|number|undefined)=>setInput(prev=>({...prev,[key]:value}));
   const save=()=>run(async()=>{const next=await window.batchStudio.vastai.saveSettings(input);setStatus(next);onStatus?.(next);setInput(prev=>({...prev,apiKey:''}));await Promise.all([loadInstances(),loadTemplate()]);});
   const choosePrivateKey=()=>run(async()=>{const selected=await window.batchStudio.vastai.selectPrivateKey();if(selected)set('sshPrivateKeyPath',selected);});
@@ -77,7 +77,25 @@ export function VastAiIntegrationPanel({run,onBack,onStatus}:{run:Runner;onBack?
       await loadInstances();
     }finally{setBusyAction(null);}
   });
-  const rentOffer=(offer:VastAiOffer)=>run(async()=>{if(!template)throw new Error('ComfyUI Templateを取得できていません。');setRentingOfferId(offer.id);setRentNotice('');try{const instanceId=await window.batchStudio.vastai.rentOffer({offerId:offer.id,storageGb:search.storageGb,templateHashId:template.hashId});if(instanceId==null)return;setRentNotice('Instance #'+instanceId+' を作成しました。上のインスタンス一覧へ反映しています。');await loadInstances();}finally{setRentingOfferId(null);}});
+  const rentOffer=async(offer:VastAiOffer)=>{
+    if(!template){setRentError('ComfyUI Templateを取得できていません。');return;}
+    setRentingOfferId(offer.id);setRentNotice('');setRentError('');
+    try{
+      const instanceId=await window.batchStudio.vastai.rentOffer({offerId:offer.id,storageGb:search.storageGb,templateHashId:template.hashId});
+      if(instanceId==null)return;
+      setRentNotice('Instance #'+instanceId+' を作成しました。上のインスタンス一覧へ反映しています。');
+      await loadInstances();
+    }catch(error){
+      const message=error instanceof Error?error.message:String(error);
+      if(message.includes('現在RENTできません')){
+        setRentError('このOfferは利用できなくなりました。検索結果を自動更新しています。');
+        setOffers(prev=>prev.filter(item=>item.id!==offer.id));
+        setSearchRevision(value=>value+1);
+      }else{
+        setRentError(message);
+      }
+    }finally{setRentingOfferId(null);}
+  };
   const sorted=useMemo(()=>instances.slice().sort((a,b)=>Number(b.status==='running')-Number(a.status==='running')||b.id-a.id),[instances]);
   const sortedOffers=useMemo(()=>offers.slice().sort((a,b)=>(a.hourlyCost??Number.POSITIVE_INFINITY)-(b.hourlyCost??Number.POSITIVE_INFINITY)||a.id-b.id),[offers]);
   return <section className="panel service-page"><div className="service-page-head">{onBack?<button onClick={onBack}>← クラウドインスタンス</button>:<span aria-hidden="true"/>}<div><h3>Vast.ai</h3><p>Vast.ai APIと、リモート環境へ接続するためのSSH設定を管理します。Remote ComfyUIのインストール先は環境設定で管理します。</p></div><b className={configured?'ok':'muted'}>{statusLabel(status)}</b></div>
@@ -87,6 +105,7 @@ export function VastAiIntegrationPanel({run,onBack,onStatus}:{run:Runner;onBack?
     <div className="service-subsection vast-search-section"><div className="panelhead"><div><h4>GPU検索・RENT</h4><p>Vast.aiのComfyUI Templateを使用するOn-demand Offerだけを検索します。GPU・VRAM・料金などは結果を比較して選択します。</p></div>{template&&<span className="vast-template-pill">ComfyUI · 推奨 {formatNumber(template.recommendedDiskSpaceGb,0)} GB</span>}</div>
       {!configured?<p className="hint">検索するにはVast.ai API Keyを設定してください。</p>:<><div className="vast-search-form"><label><span className="vast-search-field-title">Storage <em>GB</em></span><input type="number" min={template?.recommendedDiskSpaceGb??1} step="1" value={search.storageGb} onChange={e=>setSearch(prev=>({...prev,storageGb:Number(e.target.value)}))}/><small>RENT時も同じ容量を使用します。</small></label><label><span className="vast-search-field-title">Minimum TFLOPs <em>total</em></span><input type="number" min="0" step="1" value={search.minTflops} onChange={e=>setSearch(prev=>({...prev,minTflops:Number(e.target.value)}))}/><small>0で指定なし。</small></label><label><span className="vast-search-field-title">GPU Count</span><input type="number" min="1" max="64" step="1" value={search.gpuCount} onChange={e=>setSearch(prev=>({...prev,gpuCount:Number(e.target.value)}))}/><small>デフォルトは1。</small></label><label><span className="vast-search-field-title">Reliability <em>%以上</em></span><input type="number" min="0" max="100" step="0.1" value={search.minReliability} onChange={e=>setSearch(prev=>({...prev,minReliability:Number(e.target.value)}))}/><small>ホスト信頼性の下限。</small></label><label className="wide"><span className="vast-search-field-title">除外する国コード</span><input value={excludedCountries} onChange={e=>setExcludedCountries(e.target.value)} placeholder="例: CN, RU, TW"/><small>2文字の国コードをカンマまたは空白区切りで指定します。未入力なら地域を除外しません。</small></label></div><div className="vast-search-status" aria-live="polite">{searching?<span>検索中…</span>:searchError?<span className="error">{searchError}</span>:<span>{sortedOffers.length} offers · コストが低い順</span>}</div></>}
       {rentNotice&&<div className="vast-rent-notice">{rentNotice}</div>}
+      {rentError&&<div className="vast-rent-error" role="alert">{rentError}</div>}
       {configured&&!searching&&!searchError&&sortedOffers.length===0&&<p className="hint vast-search-empty">条件に一致するOfferがありません。</p>}
       {sortedOffers.length>0&&<div className="vast-offer-list">{sortedOffers.map(offer=><article className="vast-offer-card" key={offer.id}>
         <div className="vast-offer-summary">

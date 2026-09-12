@@ -139,12 +139,14 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
 
   {
     const marketCalls=[];
+    let createdVisible=false;
     const template={id:101,hash_id:'comfy-hash',name:'ComfyUI',recommended_disk_space:120,count_created:999,extra_filters:{cuda_max_good:{gte:12.6}}};
     const richOffer={id:123,gpu_name:'RTX 5090',num_gpus:1,gpu_ram:32768,gpu_total_ram:32768,total_flops:104.8,gpu_mem_bw:1792,verification:'verified',geolocation:'Tokyo, JP',machine_id:77,host_id:88,mobo_name:'Test Board',pci_gen:5,gpu_lanes:16,pcie_bw:48.2,cpu_name:'EPYC Test',cpu_cores:32,cpu_cores_effective:16,cpu_ram:131072,disk_name:'NVMe',disk_bw:6500,disk_space:900,inet_down:1500,inet_up:900,direct_port_count:64,dlperf:180,cuda_max_good:13.0,duration:604800,reliability:.997,dlperf_per_dphtotal:220,flops_per_dphtotal:130,dph_total:.82,storage_cost:.003,internet_down_cost_per_tb:.02,internet_up_cost_per_tb:.03};
     const cheapOffer={...richOffer,id:124,gpu_name:'RTX 4090',dph_total:.45};
     const marketFetch=async(url,init={})=>{
       marketCalls.push({url:String(url),init});
       const u=new URL(String(url));
+      if(u.pathname==='/api/v1/instances/')return response({instances:createdVisible?[{id:456,actual_status:'loading',intended_status:'running',cur_state:'loading',label:'ComfyUI Batch Studio',gpu_name:'RTX 5090',num_gpus:1,gpu_ram:32768,dph_total:.82}]:[],next_token:null});
       if(u.pathname==='/api/v0/template/'){
         const filters=JSON.parse(u.searchParams.get('select_filters'));
         assert.deepEqual(filters.name,{eq:'ComfyUI'});
@@ -196,6 +198,17 @@ function response(payload,status=200){return {ok:status>=200&&status<300,status,
     const instanceId=await marketClient.rentOffer({offerId:123,storageGb:120,templateHashId:'comfy-hash'});
     assert.equal(instanceId,456);
     assert.ok(marketCalls.some(x=>new URL(x.url).pathname==='/api/v0/asks/123/'&&x.init.method==='PUT'));
+    const pendingInstances=await marketClient.listInstances();
+    assert.equal(pendingInstances.length,1,'RENT直後に一覧APIへ未反映でも新Instanceを保持する');
+    assert.equal(pendingInstances[0].id,456);
+    assert.equal(pendingInstances[0].status,'starting');
+    assert.equal(pendingInstances[0].rawStatus,'creating');
+    assert.match(pendingInstances[0].statusMessage,/Instance一覧への反映を待っています/);
+    createdVisible=true;
+    const visibleInstances=await marketClient.listInstances();
+    assert.equal(visibleInstances.length,1);
+    assert.equal(visibleInstances[0].id,456);
+    assert.equal(visibleInstances[0].rawStatus,'loading','Vast.ai一覧へ反映後は実レスポンスへ置き換える');
   }
 
   console.log('Vast.ai client tests passed.');
