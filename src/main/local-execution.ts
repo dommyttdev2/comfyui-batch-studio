@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { ExecutionError, ExecutionRun } from '../shared/types.js';
+import { clearCurrentGenerationTiming, markGenerationCompleted, markGenerationStarted } from '../shared/execution-progress.js';
 import { exists, readJson } from './fs-utils.js';
 import type { ApiGraph, ApiGraphNode } from './workflow-api.js';
 import { ComfyUiClient } from './comfyui-client.js';
@@ -59,10 +60,10 @@ async function failRun(root:string,runId:string,code:string,error:unknown){
   return mutateExecutionRun(root,runId,run=>{const next=errorOf(run,code,error);run.error=next;run.errorHistory.push(next);run.lifecycle='FAILED';run.controls.scheduling='STOPPED';run.current.promptId=null;});
 }
 async function pauseForStop(root:string,runId:string){
-  return mutateExecutionRun(root,runId,run=>{run.lifecycle='PAUSED';run.controls.scheduling='STOPPED';run.current.promptId=null;});
+  return mutateExecutionRun(root,runId,run=>{run.lifecycle='PAUSED';run.controls.scheduling='STOPPED';run.current.promptId=null;clearCurrentGenerationTiming(run);});
 }
 async function markInterrupted(root:string,runId:string){
-  return mutateExecutionRun(root,runId,run=>{run.lifecycle='INTERRUPTED';run.controls.scheduling='STOPPED';run.controls.interrupt='INTERRUPTED';run.current.promptId=null;});
+  return mutateExecutionRun(root,runId,run=>{run.lifecycle='INTERRUPTED';run.controls.scheduling='STOPPED';run.controls.interrupt='INTERRUPTED';run.current.promptId=null;clearCurrentGenerationTiming(run);});
 }
 async function countRecentImages(root:string,sinceMs:number):Promise<number>{
   if(!(await exists(root)))return 0;let count=0;
@@ -118,13 +119,13 @@ export class LocalExecutionService {
           applyExpandState(branchGraph,binding.expandNodeId,continuousId,index);
           await mutateExecutionRun(root,runId,r=>{r.phase='EXECUTING';r.current={branchId:binding.branchId,leafId:binding.leafIds[index],promptId:null};const bp=r.progress.branches.find(x=>x.branchId===binding.branchId);if(bp)bp.state='running'});
           const submitted=await comfy.prompt(branchGraph,run.runId);lastPromptId=submitted.prompt_id;
-          await mutateExecutionRun(root,runId,r=>{r.current.promptId=lastPromptId;if(!r.promptIds.includes(lastPromptId))r.promptIds.push(lastPromptId)});
+          await mutateExecutionRun(root,runId,r=>{r.current.promptId=lastPromptId;if(!r.promptIds.includes(lastPromptId))r.promptIds.push(lastPromptId);markGenerationStarted(r,lastPromptId)});
           if(!runHandleClaimed){await scene.claim(prepared.run_handle,lastPromptId);runHandleClaimed=true}
           let terminal:'success'|'error'='error';
           for(;;){const history=await comfy.history(lastPromptId),state=comfy.historyState(history,lastPromptId);if(state!=='pending'){terminal=state;break}await sleep(750)}
           run=await getExecutionRun(root,runId);if(!run)return;
           if(terminal==='error'){if(run.controls.interrupt!=='IDLE'){await markInterrupted(root,runId);return}throw new Error(`ComfyUI prompt ${lastPromptId} failed.`)}
-          await mutateExecutionRun(root,runId,r=>{const bp=r.progress.branches.find(x=>x.branchId===binding.branchId);if(bp)bp.completed=Math.min(bp.total,bp.completed+1);r.progress.overall.completed=Math.min(r.progress.overall.total,r.progress.overall.completed+1);r.current.promptId=null});
+          await mutateExecutionRun(root,runId,r=>{const bp=r.progress.branches.find(x=>x.branchId===binding.branchId);if(bp)bp.completed=Math.min(bp.total,bp.completed+1);r.progress.overall.completed=Math.min(r.progress.overall.total,r.progress.overall.completed+1);markGenerationCompleted(r);r.current.promptId=null});
           run=await getExecutionRun(root,runId);if(!run)return;
           if(run.controls.interrupt!=='IDLE'){await markInterrupted(root,runId);return}
           if(run.controls.scheduling!=='ACTIVE'){await pauseForStop(root,runId);return}
