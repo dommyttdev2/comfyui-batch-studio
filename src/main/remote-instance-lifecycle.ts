@@ -90,7 +90,10 @@ export class RemoteInstanceLifecycleService {
     for(;;){
       if(current.id!==instanceId)throw new Error(`Vast.ai returned Instance ${current.id} while ${instanceId} was requested. Silent fallback is not allowed.`);
       if(unavailable(current))throw new Error(`Vast.ai Instance ${instanceId} entered ${current.status}: ${statusDetail(current)}`);
-      if(current.status==='scheduling')throw new Error(`Vast.ai Instance ${instanceId} is scheduling; Execution Run cannot continue.`);
+      if(current.status==='scheduling'){
+        await this.persistSnapshot(root,runId,current,'CLOUD_INSTANCE_STARTING');
+        throw new Error(`Vast.ai Instance ${instanceId} is scheduling; Execution Run cannot continue.`);
+      }
       if(current.status==='running'&&current.sshHost&&current.sshPort){
         await this.persistSnapshot(root,runId,current,'CLOUD_INSTANCE_READY');
         return current;
