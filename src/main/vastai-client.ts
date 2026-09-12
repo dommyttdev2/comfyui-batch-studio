@@ -5,7 +5,6 @@ const DEFAULT_BASE_URL='https://console.vast.ai';
 const REQUEST_TIMEOUT_MS=20_000;
 const LIFECYCLE_TIMEOUT_MS=15*60_000;
 const LIFECYCLE_POLL_MS=5_000;
-const PENDING_INSTANCE_ACTION_TTL_MS=15*60_000;
 type PendingInstanceAction='start'|'stop'|'reboot';
 
 type JsonRecord=Record<string,unknown>;
@@ -93,7 +92,6 @@ export class VastAiClient {
   private withPendingAction(instance:VastAiInstance){
     const pending=this.pendingInstanceActions.get(instance.id);
     if(!pending)return instance;
-    if(Date.now()-pending.requestedAt>PENDING_INSTANCE_ACTION_TTL_MS){this.pendingInstanceActions.delete(instance.id);return instance;}
     if(instance.status==='error'||instance.status==='offline'){this.pendingInstanceActions.delete(instance.id);return instance;}
     if(pending.action==='start'){
       if(instance.status==='running'){this.pendingInstanceActions.delete(instance.id);return instance;}
