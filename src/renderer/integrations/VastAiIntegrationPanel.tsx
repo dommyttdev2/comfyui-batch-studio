@@ -70,35 +70,27 @@ export function VastAiIntegrationPanel({run,onBack,onStatus}:{run:Runner;onBack?
       {!configured?<p className="hint">検索するにはVast.ai API Keyを設定してください。</p>:<><div className="vast-search-form"><label>Storage <span>GB</span><input type="number" min={template?.recommendedDiskSpaceGb??1} step="1" value={search.storageGb} onChange={e=>setSearch(prev=>({...prev,storageGb:Number(e.target.value)}))}/><small>RENT時も同じ容量を使用します。</small></label><label>Minimum TFLOPs <span>total</span><input type="number" min="0" step="1" value={search.minTflops} onChange={e=>setSearch(prev=>({...prev,minTflops:Number(e.target.value)}))}/><small>0で指定なし。</small></label><label>GPU Count<input type="number" min="1" max="64" step="1" value={search.gpuCount} onChange={e=>setSearch(prev=>({...prev,gpuCount:Number(e.target.value)}))}/><small>デフォルトは1。</small></label><label>Reliability <span>%以上</span><input type="number" min="0" max="100" step="0.1" value={search.minReliability} onChange={e=>setSearch(prev=>({...prev,minReliability:Number(e.target.value)}))}/></label><label className="wide">除外する国コード<input value={excludedCountries} onChange={e=>setExcludedCountries(e.target.value)} placeholder="例: CN, RU, TW"/><small>2文字の国コードをカンマまたは空白区切りで指定します。未入力なら地域を除外しません。</small></label></div><div className="actions vast-search-actions"><button className="primary" disabled={searching} onClick={()=>void searchOffers()}>{searching?'検索中…':'検索'}</button>{offers.length>0&&<span className="muted">{offers.length} offers</span>}</div></>}
       {rentNotice&&<div className="vast-rent-notice">{rentNotice}</div>}
       {configured&&!searching&&offers.length===0&&<p className="hint vast-search-empty">条件を入力して検索してください。</p>}
-      {offers.length>0&&<div className="vast-offer-list">{offers.map(offer=><article className="vast-offer-card" key={offer.id}><div className="vast-offer-summary"><div className="vast-offer-gpu"><b>{offer.gpuCount??'-'}x {offer.gpuName??'GPU'}</b><small>{offer.geolocation??'Location不明'} · Offer #{offer.id}</small></div><div><span>TFLOPs</span><b>{formatNumber(offer.totalFlops)}</b></div><div><span>VRAM</span><b>{formatVram(offer.gpuRamMb)}</b><small>{offer.gpuTotalRamMb&&offer.gpuCount&&offer.gpuCount>1?'total '+formatVram(offer.gpuTotalRamMb):''}</small></div><div><span>Reliability</span><b>{formatPercent(offer.reliability)}</b><small>{offer.verification??'unverified'}</small></div><div><span>Price</span><b>{formatCost(offer.hourlyCost)}</b><small>{offer.dlperfPerDollar==null?'':formatNumber(offer.dlperfPerDollar)+' DLP/$/hr'}</small></div><button className="primary vast-rent-button" disabled={rentingOfferId!==null} onClick={()=>void rentOffer(offer)}>{rentingOfferId===offer.id?'RENT中…':'RENT'}</button></div><div className="vast-offer-details"><div><span>GPU</span><b>{formatNumber(offer.gpuMemBandwidthGbps)} GB/s</b><small>Memory BW</small></div><div><span>PCIe</span><b>{offer.pciGen?'Gen '+formatNumber(offer.pciGen,0):'-'}</b><small>{offer.pcieBandwidthGbps==null?'-':formatNumber(offer.pcieBandwidthGbps)+' GB/s'} · {offer.gpuLanes?offer.gpuLanes+' lanes':'-'}</small></div><div><span>CPU</span><b>{offer.cpuName??'-'}</b><small>{offer.cpuCoresEffective??offer.cpuCores??'-'} / {offer.cpuCores??'-'} cores · {formatVram(offer.cpuRamMb)} RAM</small></div><div><span>Disk</span><b>{offer.diskName??'-'}</b><small>{offer.diskBandwidthMb==null?'-':formatNumber(offer.diskBandwidthMb,0)+' MB/s'} · {offer.diskSpaceGb==null?'-':formatNumber(offer.diskSpaceGb,0)+' GB available'}</small></div><div><span>Network</span><b>↓ {offer.internetDownMb==null?'-':formatNumber(offer.internetDownMb,0)+' MB/s'}</b><small>↑ {offer.internetUpMb==null?'-':formatNumber(offer.internetUpMb,0)+' MB/s'} · {offer.directPortCount??'-'} ports</small></div><div><span>DLPerf / CUDA</span><b>{formatNumber(offer.dlperf)} / {formatNumber(offer.cudaMaxGood)}</b><small>{offer.flopsPerDollar==null?'-':formatNumber(offer.flopsPerDollar)+' TFLOPs/$/hr'}</small></div><div><span>Machine</span><b>#{offer.machineId??'-'}</b><small>Host #{offer.hostId??'-'} · {offer.motherboard??'-'}</small></div><div><span>Max Duration</span><b>{formatDuration(offer.durationSeconds)}</b><small>{offer.storageCostPerGbMonth==null?'':'Storage }</small></div><div><span>Bandwidth cost</span><b>↓ {offer.internetDownCostPerTb==null?'-':'}</b><small>↑ {offer.internetUpCostPerTb==null?'-':'}</small></div></div></article>)}</div>}
-    </div>
-  </section>;
-}
-+formatNumber(offer.storageCostPerGbMonth,4)+'/GB/mo'}</small></div><div><span>Bandwidth cost</span><b>↓ {offer.internetDownCostPerTb==null?'-':'+formatNumber(offer.internetDownCostPerTb,2)+'/TB'}</b><small>↑ {offer.internetUpCostPerTb==null?'-':'+formatNumber(offer.internetUpCostPerTb,2)+'/TB'}</small></div></div></article>)}</div>}
-    </div>
-  </section>;
-}
-+formatNumber(offer.internetDownCostPerTb,2)+'/TB'}</b><small>↑ {offer.internetUpCostPerTb==null?'-':'+formatNumber(offer.internetUpCostPerTb,2)+'/TB'}</small></div></div></article>)}</div>}
-    </div>
-  </section>;
-}
-+formatNumber(offer.storageCostPerGbMonth,4)+'/GB/mo'}</small></div><div><span>Bandwidth cost</span><b>↓ {offer.internetDownCostPerTb==null?'-':'+formatNumber(offer.internetDownCostPerTb,2)+'/TB'}</b><small>↑ {offer.internetUpCostPerTb==null?'-':'+formatNumber(offer.internetUpCostPerTb,2)+'/TB'}</small></div></div></article>)}</div>}
-    </div>
-  </section>;
-}
-+formatNumber(offer.internetUpCostPerTb,2)+'/TB'}</small></div></div></article>)}</div>}
-    </div>
-  </section>;
-}
-+formatNumber(offer.storageCostPerGbMonth,4)+'/GB/mo'}</small></div><div><span>Bandwidth cost</span><b>↓ {offer.internetDownCostPerTb==null?'-':'+formatNumber(offer.internetDownCostPerTb,2)+'/TB'}</b><small>↑ {offer.internetUpCostPerTb==null?'-':'+formatNumber(offer.internetUpCostPerTb,2)+'/TB'}</small></div></div></article>)}</div>}
-    </div>
-  </section>;
-}
-+formatNumber(offer.internetDownCostPerTb,2)+'/TB'}</b><small>↑ {offer.internetUpCostPerTb==null?'-':'+formatNumber(offer.internetUpCostPerTb,2)+'/TB'}</small></div></div></article>)}</div>}
-    </div>
-  </section>;
-}
-+formatNumber(offer.storageCostPerGbMonth,4)+'/GB/mo'}</small></div><div><span>Bandwidth cost</span><b>↓ {offer.internetDownCostPerTb==null?'-':'+formatNumber(offer.internetDownCostPerTb,2)+'/TB'}</b><small>↑ {offer.internetUpCostPerTb==null?'-':'+formatNumber(offer.internetUpCostPerTb,2)+'/TB'}</small></div></div></article>)}</div>}
+      {offers.length>0&&<div className="vast-offer-list">{offers.map(offer=><article className="vast-offer-card" key={offer.id}>
+        <div className="vast-offer-summary">
+          <div className="vast-offer-gpu"><b>{offer.gpuCount??'-'}x {offer.gpuName??'GPU'}</b><small>{offer.geolocation??'Location不明'} · Offer #{offer.id}</small></div>
+          <div><span>TFLOPs</span><b>{formatNumber(offer.totalFlops)}</b></div>
+          <div><span>VRAM</span><b>{formatVram(offer.gpuRamMb)}</b><small>{offer.gpuTotalRamMb&&offer.gpuCount&&offer.gpuCount>1?'total '+formatVram(offer.gpuTotalRamMb):''}</small></div>
+          <div><span>Reliability</span><b>{formatPercent(offer.reliability)}</b><small>{offer.verification??'unverified'}</small></div>
+          <div><span>Price</span><b>{formatCost(offer.hourlyCost)}</b><small>{offer.dlperfPerDollar==null?'':formatNumber(offer.dlperfPerDollar)+' DLP/$/hr'}</small></div>
+          <button className="primary vast-rent-button" disabled={rentingOfferId!==null} onClick={()=>void rentOffer(offer)}>{rentingOfferId===offer.id?'RENT中…':'RENT'}</button>
+        </div>
+        <div className="vast-offer-details">
+          <div><span>GPU</span><b>{formatNumber(offer.gpuMemBandwidthGbps)} GB/s</b><small>Memory BW</small></div>
+          <div><span>PCIe</span><b>{offer.pciGen?'Gen '+formatNumber(offer.pciGen,0):'-'}</b><small>{offer.pcieBandwidthGbps==null?'-':formatNumber(offer.pcieBandwidthGbps)+' GB/s'} · {offer.gpuLanes?offer.gpuLanes+' lanes':'-'}</small></div>
+          <div><span>CPU</span><b>{offer.cpuName??'-'}</b><small>{offer.cpuCoresEffective??offer.cpuCores??'-'} / {offer.cpuCores??'-'} cores · {formatVram(offer.cpuRamMb)} RAM</small></div>
+          <div><span>Disk</span><b>{offer.diskName??'-'}</b><small>{offer.diskBandwidthMb==null?'-':formatNumber(offer.diskBandwidthMb,0)+' MB/s'} · {offer.diskSpaceGb==null?'-':formatNumber(offer.diskSpaceGb,0)+' GB available'}</small></div>
+          <div><span>Network</span><b>↓ {offer.internetDownMb==null?'-':formatNumber(offer.internetDownMb,0)+' MB/s'}</b><small>↑ {offer.internetUpMb==null?'-':formatNumber(offer.internetUpMb,0)+' MB/s'} · {offer.directPortCount??'-'} ports</small></div>
+          <div><span>DLPerf / CUDA</span><b>{formatNumber(offer.dlperf)} / {formatNumber(offer.cudaMaxGood)}</b><small>{offer.flopsPerDollar==null?'-':formatNumber(offer.flopsPerDollar)+' TFLOPs/$/hr'}</small></div>
+          <div><span>Machine</span><b>#{offer.machineId??'-'}</b><small>Host #{offer.hostId??'-'} · {offer.motherboard??'-'}</small></div>
+          <div><span>Max Duration</span><b>{formatDuration(offer.durationSeconds)}</b><small>{offer.storageCostPerGbMonth==null?'':'Storage $'+formatNumber(offer.storageCostPerGbMonth,4)+'/GB/mo'}</small></div>
+          <div><span>Bandwidth cost</span><b>↓ {offer.internetDownCostPerTb==null?'-':'$'+formatNumber(offer.internetDownCostPerTb,2)+'/TB'}</b><small>↑ {offer.internetUpCostPerTb==null?'-':'$'+formatNumber(offer.internetUpCostPerTb,2)+'/TB'}</small></div>
+        </div>
+      </article>)}</div>}
     </div>
   </section>;
 }
