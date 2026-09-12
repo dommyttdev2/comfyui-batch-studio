@@ -606,7 +606,7 @@ def package_artifacts(root,comfy_root,req):
  entries=[]
  for rel,target in files:entries.append({"path":rel,"size":os.path.getsize(target),"sha256":sha256_file(target)})
  manifest={"version":1,"runId":run_id,"outputPrefix":prefix,"artifactCount":len(entries),"artifacts":entries}
- manifest_bytes=(json.dumps(manifest,sort_keys=True,separators=(",",":"))+"\n").encode("utf-8")
+ manifest_bytes=(json.dumps(manifest,sort_keys=True,separators=(",",":"))+"\\n").encode("utf-8")
  manifest_sha=hashlib.sha256(manifest_bytes).hexdigest()
  artifact_dir=contained(root,"artifacts");os.makedirs(artifact_dir,exist_ok=True)
  manifest_path=contained(root,"artifacts/manifest.json");tmp_manifest=manifest_path+".tmp"
