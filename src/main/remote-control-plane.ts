@@ -5,6 +5,8 @@ import { RemoteWorkerClient, RemoteWorkerRequestError } from './remote-worker.js
 
 interface RemoteHandle { session:VerifiedSshSession;deployment:{runDir:string;workerPath:string;modelsRoot:string;comfyRoot:string;localSha256:string;remoteSha256:string};endpoint:VastAiSshEndpoint; }
 type EndpointResolver=(instanceId:number)=>Promise<VastAiSshEndpoint>;
+const LOCAL_COMFY_OPS=new Set(['run_scene_sequence','force_interrupt_sequence']);
+export function remoteWorkerPayload(endpoint:VastAiSshEndpoint,op:string,payload:Record<string,unknown>){return LOCAL_COMFY_OPS.has(op)?{...payload,comfyEndpoint:`http://127.0.0.1:${endpoint.comfyUiPort}`}:{...payload};}
 
 export class RemoteControlPlane {
   private readonly handles=new Map<string,RemoteHandle>();
@@ -21,7 +23,7 @@ export class RemoteControlPlane {
       await mutateExecutionRun(root,runId,r=>{r.phase='REMOTE_ENVIRONMENT_CHECKING'});return {endpoint:{host:endpoint.host,port:endpoint.port,user:endpoint.user},deployment,health:health.response};
     }catch(error){session.close();throw error;}
   }
-  private async requestWithReconnect(root:string,runId:string,op:string,payload:Record<string,unknown>={}){const key=this.key(root,runId);let handle=this.handles.get(key);if(!handle){await this.connect(root,runId);handle=this.handles.get(key);}if(!handle)throw new Error('Remote session unavailable');try{return await this.worker.request(handle.session,handle.deployment,op,payload);}catch(firstError){if(firstError instanceof RemoteWorkerRequestError)throw firstError;handle.session.close();this.handles.delete(key);await this.connect(root,runId);const reconnected=this.handles.get(key);if(!reconnected)throw firstError;return this.worker.request(reconnected.session,reconnected.deployment,op,payload);}}
+  private async requestWithReconnect(root:string,runId:string,op:string,payload:Record<string,unknown>={}){const key=this.key(root,runId);let handle=this.handles.get(key);if(!handle){await this.connect(root,runId);handle=this.handles.get(key);}if(!handle)throw new Error('Remote session unavailable');try{return await this.worker.request(handle.session,handle.deployment,op,remoteWorkerPayload(handle.endpoint,op,payload));}catch(firstError){if(firstError instanceof RemoteWorkerRequestError)throw firstError;handle.session.close();this.handles.delete(key);await this.connect(root,runId);const reconnected=this.handles.get(key);if(!reconnected)throw firstError;return this.worker.request(reconnected.session,reconnected.deployment,op,remoteWorkerPayload(reconnected.endpoint,op,payload));}}
   async requestWorker(root:string,runId:string,op:string,payload:Record<string,unknown>={}){return this.requestWithReconnect(root,runId,op,payload);}
   async reconcile(root:string,runId:string){return this.requestWithReconnect(root,runId,'status');}
   async writeState(root:string,runId:string,state:Record<string,unknown>){return this.requestWithReconnect(root,runId,'write_state',{state});}

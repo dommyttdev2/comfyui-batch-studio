@@ -88,6 +88,20 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
   assert.equal(second.phase,'CLOUD_INSTANCE_RESOLVING');
   assert.deepEqual(second.remote,{provider:'vastai',instanceId:123});
 
+  await execution.recordExecutionEvidence(root,second.runId,{kind:'EXECUTION_COMPLETED',scope:'remote-generation',data:{images:2}});
+  await execution.recordExecutionEvidence(root,second.runId,{kind:'PACKAGE_VERIFIED',scope:'remote-package',data:{artifactCount:2,size:100,sha256:'a'.repeat(64),manifestSha256:'b'.repeat(64),outputPrefix:'BatchStudio/execution-project/'+second.runId}});
+  await execution.recordExecutionEvidence(root,second.runId,{kind:'R2_OBJECT_VERIFIED',scope:'remote-package',data:{bucket:'test',key:'x.zip',size:100,sha256:'a'.repeat(64)}});
+  await execution.recordExecutionEvidence(root,second.runId,{kind:'LOCAL_FILE_VERIFIED',scope:'remote-package',data:{path:'/tmp/x.zip',size:100,sha256:'a'.repeat(64)}});
+  await execution.mutateExecutionRun(root,second.runId,run=>{run.lifecycle='FAILED';});
+  const cleanupResume=await execution.resumeExecutionRun(root,second.runId,async()=>ready);
+  assert.equal(cleanupResume.lifecycle,'RUNNING','remote local verification still requires cleanup before completion');
+  assert.equal(cleanupResume.phase,'REMOTE_CLEANUP');
+  await execution.recordExecutionEvidence(root,second.runId,{kind:'CLEANUP_COMPLETED',scope:'remote-artifacts',data:{remote:true,r2:true}});
+  await execution.mutateExecutionRun(root,second.runId,run=>{run.lifecycle='FAILED';});
+  const cleanupComplete=await execution.resumeExecutionRun(root,second.runId,async()=>ready);
+  assert.equal(cleanupComplete.lifecycle,'COMPLETED');
+  assert.equal(cleanupComplete.phase,'COMPLETED');
+
   const blocked={state:'BLOCKED',plannedImages:2,targetImages:2,blocking:[{severity:'error',code:'BLOCKED_FOR_TEST',message:'blocked'}],warnings:[],sections:[]};
   await execution.mutateExecutionRun(root,second.runId,run=>{run.lifecycle='FAILED';});
   await assert.rejects(()=>execution.resumeExecutionRun(root,second.runId,async()=>blocked),/Preflight is BLOCKED/);

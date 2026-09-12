@@ -75,7 +75,7 @@ export type ExecutionPhase=
   'WORKFLOW_PREPARING'|'EXECUTING'|'EXECUTION_COMPLETED'|'ARTIFACTS_COLLECTING'|'ARTIFACTS_PACKAGING'|
   'R2_UPLOAD_URL_ISSUED'|'R2_UPLOADING'|'R2_UPLOADED'|'LOCAL_DOWNLOADING'|'LOCAL_VERIFYING'|'LOCAL_OUTPUT_VERIFYING'|
   'REMOTE_CLEANUP'|'CLOUD_INSTANCE_FINALIZING'|'COMPLETED';
-export type ExecutionEvidenceKind='MODEL_VERIFIED'|'MODELS_VERIFIED'|'EXECUTION_COMPLETED'|'PACKAGE_VERIFIED'|'R2_OBJECT_VERIFIED'|'LOCAL_FILE_VERIFIED'|'CUSTOM';
+export type ExecutionEvidenceKind='MODEL_VERIFIED'|'MODELS_VERIFIED'|'EXECUTION_COMPLETED'|'PACKAGE_VERIFIED'|'R2_OBJECT_VERIFIED'|'LOCAL_FILE_VERIFIED'|'CLEANUP_COMPLETED'|'CUSTOM';
 export interface ExecutionProgressCounter { completed:number; total:number; }
 export interface ExecutionBranchProgress { branchId:string; completed:number; total:number; state:'pending'|'running'|'completed'|'failed'|'skipped'; }
 export interface ExecutionModelProgress { ref:string; fileName:string; kind:ModelAvailabilityRow['kind']; objectKey:string; destination:string; state:'pending'|'checking'|'downloading'|'ready'|'failed'|'skipped'; transferredBytes:number; totalBytes:number; reused:boolean; sha256:string|null; error:string|null; }

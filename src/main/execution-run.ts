@@ -136,6 +136,7 @@ export function validatedExecutionEvidence(run:ExecutionRun){
 
 function resumePhase(run:ExecutionRun,evidence:ExecutionEvidence[]):{phase:ExecutionPhase;lifecycle:ExecutionRunLifecycle}{
   const kinds=new Set(evidence.map(item=>item.kind));
+  if(run.executionTarget==='remote'&&kinds.has('LOCAL_FILE_VERIFIED')&&!kinds.has('CLEANUP_COMPLETED'))return {phase:'REMOTE_CLEANUP',lifecycle:'RUNNING'};
   if(kinds.has('LOCAL_FILE_VERIFIED'))return {phase:'COMPLETED',lifecycle:'COMPLETED'};
   if(run.executionTarget==='remote'&&kinds.has('R2_OBJECT_VERIFIED'))return {phase:'LOCAL_DOWNLOADING',lifecycle:'RUNNING'};
   if(run.executionTarget==='remote'&&kinds.has('PACKAGE_VERIFIED'))return {phase:'R2_UPLOAD_URL_ISSUED',lifecycle:'RUNNING'};
