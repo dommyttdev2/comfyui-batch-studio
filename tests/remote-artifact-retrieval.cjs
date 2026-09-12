@@ -66,6 +66,8 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
   assert.match(executionSource,/\.part/,'local download must use a .part file');
   assert.match(executionSource,/REMOTE_ARTIFACT_HASH_MISMATCH/,'local SHA-256 mismatch must fail the run');
   assert.match(executionSource,/CLEANUP_COMPLETED/,'cleanup must be resumable evidence');
+  assert.match(executionSource,/objectExists\(bucket,key\)/,'cleanup retry must treat an already-deleted R2 object as complete');
+  assert.match(executionSource,/local&&uploaded/,'resume after local verification must not require re-uploading an already-cleaned R2 object');
   assert.doesNotMatch(executionSource,/scp/i,'artifact recovery must not use SCP');
 
   console.log('Remote artifact retrieval tests passed.');
