@@ -86,14 +86,19 @@ function applyRemoteProgressEvent(run:ExecutionRun,event:Extract<WorkerEvent,{ty
 }
 
 function applyRemoteState(run:ExecutionRun,state:RemoteSequenceState){
-  const completed=state.completed??{};
+  const completed=state.completed??{},beforeOverall=run.progress.overall.completed;
   for(const branch of run.progress.branches){
     const next=Math.max(0,Math.min(branch.total,Number(completed[branch.branchId]??branch.completed)));
     branch.completed=next;
     branch.state=next>=branch.total?'completed':(state.current?.branchId===branch.branchId?'running':branch.state==='failed'?'failed':'pending');
   }
-  run.progress.overall.completed=Math.max(0,Math.min(run.progress.overall.total,Number(state.overallCompleted??run.progress.overall.completed)));
-  run.current={branchId:state.current?.branchId??null,leafId:state.current?.leafId??null,promptId:state.current?.promptId??null};
+  const nextOverall=Math.max(0,Math.min(run.progress.overall.total,Number(state.overallCompleted??run.progress.overall.completed)));
+  if(nextOverall>beforeOverall&&run.progress.generationTiming?.currentStartedAt)markGenerationCompleted(run);
+  run.progress.overall.completed=nextOverall;
+  const promptId=state.current?.promptId??null;
+  run.current={branchId:state.current?.branchId??null,leafId:state.current?.leafId??null,promptId};
+  if(promptId&&promptId!==run.progress.generationTiming?.currentPromptId)markGenerationStarted(run,promptId);
+  if(!promptId&&state.status&&state.status!=='running'&&state.status!=='interrupting')clearCurrentGenerationTiming(run);
   for(const id of state.promptIds??[])if(id&&!run.promptIds.includes(id))run.promptIds.push(id);
 }
 
@@ -163,8 +168,8 @@ export class RemoteExecutionService {
     currentRun=await getExecutionRun(root,runId);
     if(!currentRun||currentRun.lifecycle!=='RUNNING')return false;
     await this.syncState(root,runId,state);
-    if(state.status==='paused'){await mutateExecutionRun(root,runId,current=>{current.lifecycle='PAUSED';current.controls.scheduling='STOPPED';current.current.promptId=null;});return false;}
-    if(state.status==='interrupted'){await mutateExecutionRun(root,runId,current=>{current.lifecycle='INTERRUPTED';current.controls.scheduling='STOPPED';current.controls.interrupt='INTERRUPTED';current.current.promptId=null;});return false;}
+    if(state.status==='paused'){await mutateExecutionRun(root,runId,current=>{current.lifecycle='PAUSED';current.controls.scheduling='STOPPED';current.current.promptId=null;clearCurrentGenerationTiming(current);});return false;}
+    if(state.status==='interrupted'){await mutateExecutionRun(root,runId,current=>{current.lifecycle='INTERRUPTED';current.controls.scheduling='STOPPED';current.controls.interrupt='INTERRUPTED';current.current.promptId=null;clearCurrentGenerationTiming(current);});return false;}
     if(state.status==='failed')throw new Error(state.error?.message||state.error?.code||'Remote sequence failed.');
     if(state.status!=='completed')throw new Error(`Remote sequence ended in unexpected state: ${state.status??'unknown'}`);
     const latest=await getExecutionRun(root,runId);if(!latest)return false;
