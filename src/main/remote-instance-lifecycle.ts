@@ -119,6 +119,7 @@ export class RemoteInstanceLifecycleService {
     const run=await getExecutionRun(root,runId);
     if(!run||run.executionTarget!=='remote'||run.remote?.provider!=='vastai'||!Number.isInteger(run.remote.instanceId)||Number(run.remote.instanceId)<1)return;
     const lifecycle=run.remoteLifecycle;
+    if(run.lifecycle==='RUNNING'||run.lifecycle==='PAUSED')return;
     if(!lifecycle||lifecycle.initialStatus==null||lifecycle.finalizedAt)return;
     const instanceId=Number(run.remote.instanceId),phaseBefore=run.phase;
     if(lifecycle.restorePolicy!=='restore-if-started'||!lifecycle.startedByBatchStudio||lifecycle.initialStatus!=='stopped'){
