@@ -63,7 +63,7 @@ function applyRemoteState(run:ExecutionRun,state:RemoteSequenceState){
 
 export class RemoteExecutionService {
   private readonly workers=new Map<string,Promise<void>>();
-  constructor(private readonly remote:RemoteControlPlane,private readonly r2:R2Manager){}
+  constructor(private readonly remote:RemoteControlPlane,private readonly r2:R2Manager,private readonly onSettled?:(root:string,runId:string)=>Promise<void>){}
   start(root:string,runId:string){
     if(this.workers.has(runId))return;
     const task=this.execute(root,runId).catch(async error=>{
@@ -72,7 +72,7 @@ export class RemoteExecutionService {
         const failure={code,message:safeError(error),phase:run.phase,at:new Date().toISOString(),retryable:true};
         run.error=failure;run.errorHistory.push(failure);run.lifecycle='FAILED';run.controls.scheduling='STOPPED';
       });
-    }).finally(()=>{this.remote.disconnect(root,runId);this.workers.delete(runId)});
+    }).finally(async()=>{try{await this.onSettled?.(root,runId)}finally{this.remote.disconnect(root,runId);this.workers.delete(runId)}});
     this.workers.set(runId,task);
   }
   async stopScheduling(root:string,runId:string){try{await this.remote.requestWorker(root,runId,'stop_scene_sequence');return true}catch{return false}}
