@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AppSettings, AppSettingsStatus, AvailabilityResult, CompileResult, ExecutionPhase, ExecutionRun, ExecutionTarget, ModelsArtifact, PreflightResult, ProjectSummary, VastAiConnectionStatus, VastAiInstance } from '../shared/types';
+import { estimatedGenerationRemainingMs, generationAverageMs } from '../shared/execution-progress';
 import type { Runner } from './ui';
 import { issuesView } from './ui';
 import { R2ManagerStage } from './R2ManagerStage';
@@ -65,6 +66,15 @@ function modelStatus(run:ExecutionRun){
   if(run.phase==='REMOTE_MODELS_CHECKING')return'配置確認中';
   return reached(run.phase,'REMOTE_MODELS_READY')?'準備完了':'待機';
 }
+function formatGenerationDuration(ms:number|null){
+  if(ms==null)return '算出中';
+  const seconds=Math.max(0,Math.ceil(ms/1000));
+  if(seconds<60)return `約${seconds}秒`;
+  const minutes=Math.floor(seconds/60),restSeconds=seconds%60;
+  if(minutes<60)return restSeconds?`約${minutes}分${restSeconds}秒`:`約${minutes}分`;
+  const hours=Math.floor(minutes/60),restMinutes=minutes%60;
+  return restMinutes?`約${hours}時間${restMinutes}分`:`約${hours}時間`;
+}
 function deliveryStatus(run:ExecutionRun){
   const packaging=reached(run.phase,'ARTIFACTS_PACKAGING')?(reached(run.phase,'R2_UPLOAD_URL_ISSUED')?'完了':'処理中'):'待機';
   const r2=run.executionTarget==='local'?'対象外':reached(run.phase,'R2_UPLOADED')?'完了':run.phase==='R2_UPLOADING'?'アップロード中':run.phase==='R2_UPLOAD_URL_ISSUED'?'URL発行済み':'待機';
@@ -108,6 +118,9 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
   const remoteLifecycle=current?.remoteLifecycle??null;
   const generationDone=Boolean(current&&(reached(current.phase,'EXECUTION_COMPLETED')||current.lifecycle==='COMPLETED'));
   const deliveryDone=Boolean(current&&current.lifecycle==='COMPLETED');
+  const generationEta=current?estimatedGenerationRemainingMs(current):null;
+  const generationAverage=current?generationAverageMs(current):null;
+  const generationSamples=current?.progress.generationTiming?.recentDurationsMs.length??0;
   const blockedReasons=preflight?.state==='BLOCKED'?preflight.blocking:[];
   const outputPath=project.meta?.settings.artifactOutputPath??project.rootPath;
   return <div className="execution-screen">
@@ -126,7 +139,7 @@ export function ExecutionStage({project,run}:{project:ProjectSummary;run:Runner}
       </section>
       <section className="panel"><div className="panelhead"><div><h3>Generation progress</h3><p>generation completed と artifact delivery completed は別状態です。</p></div><b>{current.progress.overall.completed} / {current.progress.overall.total}</b></div>
       <progress className="execution-progress" max={100} value={pct(current.progress.overall.completed,current.progress.overall.total)}/>
-      <div className="facts execution-facts"><div><span>Generation completed</span><b>{generationDone?'完了':'未完了'}</b></div><div><span>Artifact delivery completed</span><b>{deliveryDone?'完了':'未完了'}</b></div><div><span>Current branch</span><b>{current.current.branchId??'-'}</b></div><div><span>Current prompt ID</span><b>{current.current.promptId??current.current.leafId??'-'}</b></div></div>
+      <div className="facts execution-facts"><div><span>Generation completed</span><b>{generationDone?'完了':'未完了'}</b></div><div><span>推定残り時間</span><b>{generationDone?'完了':formatGenerationDuration(generationEta)}</b><small style={{display:'block',marginTop:4}}>直近 {generationSamples} / 5枚の移動平均{generationAverage!=null?` · 1枚平均 ${formatGenerationDuration(generationAverage)}`:''}</small></div><div><span>Artifact delivery completed</span><b>{deliveryDone?'完了':'未完了'}</b></div><div><span>Current branch</span><b>{current.current.branchId??'-'}</b></div><div><span>Current prompt ID</span><b>{current.current.promptId??current.current.leafId??'-'}</b></div></div>
       {branch&&<div className="branch-progress"><div><span>Branch progress · {branch.branchId}</span><b>{branch.completed} / {branch.total} · {branch.state}</b></div><progress max={100} value={pct(branch.completed,branch.total)}/></div>}
       </section>
 

@@ -14,6 +14,7 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
 
 (async()=>{
   const execution=await load('execution-run.js');
+  const progress=await load('../shared/execution-progress.js');
   const {hashCanonicalJson}=await load('workflow-api.js');
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'batch-studio-execution-project-'));
   const ui={nodes:[{id:1,type:'TestNode'}],links:[]};
@@ -34,6 +35,23 @@ const writeJson=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true})
   assert.equal(started.snapshot.workflow.workflowIdentity,workflowIdentity);
   assert.deepEqual(started.snapshot.plan.branches,[{branchId:'branch-a',leafIds:['leaf-a1','leaf-a2']}]);
   assert.deepEqual(started.progress.overall,{completed:0,total:2});
+  assert.deepEqual(started.progress.generationTiming,{currentPromptId:null,currentStartedAt:null,recentDurationsMs:[]});
+  const timingRun=structuredClone(started);
+  timingRun.progress.overall.total=10;
+  let clock=1_000;
+  for(const duration of [1_000,2_000,3_000,4_000,5_000,6_000]){
+    progress.markGenerationStarted(timingRun,'prompt-'+duration,clock);
+    progress.markGenerationCompleted(timingRun,clock+duration);
+    clock+=duration+100;
+  }
+  assert.deepEqual(timingRun.progress.generationTiming.recentDurationsMs,[2_000,3_000,4_000,5_000,6_000],'moving average must retain only the latest five image durations');
+  timingRun.progress.overall.completed=5;
+  assert.equal(progress.generationAverageMs(timingRun),4_000);
+  assert.equal(progress.estimatedGenerationRemainingMs(timingRun,clock),20_000,'ETA must multiply the five-image moving average by the remaining image count');
+  progress.markGenerationStarted(timingRun,'current',clock);
+  assert.equal(progress.estimatedGenerationRemainingMs(timingRun,clock+1_500),18_500,'ETA must subtract elapsed time for the current in-flight image');
+  progress.clearCurrentGenerationTiming(timingRun);
+  assert.equal(timingRun.progress.generationTiming.currentStartedAt,null);
   assert.equal(fs.existsSync(path.join(root,'execution_runs',started.runId+'.json')),true);
   assert.equal((await execution.getCurrentExecutionRun(root)).runId,started.runId);
   assert.equal((await execution.getExecutionRun(root,started.runId)).runId,started.runId);

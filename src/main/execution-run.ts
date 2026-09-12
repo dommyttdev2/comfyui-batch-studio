@@ -167,7 +167,7 @@ export async function startExecutionRun(root:string,preflightProvider:PreflightP
       phase:initialPhase(snapshot.target),
       controls:{scheduling:'ACTIVE',interrupt:'IDLE',stopSchedulingRequestedAt:null,forceInterruptRequestedAt:null},
       current:{branchId:null,leafId:null,promptId:null},
-      progress:{overall:{completed:0,total:preflight.plannedImages},branches,models:[]},
+      progress:{overall:{completed:0,total:preflight.plannedImages},branches,models:[],generationTiming:{currentPromptId:null,currentStartedAt:null,recentDurationsMs:[]}},
       promptIds:[],
       evidence:[],
       error:null,
@@ -240,6 +240,7 @@ export async function discardExecutionRun(root:string,runId:string):Promise<Exec
     run.controls.stopSchedulingRequestedAt=null;
     run.controls.forceInterruptRequestedAt=null;
     run.current={branchId:null,leafId:null,promptId:null};
+    if(run.progress.generationTiming){run.progress.generationTiming.currentPromptId=null;run.progress.generationTiming.currentStartedAt=null;}
     run.completedAt=at;
   });
 }
@@ -275,6 +276,7 @@ export async function resumeExecutionRun(root:string,runId:string,preflightProvi
       lifecycle:decision.lifecycle,
       phase:decision.phase,
       controls:{scheduling:'ACTIVE',interrupt:'IDLE',stopSchedulingRequestedAt:null,forceInterruptRequestedAt:null},
+      progress:{...run.progress,generationTiming:{currentPromptId:null,currentStartedAt:null,recentDurationsMs:[...(run.progress.generationTiming?.recentDurationsMs??[])].slice(-5)}},
       error:null,
       resume:{attempts:run.resume.attempts+1,lastAttemptAt:now,lastValidatedEvidenceIds:checked.valid.map(item=>item.id),lastIgnoredEvidenceIds:checked.invalid,lastDecisionPhase:decision.phase},
       updatedAt:now,

@@ -10,6 +10,8 @@ const uiSource=fs.readFileSync(path.join(repo,'src','renderer','ui.tsx'),'utf8')
 const appSource=fs.readFileSync(path.join(repo,'src','renderer','App.tsx'),'utf8');
 const executionSource=fs.readFileSync(path.join(repo,'src','renderer','ExecutionStages.tsx'),'utf8');
 const remoteExecutionSource=fs.readFileSync(path.join(repo,'src','main','remote-execution.ts'),'utf8');
+const localExecutionSource=fs.readFileSync(path.join(repo,'src','main','local-execution.ts'),'utf8');
+const progressSource=fs.readFileSync(path.join(repo,'src','shared','execution-progress.ts'),'utf8');
 const mainSource=fs.readFileSync(path.join(repo,'src','main','main.ts'),'utf8');
 assert.match(uiSource,/実行前チェック','実行'/,'Project navigation must place 実行 after 実行前チェック');
 assert.match(appSource,/case'実行':return <ExecutionStage/,'実行 stage must render ExecutionStage');
@@ -46,6 +48,14 @@ assert.match(remoteExecutionSource,/discardArtifacts/,'fresh restart must clean 
 assert.match(remoteExecutionSource,/applyRemoteProgressEvent/,'Remote generation progress must be applied from streamed Worker progress events');
 assert.match(remoteExecutionSource,/event\.type!==['"]progress['"]/,'Remote generation must ignore non-progress Worker events during live synchronization');
 assert.match(remoteExecutionSource,/overallCompleted/,'Generation progress must synchronize the Remote Worker overallCompleted counter');
+assert.match(executionSource,/推定残り時間/,'Generation progress must display an estimated remaining time');
+assert.match(executionSource,/直近 \{generationSamples\} \/ 5枚の移動平均/,'Generation ETA must explain its five-image moving-average window');
+assert.match(progressSource,/GENERATION_TIMING_WINDOW=5/,'generation ETA must use a five-image moving window');
+assert.match(progressSource,/estimatedGenerationRemainingMs/,'shared progress logic must calculate remaining generation time');
+assert.match(remoteExecutionSource,/markGenerationStarted\(run,promptId\)/,'Remote generation timing must start from streamed prompt submission');
+assert.match(remoteExecutionSource,/markGenerationCompleted\(run\)/,'Remote generation timing must finish on prompt success');
+assert.match(localExecutionSource,/markGenerationStarted\(r,lastPromptId\)/,'Local generation timing must start when a prompt is submitted');
+assert.match(localExecutionSource,/markGenerationCompleted\(r\)/,'Local generation timing must finish on prompt success');
 assert.match(mainSource,/IPC\.EXECUTION_RESTART_REMOTE/,'Main Process must implement replacement-Run IPC');
 assert.match(mainSource,/REMOTE_INSTANCE_REPLACED/,'replacement must terminalize the old Run with an explicit history reason');
 assert.match(mainSource,/isRemotePreGenerationPhase\(current\.phase\)/,'Instance replacement must be limited to pre-generation phases');

@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ExecutionEvidence, ExecutionEvidenceKind, ExecutionRun } from '../shared/types.js';
+import { clearCurrentGenerationTiming, markGenerationCompleted, markGenerationStarted } from '../shared/execution-progress.js';
 import { exists, readJson } from './fs-utils.js';
 import { enumerateSceneBranches, sliceSceneBranchGraph } from './local-execution.js';
 import { getExecutionRun, mutateExecutionRun, recordExecutionEvidence, validatedExecutionEvidence } from './execution-run.js';
@@ -55,7 +56,7 @@ async function localMatches(file:string,size:number,sha256:string){
   return (await sha256File(file))===sha256;
 }
 async function pauseForStop(root:string,runId:string){
-  return mutateExecutionRun(root,runId,run=>{run.lifecycle='PAUSED';run.controls.scheduling='STOPPED';run.current.promptId=null;});
+  return mutateExecutionRun(root,runId,run=>{run.lifecycle='PAUSED';run.controls.scheduling='STOPPED';run.current.promptId=null;clearCurrentGenerationTiming(run);});
 }
 
 function applyRemoteProgressEvent(run:ExecutionRun,event:Extract<WorkerEvent,{type:'progress'}>){
@@ -67,6 +68,12 @@ function applyRemoteProgressEvent(run:ExecutionRun,event:Extract<WorkerEvent,{ty
   const promptId=typeof current?.promptId==='string'?current.promptId:(typeof event.promptId==='string'?event.promptId:null);
   run.current={branchId,leafId,promptId};
   if(promptId&&!run.promptIds.includes(promptId))run.promptIds.push(promptId);
+  if(event.stage==='prompt_submitted')markGenerationStarted(run,promptId);
+  if(event.stage==='prompt_terminal'){
+    if(event.terminal==='success')markGenerationCompleted(run);
+    else clearCurrentGenerationTiming(run);
+  }
+  if(event.stage==='scheduling_stopped'||event.stage==='interrupt_requested'||event.stage==='sequence_completed')clearCurrentGenerationTiming(run);
   if(branchId){
     const branch=run.progress.branches.find(item=>item.branchId===branchId);
     if(branch){
@@ -79,14 +86,19 @@ function applyRemoteProgressEvent(run:ExecutionRun,event:Extract<WorkerEvent,{ty
 }
 
 function applyRemoteState(run:ExecutionRun,state:RemoteSequenceState){
-  const completed=state.completed??{};
+  const completed=state.completed??{},beforeOverall=run.progress.overall.completed;
   for(const branch of run.progress.branches){
     const next=Math.max(0,Math.min(branch.total,Number(completed[branch.branchId]??branch.completed)));
     branch.completed=next;
     branch.state=next>=branch.total?'completed':(state.current?.branchId===branch.branchId?'running':branch.state==='failed'?'failed':'pending');
   }
-  run.progress.overall.completed=Math.max(0,Math.min(run.progress.overall.total,Number(state.overallCompleted??run.progress.overall.completed)));
-  run.current={branchId:state.current?.branchId??null,leafId:state.current?.leafId??null,promptId:state.current?.promptId??null};
+  const nextOverall=Math.max(0,Math.min(run.progress.overall.total,Number(state.overallCompleted??run.progress.overall.completed)));
+  if(nextOverall>beforeOverall&&run.progress.generationTiming?.currentStartedAt)markGenerationCompleted(run);
+  run.progress.overall.completed=nextOverall;
+  const promptId=state.current?.promptId??null;
+  run.current={branchId:state.current?.branchId??null,leafId:state.current?.leafId??null,promptId};
+  if(promptId&&promptId!==run.progress.generationTiming?.currentPromptId)markGenerationStarted(run,promptId);
+  if(!promptId&&state.status&&state.status!=='running'&&state.status!=='interrupting')clearCurrentGenerationTiming(run);
   for(const id of state.promptIds??[])if(id&&!run.promptIds.includes(id))run.promptIds.push(id);
 }
 
@@ -103,7 +115,7 @@ export class RemoteExecutionService {
         if(run.lifecycle==='DISCARDED')return;
         const code=error instanceof ArtifactPipelineError?error.code:'REMOTE_EXECUTION_FAILED';
         const failure={code,message:safeError(error),phase:run.phase,at:new Date().toISOString(),retryable:true};
-        run.error=failure;run.errorHistory.push(failure);run.lifecycle='FAILED';run.controls.scheduling='STOPPED';
+        run.error=failure;run.errorHistory.push(failure);run.lifecycle='FAILED';run.controls.scheduling='STOPPED';clearCurrentGenerationTiming(run);
       });
     }).finally(async()=>{const discarding=this.discardingRuns.has(runId);try{if(!discarding)await this.onSettled?.(root,runId)}finally{if(!discarding)this.remote.disconnect(root,runId);this.workers.delete(runId)}});
     this.workers.set(runId,task);
@@ -156,8 +168,8 @@ export class RemoteExecutionService {
     currentRun=await getExecutionRun(root,runId);
     if(!currentRun||currentRun.lifecycle!=='RUNNING')return false;
     await this.syncState(root,runId,state);
-    if(state.status==='paused'){await mutateExecutionRun(root,runId,current=>{current.lifecycle='PAUSED';current.controls.scheduling='STOPPED';current.current.promptId=null;});return false;}
-    if(state.status==='interrupted'){await mutateExecutionRun(root,runId,current=>{current.lifecycle='INTERRUPTED';current.controls.scheduling='STOPPED';current.controls.interrupt='INTERRUPTED';current.current.promptId=null;});return false;}
+    if(state.status==='paused'){await mutateExecutionRun(root,runId,current=>{current.lifecycle='PAUSED';current.controls.scheduling='STOPPED';current.current.promptId=null;clearCurrentGenerationTiming(current);});return false;}
+    if(state.status==='interrupted'){await mutateExecutionRun(root,runId,current=>{current.lifecycle='INTERRUPTED';current.controls.scheduling='STOPPED';current.controls.interrupt='INTERRUPTED';current.current.promptId=null;clearCurrentGenerationTiming(current);});return false;}
     if(state.status==='failed')throw new Error(state.error?.message||state.error?.code||'Remote sequence failed.');
     if(state.status!=='completed')throw new Error(`Remote sequence ended in unexpected state: ${state.status??'unknown'}`);
     const latest=await getExecutionRun(root,runId);if(!latest)return false;
