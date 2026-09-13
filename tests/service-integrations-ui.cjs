@@ -119,6 +119,7 @@ matchCode(
   'Instanceが0件でも更新時にレイアウト高が変わらないよう最低高を確保する',
 );
 matchCode(vastPanel, /GPU検索・RENT/, 'Vast.ai画面に検索・RENT導線を追加する');
+matchCode(vastPanel, /ComfyUI Template互換・Verified・利用可能/, 'Web版に合わせた内部検索条件を説明する');
 matchCode(vastPanel, /rentError/, 'RENT失敗はVast.ai検索領域内で表示する');
 matchCode(
   vastPanel,
@@ -167,6 +168,9 @@ matchCode(vastPanel, /offer\.verification/, '検索結果にVerified情報を表
 matchCode(vastPanel, /offer\.internetDownMb/, '検索結果にDownload性能を表示する');
 matchCode(vastPanel, /offer\.diskBandwidthMb/, '検索結果にDisk性能を表示する');
 matchCode(vastClient, /type:'on-demand'/, 'Offer検索とRENTはOn-demand固定にする');
+matchCode(vastClient, /verified: \{ eq: true \}/, 'Web版と同様にVerified Offerへ限定する');
+matchCode(vastClient, /duration: \{ gte: WEB_DEFAULT_MIN_DURATION_SECONDS \}/, 'Web版既定の7日以上利用可能条件を適用する');
+matchCode(vastClient, /WEB_DEFAULT_MIN_DURATION_SECONDS = 7 \* 24 \* 60 \* 60/, 'Web版既定durationを7日として定義する');
 matchCode(vastClient, /order:\[\['dph_total','asc'\]\]/, 'Offer検索は時間単価の安い順を要求する');
 matchCode(vastClient, /allocated_storage:search\.storageGb/, '検索価格計算へStorage容量を反映する');
 matchCode(vastClient, /num_gpus:\{eq:search\.gpuCount\}/, 'GPU枚数を完全一致で検索する');
