@@ -11,6 +11,7 @@ for (const [stage, fileName] of [
   ['models-fix', 'model_loras.json'],
   ['prompt-plan', 'prompt_plan.json'],
   ['prompt-plan-fix', 'prompt_plan.json'],
+  ['caption', 'caption_content.json'],
 ]) {
   const escapedStage = stage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const escapedFile = fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
