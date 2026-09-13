@@ -135,7 +135,8 @@ export function validateCaptionContent(value: unknown): ValidationResult {
       issues.push({
         severity: 'error',
         code: 'CAPTION_CONTENT_CONTENTS',
-        message: 'contentsを指定する場合は ja / en を1件以上の空でない文字列配列で指定してください。',
+        message:
+          'contentsを指定する場合は ja / en を1件以上の空でない文字列配列で指定してください。',
       });
   }
 
@@ -156,7 +157,8 @@ async function countImages(directory: string): Promise<number> {
   for (const entry of entries) {
     const full = path.join(directory, entry.name);
     if (entry.isDirectory()) count += await countImages(full);
-    else if (entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) count += 1;
+    else if (entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
+      count += 1;
   }
   return count;
 }
@@ -246,7 +248,10 @@ export async function getCaptionStatus(root: string): Promise<CaptionStatus> {
   let state: CaptionStatus['state'];
   if (!sourceDirectory) state = 'unconfigured';
   else if (!sourceExists) state = 'source-missing';
-  else if (!draft.content && draft.validation.issues.some((issue) => issue.code === 'CAPTION_CONTENT_MISSING'))
+  else if (
+    !draft.content &&
+    draft.validation.issues.some((issue) => issue.code === 'CAPTION_CONTENT_MISSING')
+  )
     state = 'missing-content';
   else if (!draft.validation.valid) state = 'invalid-content';
   else if (!captionExists) state = 'ready';
@@ -324,14 +329,11 @@ export async function importCaptionGrok(root: string, raw: string): Promise<Impo
 
 export async function generateCaption(root: string): Promise<CaptionStatus> {
   const status = await getCaptionStatus(root);
-  if (!status.sourceDirectory)
-    throw new Error('最終成果物ディレクトリを指定してください。');
-  if (!status.sourceExists)
-    throw new Error('指定された最終成果物ディレクトリが見つかりません。');
+  if (!status.sourceDirectory) throw new Error('最終成果物ディレクトリを指定してください。');
+  if (!status.sourceExists) throw new Error('指定された最終成果物ディレクトリが見つかりません。');
   if (!status.content || !status.contentValidation.valid)
     throw new Error('有効な caption_content.json をGrokから取り込んでください。');
-  if (status.imageCount < 1)
-    throw new Error('最終成果物ディレクトリに対象画像がありません。');
+  if (status.imageCount < 1) throw new Error('最終成果物ディレクトリに対象画像がありません。');
   if (!status.preview) throw new Error('caption.txt の生成内容を構築できません。');
 
   await writeTextAtomic(status.captionPath, status.preview);
