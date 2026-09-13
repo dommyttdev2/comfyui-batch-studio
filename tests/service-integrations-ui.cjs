@@ -217,7 +217,7 @@ matchCode(
   /template_hash_id:template\.hashId/,
   'RENT時にComfyUI Template hashを指定する',
 );
-matchCode(vastClient, /Vast\.ai API \(404\|410\)/, 'Create APIの404/410をOffer失効として扱う');
+matchCode(vastClient, /no_such_ask/, 'Create APIの404/410・no_such_askをOffer失効として扱う');
 matchCode(vastClient, /disk:storageGb/, '検索時と同じStorage容量でRENTする');
 matchCode(ipc, /VASTAI_SEARCH_OFFERS/);
 matchCode(ipc, /VASTAI_RENT_OFFER/);
