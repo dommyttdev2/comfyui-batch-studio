@@ -73,11 +73,7 @@ matchCode(
   /画像枚数、収録枚数、生成枚数は出力しません/,
   'Grok must not provide the final image count',
 );
-matchCode(
-  grok,
-  /定型注意書きは出力しません/,
-  'Grok must not own deterministic disclaimers',
-);
+matchCode(grok, /定型注意書きは出力しません/, 'Grok must not own deterministic disclaimers');
 matchCode(
   stage,
   /caption\.selectSourceDirectory/,
