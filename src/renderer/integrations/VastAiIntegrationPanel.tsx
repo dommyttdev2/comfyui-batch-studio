@@ -586,8 +586,8 @@ export function VastAiIntegrationPanel({
           <div>
             <h4>GPU検索・RENT</h4>
             <p>
-              Vast.aiのComfyUI Templateを使用するOn-demand
-              Offerだけを検索します。GPU・VRAM・料金などは結果を比較して選択します。
+              Vast.ai Webの既定条件に合わせ、ComfyUI Template互換・Verified・利用可能・
+              7日以上利用可能なOn-demand Offerを検索します。GPU・VRAM・料金などは結果を比較して選択します。
             </p>
           </div>
           {template && (
