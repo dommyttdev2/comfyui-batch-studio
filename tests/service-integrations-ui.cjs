@@ -121,11 +121,7 @@ matchCode(
 matchCode(vastPanel, /GPU検索・RENT/, 'Vast.ai画面に検索・RENT導線を追加する');
 matchCode(vastPanel, /ComfyUI Template互換・Verified・利用可能/, 'Web版に合わせた内部検索条件を説明する');
 matchCode(vastPanel, /rentError/, 'RENT失敗はVast.ai検索領域内で表示する');
-matchCode(
-  vastPanel,
-  /このOfferは利用できなくなりました。検索結果を自動更新しています。/,
-  '失効Offerを分かりやすく通知する',
-);
+matchCode(vastPanel, /このOfferは利用できなくなりました。検索結果への反映待ちの間は再表示しません。/, '失効Offerを分かりやすく通知する');
 matchCode(
   vastPanel,
   /setSearchRevision\(value=>value\+1\)/,
@@ -140,6 +136,10 @@ matchCode(vastPanel, /role="alert"/, 'RENTエラーを検索結果付近のalert
 matchCode(serviceCss, /\.vast-rent-error\{/, 'RENTエラー専用のインライン表示を持つ');
 matchCode(vastPanel, /DEFAULT_SEARCH:[^\n]*gpuCount:1/, 'GPU Countの初期値は1にする');
 matchCode(vastPanel, /SEARCH_DEBOUNCE_MS=400/, '検索条件変更はdebounceしてリアルタイム検索する');
+matchCode(vastPanel, /SEARCH_REFRESH_MS=5_000/, '検索結果を5秒ごとに再取得する');
+matchCode(vastPanel, /STALE_OFFER_SUPPRESSION_MS=10\*60_000/, 'RENT不可Offerは10分間ローカル抑止する');
+matchCode(vastPanel, /staleOfferIdsRef\.current\.set\(offer\.id/, 'RENT不可Offer IDを抑止リストへ登録する');
+matchCode(vastPanel, /filter\(offer=>!staleOfferIdsRef\.current\.has\(offer\.id\)\)/, '検索APIが古いOfferを返しても再表示しない');
 matchCode(vastPanel, /window\.setTimeout/, '検索は入力変更後に自動実行する');
 doesNotMatchCode(vastPanel, />検索<\/button>/, '検索ボタンを置かない');
 matchCode(vastPanel, /sortedOffers/, 'Rendererでも検索結果をコスト順に安定化する');
@@ -189,12 +189,14 @@ matchCode(
   /template_hash_id:template\.hashId/,
   'RENT時にComfyUI Template hashを指定する',
 );
+matchCode(vastClient, /Vast\.ai API \(404\|410\)/, 'Create APIの404/410をOffer失効として扱う');
 matchCode(vastClient, /disk:storageGb/, '検索時と同じStorage容量でRENTする');
 matchCode(ipc, /VASTAI_SEARCH_OFFERS/);
 matchCode(ipc, /VASTAI_RENT_OFFER/);
 matchCode(preload, /searchOffers/);
 matchCode(preload, /rentOffer/);
 matchCode(main, /RENTするとVast\.aiで課金が開始されます/, '課金開始前に確認ダイアログを表示する');
+matchCode(main, /rentOffer\(\{offerId,storageGb,templateHashId\},offer\)/, '確認済みOfferをCreateへ渡して余分な再検索を避ける');
 matchCode(
   main,
   /openStandaloneToolWindow\('vastai'\)/,
