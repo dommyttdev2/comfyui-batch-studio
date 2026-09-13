@@ -90,6 +90,7 @@ import { RemoteModelStager } from './remote-model-stager.js';
 import { RemoteEnvironmentBootstrap } from './remote-environment-bootstrap.js';
 import { RemoteExecutionService } from './remote-execution.js';
 import { RemoteInstanceLifecycleService } from './remote-instance-lifecycle.js';
+import { generateCaption, getCaptionStatus, importCaptionGrok } from './caption-service.js';
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
@@ -310,7 +311,7 @@ function validRoot(x: unknown): asserts x is string {
   if (typeof x !== 'string' || !x.trim()) throw new Error('Invalid project root.');
 }
 function validGrokContextStage(x: unknown): asserts x is GrokContextStage {
-  if (x !== 'story' && x !== 'models' && x !== 'prompt-plan')
+  if (x !== 'story' && x !== 'models' && x !== 'prompt-plan' && x !== 'caption')
     throw new Error('Invalid Grok context stage.');
 }
 function validManualResetScope(x: unknown): asserts x is ManualResetScope {
@@ -1251,6 +1252,33 @@ function register() {
     } finally {
       executor.endDiscard(runId);
     }
+  });
+  ipcMain.handle(IPC.CAPTION_STATUS, (_e, root: unknown) => {
+    validRoot(root);
+    return getCaptionStatus(root);
+  });
+  ipcMain.handle(IPC.CAPTION_SELECT_SOURCE_DIRECTORY, async (_e, root: unknown) => {
+    validRoot(root);
+    const meta = await readProjectMeta(root);
+    const current = meta?.settings.captionSourceDirectory?.trim();
+    const fallback = meta?.settings.artifactOutputPath?.trim();
+    const result = await dialog.showOpenDialog({
+      title: '最終成果物ディレクトリを選択',
+      defaultPath: current || fallback || root,
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) return getCaptionStatus(root);
+    await saveProjectSettings(root, { captionSourceDirectory: result.filePaths[0] });
+    return getCaptionStatus(root);
+  });
+  ipcMain.handle(IPC.CAPTION_IMPORT_GROK, (_e, root: unknown, raw: unknown) => {
+    validRoot(root);
+    if (typeof raw !== 'string') throw new Error('Invalid Grok caption response');
+    return importCaptionGrok(root, raw);
+  });
+  ipcMain.handle(IPC.CAPTION_GENERATE, (_e, root: unknown) => {
+    validRoot(root);
+    return generateCaption(root);
   });
   ipcMain.handle(IPC.R2_SETTINGS, () => r2().settings());
   ipcMain.handle(IPC.R2_ENVIRONMENT, () => r2().environment());
