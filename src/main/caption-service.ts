@@ -154,8 +154,7 @@ async function isDirectory(directory: string) {
 async function countImages(directory: string): Promise<number> {
   const entries = await readdir(directory, { withFileTypes: true });
   return entries.filter(
-    (entry) =>
-      entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()),
+    (entry) => entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()),
   ).length;
 }
 
