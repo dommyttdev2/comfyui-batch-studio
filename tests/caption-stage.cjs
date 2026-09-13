@@ -28,10 +28,10 @@ matchCode(
   /new Set\(\['\.png', '\.jpg', '\.jpeg', '\.webp'\]\)/,
   'caption image count must use the agreed supported image extensions',
 );
-matchCode(
+doesNotMatchCode(
   service,
-  /entry\.isDirectory\(\)\) count \+= await countImages\(full\)/,
-  'caption image count must scan the selected directory tree',
+  /entry\.isDirectory\(\)/,
+  'caption image count must not include images from subdirectories',
 );
 matchCode(
   service,
