@@ -33,6 +33,16 @@ matchCode(
 );
 matchCode(
   src,
+  /artifactFileOutputRules\('caption_content\.json'\)/,
+  'Caption semantic content must be returned as caption_content.json file',
+);
+matchCode(
+  src,
+  /画像枚数、収録枚数、生成枚数は出力しません/,
+  'Grok caption output must leave actual image count to Batch Studio',
+);
+matchCode(
+  src,
   /ダウンロード可能なファイルとして生成・添付/,
   'final artifact outputs must be downloadable files',
 );
