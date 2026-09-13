@@ -13,6 +13,7 @@ const DEFAULT_BASE_URL = 'https://console.vast.ai';
 const REQUEST_TIMEOUT_MS = 20_000;
 const LIFECYCLE_TIMEOUT_MS = 15 * 60_000;
 const LIFECYCLE_POLL_MS = 5_000;
+const WEB_DEFAULT_MIN_DURATION_SECONDS = 7 * 24 * 60 * 60;
 const PENDING_CREATION_TTL_MS = 10 * 60_000;
 type PendingInstanceAction = 'start' | 'stop' | 'reboot';
 
@@ -494,8 +495,10 @@ export class VastAiClient {
       ...template.extraFilters,
       limit: 100,
       type: 'on-demand',
+      verified: { eq: true },
       rentable: { eq: true },
       rented: { eq: false },
+      duration: { gte: WEB_DEFAULT_MIN_DURATION_SECONDS },
       allocated_storage: search.storageGb,
       num_gpus: { eq: search.gpuCount },
       reliability: { gte: search.minReliability / 100 },
