@@ -439,13 +439,7 @@ function response(payload, status = 200) {
           { gte: 12.6 },
           'ComfyUI Template extra_filtersを検索条件へ反映する',
         );
-        for (const key of [
-          'gpu_name',
-          'gpu_ram',
-          'dph_total',
-          'inet_down',
-          'disk_bw',
-        ])
+        for (const key of ['gpu_name', 'gpu_ram', 'dph_total', 'inet_down', 'disk_bw'])
           assert.equal(body[key], undefined, key + ' must remain result-only');
         return response({ offers: [richOffer, cheapOffer] });
       }
