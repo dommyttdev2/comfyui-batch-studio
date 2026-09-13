@@ -238,7 +238,8 @@ export function VastAiIntegrationPanel({
           const now = Date.now();
           const returnedIds = new Set(result.offers.map((offer) => offer.id));
           for (const [offerId, expiresAt] of staleOfferIdsRef.current) {
-            if (expiresAt <= now || !returnedIds.has(offerId)) staleOfferIdsRef.current.delete(offerId);
+            if (expiresAt <= now || !returnedIds.has(offerId))
+              staleOfferIdsRef.current.delete(offerId);
           }
           setTemplate(result.template);
           setOffers(result.offers.filter((offer) => !staleOfferIdsRef.current.has(offer.id)));
@@ -587,7 +588,8 @@ export function VastAiIntegrationPanel({
             <h4>GPU検索・RENT</h4>
             <p>
               Vast.ai Webの既定条件に合わせ、ComfyUI Template互換・Verified・利用可能・
-              7日以上利用可能なOn-demand Offerを検索します。GPU・VRAM・料金などは結果を比較して選択します。
+              7日以上利用可能なOn-demand
+              Offerを検索します。GPU・VRAM・料金などは結果を比較して選択します。
             </p>
           </div>
           {template && (
