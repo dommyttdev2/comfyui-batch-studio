@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   VastAiComfyUiTemplate,
   VastAiConnectionInput,
@@ -17,6 +17,8 @@ const EMPTY_VAST: VastAiConnectionInput = {
 };
 const INSTANCE_REFRESH_MS = 5_000;
 const SEARCH_DEBOUNCE_MS = 400;
+const SEARCH_REFRESH_MS = 5_000;
+const STALE_OFFER_SUPPRESSION_MS = 10 * 60_000;
 const DEFAULT_SEARCH: VastAiOfferSearchInput = {
   storageGb: 8,
   minTflops: 0,
@@ -162,6 +164,7 @@ export function VastAiIntegrationPanel({
     [rentNotice, setRentNotice] = useState(''),
     [rentError, setRentError] = useState('');
   const configured = Boolean(status?.configured);
+  const staleOfferIdsRef = useRef(new Map<number, number>());
   const loadInstances = async () => {
     setLoadingInstances(true);
     try {
@@ -232,8 +235,14 @@ export function VastAiIntegrationPanel({
         .searchOffers({ ...search, excludedCountries: countries.codes })
         .then((result) => {
           if (cancelled) return;
+          const now = Date.now();
+          const returnedIds = new Set(result.offers.map((offer) => offer.id));
+          for (const [offerId, expiresAt] of staleOfferIdsRef.current) {
+            if (expiresAt <= now || !returnedIds.has(offerId))
+              staleOfferIdsRef.current.delete(offerId);
+          }
           setTemplate(result.template);
-          setOffers(result.offers);
+          setOffers(result.offers.filter((offer) => !staleOfferIdsRef.current.has(offer.id)));
         })
         .catch((error) => {
           if (!cancelled) setSearchError(error instanceof Error ? error.message : String(error));
@@ -257,6 +266,14 @@ export function VastAiIntegrationPanel({
     excludedCountries,
     searchRevision,
   ]);
+  useEffect(() => {
+    if (!configured || !template) return;
+    const timer = window.setInterval(
+      () => setSearchRevision((value) => value + 1),
+      SEARCH_REFRESH_MS,
+    );
+    return () => window.clearInterval(timer);
+  }, [configured, template?.hashId]);
   const set = (key: keyof VastAiConnectionInput, value: string | number | undefined) =>
     setInput((prev) => ({ ...prev, [key]: value }));
   const save = () =>
@@ -316,7 +333,10 @@ export function VastAiIntegrationPanel({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes('現在RENTできません')) {
-        setRentError('このOfferは利用できなくなりました。検索結果を自動更新しています。');
+        staleOfferIdsRef.current.set(offer.id, Date.now() + STALE_OFFER_SUPPRESSION_MS);
+        setRentError(
+          'このOfferは利用できなくなりました。検索結果への反映待ちの間は再表示しません。',
+        );
         setOffers((prev) => prev.filter((item) => item.id !== offer.id));
         setSearchRevision((value) => value + 1);
       } else {
@@ -567,8 +587,9 @@ export function VastAiIntegrationPanel({
           <div>
             <h4>GPU検索・RENT</h4>
             <p>
-              Vast.aiのComfyUI Templateを使用するOn-demand
-              Offerだけを検索します。GPU・VRAM・料金などは結果を比較して選択します。
+              Vast.ai Webの既定条件に合わせ、ComfyUI Template互換・Verified・利用可能・
+              7日以上利用可能なOn-demand
+              Offerを検索します。GPU・VRAM・料金などは結果を比較して選択します。
             </p>
           </div>
           {template && (
@@ -660,7 +681,7 @@ export function VastAiIntegrationPanel({
               ) : searchError ? (
                 <span className="error">{searchError}</span>
               ) : (
-                <span>{sortedOffers.length} offers · コストが低い順</span>
+                <span>{sortedOffers.length} offers · コストが低い順 · 5秒ごとに更新</span>
               )}
             </div>
           </>

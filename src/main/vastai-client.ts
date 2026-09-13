@@ -13,6 +13,7 @@ const DEFAULT_BASE_URL = 'https://console.vast.ai';
 const REQUEST_TIMEOUT_MS = 20_000;
 const LIFECYCLE_TIMEOUT_MS = 15 * 60_000;
 const LIFECYCLE_POLL_MS = 5_000;
+const WEB_DEFAULT_MIN_DURATION_SECONDS = 7 * 24 * 60 * 60;
 const PENDING_CREATION_TTL_MS = 10 * 60_000;
 type PendingInstanceAction = 'start' | 'stop' | 'reboot';
 
@@ -494,8 +495,10 @@ export class VastAiClient {
       ...template.extraFilters,
       limit: 100,
       type: 'on-demand',
+      verified: { eq: true },
       rentable: { eq: true },
       rented: { eq: false },
+      duration: { gte: WEB_DEFAULT_MIN_DURATION_SECONDS },
       allocated_storage: search.storageGb,
       num_gpus: { eq: search.gpuCount },
       reliability: { gte: search.minReliability / 100 },
@@ -537,7 +540,7 @@ export class VastAiClient {
       );
     return normalizeVastOffer(rows[0]);
   }
-  async rentOffer(input: VastAiRentRequest) {
+  async rentOffer(input: VastAiRentRequest, validatedOffer?: VastAiOffer) {
     const offerId = integerValue(input?.offerId),
       storageGb = numberValue(input?.storageGb),
       templateHashId = stringValue(input?.templateHashId);
@@ -549,8 +552,10 @@ export class VastAiClient {
       throw new Error(
         `ComfyUI Templateの推奨Storageは ${template.recommendedDiskSpaceGb} GB以上です。`,
       );
-    const offer = await this.getOffer(offerId, storageGb);
-    const payload = record(
+    const offer = validatedOffer ?? (await this.getOffer(offerId, storageGb));
+    let payload: JsonRecord;
+    try {
+      payload = record(
         await this.request(`/api/v0/asks/${offerId}/`, {
           method: 'PUT',
           body: JSON.stringify({
@@ -560,8 +565,16 @@ export class VastAiClient {
             label: 'ComfyUI Batch Studio',
           }),
         }),
-      ),
-      instanceId = integerValue(payload.new_contract);
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Vast\.ai API (404|410):|no_such_ask/i.test(message))
+        throw new Error(
+          `Vast.ai Offer #${offerId} は現在RENTできません。検索結果を更新してください。`,
+        );
+      throw error;
+    }
+    const instanceId = integerValue(payload.new_contract);
     if (payload.success === false || instanceId == null || instanceId < 1)
       throw new Error(messageFromPayload(payload) ?? 'Vast.ai Instanceを作成できませんでした。');
     this.pendingCreatedInstances.set(instanceId, { createdAt: Date.now(), offer });

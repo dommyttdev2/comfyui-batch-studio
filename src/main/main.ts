@@ -988,7 +988,7 @@ function register() {
       noLink: true,
     });
     if (result.response !== 1) return null;
-    return vastClient().rentOffer({ offerId, storageGb, templateHashId });
+    return vastClient().rentOffer({ offerId, storageGb, templateHashId }, offer);
   });
   ipcMain.handle(IPC.VASTAI_START_INSTANCE, async (_e, id: unknown) => {
     await vastClient().requestStartInstance(validInstanceId(id));

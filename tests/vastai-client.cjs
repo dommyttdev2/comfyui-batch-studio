@@ -424,8 +424,10 @@ function response(payload, status = 200) {
         if (body.id?.eq === 123) return response({ offers: [richOffer] });
         assert.equal(body.type, 'on-demand');
         assert.equal(body.limit, 100);
+        assert.deepEqual(body.verified, { eq: true });
         assert.deepEqual(body.rentable, { eq: true });
         assert.deepEqual(body.rented, { eq: false });
+        assert.deepEqual(body.duration, { gte: 604800 });
         assert.equal(body.allocated_storage, 120);
         assert.deepEqual(body.num_gpus, { eq: 1 });
         assert.deepEqual(body.total_flops, { gte: 60 });
@@ -437,14 +439,7 @@ function response(payload, status = 200) {
           { gte: 12.6 },
           'ComfyUI Template extra_filtersを検索条件へ反映する',
         );
-        for (const key of [
-          'gpu_name',
-          'gpu_ram',
-          'dph_total',
-          'verification',
-          'inet_down',
-          'disk_bw',
-        ])
+        for (const key of ['gpu_name', 'gpu_ram', 'dph_total', 'inet_down', 'disk_bw'])
           assert.equal(body[key], undefined, key + ' must remain result-only');
         return response({ offers: [richOffer, cheapOffer] });
       }
