@@ -31,6 +31,7 @@ const GROK_RETURN_FILES: Partial<Record<GrokTask['stage'], GrokReturnFile>> = {
   'models-fix': { name: 'model_loras.json', accept: '.json,application/json,text/plain' },
   'prompt-plan': { name: 'prompt_plan.json', accept: '.json,application/json,text/plain' },
   'prompt-plan-fix': { name: 'prompt_plan.json', accept: '.json,application/json,text/plain' },
+  caption: { name: 'caption_content.json', accept: '.json,application/json,text/plain' },
 };
 function fileSizeLabel(size: number) {
   if (size < 1024) return `${size} B`;

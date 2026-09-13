@@ -9,7 +9,8 @@ export type Stage =
   | 'ワークフロー'
   | 'モデル配置'
   | '実行前チェック'
-  | '実行';
+  | '実行'
+  | 'キャプション';
 export type Runner = <T>(fn: () => Promise<T>) => Promise<T | undefined>;
 export const stages: Stage[] = [
   '概要',
@@ -21,11 +22,13 @@ export const stages: Stage[] = [
   'モデル配置',
   '実行前チェック',
   '実行',
+  'キャプション',
 ];
 const GROK_STAGE_CONTEXT: Partial<Record<Stage, GrokContextStage>> = {
   ストーリー: 'story',
   モデル選定: 'models',
   プロンプト設計: 'prompt-plan',
+  キャプション: 'caption',
 };
 export function shouldShowGrok(stage: Stage) {
   return Boolean(GROK_STAGE_CONTEXT[stage]);

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "caption-content.schema.json",
+  "title": "ComfyUI Batch Studio Caption Content",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "title", "description"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "title": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ja", "en"],
+      "properties": {
+        "ja": { "type": "string", "minLength": 1 },
+        "en": { "type": "string", "minLength": 1 }
+      }
+    },
+    "description": {
+      "$ref": "#/$defs/bilingualLines"
+    },
+    "contents": {
+      "$ref": "#/$defs/bilingualLines"
+    }
+  },
+  "$defs": {
+    "bilingualLines": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ja", "en"],
+      "properties": {
+        "ja": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "en": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

@@ -4,6 +4,7 @@ import { grokContextStage, stages, shouldShowGrok, statusDot, type Runner, type 
 import { Overview, Settings } from './ProjectStages';
 import { StoryStage, ModelsStage } from './GrokStages';
 import { PromptPlanStage } from './PromptPlanStage';
+import { CaptionStage } from './CaptionStage';
 import {
   WorkflowStage,
   AvailabilityStage,
@@ -611,6 +612,8 @@ function StageView(props: {
       return <PreflightStage {...props} />;
     case '実行':
       return <ExecutionStage {...props} />;
+    case 'キャプション':
+      return <CaptionStage {...props} />;
   }
 }
 

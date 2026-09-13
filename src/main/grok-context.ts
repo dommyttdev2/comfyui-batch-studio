@@ -149,6 +149,28 @@ prompt_plan.json は次の形だけにしてください。
 - model_prompt_fallbacks.json が添付されている場合、その promptFallbacks はLoRA不足をPromptで解決済みと判断した要件です。各 requirement と Story を照合し、該当する common / Branch / Leaf の positive・negativeへ記録済み文字列を反映してください。無関係なSceneへ一律適用せず、必要な範囲へ配置してください。
 - promptFallbacks の positive / negative は代替策として確定したPromptなので、省略したり反対の意味へ書き換えたりしません。重複だけは適用先Prompt内で1回にまとめて構いません。
 - common / rootLoras / branches / leaves の意味情報だけを出力し、Workflow内部fieldや未知fieldを追加しません。`;
+const captionShape = `${artifactFileOutputRules('caption_content.json')}
+caption_content.json は次の形だけにしてください。
+{
+  "schemaVersion": 1,
+  "title": { "ja": "...", "en": "..." },
+  "description": {
+    "ja": ["段落1", "段落2"],
+    "en": ["Paragraph 1", "Paragraph 2"]
+  },
+  "contents": {
+    "ja": ["内容1", "内容2"],
+    "en": ["Content 1", "Content 2"]
+  }
+}
+- JSONとしてparse可能な厳密な構文にしてください。コメント、末尾カンマ、擬似値は出力しません。
+- title と description は必須です。ja / en の両方を作成してください。
+- description は段落単位の文字列配列にしてください。
+- contents は作品内容を短い一覧として示す価値がある場合だけ追加する任意fieldです。不要ならfield自体を出力しません。
+- 画像枚数、収録枚数、生成枚数は出力しません。最終成果物ディレクトリの実ファイル数をBatch Studioが挿入します。
+- 「二次創作です」「公式とは無関係です」「AI生成作品です」等の定型注意書きは出力しません。Batch Studioが付加します。
+- Markdown見出し、code block、caption.txt完成形、ComfyUI情報、未定義fieldは出力しません。
+- 日本語と英語で作品内容の意味が対応するようにしてください。`;
 const danbooruTagRules = `## Danbooruタグ選定ルール
 画像生成に使用する positive / negative prompt の通常タグは、Danbooruで実在するタグを使用してください。
 - 自由作文の英語フレーズや、Danbooruに存在しない独自タグを新しく作ってはいけません。
@@ -225,6 +247,21 @@ export async function buildGrokTask(
       ],
     };
   }
+  if (stage === 'caption')
+    return {
+      stage,
+      title: 'キャプション本文生成',
+      prompt: `${common}\n\n## Task\n確定済みの基本設定・Story・Prompt Planを基に、最終作品のcaption.txtへ使用するタイトルと説明文を日本語・英語で作成してください。作品内容を要約する短い一覧が有用な場合だけ contents も作成してください。実際の収録画像枚数は手作業で選定・モザイク処理された最終成果物ディレクトリをBatch Studioが数えるため、あなたは枚数を推測・記載しないでください。\n\n${captionShape}${extra ? `\n\n追加条件:\n${extra}` : ''}`,
+      attachments: [
+        await attachment('project_brief.json', brief, '作品・キャラクター・基本設定'),
+        await attachment('story.md', story, '確定ストーリー'),
+        await attachment(
+          'prompt_plan.json',
+          path.join(root, 'prompt_plan.json'),
+          '実際に画像化するシーン構成',
+        ),
+      ],
+    };
   const briefData = await readJson<any>(brief),
     modelData = await readJson<any>(models);
   const target = briefData?.generation?.target_image_count,

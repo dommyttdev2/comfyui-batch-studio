@@ -98,6 +98,7 @@ export interface ProjectSettings {
   remoteProvider?: CloudInstanceProviderId;
   remoteInstanceId?: number;
   artifactOutputPath?: string;
+  captionSourceDirectory?: string;
   r2IndexPath?: string;
   templatePath?: string;
   manifestPath?: string;
@@ -482,6 +483,40 @@ export interface CatalogSelectionTemplateInput {
   name: string;
   selection: CatalogSelectionEntry[];
 }
+export interface CaptionContent {
+  schemaVersion: 1;
+  title: { ja: string; en: string };
+  description: { ja: string[]; en: string[] };
+  contents?: { ja: string[]; en: string[] };
+}
+export interface CaptionBuildInfo {
+  schemaVersion: 1;
+  sourceDirectory: string;
+  imageCount: number;
+  contentSha256: string;
+  generatedAt: string;
+}
+export interface CaptionStatus {
+  state:
+    | 'unconfigured'
+    | 'source-missing'
+    | 'missing-content'
+    | 'invalid-content'
+    | 'ready'
+    | 'generated'
+    | 'stale';
+  sourceDirectory: string | null;
+  sourceExists: boolean;
+  imageCount: number;
+  imageExtensions: string[];
+  content: CaptionContent | null;
+  contentValidation: ValidationResult;
+  captionPath: string;
+  captionExists: boolean;
+  stale: boolean;
+  build: CaptionBuildInfo | null;
+  preview: string | null;
+}
 export interface GrokTask {
   stage:
     | 'story-initial'
@@ -490,7 +525,8 @@ export interface GrokTask {
     | 'models'
     | 'models-fix'
     | 'prompt-plan'
-    | 'prompt-plan-fix';
+    | 'prompt-plan-fix'
+    | 'caption';
   title: string;
   prompt: string;
   attachments: Array<{ name: string; path: string; purpose: string; exists: boolean }>;
@@ -780,7 +816,7 @@ export interface R2Metrics {
   configured: boolean;
   payload?: unknown;
 }
-export type GrokContextStage = 'story' | 'models' | 'prompt-plan';
+export type GrokContextStage = 'story' | 'models' | 'prompt-plan' | 'caption';
 export interface GrokPaneState {
   visible: boolean;
   ratio: number;
@@ -881,6 +917,12 @@ export interface BatchStudioApi {
     resume: (root: string, runId: string) => Promise<ExecutionRun>;
     restartRemote: (root: string, runId: string) => Promise<ExecutionRun>;
     restartFromScratch: (root: string, runId: string) => Promise<ExecutionRun>;
+  };
+  caption: {
+    status: (root: string) => Promise<CaptionStatus>;
+    selectSourceDirectory: (root: string) => Promise<CaptionStatus>;
+    importGrok: (root: string, raw: string) => Promise<ImportResult>;
+    generate: (root: string) => Promise<CaptionStatus>;
   };
   clipboard: { writeText: (text: string) => Promise<void> };
   r2: {
