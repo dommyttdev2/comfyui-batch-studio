@@ -152,15 +152,11 @@ async function isDirectory(directory: string) {
 }
 
 async function countImages(directory: string): Promise<number> {
-  let count = 0;
   const entries = await readdir(directory, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = path.join(directory, entry.name);
-    if (entry.isDirectory()) count += await countImages(full);
-    else if (entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
-      count += 1;
-  }
-  return count;
+  return entries.filter(
+    (entry) =>
+      entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()),
+  ).length;
 }
 
 function renderContents(lines: string[], prefix: string) {
