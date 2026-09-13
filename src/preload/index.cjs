@@ -63,6 +63,10 @@ const I = {
   EXECUTION_RESUME: 'execution:resume',
   EXECUTION_RESTART_REMOTE: 'execution:restart-remote',
   EXECUTION_RESTART_FROM_SCRATCH: 'execution:restart-from-scratch',
+  CAPTION_STATUS: 'caption:status',
+  CAPTION_SELECT_SOURCE_DIRECTORY: 'caption:select-source-directory',
+  CAPTION_IMPORT_GROK: 'caption:import-grok',
+  CAPTION_GENERATE: 'caption:generate',
   R2_SETTINGS: 'r2:settings',
   R2_ENVIRONMENT: 'r2:environment',
   R2_TEST: 'r2:test',
@@ -174,6 +178,12 @@ contextBridge.exposeInMainWorld('batchStudio', {
     resume: (r, id) => ipcRenderer.invoke(I.EXECUTION_RESUME, r, id),
     restartRemote: (r, id) => ipcRenderer.invoke(I.EXECUTION_RESTART_REMOTE, r, id),
     restartFromScratch: (r, id) => ipcRenderer.invoke(I.EXECUTION_RESTART_FROM_SCRATCH, r, id),
+  },
+  caption: {
+    status: (r) => ipcRenderer.invoke(I.CAPTION_STATUS, r),
+    selectSourceDirectory: (r) => ipcRenderer.invoke(I.CAPTION_SELECT_SOURCE_DIRECTORY, r),
+    importGrok: (r, x) => ipcRenderer.invoke(I.CAPTION_IMPORT_GROK, r, x),
+    generate: (r) => ipcRenderer.invoke(I.CAPTION_GENERATE, r),
   },
   clipboard: { writeText: (t) => ipcRenderer.invoke(I.CLIPBOARD_WRITE_TEXT, t) },
   r2: {
