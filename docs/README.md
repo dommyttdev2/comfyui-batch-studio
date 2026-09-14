@@ -17,6 +17,7 @@ docs/
 │  └─ scope-and-flow.md
 ├─ architecture/
 │  ├─ system-architecture.md
+│  ├─ project-window-execution-runtime.md
 │  ├─ workflow-compiler.md
 │  └─ remote-execution.md
 ├─ contracts/
@@ -45,6 +46,7 @@ docs/
 | `requirements/requirements.md` | 要件 ID、状態、未決事項の索引 |
 | `product/scope-and-flow.md` | 製品目的、責務境界、対象範囲、全体工程、工程 Gate |
 | `architecture/system-architecture.md` | Electron 構成、サービス境界、信頼境界、データフロー |
+| `architecture/project-window-execution-runtime.md` | Project Window / Project / Execution Run / app-wide Execution Runtime の ownership、Multi Window lifecycle、resource lock |
 | `architecture/workflow-compiler.md` | 1枝 Template から最終 ComfyUI Workflow を機械生成する方式 |
 | `architecture/remote-execution.md` | Local / Remote Execution、SSH + Remote Worker、Scene Prompt連続生成、R2経由のモデル配置・成果物回収、Run State / Resume |
 | `contracts/project-artifacts.md` | プロジェクト内ファイル、正本関係、依存関係、互換性 |
@@ -69,6 +71,7 @@ docs/
 
 - `prompt_plan.json` のフィールド定義は `contracts/prompt-plan.md` が所有する。
 - Workflow の Node ID / Link ID 再採番は `architecture/workflow-compiler.md` が所有する。
+- Project Window / Project / Execution Run / app-wide Execution Runtime の ownership、Multi Window lifecycle、Window close / app quit、execution resource lock は `architecture/project-window-execution-runtime.md` が所有する。
 - Execution / Remote Execution の SSH、Remote Worker、Scene Prompt continuous run、R2 transfer、Run State詳細は `architecture/remote-execution.md` が所有する。
 - Home のサービス連携、Vast.ai API Key / Instance lifecycle / provider handoff は `integrations/service-integrations.md` が所有する。
 - Grok が Workflow JSON を生成しないという責務境界は `product/scope-and-flow.md` と Decision Log で宣言し、具体的な Grok 返却形式は `contracts/grok-contract.md` が所有する。
@@ -116,7 +119,7 @@ Cloudflare R2もBatch Studio Main Processが直接管理する。旧 `civit-mode
 
 外部credentialとクラウドリソースはHomeの「サービス連携」からapp-wideに管理する。初期Cloud Instance ProviderはVast.aiとし、Projectは`remoteProvider + remoteInstanceId`をstable selectionとして保持する。詳細は`integrations/service-integrations.md`を正本とする。
 
-Execution では Local / Remote を同一 Project flow で扱う。Remote は公開 SSH + 秘密鍵認証を control plane、Cloudflare R2 を large binary transfer plane とし、SSH Tunnel は使用しない。詳細は `architecture/remote-execution.md` を正本とする。
+Execution では Local / Remote を同一 Project flow で扱う。Execution Runtime は Project Window / Project lifecycle から独立した app-wide Main Process service とし、Project配下には永続 Execution Run 履歴を保持する。Multi Window と Execution ownership の詳細は `architecture/project-window-execution-runtime.md`、Local / Remote の実行方式詳細は `architecture/remote-execution.md` を正本とする。
 
 ## 6. 要件追加時の流れ
 

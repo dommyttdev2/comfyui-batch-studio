@@ -16,7 +16,9 @@ ComfyUI Batch Studio に `実行前チェック` の後段として `実行` 工
 - R2 から Local Project への成果物回収。
 - 長時間 Run の進捗、停止、再接続、Resume。
 
-この文書を Execution / Remote Execution の詳細設計の正本とする。
+この文書を Local / Remote Execution の個別実行手順、Remote Worker、SSH、R2 transfer、artifact delivery / recovery の詳細設計の正本とする。
+
+Project Window / Project / Execution Run / app-wide Execution Runtime の ownership、Window lifecycle、Execution resource lock は `project-window-execution-runtime.md` を正本とする。
 
 Vast.ai API Key、Instance Manager、Cloud Provider abstraction、サービス連携 UI は `../integrations/service-integrations.md` を正本とする。
 
@@ -196,8 +198,14 @@ R2 credentialはElectron Main Process内に留め、Remoteへ渡さない。
 
 ## 7. Main Process Architecture
 
+Execution executorはProject WindowやProject componentの所有物ではなく、Electron Main Processのapp-wide runtimeとして存在する。Project配下に永続化するのはExecution Run state/historyであり、active worker / SSH session / runtime resource lockはApplication Runtimeが所有する。
+
 ```text
-ExecutionService
+ExecutionCoordinator
+|
++-- ExecutionResourceLockManager
+|
++-- ExecutionService
 |
 +-- LocalExecutionService
 |
@@ -227,6 +235,8 @@ ServiceIntegrations
 ```
 
 Rendererはcredential本体・SSH private key contents・R2 secretへ直接アクセスしない。
+
+Multi Window時も各RendererはExecutionを所有せず、`projectRoot + runId` でpersistent Runを参照・操作する。Project Window closeはExecution stop/pause/discardの契機にしない。
 
 ---
 
