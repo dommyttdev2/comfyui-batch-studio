@@ -213,8 +213,9 @@ export class RemoteExecutionService {
     private readonly r2: R2Manager,
     private readonly onSettled?: (root: string, runId: string) => Promise<void>,
   ) {}
-  start(root: string, runId: string) {
-    if (this.workers.has(runId)) return;
+  start(root: string, runId: string): Promise<void> {
+    const existing = this.workers.get(runId);
+    if (existing) return existing;
     const task = this.execute(root, runId)
       .catch(async (error) => {
         const current = await getExecutionRun(root, runId);
@@ -247,6 +248,7 @@ export class RemoteExecutionService {
         }
       });
     this.workers.set(runId, task);
+    return task;
   }
   beginDiscard(runId: string) {
     this.discardingRuns.add(runId);
