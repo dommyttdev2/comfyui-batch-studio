@@ -128,6 +128,11 @@ const writeJson = (file, value) => {
   assert.equal(fs.existsSync(path.join(root, 'execution_runs', started.runId + '.json')), true);
   assert.equal((await execution.getCurrentExecutionRun(root)).runId, started.runId);
   assert.equal((await execution.getExecutionRun(root, started.runId)).runId, started.runId);
+  assert.deepEqual(
+    (await execution.listExecutionRuns(root)).map((run) => run.runId),
+    [started.runId],
+    'persisted Run listing must include the active Run',
+  );
   await assert.rejects(
     () => execution.startExecutionRun(root, async () => ready),
     /already active/,
@@ -332,6 +337,34 @@ const writeJson = (file, value) => {
     () => execution.resumeExecutionRun(root, second.runId, async () => blocked),
     /Preflight is BLOCKED/,
   );
+
+  const mainSource = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+  const uiSource = fs.readFileSync(path.join(repo, 'src/renderer/ExecutionStages.tsx'), 'utf8');
+  const restartHandlerStart = mainSource.indexOf('IPC.EXECUTION_RESTART_FROM_SCRATCH');
+  const restartHandlerEnd = mainSource.indexOf('IPC.CAPTION_STATUS', restartHandlerStart);
+  assert.ok(
+    restartHandlerStart >= 0 && restartHandlerEnd > restartHandlerStart,
+    'latest Prompt Plan restart handler must exist',
+  );
+  const restartHandler = mainSource.slice(restartHandlerStart, restartHandlerEnd);
+  assert.equal(restartHandler.includes('listExecutionRuns(root)'), true);
+  assert.equal(restartHandler.includes("['RUNNING', 'PAUSED', 'INTERRUPTED']"), true);
+  assert.equal(restartHandler.includes('localExecutor()'), true);
+  assert.equal(restartHandler.includes('remoteSceneExecutor()'), true);
+  assert.ok(
+    restartHandler.indexOf('await compileWorkflow(root);') <
+      restartHandler.indexOf('await startExecutionRun(root, async () => preflight);'),
+    'latest prompt_plan workflow compilation must happen before the replacement Run starts',
+  );
+  const restartFlagStart = uiSource.indexOf('const canRestartFromScratch');
+  const restartFlagEnd = uiSource.indexOf('const canStart', restartFlagStart);
+  assert.ok(restartFlagStart >= 0 && restartFlagEnd > restartFlagStart);
+  assert.equal(
+    uiSource.slice(restartFlagStart, restartFlagEnd).includes("preflight?.state === 'READY'"),
+    false,
+    'stale Preflight must not remove the prompt-plan restart path',
+  );
+  assert.equal(uiSource.includes('最新のPrompt Planで最初から実行'), true);
 
   console.log('Persistent Execution Run tests passed.');
 })().catch((error) => {

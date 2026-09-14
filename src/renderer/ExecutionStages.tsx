@@ -660,11 +660,9 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
   );
   const canRestartFromScratch = Boolean(
     current &&
-      current.executionTarget === 'remote' &&
-      current.lifecycle !== 'DISCARDED' &&
-      preflight?.state === 'READY' &&
-      !checking &&
-      (current.lifecycle !== 'RUNNING' || !reached(current.phase, 'EXECUTION_COMPLETED')),
+      (current.lifecycle !== 'RUNNING' ||
+        current.executionTarget === 'local' ||
+        phaseIndex(current.phase) <= phaseIndex('EXECUTING')),
   );
   const canStart = preflight?.state === 'READY' && !active;
   const canResume = Boolean(
@@ -690,13 +688,18 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
           message: `現在のRunは Vast.ai Instance #${current?.remote?.instanceId ?? '-'} を使用しています。Projectでは #${selectedProjectRemoteInstanceId ?? '-'} が選択されています。「別Instanceで新しく実行」で新しいRunを開始できます。`,
         }
       : preflight?.state !== 'READY'
-        ? { state: preflight?.state ?? 'UNKNOWN', message: 'StartにはPreflight READYが必要です' }
+        ? {
+            state: preflight?.state ?? 'UNKNOWN',
+            message: current
+              ? '通常のStartにはPreflight READYが必要です。prompt_plan変更後は「最新のPrompt Planで最初から実行」でWorkflowを再生成して新しいRunを開始できます。'
+              : 'StartにはPreflight READYが必要です',
+          }
         : active
           ? current?.lifecycle === 'RUNNING'
             ? {
                 state: 'RUN RUNNING',
                 message:
-                  '既存Runが実行中のため新規Startできません。Stop scheduling / Force interruptで既存Runを操作してください。',
+                  '既存Runが実行中です。通常の停止はStop scheduling / Force interrupt、prompt_plan変更後の再実行は「最新のPrompt Planで最初から実行」を使用してください。',
               }
             : {
                 state: `RUN ${current?.lifecycle ?? 'ACTIVE'}`,
@@ -724,7 +727,7 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
             <h3>Execution Run</h3>
             <p>
               永続化された Run State を監視し、Start / Stop scheduling / Force interrupt / Resume /
-              最初からやり直す を操作します。
+              最新のPrompt Planで最初から実行 を操作します。
             </p>
           </div>
           <button onClick={() => void refreshPreflight()} disabled={checking}>
@@ -772,7 +775,7 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
               )
             }
           >
-            最初からやり直す
+            最新のPrompt Planで最初から実行
           </button>
           <button
             disabled={!canStopScheduling}
