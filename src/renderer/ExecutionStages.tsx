@@ -660,11 +660,9 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
   );
   const canRestartFromScratch = Boolean(
     current &&
-      current.executionTarget === 'remote' &&
-      current.lifecycle !== 'DISCARDED' &&
-      preflight?.state === 'READY' &&
-      !checking &&
-      (current.lifecycle !== 'RUNNING' || !reached(current.phase, 'EXECUTION_COMPLETED')),
+      (current.lifecycle !== 'RUNNING' ||
+        current.executionTarget === 'local' ||
+        phaseIndex(current.phase) <= phaseIndex('EXECUTING')),
   );
   const canStart = preflight?.state === 'READY' && !active;
   const canResume = Boolean(
