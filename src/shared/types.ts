@@ -832,10 +832,11 @@ export interface BatchStudioApi {
     last: () => Promise<ProjectSummary | null>;
     recent: () => Promise<ProjectSummary[]>;
     removeRecent: (root: string) => Promise<void>;
-    open: (root: string) => Promise<ProjectSummary>;
+    open: (root: string) => Promise<ProjectSummary | null>;
     close: () => Promise<void>;
     selectParent: () => Promise<string | null>;
     create: (parent: string, brief: ProjectBriefInput) => Promise<ProjectSummary>;
+    onMenuCommand: (listener: (command: 'new' | 'open', project?: ProjectSummary) => void) => () => void;
     scan: (root: string) => Promise<ProjectSummary>;
     openFolder: (root: string) => Promise<void>;
     saveSettings: (root: string, settings: ProjectSettings) => Promise<ProjectSummary>;
