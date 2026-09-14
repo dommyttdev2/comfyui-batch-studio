@@ -226,7 +226,7 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 | ストーリー | Brief / 参考資料 | `story.md` | User Confirm / validation成功 |
 | モデル選定 | `story.md`, app-wide `model_catalog.json`, Local/R2 model inventory | `models.json` | Model Family/基盤モデル選択済み、LoRA identity実在、unresolved `missingRequirements` なし |
 | プロンプト設計 | story, models | `prompt_plan.json` | schema / refs / branch-leaf整合性有効 |
-| ワークフロー | Template, Manifest, models, plan | UI Workflow | 現行CompilerのUI Workflow構造validation成功。Execution用API graphは未実装 |
+| ワークフロー | Template, Manifest, models, plan | UI Workflow + Execution API graph | UI Workflow / API graph生成、構造validation、hash / workflow identity整合が成功 |
 | モデル配置 | models, Local, integrated R2, executionTarget | 所在状態 / R2操作 | Local targetはLocal配置済み。Remote targetはR2配置済み |
 | 実行前チェック | 全成果物 + target環境 | READY / BLOCKED | artifact/model validationとtarget-specific operational checkにblocking errorなし |
 | 実行 | READY Project + executionTarget | Execution Run / Local成果物 | Localは生成+成果物確認、Remoteは生成+R2経由Local回収+hash検証成功 |
