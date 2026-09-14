@@ -362,6 +362,10 @@ export async function readArtifact(
   let content = await readText(file);
   if (key === 'models' && content != null)
     content = await refreshModelsCatalogProvenance(root, source, file, content);
+  if (key === 'promptPlan' && source === 'draft' && content != null) {
+    const parsed = parsePromptPlan(content);
+    if (!parsed || !isRenderablePromptPlan(parsed)) content = null;
+  }
   return {
     key,
     source,
