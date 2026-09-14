@@ -66,6 +66,11 @@ export class ExecutionCoordinator {
     return this.active.size > 0;
   }
 
+  async waitForSettled(ref: ExecutionRef) {
+    const task = this.active.get(refKey(ref));
+    if (task) await task.catch(() => {});
+  }
+
   startLocal(ref: ExecutionRef, endpoint: string, work: () => Promise<void>) {
     return this.start(ref, () => this.locks.acquireLocal(endpoint, ref), work);
   }
