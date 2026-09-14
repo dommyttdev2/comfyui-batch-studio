@@ -27,9 +27,7 @@ export class ExecutionResourceLockManager {
   private acquire(resource: string, ref: ExecutionRef) {
     const existing = this.resources.get(resource);
     if (existing && refKey(existing) !== refKey(ref))
-      throw new Error(
-        `Execution resource is already in use by Run ${existing.runId}: ${resource}`,
-      );
+      throw new Error(`Execution resource is already in use by Run ${existing.runId}: ${resource}`);
     this.resources.set(resource, ref);
     const key = refKey(ref);
     const owned = this.refs.get(key) ?? new Set<string>();
@@ -75,12 +73,7 @@ export class ExecutionCoordinator {
     return this.start(ref, () => this.locks.acquireLocal(endpoint, ref), work);
   }
 
-  startRemote(
-    ref: ExecutionRef,
-    provider: string,
-    instanceId: number,
-    work: () => Promise<void>,
-  ) {
+  startRemote(ref: ExecutionRef, provider: string, instanceId: number, work: () => Promise<void>) {
     return this.start(ref, () => this.locks.acquireRemote(provider, instanceId, ref), work);
   }
 
