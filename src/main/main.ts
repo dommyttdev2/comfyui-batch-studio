@@ -1035,9 +1035,12 @@ function register() {
     layoutProjectWindow(state);
     await rememberMostRecentOpenProject();
   });
-  ipcMain.handle(IPC.PROJECT_SELECT_PARENT, async () => {
+  ipcMain.handle(IPC.PROJECT_SELECT_PARENT, async (_event, defaultPath: unknown) => {
+    const initialDirectory =
+      typeof defaultPath === 'string' && defaultPath.trim() ? defaultPath.trim() : undefined;
     const r = await dialog.showOpenDialog({
       title: '作成先フォルダーを選択',
+      defaultPath: initialDirectory,
       properties: ['openDirectory', 'createDirectory'],
     });
     return r.canceled ? null : r.filePaths[0];
