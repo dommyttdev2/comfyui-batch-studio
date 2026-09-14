@@ -321,19 +321,13 @@ function StructuredPromptEditor({
   editable: boolean;
   onChange: (value: StructuredPrompt) => void;
 }) {
-  const updatePositive = (
-    key: Exclude<keyof PositivePromptGroups, 'camera'>,
-    tags: string[],
-  ) => {
+  const updatePositive = (key: Exclude<keyof PositivePromptGroups, 'camera'>, tags: string[]) => {
     const next = structuredClone(value);
     if (tags.length) next.positive[key] = tags;
     else delete next.positive[key];
     onChange(next);
   };
-  const updateCamera = (
-    key: keyof NonNullable<PositivePromptGroups['camera']>,
-    tags: string[],
-  ) => {
+  const updateCamera = (key: keyof NonNullable<PositivePromptGroups['camera']>, tags: string[]) => {
     const next = structuredClone(value);
     const camera = { ...(next.positive.camera ?? {}) };
     if (tags.length) camera[key] = tags;
@@ -390,13 +384,7 @@ function StructuredPromptEditor({
   );
 }
 
-function CompiledPreview({
-  positive,
-  negative,
-}: {
-  positive: string;
-  negative: string;
-}) {
+function CompiledPreview({ positive, negative }: { positive: string; negative: string }) {
   return (
     <div className="compiled-prompt-preview">
       <h4>Compiled Prompt Preview</h4>
@@ -797,17 +785,18 @@ function PlanInspector({
                 )
               }
             />
-            {compiled && (() => {
-              const compiledLeaf = compiled.branches
-                .find((item) => item.id === branch.id)
-                ?.leaves.find((item) => item.id === leaf.id);
-              return compiledLeaf ? (
-                <CompiledPreview
-                  positive={compiledLeaf.positive}
-                  negative={compiledLeaf.negative}
-                />
-              ) : null;
-            })()}
+            {compiled &&
+              (() => {
+                const compiledLeaf = compiled.branches
+                  .find((item) => item.id === branch.id)
+                  ?.leaves.find((item) => item.id === leaf.id);
+                return compiledLeaf ? (
+                  <CompiledPreview
+                    positive={compiledLeaf.positive}
+                    negative={compiledLeaf.negative}
+                  />
+                ) : null;
+              })()}
           </>
         )}
       </div>
