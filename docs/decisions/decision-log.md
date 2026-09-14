@@ -455,7 +455,7 @@ Legacy conversion の実装は v1 の必須条件ではなく、必要性が確�
 ## DEC-017: Prompt Plan Schema v1 is fixed and machine-readable
 
 Date: 2026-09-07
-Status: Accepted
+Status: Superseded for new Prompt Plans by DEC-025; retained for v1 compatibility
 
 ### Decision
 
@@ -1270,6 +1270,126 @@ Main ProcessにはProject Window registryとExecutionCoordinator / resource lock
 - `REQ-EXEC-010`
 - `REQ-EXEC-011`
 - `REQ-EXEC-012`
+
+---
+
+## DEC-025: Prompt Plan Schema v2 stores structured semantic tags and Batch Studio owns prompt compilation
+
+Date: 2026-09-15
+Status: Accepted
+
+### Decision
+
+新規 `prompt_plan.json` は Schema v2 を使用し、最終positive/negative文字列ではなく、Common / Branch / Leaf scopeへ分類した構造化Danbooru tagを正本として保存する。
+
+```text
+common
+  -> branch.prompt
+       -> leaf.prompt
+```
+
+Positive category:
+
+```text
+subject
+identity
+appearance
+style
+outfit
+expression
+action
+pose
+camera
+environment
+lighting
+effects
+```
+
+Camera subcategory:
+
+```text
+pov
+angle
+framing
+gaze
+focus
+```
+
+Negative category:
+
+```text
+anatomy
+identity
+appearance
+subject
+outfit
+action
+camera
+environment
+artifacts
+content
+```
+
+親scopeに存在するtagを子scopeへ再掲せず、途中で変化する衣装・状態・場所をCommonへ置かない。
+
+### Compiler ownership
+
+Model Family quality preset、category compile order、`models.json.trainedWords`注入、exact dedupe、最終positive/negative文字列化はBatch Studio Prompt Compilerが所有する。
+
+```text
+Base Model trainedWords
+Root LoRA trainedWords
+  -> Common compiled positive
+
+Branch LoRA trainedWords
+  -> Branch配下各Leaf compiled positive
+```
+
+`trainedWords`は`models.json`の文字列を変更・翻訳・正規化せず使用し、GrokはPrompt Planへ転記しない。
+
+### Prompt fallback
+
+LoRA選定工程でPrompt代替可能と判断した要件は、完成Prompt文字列ではなく `positiveTags[]` / `negativeTags[]` としてinternal sidecarへ保存する。Prompt Planning工程がStoryを踏まえて適切なscope/categoryへ配置する。
+
+Legacy comma string fallbackは互換読み取り時にtag arrayへnormalizeできる。
+
+### Validation
+
+Schema validationに加えて少なくとも次をsemantic validationする。
+
+- Model Family tag dialect。
+- Positive / Negative exact conflict。
+- Parent / child scope duplicate warning。
+- Camera angle / framing / gaze conflict。
+- Expression過剰指定warning。
+- 明白なsubject conflict。
+- nude系状態とoutfit併用warning。
+
+### Compatibility
+
+Schema v1を削除しない。
+
+- 既存v1は読み取り可能。
+- 既存v1は編集可能。
+- 既存v1は従来flat stringをそのままCompileする。
+- v2のquality/trainedWords policyをv1へ後付けしない。
+- Projectを開いただけで自動migrationしない。
+- v1からv2へ移行する場合はGrok再構造化、Batch Studio validation、User approvalを経る。
+
+### Rationale
+
+- Grokの出力順揺れ・重複・trainedWords転記ミスを減らす。
+- Character固定情報とScene差分を明確に分離する。
+- Camera conflictを機械検出可能にする。
+- Model FamilyごとのPrompt policyをProject Artifactから分離し、Compiler側で一貫管理する。
+- 既存Projectの再Compile結果を破壊せず新方式へ移行できる。
+
+### Supersedes
+
+- `DEC-017` のSchema v1を新規Prompt Plan形式として固定する部分。
+- `DEC-017` のstable ID、LoRA usage、ordering、strict unknown-field、machine-readable schema原則は継承する。
+
+詳細は `../contracts/prompt-plan.md` を正本とする。
 
 ---
 
