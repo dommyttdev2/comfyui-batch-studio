@@ -400,7 +400,7 @@ Goal: Remote生成成果物をR2経由でLocalへ確実に回収し、hash検証
 - before / after artifact manifest差分。
 - current Run artifact count validation。
 - Remote ZIP packaging。
-- manifest embed。
+- manifestをZIP外の検証用JSONとして生成・保存。
 - Remote package SHA-256。
 - Integrated R2 Manager presigned PUT generation。
 - signed URL full queryのlog redaction。
@@ -425,36 +425,36 @@ localSha256 == remotePackageSha256
 
 上記を満たした場合のみRemote Runを`COMPLETED`とする。
 
-## Current implementation snapshot (2026-09-11)
+## Current implementation snapshot (2026-09-14)
 
 最新mainのコードを正本にした実装状況:
 
 | Phase | Status | Current boundary |
 | --- | --- | --- |
 | 0 | Implemented / maintained | schemas/decisionsは運用中。models新規保存はv5 |
-| 1 | Implemented | Electron shell、Grok分離、Project scan、Home/recent、Standalone R2/Civit windows |
+| 1 | Implemented | Electron shell、Grok分離、Project scan、Home/recent、Standalone R2/Civit/Vast.ai windows |
 | 2 | Implemented | Project Brief、Draft/History、Story import/confirm、Project/Artifact roots |
 | 3 | Implemented | Integrated Civitai Catalog、cache/retry/metrics、User base model + Grok LoRA selection |
 | 4 | Mostly implemented | Prompt Plan編集/順序/strength/validation。target差分の専用表示やvalidation field誘導は改善余地あり |
 | 5 | Implemented | Illustrious/Anima Template + Manifest |
-| 6 | Partial | UI Workflow compilerは実装済み。Execution API-format graphは未実装 |
-| 7 | Implemented for current UI | target別availability、Integrated R2 Manager、multipart upload、batch DL、temporary PUT URL |
-| 8 | Partial | Artifact/model/provider選択Gateは実装済み。ComfyUI/Scene Prompt/SSH等operational checksは未実装 |
-| 9 | Not implemented | `実行` stage、Execution Run、Local ComfyUI orchestration |
-| 10 | Partial foundation only | Vast.ai endpoint/private-key pathまでは実装。SSH client/Host Key/Remote Workerは未実装 |
-| 11 | Not implemented | Remote model staging |
-| 12 | Not implemented | Remote Scene Prompt execution |
-| 13 | Not implemented | Remote artifact package/R2 delivery/local verification |
+| 6 | Implemented | UI WorkflowとExecution API-format graphを同時生成し、hash / workflow identityをbuild provenanceへ保存 |
+| 7 | Implemented | target別availability、Integrated R2 Manager、multipart upload、batch DL、temporary PUT URL |
+| 8 | Partial | Artifact/model/API graph/provider選択Gateは実装済み。SSH/Host Key/Remote filesystem/ComfyUI capability等の一部operational checksはExecution runtimeで検証 |
+| 9 | Implemented | `実行` stage、persistent Execution Run、Local ComfyUI + Scene Prompt連続生成、Stop / Force Interrupt / Resume、Local output verification |
+| 10 | Implemented | 公開SSH、Host Key検証、Remote Worker deploy/hash、structured request/progress、Remote control plane |
+| 11 | Implemented | R2 model resolution、最大4モデル同時staging、aria2、size/SHA-256、evidence/Resume |
+| 12 | Implemented | Remote Worker内Scene Prompt連続生成、progress、stop/interrupt、recovery |
+| 13 | Implemented | Remote ZIP + external manifest、R2 single/multipart upload、Local download、SHA-256検証、cleanup/Resume |
 
 この表は要件の正本ではなく、実装進捗の記録である。
 
 ## Post-Execution Extensions
 
-Execution core完了後に必要性を確認して追加する候補:
+Execution core後の拡張候補:
 
-- Vast.ai instance discovery / start / stop integration。
 - 複数Remote profile管理。
 - artifact package以外の個別同期mode。
 - execution history横断検索 /統計。
+- PreflightでのSSH / Host Key / Remote filesystem / ComfyUI capability事前検証拡充。
 
-これらをRemote Execution coreの前提にしない。
+Vast.ai instance discovery / start / stop、Offer検索 / RENT、Remote Execution lifecycleは既に実装済みであり、Post-Execution候補には含めない。
