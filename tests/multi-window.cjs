@@ -14,6 +14,13 @@ matchCode(main, /projectWindowForSender\(event\.sender\)/);
 matchCode(main, /function projectWindowForRoot\(/);
 matchCode(main, /createProjectWindow\(\{restoreLastProject:true\}\)/);
 matchCode(main, /rememberMostRecentOpenProject\(false\)/);
+matchCode(main, /const windowId=window\.id/);
+matchCode(main, /projectWindows\.delete\(windowId\)/);
+doesNotMatchCode(
+  main,
+  /window\.on\('closed',[\s\S]*?projectWindows\.delete\(window\.id\)/,
+  'Closed handlers must not access BaseWindow properties after Electron destroys the native window',
+);
 matchCode(main, /app\.requestSingleInstanceLock\(\)/);
 matchCode(main, /app\.on\('second-instance'/);
 matchCode(main, /executionCoordinator\.hasActiveRuns\(\)/);
