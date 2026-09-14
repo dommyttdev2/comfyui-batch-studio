@@ -23,6 +23,7 @@ const sha256 = (s) => crypto.createHash('sha256').update(Buffer.from(s, 'utf8'))
 
 (async () => {
   const { compileWorkflow } = await load('compiler.js');
+  const { scanProject } = await load('project-scan.js');
   const sourceTemplate = path.join(repo, 'templates/default-scene-batch/template.json');
   const manifestPath = path.join(repo, 'templates/default-scene-batch/manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -87,6 +88,13 @@ const sha256 = (s) => crypto.createHash('sha256').update(Buffer.from(s, 'utf8'))
   const result = await compileWorkflow(root);
   assert.equal(result.validation.valid, true);
   assert.equal(fs.existsSync(result.outputPath), true);
+
+  const summary = await scanProject(root);
+  assert.equal(
+    summary.artifacts.find((artifact) => artifact.key === 'workflow')?.state,
+    'generated',
+    'CRLF template must not make the generated workflow stale during preflight artifact scanning',
+  );
   console.log('Workflow template CRLF SHA-256 regression test passed.');
 })().catch((error) => {
   console.error(error);
