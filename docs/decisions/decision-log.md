@@ -1420,9 +1420,9 @@ Status: Superseded
 Date: 2026-09-07
 Status: Superseded
 
-`DEC-017` により解決済み。
+`DEC-017` で初期Schema v1を定義し、`DEC-025` で新規Prompt PlanをSchema v2へ進化させた。
 
-Prompt Plan Schema v1 の正式 field name、Project-wide ID uniqueness、ordering、unknown field policy、schema evolution policy を固定し、機械可読 schema を `schemas/prompt-plan.schema.json` とした。
+機械可読schemaの正本は引き続き `schemas/prompt-plan.schema.json`。Project-wide ID uniqueness、ordering、strict unknown-field policyを維持し、Schema v1は既存Project互換として残す。
 
 ---
 
