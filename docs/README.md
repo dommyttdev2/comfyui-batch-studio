@@ -110,7 +110,7 @@ docs/
 
 特に Workflow については、Grok に ComfyUI Workflow JSON を生成させない。Grok から受け取るのは共通プロンプト、使用 LoRA、枝と葉のプロンプトを表す構造化 JSON であり、最終 Workflow は Batch Studio の Workflow Compiler が生成する。
 
-使用モデルの選定は Grok が Batch Studio 内蔵 `model_catalog.json` を根拠に行い、Batch Studio はCivitai同期・Catalog生成・選定結果検証・保存を担当する。
+Model Familyと基盤モデルはユーザーがBatch Studio UIで選択し、GrokはBatch Studio内蔵 `model_catalog.json` を根拠にLoRAだけを選定する。Batch StudioはCivitai同期・Catalog生成・基盤モデル選択UI・LoRA選定結果の検証/merge・保存を担当する。
 
 Cloudflare R2もBatch Studio Main Processが直接管理する。旧 `civit-model-viewer` / `r2-file-manager` はStandalone/Legacyであり、新規Batch Studioフローの外部依存にはしない。
 
