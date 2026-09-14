@@ -104,11 +104,23 @@ const standaloneToolTitles: Record<StandaloneWindowTool, string> = {
   vastai: 'Vast.ai',
 };
 const standaloneToolWindows = new Map<StandaloneWindowTool, StandaloneToolWindowState>();
-let mainWindow: BaseWindow | null = null,
-  localView: WebContentsView | null = null,
-  grokView: WebContentsView | null = null,
-  grokVisible = false,
-  localRatio = 0.45,
+type ProjectWindowState = {
+  window: BaseWindow;
+  localView: WebContentsView;
+  grokView: WebContentsView;
+  projectRoot: string | null;
+  restoreLastProject: boolean;
+  grokVisible: boolean;
+  localRatio: number;
+  activeGrokContext: { root: string; stage: GrokContextStage } | null;
+  restoringGrokContext: boolean;
+  grokNavigationQueue: GrokNavigationQueue;
+  grokContextQueue: LatestGrokContextQueue<GrokPaneState>;
+  lastFocusedAt: number;
+};
+const projectWindows = new Map<number, ProjectWindowState>();
+let lastFocusedProjectWindowId: number | null = null,
+  projectWindowFocusSequence = 0,
   civitaiCatalog: CivitaiCatalogService | null = null,
   civitaiPolicy: CivitaiRequestPolicy | null = null,
   civitaiConfig: CivitaiConfigStore | null = null,
@@ -124,25 +136,64 @@ let mainWindow: BaseWindow | null = null,
   remoteModelStager: RemoteModelStager | null = null,
   remoteEnvironmentBootstrap: RemoteEnvironmentBootstrap | null = null,
   remoteExecutionService: RemoteExecutionService | null = null,
-  remoteInstanceLifecycleService: RemoteInstanceLifecycleService | null = null,
-  activeGrokContext: { root: string; stage: GrokContextStage } | null = null,
-  restoringGrokContext = false;
-const grokNavigationQueue = new GrokNavigationQueue(),
-  grokContextQueue = new LatestGrokContextQueue<GrokPaneState>();
-function state(): GrokPaneState {
-  return { visible: grokVisible, ratio: localRatio };
+  remoteInstanceLifecycleService: RemoteInstanceLifecycleService | null = null;
+
+function projectRootKey(root: string) {
+  const resolved = path.resolve(root);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
-function layout() {
-  if (!mainWindow || !localView || !grokView) return;
-  const { width, height } = mainWindow.getContentBounds();
-  if (!grokVisible || width < 840) {
-    localView.setBounds({ x: 0, y: 0, width, height });
-    grokView.setBounds({ x: width, y: 0, width: 0, height });
+function paneState(state: ProjectWindowState): GrokPaneState {
+  return { visible: state.grokVisible, ratio: state.localRatio };
+}
+function layoutProjectWindow(state: ProjectWindowState) {
+  const { width, height } = state.window.getContentBounds();
+  if (!state.grokVisible || width < 840) {
+    state.localView.setBounds({ x: 0, y: 0, width, height });
+    state.grokView.setBounds({ x: width, y: 0, width: 0, height });
     return;
   }
-  const lw = Math.max(420, Math.min(width - 420, Math.round(width * localRatio)));
-  localView.setBounds({ x: 0, y: 0, width: lw, height });
-  grokView.setBounds({ x: lw, y: 0, width: width - lw, height: height });
+  const lw = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio)));
+  state.localView.setBounds({ x: 0, y: 0, width: lw, height });
+  state.grokView.setBounds({ x: lw, y: 0, width: width - lw, height });
+}
+function projectWindowForSender(contents: WebContents) {
+  for (const state of projectWindows.values())
+    if (state.localView.webContents.id === contents.id || state.grokView.webContents.id === contents.id)
+      return state;
+  throw new Error('Project Window was not found for IPC sender.');
+}
+function lastFocusedProjectWindow() {
+  if (lastFocusedProjectWindowId != null) {
+    const state = projectWindows.get(lastFocusedProjectWindowId);
+    if (state) return state;
+  }
+  return [...projectWindows.values()].sort((a, b) => b.lastFocusedAt - a.lastFocusedAt)[0] ?? null;
+}
+function projectWindowForRoot(root: string, except?: ProjectWindowState) {
+  const key = projectRootKey(root);
+  return (
+    [...projectWindows.values()].find(
+      (state) => state !== except && state.projectRoot && projectRootKey(state.projectRoot) === key,
+    ) ?? null
+  );
+}
+function focusProjectWindow(state: ProjectWindowState) {
+  state.window.show();
+  state.window.focus();
+}
+async function setWindowProject(state: ProjectWindowState, root: string | null) {
+  if (!root) {
+    state.projectRoot = null;
+    return;
+  }
+  const resolved = path.resolve(root),
+    existing = projectWindowForRoot(resolved, state);
+  if (existing) {
+    focusProjectWindow(existing);
+    throw new Error('このプロジェクトは既に別のWindowで開かれています。');
+  }
+  state.projectRoot = resolved;
+  await stateStore().rememberProject(resolved);
 }
 async function loadRenderer(v: WebContentsView, tool?: StandaloneWindowTool) {
   const dev = process.env.VITE_DEV_SERVER_URL;
