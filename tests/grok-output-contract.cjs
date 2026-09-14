@@ -115,14 +115,10 @@ matchCode(
 );
 matchCode(src, /trainedWords は例外[\s\S]*1文字も変更せず/, 'trainedWords must remain exact');
 matchCode(src, /1 Leaf = 1 image/, 'Prompt Plan output must preserve leaf cardinality');
+matchCode(src, /schemaVersion": 2/, 'new Prompt Plan output must use schemaVersion 2');
 matchCode(
   src,
-  /schemaVersion": 2/,
-  'new Prompt Plan output must use schemaVersion 2',
-);
-matchCode(
-  src,
-  /common[sS]*branch.prompt[sS]*leaf.prompt/,
+  /common[\s\S]*branch\.prompt[\s\S]*leaf\.prompt/,
   'Prompt Plan must define common/branch/leaf prompt scopes',
 );
 matchCode(
@@ -145,11 +141,7 @@ matchCode(
   /pov, angle, framing, gaze, focus/,
   'Prompt Plan camera categories must be explicit',
 );
-matchCode(
-  src,
-  /positiveTags \/ negativeTags/,
-  'Prompt fallback contract must use tag arrays',
-);
+matchCode(src, /positiveTags \/ negativeTags/, 'Prompt fallback contract must use tag arrays');
 matchCode(src, /const danbooruTagRules=/, 'Danbooru tag selection policy must be defined');
 matchCode(
   src,
