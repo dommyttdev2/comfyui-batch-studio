@@ -688,7 +688,12 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
           message: `現在のRunは Vast.ai Instance #${current?.remote?.instanceId ?? '-'} を使用しています。Projectでは #${selectedProjectRemoteInstanceId ?? '-'} が選択されています。「別Instanceで新しく実行」で新しいRunを開始できます。`,
         }
       : preflight?.state !== 'READY'
-        ? { state: preflight?.state ?? 'UNKNOWN', message: 'StartにはPreflight READYが必要です' }
+        ? {
+            state: preflight?.state ?? 'UNKNOWN',
+            message: current
+              ? '通常のStartにはPreflight READYが必要です。prompt_plan変更後は「最新のPrompt Planで最初から実行」でWorkflowを再生成して新しいRunを開始できます。'
+              : 'StartにはPreflight READYが必要です',
+          }
         : active
           ? current?.lifecycle === 'RUNNING'
             ? {
