@@ -19,6 +19,7 @@ import type {
   CivitaiConnectionInput,
   GrokContextStage,
   GrokPaneState,
+  ExecutionRun,
   ProjectBriefInput,
   ProjectSettings,
   PromptPlanArtifact,
@@ -62,6 +63,7 @@ import {
   startExecutionRun,
 } from './execution-run.js';
 import { LocalExecutionService } from './local-execution.js';
+import { ExecutionCoordinator } from './execution-coordinator.js';
 import {
   canonicalGrokConversationUrl,
   GROK_PARTITION,
@@ -104,6 +106,7 @@ const standaloneToolTitles: Record<StandaloneWindowTool, string> = {
   vastai: 'Vast.ai',
 };
 const standaloneToolWindows = new Map<StandaloneWindowTool, StandaloneToolWindowState>();
+const executionCoordinator = new ExecutionCoordinator();
 type ProjectWindowState = {
   window: BaseWindow;
   localView: WebContentsView;
