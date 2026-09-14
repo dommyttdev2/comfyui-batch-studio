@@ -37,7 +37,10 @@ function selectionImpact(value: any) {
 }
 function normalizedFallbackTags(value: unknown) {
   if (Array.isArray(value))
-    return value.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean);
+    return value
+      .filter((tag): tag is string => typeof tag === 'string')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
   if (typeof value === 'string')
     return value
       .split(',')
