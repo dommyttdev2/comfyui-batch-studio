@@ -28,6 +28,7 @@ import {
   validatePromptPlan,
 } from './validation.js';
 import { loadCatalog, validateModelsAgainstCatalog } from './model-catalog.js';
+import { isRenderablePromptPlan } from '../shared/prompt-plan-shape.js';
 import { modelGenerationInputsChanged, resetModelDownstream } from './model-downstream-reset.js';
 const FILES: Partial<Record<ArtifactKey, string>> = {
   projectBrief: 'project_brief.json',
@@ -474,6 +475,28 @@ export async function importGrok(
     if (fallbacks.length) merged.promptFallbacks = fallbacks;
     if (miss.length) merged.missingRequirements = miss;
     extracted = JSON.stringify(merged, null, 2);
+  }
+  if (key === 'promptPlan') {
+    const parsed = parsePromptPlan(extracted);
+    if (!parsed || !isRenderablePromptPlan(parsed)) {
+      const checked = await validateContent(root, key, extracted),
+        issues = checked.issues.length
+          ? checked.issues
+          : [
+              {
+                severity: 'error' as const,
+                code: 'PLAN_RENDER_SHAPE',
+                message:
+                  'prompt_plan.jsonの構造が不正なため、現在のPrompt Plan下書きは更新されませんでした。',
+              },
+            ];
+      return {
+        extracted,
+        validation: { valid: false, issues },
+        summary: {},
+        missingRequirements: [],
+      };
+    }
   }
   const saved = await saveDraft(root, key, extracted);
   if (key === 'models' && (response.stage === 'models' || response.stage === 'models-fix'))
