@@ -42,7 +42,9 @@ export function issuesView(issues: ValidationIssue[]) {
     <div className="issues">
       {issues.map((i, n) => (
         <div key={n} className={`issue ${i.severity}`}>
-          {i.severity === 'error' ? '✕' : i.severity === 'warning' ? '⚠' : 'ℹ'} {i.message}
+          {i.severity === 'error' ? '✕' : i.severity === 'warning' ? '⚠' : 'ℹ'}{' '}
+          {i.location ? `[${i.location}] ` : ''}
+          {i.message}
         </div>
       ))}
     </div>
