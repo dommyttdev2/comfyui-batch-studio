@@ -147,7 +147,7 @@ matchCode(
 );
 matchCode(
   src,
-  /positiveTags / negativeTags/,
+  /positiveTags \/ negativeTags/,
   'Prompt fallback contract must use tag arrays',
 );
 matchCode(src, /const danbooruTagRules=/, 'Danbooru tag selection policy must be defined');
