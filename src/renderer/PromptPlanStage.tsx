@@ -780,9 +780,7 @@ function PlanInspector({
               value={leaf.prompt}
               editable={editable}
               onChange={(value) =>
-                mutate(
-                  (p) => (p.branches[selected.branch].leaves[selected.leaf].prompt = value),
-                )
+                mutate((p) => (p.branches[selected.branch].leaves[selected.leaf].prompt = value))
               }
             />
             {compiled &&
