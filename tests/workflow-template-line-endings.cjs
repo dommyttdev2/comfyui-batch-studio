@@ -24,6 +24,7 @@ const sha256 = (s) => crypto.createHash('sha256').update(Buffer.from(s, 'utf8'))
 (async () => {
   const { compileWorkflow } = await load('compiler.js');
   const { scanProject } = await load('project-scan.js');
+  const { hashWorkflowTemplate } = await load('workflow-template-integrity.js');
   const sourceTemplate = path.join(repo, 'templates/default-scene-batch/template.json');
   const manifestPath = path.join(repo, 'templates/default-scene-batch/manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -31,6 +32,12 @@ const sha256 = (s) => crypto.createHash('sha256').update(Buffer.from(s, 'utf8'))
   const crlfTemplate = lfTemplate.replace(/\n/g, '\r\n');
 
   assert.equal(sha256(lfTemplate), manifest.template.sha256);
+  assert.equal(hashWorkflowTemplate(lfTemplate), manifest.template.sha256);
+  assert.equal(
+    hashWorkflowTemplate(crlfTemplate),
+    manifest.template.sha256,
+    'shared template hash helper must be invariant to LF/CRLF conversion',
+  );
   assert.notEqual(
     sha256(crlfTemplate),
     manifest.template.sha256,
