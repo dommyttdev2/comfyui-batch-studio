@@ -11,6 +11,7 @@ import type {
 import { exists, readJson, readText } from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
 import { readArtifact } from './artifact-service.js';
+import { hashWorkflowTemplate } from './workflow-template-integrity.js';
 import { resolveWorkflowTemplatePaths } from './workflow-template-paths.js';
 const defs: Array<[ArtifactKey, string, string]> = [
   ['projectBrief', '基本設定', 'project_brief.json'],
@@ -27,9 +28,6 @@ async function mtime(p: string) {
 }
 function sha256(text: string) {
   return createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex');
-}
-function normalizeTemplateText(text: string) {
-  return text.replace(/\r\n?/g, '\n');
 }
 function storyBriefInputs(value: any) {
   const copy = structuredClone(value ?? {});
@@ -76,7 +74,7 @@ async function workflowInputsChanged(root: string, meta: any) {
     manifest = await readJson<any>(manifestPath);
   if (!templateRaw || !manifest) return true;
   if (
-    build.template?.sha256 !== sha256(normalizeTemplateText(templateRaw)) ||
+    build.template?.sha256 !== hashWorkflowTemplate(templateRaw) ||
     build.template?.id !== manifest.template?.id ||
     build.template?.version !== manifest.template?.version
   )
