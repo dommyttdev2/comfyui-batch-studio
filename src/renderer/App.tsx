@@ -498,7 +498,7 @@ function CreateProject({
             <input value={parent} readOnly />
             <button
               onClick={async () => {
-                const p = await window.batchStudio.project.selectParent();
+                const p = await window.batchStudio.project.selectParent(parent);
                 if (p) setParent(p);
               }}
             >
