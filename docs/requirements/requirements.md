@@ -17,26 +17,7 @@ Status: Active
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-PROJ-001 | Decided | 初期画面は細かなストーリー設計を要求せず、プロジェクト名・対象キャラクター・ターゲット読者・固定前提・大まかな要望を Brief として保存する。 | `ui/project-initialization.md` |
-| REQ-PROJ-002 | Decided | `project.id` は表示名とは独立した filesystem-safe stable ID とし、`^[a-z0-9][a-z0-9._-]{0,63}# Requirements Registry
-
-Status: Active
-
-この文書は要件の索引である。詳細設計をここへ重複記載せず、各要件の正本となる文書へリンクする。
-
-## 1. Product / Scope
-
-| ID | Status | Requirement | Owner |
-| --- | --- | --- | --- |
-| REQ-SCOPE-001 | Decided | Batch Studio はプロジェクト作成からPreflight、Local / Remote ComfyUIでの生成実行、成果物回収までを支援する。`READY`は実行開始可能状態、`COMPLETED`は対象Execution Runの成果物確認・回収まで完了した状態とする。 | `product/scope-and-flow.md` |
-| REQ-SCOPE-002 | Decided | Grok Web はユーザーが直接操作し、Batch Studio は Grok の入力欄・添付・送信・回答取得を自動操作しない。 | `product/scope-and-flow.md` |
-| REQ-SCOPE-003 | Decided | Grok の回答は下書きであり、ユーザー確認と Batch Studio の検証を経て明示保存されたファイルだけをプロジェクト成果物として扱う。 | `contracts/project-artifacts.md` |
-
-## 2. Project / Story
-
-| ID | Status | Requirement | Owner |
-| --- | --- | --- | --- |
-| REQ-PROJ-001 | Decided | 初期画面は細かなストーリー設計を要求せず、プロジェクト名・対象キャラクター・ターゲット読者・固定前提・大まかな要望を Brief として保存する。 | `ui/project-initialization.md` |
- を満たす。ComfyUI内の生成物保存先等の機械識別には `project.id` を使用する。Workflow JSONのファイル名だけはProject実フォルダの1階層上にある作成先フォルダ名を使用し、`LoRA_{作成先フォルダ名}.json` とする。 | `ui/project-initialization.md` / `architecture/workflow-compiler.md` |
+| REQ-PROJ-002 | Decided | `project.id` は表示名とは独立した filesystem-safe stable ID とし、`^[a-z0-9][a-z0-9._-]{0,63}$` を満たす。ComfyUI内の生成物保存先等の機械識別には `project.id` を使用する。Workflow JSONのファイル名だけはProject実フォルダの1階層上にある作成先フォルダ名を使用し、`LoRA_{作成先フォルダ名}.json` とする。 | `ui/project-initialization.md` / `architecture/workflow-compiler.md` |
 | REQ-PROJ-003 | Implemented | app-wide の `Project root` を新規Project作成先の既定値とする。`成果物配置 root` が設定されている場合はProject作成時に `<artifactRoot>/<project.id>` を作成し、その絶対pathを `project_meta.json.settings.artifactOutputPath` に保存する。設定値は `BATCH_STUDIO_PROJECT_ROOT` / `BATCH_STUDIO_ARTIFACT_ROOT` としてruntimeへ反映する。 | `ui/project-initialization.md` / `integrations/service-integrations.md` |
 | REQ-STORY-001 | Decided | Story の調査・案出し・詳細化は Grok に担当させ、ユーザーとの会話後に `story.md` を確定する。 | `contracts/grok-contract.md` |
 
@@ -99,7 +80,9 @@ Status: Active
 | REQ-INT-011 | Decided | Vast.ai Remote接続は公開SSH + private-key authenticationを前提とし、SSH private key contentsをapp config/ProjectへコピーせずLocal pathだけを保持する。SSH Tunnelとpassword fallbackを使用しない。 | `integrations/service-integrations.md` / `architecture/remote-execution.md` |
 | REQ-INT-012 | Implemented | Civitai同期はCollection membershipを毎回正本として再取得し、Model/Version/Baseline/thumbnail metadataはTTL付きapp data cacheを再利用する。429/一時5xx/network errorはbounded retryし、API request/cache/retry/429/5xx/page/membership/elapsed metricsをCivit Explorerへ表示する。 | `integrations/external-tools.md` |
 | REQ-INT-013 | Implemented | Standalone R2 File Manager は指定Object Key向けの短命presigned PUT URLとcurlコマンドを生成できる。有効期限は1秒〜7日、Content-Type固定は任意で、同名ObjectはPUTにより上書きされ得ることをUIで警告する。 | `integrations/external-tools.md` |
-| REQ-INT-014 | Implemented | Electron application menu の `Window` から R2 File Manager と Civit Explorer を独立した別ウィンドウで開ける。同一toolの既存windowがあれば新規作成せず再表示・focusする。 | `ui/application-shell.md` |
+| REQ-INT-014 | Implemented | Electron application menu の `Window` から R2 File Manager、Civit Explorer、Vast.ai を独立した別ウィンドウで開ける。同一toolの既存windowがあれば新規作成せず再表示・focusする。 | `ui/application-shell.md` |
+| REQ-INT-015 | Implemented | Vast.ai管理画面ではComfyUI Template互換のOn-demand Offerを検索・自動更新し、Storage / GPU計算性能 / GPU数 / Reliability / 除外国等の条件で絞り込み、選択Offerを確認後にRENTしてInstanceを作成できる。利用不能Offerは一時的に検索結果から抑止して再検索する。 | `integrations/service-integrations.md` |
+| REQ-INT-016 | Implemented | Vast.ai Instance管理では一覧の自動更新に加え、start、stop / scheduling cancel、destroy、rebootを提供する。destroyは取消不能の破壊操作としてMain Processの確認dialogを必須とする。 | `integrations/service-integrations.md` |
 
 ## 7. Execution
 
