@@ -423,6 +423,67 @@ function plan() {
     false,
     'confirmed draft must be cleared',
   );
+
+  const promptDraftRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-prompt-draft-'));
+  const promptDraftPath = path.join(
+    promptDraftRoot,
+    '._batch_studio',
+    'drafts',
+    'prompt_plan.json',
+  );
+  fs.mkdirSync(path.dirname(promptDraftPath), { recursive: true });
+  writeJson(path.join(promptDraftRoot, 'prompt_plan.json'), plan());
+  writeJson(promptDraftPath, { schemaVersion: 2 });
+
+  const hiddenMalformedDraft = await artifacts.readArtifact(
+    promptDraftRoot,
+    'promptPlan',
+    'draft',
+  );
+  assert.equal(
+    hiddenMalformedDraft.exists,
+    false,
+    'non-renderable Prompt Plan drafts must not be exposed to the renderer',
+  );
+  assert.equal(hiddenMalformedDraft.content, null);
+
+  const recoveredDraft = await artifacts.beginEditArtifact(promptDraftRoot, 'promptPlan');
+  assert.equal(recoveredDraft.exists, true, 'editing must recover from the confirmed Prompt Plan');
+  assert.equal(JSON.parse(recoveredDraft.content).branches.length, plan().branches.length);
+
+  const stableDraft = fs.readFileSync(promptDraftPath, 'utf8');
+  const rejectedPromptImport = await artifacts.importGrok(
+    promptDraftRoot,
+    'promptPlan',
+    JSON.stringify({ schemaVersion: 2 }),
+    'prompt-plan',
+  );
+  assert.equal(rejectedPromptImport.validation.valid, false);
+  assert.equal(
+    fs.readFileSync(promptDraftPath, 'utf8'),
+    stableDraft,
+    'non-renderable imports must not overwrite the current Prompt Plan draft',
+  );
+
+  const renderableInvalidPlan = plan();
+  renderableInvalidPlan.branches[0].leaves[0].unknown = true;
+  const renderableInvalidImport = await artifacts.importGrok(
+    promptDraftRoot,
+    'promptPlan',
+    JSON.stringify(renderableInvalidPlan),
+    'prompt-plan',
+  );
+  assert.equal(
+    renderableInvalidImport.validation.valid,
+    false,
+    'semantic validation errors must remain editable as drafts',
+  );
+  assert.equal(
+    JSON.parse(fs.readFileSync(promptDraftPath, 'utf8')).branches[0].leaves[0].unknown,
+    true,
+    'renderable Prompt Plans with validation errors must still be saved for correction',
+  );
+
   const unresolved = {
     ...models(),
     missingRequirements: [{ role: 'pose', requirement: 'pose LoRA', reason: 'not found' }],
