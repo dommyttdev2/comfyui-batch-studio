@@ -197,6 +197,10 @@ export class LocalExecutionService {
     this.workers.set(runId, worker);
     return worker;
   }
+  async waitForSettled(runId: string) {
+    const task = this.workers.get(runId);
+    if (task) await task.catch(() => {});
+  }
   async forceInterrupt(root: string, runId: string) {
     const run = await getExecutionRun(root, runId);
     if (!run || run.executionTarget !== 'local' || !run.current.promptId) return false;
