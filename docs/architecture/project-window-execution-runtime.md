@@ -1,6 +1,6 @@
 # Project Window / Execution Runtime Architecture
 
-Status: Accepted design / implementation pending
+Status: Active / implemented
 
 ## 1. 目的
 
