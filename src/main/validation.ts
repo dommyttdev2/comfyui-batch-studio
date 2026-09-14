@@ -969,10 +969,7 @@ function validateEffectivePrompt(
     });
 }
 
-function annotatePromptPlanLeafLocations(
-  issues: ValidationIssue[],
-  branches: unknown[],
-) {
+function annotatePromptPlanLeafLocations(issues: ValidationIssue[], branches: unknown[]) {
   for (const issue of issues) {
     const match = issue.path?.match(/^branches\.(\d+)\.leaves\.(\d+)(?:\.|$)/);
     if (!match) continue;
@@ -983,9 +980,7 @@ function annotatePromptPlanLeafLocations(
     const leaf = object(leaves[leafIndex]) ? leaves[leafIndex] : null;
     issue.location = [
       `Matrix ${leafIndex + 1}行目`,
-      branch && typeof branch.id === 'string'
-        ? `Branch ${branch.id}`
-        : `Branch ${branchIndex + 1}`,
+      branch && typeof branch.id === 'string' ? `Branch ${branch.id}` : `Branch ${branchIndex + 1}`,
       leaf && typeof leaf.id === 'string' ? `Leaf ${leaf.id}` : null,
     ]
       .filter(Boolean)
