@@ -20,13 +20,13 @@ const writeJson = (p, value) => {
 };
 
 const catalog = { schemaVersion: 1, generation: 1, generatedAt: '2026-09-15T00:00:00Z' };
-const model = (ref, fileName, trainedWords) => ({
+const model = (ref, fileName, trainedWords, id) => ({
   ref,
-  modelId: Math.floor(Math.random() * 1000) + 1,
+  modelId: id,
   modelName: ref,
-  versionId: Math.floor(Math.random() * 1000) + 1001,
+  versionId: id + 1000,
   versionName: 'v1',
-  fileId: Math.floor(Math.random() * 1000) + 2001,
+  fileId: id + 2000,
   fileName,
   modelUrl: 'https://example.com/model',
   trainedWords,
@@ -38,9 +38,9 @@ const model = (ref, fileName, trainedWords) => ({
   const { compilePromptPlanPrompts } = await load('shared/prompt-policy.js');
   const { compileWorkflow } = await load('main/compiler.js');
 
-  const checkpoint = model('checkpoint.main', 'base.safetensors', ['base_trigger']);
-  const character = model('lora.character', 'character.safetensors', ['character_trigger']);
-  const pose = model('lora.pose', 'pose.safetensors', ['pose_trigger']);
+  const checkpoint = model('checkpoint.main', 'base.safetensors', ['base_trigger'], 1);
+  const character = model('lora.character', 'character.safetensors', ['character_trigger'], 2);
+  const pose = model('lora.pose', 'pose.safetensors', ['pose_trigger'], 3);
   const models = {
     schemaVersion: 5,
     modelFamily: 'illustrious',
