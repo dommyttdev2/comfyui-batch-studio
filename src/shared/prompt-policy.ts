@@ -38,10 +38,7 @@ export const negativePromptOrder = [
   'content',
 ] as const;
 
-const familyPolicy: Record<
-  ModelFamily,
-  { positivePrefix: string[]; negativePrefix: string[] }
-> = {
+const familyPolicy: Record<ModelFamily, { positivePrefix: string[]; negativePrefix: string[] }> = {
   illustrious: {
     positivePrefix: [
       'masterpiece',
@@ -129,9 +126,7 @@ function flattenPrompt(prompt?: StructuredPrompt) {
 
 function loraTriggers(usages: Array<{ modelRef: string }>, models: ModelsArtifact) {
   const byRef = new Map(models.loras.map((model) => [model.ref, model]));
-  return uniqueTags(
-    usages.flatMap((usage) => byRef.get(usage.modelRef)?.trainedWords ?? []),
-  );
+  return uniqueTags(usages.flatMap((usage) => byRef.get(usage.modelRef)?.trainedWords ?? []));
 }
 
 function baseModelTriggers(models: ModelsArtifact) {
