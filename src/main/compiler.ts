@@ -41,6 +41,9 @@ const emptyJson = '{"version":1,"categories":{}}';
 function sha256(s: string) {
   return createHash('sha256').update(Buffer.from(s, 'utf8')).digest('hex');
 }
+function normalizeTemplateText(s: string) {
+  return s.replace(/\r\n?/g, '\n');
+}
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
@@ -367,7 +370,8 @@ export async function compileWorkflow(root: string): Promise<CompileResult> {
         .map((x) => x.message)
         .join('\n'),
     );
-  if (sha256(raw) !== manifest.template.sha256) throw new Error('Template SHA-256 mismatch');
+  if (sha256(normalizeTemplateText(raw)) !== manifest.template.sha256)
+    throw new Error('Template SHA-256 mismatch');
   const w = JSON.parse(raw) as Workflow;
   const proto = new Set(manifest.branchPrototype.nodeIds);
   for (const [role, binding] of Object.entries(manifest.common.roles)) {
