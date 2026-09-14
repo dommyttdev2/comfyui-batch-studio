@@ -90,8 +90,8 @@ const baseModels = {
   const grok = await import(pathToFileURL(path.join(runtime, 'main', 'grok-context.js')).href);
   const fallback = {
     requirement: 'specific hand pose',
-    positive: 'specific_hand_pose, detailed_hands',
-    negative: 'bad_hands',
+    positiveTags: ['specific_hand_pose', 'detailed_hands'],
+    negativeTags: ['bad_hands'],
     reason: 'No suitable LoRA was found and the pose is expressible with prompt tags.',
   };
   const resolved = await artifacts.importGrok(
@@ -131,7 +131,7 @@ const baseModels = {
   );
   assert.deepEqual(
     sidecar,
-    { schemaVersion: 1, promptFallbacks: [fallback] },
+    { schemaVersion: 2, promptFallbacks: [fallback] },
     'confirmed prompt fallbacks must persist in the internal sidecar',
   );
 
@@ -182,7 +182,7 @@ const baseModels = {
       schemaVersion: 1,
       loras: [],
       promptFallbacks: [
-        { requirement: 'pose', positive: '', negative: '', reason: 'empty replacement' },
+        { requirement: 'pose', positiveTags: [], negativeTags: [], reason: 'empty replacement' },
       ],
     }),
     'models',
