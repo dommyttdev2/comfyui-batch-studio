@@ -694,7 +694,7 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
             ? {
                 state: 'RUN RUNNING',
                 message:
-                  '既存Runが実行中のため新規Startできません。Stop scheduling / Force interruptで既存Runを操作してください。',
+                  '既存Runが実行中です。通常の停止はStop scheduling / Force interrupt、prompt_plan変更後の再実行は「最新のPrompt Planで最初から実行」を使用してください。',
               }
             : {
                 state: `RUN ${current?.lifecycle ?? 'ACTIVE'}`,
