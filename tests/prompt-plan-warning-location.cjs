@@ -2,27 +2,36 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const src = fs.readFileSync(path.resolve(__dirname, '../src/renderer/PromptPlanStage.tsx'), 'utf8');
+const validationSrc = fs.readFileSync(path.resolve(__dirname, '../src/main/validation.ts'), 'utf8');
+const uiSrc = fs.readFileSync(path.resolve(__dirname, '../src/renderer/ui.tsx'), 'utf8');
+const promptPlanSrc = fs.readFileSync(
+  path.resolve(__dirname, '../src/renderer/PromptPlanStage.tsx'),
+  'utf8',
+);
 
 assert.ok(
-  src.includes('issue.path?.match(/^branches\\.(\\d+)\\.leaves\\.(\\d+)(?:\\.|$)/)'),
-  'Prompt Plan validation locations must derive branch and leaf indexes from issue.path',
+  validationSrc.includes('function annotatePromptPlanLeafLocations('),
+  'Prompt Plan validation must attach display locations at the validator boundary',
 );
 assert.ok(
-  src.includes('`Matrix ${leafIndex + 1}行目`'),
-  'Prompt Plan validation locations must show the 1-based Matrix row',
+  validationSrc.includes('`Matrix ${leafIndex + 1}行目`'),
+  'Prompt Plan validation locations must use 1-based Matrix rows',
 );
 assert.ok(
-  src.includes('`Branch ${branch.id}`'),
-  'Prompt Plan validation locations must show the branch id',
+  validationSrc.includes('annotatePromptPlanLeafLocations(i, branches)'),
+  'Prompt Plan v2 validation must annotate issues before returning them',
 );
 assert.ok(
-  src.includes('`Leaf ${leaf.id}`'),
-  'Prompt Plan validation locations must show the leaf id',
+  uiSrc.includes("i.location ? `[${i.location}] ` : ''"),
+  'Generic issue rendering must show validator-provided locations',
 );
 assert.ok(
-  src.includes('issuesView(promptPlanIssues(plan, validation))'),
-  'Prompt Plan warnings must be rendered with human-readable locations',
+  promptPlanSrc.includes('issuesView(validation)'),
+  'Prompt Plan must use the same generic issue renderer as Grok import results',
+);
+assert.ok(
+  !promptPlanSrc.includes('function promptPlanIssueLocation('),
+  'Prompt Plan must not depend on a stage-local location formatter',
 );
 
 console.log('Prompt Plan warning location tests passed.');

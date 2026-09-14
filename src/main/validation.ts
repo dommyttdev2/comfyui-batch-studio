@@ -968,6 +968,25 @@ function validateEffectivePrompt(
     });
 }
 
+function annotatePromptPlanLeafLocations(issues: ValidationIssue[], branches: unknown[]) {
+  for (const issue of issues) {
+    const match = issue.path?.match(/^branches\.(\d+)\.leaves\.(\d+)(?:\.|$)/);
+    if (!match) continue;
+    const branchIndex = Number(match[1]);
+    const leafIndex = Number(match[2]);
+    const branch = object(branches[branchIndex]) ? branches[branchIndex] : null;
+    const leaves = branch && Array.isArray(branch.leaves) ? branch.leaves : [];
+    const leaf = object(leaves[leafIndex]) ? leaves[leafIndex] : null;
+    issue.location = [
+      `Matrix ${leafIndex + 1}行目`,
+      branch && typeof branch.id === 'string' ? `Branch ${branch.id}` : `Branch ${branchIndex + 1}`,
+      leaf && typeof leaf.id === 'string' ? `Leaf ${leaf.id}` : null,
+    ]
+      .filter(Boolean)
+      .join(' / ');
+  }
+}
+
 function validatePromptPlanV2(
   p: PromptPlanArtifact,
   models: ModelsArtifact | null,
@@ -1075,6 +1094,7 @@ function validatePromptPlanV2(
     i.push({ severity: 'error', code: 'DUP_BRANCH_ID', message: 'Branch IDが重複しています。' });
   if (new Set(leafIds).size !== leafIds.length)
     i.push({ severity: 'error', code: 'DUP_LEAF_ID', message: '生成項目IDが重複しています。' });
+  annotatePromptPlanLeafLocations(i, branches);
   return ok(i);
 }
 

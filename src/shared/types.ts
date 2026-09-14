@@ -4,6 +4,7 @@ export interface ValidationIssue {
   code: string;
   message: string;
   path?: string;
+  location?: string;
 }
 export interface ValidationResult {
   valid: boolean;

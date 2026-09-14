@@ -134,6 +134,19 @@ const model = (ref, fileName, trainedWords, id) => ({
   assert.equal(pnValidation.valid, false);
   assert.ok(pnValidation.issues.some((issue) => issue.code === 'POSITIVE_NEGATIVE_CONFLICT'));
 
+  const outfitState = structuredClone(plan);
+  outfitState.branches[0].leaves[0].prompt.positive.outfit = ['nude'];
+  const outfitValidation = validatePromptPlan(outfitState, models);
+  const outfitWarning = outfitValidation.issues.find(
+    (issue) => issue.code === 'OUTFIT_STATE_CONFLICT',
+  );
+  assert.ok(outfitWarning, 'outfit state warning must be emitted');
+  assert.equal(
+    outfitWarning.location,
+    'Matrix 1行目 / Branch b01 / Leaf s1-01-c1',
+    'leaf validation warning must carry a human-readable location',
+  );
+
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-prompt-v2-parent-'));
   const root = path.join(parent, 'project');
   fs.mkdirSync(root, { recursive: true });
