@@ -348,10 +348,7 @@ const writeJson = (file, value) => {
   );
   const restartHandler = mainSource.slice(restartHandlerStart, restartHandlerEnd);
   assert.equal(restartHandler.includes('listExecutionRuns(root)'), true);
-  assert.equal(
-    restartHandler.includes("['RUNNING', 'PAUSED', 'INTERRUPTED']"),
-    true,
-  );
+  assert.equal(restartHandler.includes("['RUNNING', 'PAUSED', 'INTERRUPTED']"), true);
   assert.equal(restartHandler.includes('localExecutor().forceInterrupt'), true);
   assert.equal(restartHandler.includes('remoteSceneExecutor()'), true);
   assert.ok(
