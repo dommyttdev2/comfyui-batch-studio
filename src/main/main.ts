@@ -1230,8 +1230,7 @@ function register() {
       type: 'warning',
       title: '最新のPrompt Planで最初から実行',
       message: '未完了のRunを停止して、最新のprompt_plan.jsonで最初から実行しますか？',
-      detail:
-        `${restartable.length}件の未完了Runを破棄し、最新prompt_plan.jsonからWorkflow/API graphを再生成して、新しいRun IDで0から実行します。旧RunのRemote/R2一時成果物は削除しますが、Localへ回収済みの成果物は削除しません。`,
+      detail: `${restartable.length}件の未完了Runを破棄し、最新prompt_plan.jsonからWorkflow/API graphを再生成して、新しいRun IDで0から実行します。旧RunのRemote/R2一時成果物は削除しますが、Localへ回収済みの成果物は削除しません。`,
       buttons: ['キャンセル', '最新のPrompt Planで実行'],
       defaultId: 0,
       cancelId: 0,
