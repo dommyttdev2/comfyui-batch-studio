@@ -677,36 +677,43 @@ async function scanAndRemember(root: string) {
   await stateStore().rememberProject(root);
   return project;
 }
-async function setGrokContext(root: string, stage: GrokContextStage) {
+async function setGrokContext(
+  state: ProjectWindowState,
+  root: string,
+  stage: GrokContextStage,
+) {
   validRoot(root);
   validGrokContextStage(stage);
   const resolvedRoot = path.resolve(root),
     key = `${resolvedRoot}\0${stage}`;
-  return grokContextQueue.run(key, async (isLatest) => {
-    if (!isLatest()) return state();
-    if (grokView && activeGrokContext) {
-      const current = canonicalGrokConversationUrl(grokView.webContents.getURL());
+  return state.grokContextQueue.run(key, async (isLatest) => {
+    if (!isLatest()) return paneState(state);
+    if (state.activeGrokContext) {
+      const current = canonicalGrokConversationUrl(state.grokView.webContents.getURL());
       if (current)
-        await chatStore().remember(activeGrokContext.root, activeGrokContext.stage, current);
+        await chatStore().remember(
+          state.activeGrokContext.root,
+          state.activeGrokContext.stage,
+          current,
+        );
     }
-    if (!isLatest()) return state();
-    activeGrokContext = { root: resolvedRoot, stage };
-    if (!grokView) return state();
+    if (!isLatest()) return paneState(state);
+    state.activeGrokContext = { root: resolvedRoot, stage };
     const saved = await chatStore().get(resolvedRoot, stage);
-    if (!isLatest()) return state();
+    if (!isLatest()) return paneState(state);
     const target = saved ?? GROK_URL,
-      current = grokView.webContents.getURL(),
+      current = state.grokView.webContents.getURL(),
       currentCanonical = canonicalGrokConversationUrl(current);
     const alreadyThere = saved ? currentCanonical === saved : current === GROK_URL;
     if (!alreadyThere) {
-      restoringGrokContext = true;
+      state.restoringGrokContext = true;
       try {
-        await grokNavigationQueue.navigate(grokView.webContents, target);
+        await state.grokNavigationQueue.navigate(state.grokView.webContents, target);
       } finally {
-        restoringGrokContext = false;
+        state.restoringGrokContext = false;
       }
     }
-    return state();
+    return paneState(state);
   });
 }
 function validCivitaiUrl(value: unknown) {
