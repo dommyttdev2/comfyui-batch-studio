@@ -321,23 +321,24 @@ function createProjectWindow(
       grokContextQueue: new LatestGrokContextQueue<GrokPaneState>(),
       lastFocusedAt: ++projectWindowFocusSequence,
     };
-  projectWindows.set(window.id, state);
-  lastFocusedProjectWindowId = window.id;
+  const windowId = window.id;
+  projectWindows.set(windowId, state);
+  lastFocusedProjectWindowId = windowId;
   window.contentView.addChildView(localView);
   window.contentView.addChildView(grokView);
   configureGrokContents(grokView.webContents);
   attachGrokHistoryTracking(state);
   window.on('focus', () => {
     state.lastFocusedAt = ++projectWindowFocusSequence;
-    lastFocusedProjectWindowId = window.id;
+    lastFocusedProjectWindowId = windowId;
     if (state.projectRoot) void stateStore().rememberProject(state.projectRoot);
   });
   window.on('resize', () => layoutProjectWindow(state));
   window.on('closed', () => {
     localView.webContents.close();
     grokView.webContents.close();
-    projectWindows.delete(window.id);
-    if (lastFocusedProjectWindowId === window.id) lastFocusedProjectWindowId = null;
+    projectWindows.delete(windowId);
+    if (lastFocusedProjectWindowId === windowId) lastFocusedProjectWindowId = null;
     void rememberMostRecentOpenProject(false);
   });
   layoutProjectWindow(state);
