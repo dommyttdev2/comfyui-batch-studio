@@ -265,12 +265,12 @@ function attachGrokHistoryTracking(state: ProjectWindowState) {
     void rememberGrokConversation(state, url);
   });
 }
-async function rememberMostRecentOpenProject() {
+async function rememberMostRecentOpenProject(clearIfNone = true) {
   const candidate = [...projectWindows.values()]
     .filter((state) => Boolean(state.projectRoot))
     .sort((a, b) => b.lastFocusedAt - a.lastFocusedAt)[0];
   if (candidate?.projectRoot) await stateStore().rememberProject(candidate.projectRoot);
-  else await stateStore().clearProject();
+  else if (clearIfNone) await stateStore().clearProject();
 }
 function createProjectWindow(options: {
   restoreLastProject?: boolean;
@@ -331,7 +331,7 @@ function createProjectWindow(options: {
     grokView.webContents.close();
     projectWindows.delete(window.id);
     if (lastFocusedProjectWindowId === window.id) lastFocusedProjectWindowId = null;
-    void rememberMostRecentOpenProject();
+    void rememberMostRecentOpenProject(false);
   });
   layoutProjectWindow(state);
   if (options.openCreateOnLoad)
@@ -1493,6 +1493,10 @@ function register() {
           remoteExecutor().disconnect(root, candidate.runId);
           await executor.waitForSettled(candidate.runId);
           await finalizeRemoteInstance(root, candidate.runId);
+          await executionCoordinator.waitForSettled({
+            projectRoot: path.resolve(root),
+            runId: candidate.runId,
+          });
           await discardExecutionRun(root, candidate.runId);
         } finally {
           executor.endDiscard(candidate.runId);
@@ -1722,7 +1726,8 @@ else
     else createProjectWindow({ restoreLastProject: true });
   });
 
-app.whenReady().then(async () => {
+if (hasSingleInstanceLock)
+  app.whenReady().then(async () => {
   const userData = app.getPath('userData');
   civitaiPolicy = new CivitaiRequestPolicy();
   civitaiPolicy.install();
