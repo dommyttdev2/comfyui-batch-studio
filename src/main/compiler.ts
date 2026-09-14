@@ -11,6 +11,7 @@ import type {
 import { exists, readJson, readText, removeIfExists, writeJsonAtomic } from './fs-utils.js';
 import { readProjectMeta, saveWorkflowBuild } from './project-meta.js';
 import { validateModels, validatePromptPlan, validateWorkflowManifest } from './validation.js';
+import { hashWorkflowTemplate } from './workflow-template-integrity.js';
 import { resolveWorkflowTemplatePaths } from './workflow-template-paths.js';
 import { buildApiGraph, hashCanonicalJson, validateCompiledApiGraph } from './workflow-api.js';
 import { compilePromptPlanPrompts } from '../shared/prompt-policy.js';
@@ -40,9 +41,6 @@ type Workflow = {
 const emptyJson = '{"version":1,"categories":{}}';
 function sha256(s: string) {
   return createHash('sha256').update(Buffer.from(s, 'utf8')).digest('hex');
-}
-function normalizeTemplateText(s: string) {
-  return s.replace(/\r\n?/g, '\n');
 }
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
@@ -370,7 +368,7 @@ export async function compileWorkflow(root: string): Promise<CompileResult> {
         .map((x) => x.message)
         .join('\n'),
     );
-  if (sha256(normalizeTemplateText(raw)) !== manifest.template.sha256)
+  if (hashWorkflowTemplate(raw) !== manifest.template.sha256)
     throw new Error('Template SHA-256 mismatch');
   const w = JSON.parse(raw) as Workflow;
   const proto = new Set(manifest.branchPrototype.nodeIds);
