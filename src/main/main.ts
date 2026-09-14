@@ -124,6 +124,8 @@ type ProjectWindowState = {
 const projectWindows = new Map<number, ProjectWindowState>();
 let lastFocusedProjectWindowId: number | null = null,
   projectWindowFocusSequence = 0,
+  quitApproved = false,
+  quitPromptOpen = false,
   civitaiCatalog: CivitaiCatalogService | null = null,
   civitaiPolicy: CivitaiRequestPolicy | null = null,
   civitaiConfig: CivitaiConfigStore | null = null,
@@ -452,7 +454,7 @@ function installApplicationMenu() {
     { label: 'Open Project...', click: () => void handleProjectMenuAction('open') },
     { type: 'separator' },
     { label: 'Close Window', role: 'close' },
-    { label: 'Quit', role: 'quit' },
+    { label: 'Quit', click: () => app.quit() },
   ];
   const template: MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' } as MenuItemConstructorOptions] : []),
@@ -686,18 +688,18 @@ async function startExecutionRuntime(root: string, run: ExecutionRun) {
   try {
     if (run.executionTarget === 'local') {
       const settings = await settingsStore().status();
-      void executionCoordinator.startLocal(ref, settings.comfyUiApiEndpoint, () =>
-        localExecutor().start(root, run.runId),
-      );
+      void executionCoordinator
+        .startLocal(ref, settings.comfyUiApiEndpoint, () => localExecutor().start(root, run.runId))
+        .finally(maybeQuitAfterExecution);
       return;
     }
     const provider = run.remote?.provider,
       instanceId = Number(run.remote?.instanceId);
     if (provider !== 'vastai' || !Number.isInteger(instanceId) || instanceId < 1)
       throw new Error('Remote Execution Run has no valid Vast.ai Instance.');
-    void executionCoordinator.startRemote(ref, provider, instanceId, () =>
-      prepareRemoteExecution(root, run.runId),
-    );
+    void executionCoordinator
+      .startRemote(ref, provider, instanceId, () => prepareRemoteExecution(root, run.runId))
+      .finally(maybeQuitAfterExecution);
   } catch (error) {
     await mutateExecutionRun(root, run.runId, (current) => {
       const failure = {
@@ -1715,6 +1717,40 @@ function register() {
   );
   ipcMain.handle(IPC.GROK_OPEN_EXTERNAL, () => shell.openExternal(GROK_URL));
 }
+
+function maybeQuitAfterExecution() {
+  if (
+    process.platform !== 'darwin' &&
+    projectWindows.size === 0 &&
+    standaloneToolWindows.size === 0 &&
+    !executionCoordinator.hasActiveRuns()
+  )
+    app.quit();
+}
+
+app.on('before-quit', (event) => {
+  if (quitApproved || !executionCoordinator.hasActiveRuns()) return;
+  event.preventDefault();
+  if (quitPromptOpen) return;
+  quitPromptOpen = true;
+  void dialog
+    .showMessageBox({
+      type: 'warning',
+      title: '実行中のRunがあります',
+      message: '実行中のRunがあります。Batch Studioを終了しますか？',
+      detail: 'Applicationを終了すると、Windowを閉じる場合と異なり実行中Runも停止します。',
+      buttons: ['キャンセル', '終了'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    })
+    .then((result) => {
+      quitPromptOpen = false;
+      if (result.response !== 1) return;
+      quitApproved = true;
+      app.quit();
+    });
+});
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
