@@ -1639,33 +1639,50 @@ function register() {
     if (typeof text !== 'string') throw new Error('Clipboard text must be string');
     clipboard.writeText(text);
   });
-  ipcMain.handle(IPC.GROK_SET_VISIBLE, (_e, v: unknown) => {
-    grokVisible = v === true;
-    layout();
-    return state();
+  ipcMain.handle(IPC.GROK_SET_VISIBLE, (event, v: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    state.grokVisible = v === true;
+    layoutProjectWindow(state);
+    return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_SET_CONTEXT, (_e, root: unknown, stage: unknown) => {
+  ipcMain.handle(IPC.GROK_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
     validRoot(root);
     validGrokContextStage(stage);
-    return setGrokContext(root, stage);
+    return setGrokContext(projectWindowForSender(event.sender), root, stage);
   });
-  ipcMain.handle(IPC.GROK_SET_RATIO, (_e, r: unknown) => {
+  ipcMain.handle(IPC.GROK_SET_RATIO, (event, r: unknown) => {
     if (typeof r !== 'number' || !Number.isFinite(r)) throw new Error('Invalid ratio');
-    localRatio = Math.max(0.3, Math.min(0.7, r));
-    layout();
-    return state();
+    const state = projectWindowForSender(event.sender);
+    state.localRatio = Math.max(0.3, Math.min(0.7, r));
+    layoutProjectWindow(state);
+    return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_SET_DIVIDER_X, (_e, x: unknown) => {
-    if (typeof x !== 'number' || !Number.isFinite(x) || !mainWindow)
-      throw new Error('Invalid divider position');
-    const bounds = mainWindow.getContentBounds();
-    localRatio = Math.max(0.3, Math.min(0.7, (x - bounds.x) / Math.max(bounds.width, 1)));
-    layout();
-    return state();
+  ipcMain.handle(IPC.GROK_SET_DIVIDER_X, (event, x: unknown) => {
+    if (typeof x !== 'number' || !Number.isFinite(x)) throw new Error('Invalid divider position');
+    const state = projectWindowForSender(event.sender),
+      bounds = state.window.getContentBounds();
+    state.localRatio = Math.max(
+      0.3,
+      Math.min(0.7, (x - bounds.x) / Math.max(bounds.width, 1)),
+    );
+    layoutProjectWindow(state);
+    return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_RELOAD, () => grokView?.webContents.reload());
+  ipcMain.handle(IPC.GROK_RELOAD, (event) =>
+    projectWindowForSender(event.sender).grokView.webContents.reload(),
+  );
   ipcMain.handle(IPC.GROK_OPEN_EXTERNAL, () => shell.openExternal(GROK_URL));
 }
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) app.quit();
+else
+  app.on('second-instance', () => {
+    if (!app.isReady()) return;
+    const existing = lastFocusedProjectWindow();
+    if (existing) focusProjectWindow(existing);
+    else createProjectWindow({ restoreLastProject: true });
+  });
 
 app.whenReady().then(async () => {
   const userData = app.getPath('userData');
@@ -1712,11 +1729,13 @@ app.whenReady().then(async () => {
   if (initial.state === 'idle' && initial.apiKeyConfigured) void civitaiCatalog.startSync();
   register();
   installApplicationMenu();
-  createWindow();
+  createProjectWindow({ restoreLastProject: true });
   app.on('activate', () => {
-    if (!mainWindow) createWindow();
+    const existing = lastFocusedProjectWindow();
+    if (existing) focusProjectWindow(existing);
+    else createProjectWindow({ restoreLastProject: true });
   });
 });
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (!executionCoordinator.hasActiveRuns() && process.platform !== 'darwin') app.quit();
 });
