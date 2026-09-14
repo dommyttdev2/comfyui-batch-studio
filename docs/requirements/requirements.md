@@ -20,6 +20,7 @@ Status: Active
 | REQ-PROJ-002 | Decided | `project.id` は表示名とは独立した filesystem-safe stable ID とし、`^[a-z0-9][a-z0-9._-]{0,63}$` を満たす。ComfyUI内の生成物保存先等の機械識別には `project.id` を使用する。Workflow JSONのファイル名だけはProject実フォルダの1階層上にある作成先フォルダ名を使用し、`LoRA_{作成先フォルダ名}.json` とする。 | `ui/project-initialization.md` / `architecture/workflow-compiler.md` |
 | REQ-PROJ-003 | Implemented | app-wide の `Project root` を新規Project作成先の既定値とする。`成果物配置 root` が設定されている場合はProject作成時に `<artifactRoot>/<project.id>` を作成し、その絶対pathを `project_meta.json.settings.artifactOutputPath` に保存する。設定値は `BATCH_STUDIO_PROJECT_ROOT` / `BATCH_STUDIO_ARTIFACT_ROOT` としてruntimeへ反映する。 | `ui/project-initialization.md` / `integrations/service-integrations.md` |
 | REQ-PROJ-004 | Decided | File menuのNew Project / Open Projectでは「現在のWindow」「新しいWindow」「キャンセル」を選択できる。複数Project Windowを同時に開けるが、同一Project rootは同時に1 Windowのみとし、既に開かれている場合は既存Windowをfocusする。 | `ui/application-shell.md` / `architecture/project-window-execution-runtime.md` |
+| REQ-PROJ-005 | Decided | 通常起動時は前回最後にfocusされていた有効Projectを1件だけ復元し、終了時に開いていた全Project WindowやWindow layoutを自動復元しない。Standalone WindowからNew/Open Projectを実行する場合は最後にfocusされたProject Windowをcurrent targetとし、Project Windowが存在しなければcurrent-window openingを許可しない。 | `architecture/project-window-execution-runtime.md` / `ui/application-shell.md` |
 | REQ-STORY-001 | Decided | Story の調査・案出し・詳細化は Grok に担当させ、ユーザーとの会話後に `story.md` を確定する。 | `contracts/grok-contract.md` |
 
 ## 3. Model Selection
@@ -101,6 +102,8 @@ Status: Active
 | REQ-EXEC-010 | Decided | `LocalExecutionService` / `RemoteExecutionService` とactive worker / SSH session / runtime resource lockはProjectやProject Windowの所有物にせず、Electron Main Processのapp-wide Execution Runtimeとして管理する。Project配下にはpersistent Execution Run state/historyを保持する。 | `architecture/project-window-execution-runtime.md` |
 | REQ-EXEC-011 | Decided | Project close / Project Window closeはExecution stop/pause/discardの契機にしない。active Runが存在する場合は最後のProject Windowを閉じてもMain Processを継続し、明示的Application Quitではactive Run警告を表示する。 | `architecture/project-window-execution-runtime.md` |
 | REQ-EXEC-012 | Decided | Multi Windowからの競合実行をExecution Runtimeで排他し、同じnormalized Local ComfyUI endpointまたは同じVast.ai Instanceを複数active Runが同時利用することを禁止する。別Vast.ai Instanceのparallel Remote Runは許可する。 | `architecture/project-window-execution-runtime.md` |
+| REQ-EXEC-013 | Decided | active RunによりWindow 0枚でもMain Processを継続する場合、Applicationをsingle-instanceとして再起動操作を既存Main Processへ転送し、新しいProject Windowを生成できる。 | `architecture/project-window-execution-runtime.md` |
+| REQ-EXEC-014 | Decided | Local resource lockはLocal ComfyUIへの副作用前、Remote resource lockはVast.ai Instanceへのstart/bootstrap/staging等の副作用前に取得し、Resume時も再取得する。Window closeではreleaseせず、Localはterminal output verification/cleanup後、Remoteはartifact cleanupとInstance finalization完了後にreleaseする。 | `architecture/project-window-execution-runtime.md` |
 
 ## 8. Validation / Security
 
