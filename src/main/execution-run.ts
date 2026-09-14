@@ -112,15 +112,15 @@ export async function getExecutionRun(root: string, runId: string): Promise<Exec
   return readJson<ExecutionRun>(executionRunPath(root, runId));
 }
 
-async function latestExecutionRun(root: string): Promise<ExecutionRun | null> {
-  if (!(await exists(executionRunsDir(root)))) return null;
+export async function listExecutionRuns(root: string): Promise<ExecutionRun[]> {
+  if (!(await exists(executionRunsDir(root)))) return [];
   let names: string[] = [];
   try {
     names = (await readdir(executionRunsDir(root))).filter(
       (name) => name.endsWith('.json') && name !== CURRENT_FILE,
     );
   } catch {
-    return null;
+    return [];
   }
   const runs = (
     await Promise.all(
@@ -133,7 +133,11 @@ async function latestExecutionRun(root: string): Promise<ExecutionRun | null> {
       }),
     )
   ).filter((run): run is ExecutionRun => Boolean(run));
-  return runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0] ?? null;
+  return runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+}
+
+async function latestExecutionRun(root: string): Promise<ExecutionRun | null> {
+  return (await listExecutionRuns(root))[0] ?? null;
 }
 
 export async function getCurrentExecutionRun(root: string): Promise<ExecutionRun | null> {
