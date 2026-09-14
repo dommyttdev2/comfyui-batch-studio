@@ -149,7 +149,7 @@ function promptFallbacks(parsed: any): PromptFallback[] {
   return Array.isArray(parsed?.promptFallbacks)
     ? parsed.promptFallbacks
         .map(normalizePromptFallback)
-        .filter((value): value is PromptFallback => value != null)
+        .filter((value: PromptFallback | null): value is PromptFallback => value != null)
     : [];
 }
 function promptFallbacksValid(parsed: any) {
