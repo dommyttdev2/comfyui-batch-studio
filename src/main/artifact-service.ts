@@ -106,7 +106,10 @@ function missing(parsed: any): MissingRequirement[] {
 }
 function fallbackTags(value: unknown) {
   if (Array.isArray(value))
-    return value.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean);
+    return value
+      .filter((tag): tag is string => typeof tag === 'string')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
   if (typeof value === 'string')
     return value
       .split(',')
@@ -130,11 +133,7 @@ function normalizePromptFallback(x: any): PromptFallback | null {
   const positiveTags = fallbackTags(x.positiveTags ?? x.positive);
   const negativeTags = fallbackTags(x.negativeTags ?? x.negative);
   if (!positiveTags.length && !negativeTags.length) return null;
-  if (
-    [...positiveTags, ...negativeTags].some(
-      (tag) => /[\r\n,]/.test(tag) || !tag.trim(),
-    )
-  )
+  if ([...positiveTags, ...negativeTags].some((tag) => /[\r\n,]/.test(tag) || !tag.trim()))
     return null;
   return {
     requirement: x.requirement.trim(),
