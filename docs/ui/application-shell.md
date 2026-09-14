@@ -50,6 +50,7 @@ Projectを開いている場合:
 ワークフロー
 モデル配置
 実行前チェック
+実行
 ```
 
 Projectを閉じている場合:
@@ -292,7 +293,7 @@ Vast.ai/SSH/Remote Worker capabilityの実装に応じて次を段階的にblock
 
 ## 15. Execution Screen
 
-> Current implementation: `実行` stageをProject navigationへ実装済み。persistent Execution Runを復元・ポーリングし、Start / Stop scheduling / Force interrupt / Resumeとphase/progress/error監視を提供する。ComfyUI実submitやartifact transfer本体は後続Execution実装の責務。
+> Current implementation: `実行` stage、persistent Execution Run、Local ComfyUI連続生成、Remote Vast.ai lifecycle / SSH / bootstrap / model staging / Scene Prompt連続生成 / artifact package・R2 upload・Local download・SHA-256検証まで実装済み。Start / Stop scheduling / Force interrupt / Resume / 別Instanceで新しく実行 / 最初からやり直すと、phase/progress/error/推定残り時間監視を提供する。
 
 Grok paneは非表示とし、Local UIを全幅使用する。
 
