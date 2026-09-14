@@ -1,6 +1,6 @@
 # Local / Remote Execution Architecture
 
-Status: Active design / implementation in progress
+Status: Active / core implementation available
 
 ## 1. 目的
 
@@ -16,9 +16,7 @@ ComfyUI Batch Studio に `実行前チェック` の後段として `実行` 工
 - R2 から Local Project への成果物回収。
 - 長時間 Run の進捗、停止、再接続、Resume。
 
-この文書を Local / Remote Execution の個別実行手順、Remote Worker、SSH、R2 transfer、artifact delivery / recovery の詳細設計の正本とする。
-
-Project Window / Project / Execution Run / app-wide Execution Runtime の ownership、Window lifecycle、Execution resource lock は `project-window-execution-runtime.md` を正本とする。
+この文書を Execution / Remote Execution の詳細設計の正本とする。
 
 Vast.ai API Key、Instance Manager、Cloud Provider abstraction、サービス連携 UI は `../integrations/service-integrations.md` を正本とする。
 
@@ -1096,58 +1094,76 @@ RemoteではInstance起動中、SSH準備中、生成中、成果物転送中を
 
 ## 30. Current Implementation Boundary
 
-Service Integration / Vast.ai providerとして現在実装する範囲:
+Service Integration / Vast.ai providerとして現在実装済み:
 
 ```text
 Vast.ai API Key safeStorage / environment fallback
-Instance list
+Instance list / 5-second refresh
 status normalization
-start / stop
+start / stop / scheduling cancel
+destroy / reboot
+ComfyUI Template-compatible Offer search / RENT
 public SSH endpoint resolution
 Project remoteProvider / remoteInstanceId selection
-Project-level Preflight Gate（provider設定 / key path / instance state / endpoint範囲）
-Integrated R2 Managerのpresigned GET / temporary presigned PUT primitive
+Project-level Preflight Gate
+Integrated R2 Manager signed GET / PUT / multipart primitives
 ```
 
-Execution foundationとして現在実装する範囲:
+Execution domainとして現在実装済み:
 
 ```text
 Project-local persistent Execution Run
 start / status / get / stop scheduling / force interrupt / resume IPC
-Preflight + Workflow/API graph identity + Prompt Plan identity snapshot
+restart on another Vast.ai Instance
+restart from scratch with DISCARDED history
+Workflow/API graph + Prompt Plan snapshot
 Local / Remote phase model
 Run-scoped progress / current branch / current prompt / error state
+moving-average remaining-time estimation
 evidence fingerprint validation
 stale Workflow/API graph / Prompt Plan resume rejection
-secret / private-key contents / credential / presigned URL persistence guard
+secret / private-key contents / credential / signed URL persistence guard
 ```
 
-現在実装済みのRemote Execution基盤:
+Local Executionとして現在実装済み:
 
 ```text
-SSH client / Host Key policy
-Remote Worker
+Local ComfyUI API client
+Scene Prompt Tools prepare / claim / finalize / release
+deterministic branch enumeration
+prompt submission / history wait
+Stop scheduling
+Force Interrupt for the owned current prompt
+Local output verification
+```
+
+Remote Executionとして現在実装済み:
+
+```text
+Vast.ai Instance prepare / automatic start / readiness wait
+initial-state-preserving finalize
+SSH client / Host Key verification
+Remote Worker deploy + SHA-256 verification
 Remote ComfyUI install path validation
-Remote environment bootstrap（aria2 / gh / PAT / ComfyUI latest release / custom_nodes）
-R2 -> Remote model staging via aria2
+Remote environment bootstrap
+  aria2 / gh / PAT / latest ComfyUI release / requirements / Manager / custom_nodes / restart
+R2 -> Remote model staging with up to 4 concurrent model downloads
 per-model progress / evidence / Resume skip
-size / SHA-256 validation + .part + atomic rename
+model size / SHA-256 verification + .part + atomic rename
 signed URL non-persistence + expiry retry
+Remote Scene Prompt continuous execution inside the Remote Worker
+Remote progress recovery / stop scheduling / force interrupt
+artifact count verification
+Remote ZIP + external manifest + SHA-256
+R2 single PUT / multipart upload
+Execution-scoped R2 object verification
+R2 -> Local stream download to .part
+Local ZIP / manifest SHA-256 verification + atomic rename
+Remote/R2 temporary artifact cleanup
+Resume from generation / package / upload / local verification evidence
 ```
 
-今後のExecution実装範囲:
-
-```text
-ComfyUI API graph submission
-Scene Prompt continuous runner
-Execution連携としてのartifact package/upload/download
-provider lifecycle automatic start/wait/finalize
-```
-
-未実装部分をUI上で成功済みとして扱わない。
-
-Standalone R2 File Managerの一時PUT URL生成は実装済みだが、Remote Runのartifact package/hash生成、Execution専用Object Key管理、Remote WorkerへのURL受け渡し、upload evidence、R2からLocalへのstream回収とhash検証は未実装である。
-
+PreflightはWorkflow/API graph、Artifact/model availability、provider/key/Instance等のGateを実装している。一方、SSH authentication、Host Key、Remote filesystem/runtime、ComfyUI/Scene Prompt capability等の一部operational validationはRun開始後の各phaseでも実施する。Preflight READYとruntime validationを同義にしない。
 
 ### Restart from scratch
 

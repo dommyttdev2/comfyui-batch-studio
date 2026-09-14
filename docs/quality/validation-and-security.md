@@ -241,9 +241,11 @@ Blocking が1件でもあれば `BLOCKED`。
 - Vast.ai API Key設定、SSH private key path存在。
 - selected Instanceのcurrent provider statusとrunning時のpublic SSH endpoint有無。
 
-一方、UI Workflowに対応するAPI-format graph、Local ComfyUI API、Scene Prompt Tools、required custom nodes、実SSH authentication、Host Key、Remote Worker、remote filesystem/disk等のoperational checkは未実装である。
+Execution用API-format graphの生成・構造・hash / workflow identity検証は実装済みである。
 
-したがって現在の `READY` は実装済みGate範囲の結果であり、本章で定義する最終的な「Execution開始可能」のoperational READYより弱い。Execution capability追加時にPreflightを同時に強化し、未検証項目を成功扱いしない。
+一方、Local ComfyUI API到達性、Scene Prompt Tools / required custom nodes、実SSH authentication、Host Key、Remote Worker、remote filesystem/disk、Remote localhost ComfyUI capability等の一部operational checkはPreflightでは未実装である。これらの多くはExecution開始後のLocal / Remote各phaseでruntime validationされる。
+
+したがって現在の `READY` は実装済みPreflight Gate範囲の結果であり、本章で定義する「全runtime capabilityを開始前に検証済み」という意味ではない。Preflightで未検証の項目を成功扱いせず、runtime validation failureもExecution errorとして明示する。
 
 ## 11. Grok Security
 

@@ -90,7 +90,6 @@ Remote executionの詳細設計は `../architecture/remote-execution.md` を正�
 現時点で必須責務としないもの:
 
 - Vast.ai instanceの自動契約・作成。
-- Vast.ai instance start / stopをRemote executionの必須要件とすること。
 - SSH Tunnel。
 - ComfyUI API portの外部公開。
 
@@ -227,7 +226,7 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 | ストーリー | Brief / 参考資料 | `story.md` | User Confirm / validation成功 |
 | モデル選定 | `story.md`, app-wide `model_catalog.json`, Local/R2 model inventory | `models.json` | Model Family/基盤モデル選択済み、LoRA identity実在、unresolved `missingRequirements` なし |
 | プロンプト設計 | story, models | `prompt_plan.json` | schema / refs / branch-leaf整合性有効 |
-| ワークフロー | Template, Manifest, models, plan | UI Workflow | 現行CompilerのUI Workflow構造validation成功。Execution用API graphは未実装 |
+| ワークフロー | Template, Manifest, models, plan | UI Workflow + Execution API graph | UI Workflow / API graph生成、構造validation、hash / workflow identity整合が成功 |
 | モデル配置 | models, Local, integrated R2, executionTarget | 所在状態 / R2操作 | Local targetはLocal配置済み。Remote targetはR2配置済み |
 | 実行前チェック | 全成果物 + target環境 | READY / BLOCKED | artifact/model validationとtarget-specific operational checkにblocking errorなし |
 | 実行 | READY Project + executionTarget | Execution Run / Local成果物 | Localは生成+成果物確認、Remoteは生成+R2経由Local回収+hash検証成功 |
@@ -289,9 +288,13 @@ Executionの詳細責務は `../architecture/remote-execution.md` を正本と�
 
 ### 7.4 Current implementation boundary
 
-現在のProject navigationは `概要 -> 基本設定 -> ストーリー -> モデル選定 -> プロンプト設計 -> ワークフロー -> モデル配置 -> 実行前チェック` まで実装済みである。
+現在のProject navigationは `概要 -> 基本設定 -> ストーリー -> モデル選定 -> プロンプト設計 -> ワークフロー -> モデル配置 -> 実行前チェック -> 実行` まで実装済みである。
 
-`実行` stage、Execution Run、Local ComfyUI API execution、SSH/Remote Worker、remote model staging、remote Scene Prompt execution、artifact deliveryは設計済みだが未実装である。したがって現行Preflightの `READY` はArtifact/model/provider選択の範囲であり、設計上の完全なoperational READYへは今後強化する必要がある。
+Executionではpersistent Run、Local ComfyUI API + Scene Prompt Tools連続生成、Stop scheduling / Force interrupt / Resume、Vast.ai Instance lifecycle、公開SSH + Host Key検証、Remote Worker、Remote環境bootstrap、R2からのmodel staging、Remote Scene Prompt連続生成、成果物ZIP/manifest作成、R2 upload、Local download、SHA-256検証、cleanupまで実装済みである。
+
+Vast.ai Remote Runは選択InstanceがstoppedならRun開始時に起動し、Batch Studioが起動したInstanceはRun終端後にinitial stateへ戻す。Run開始前からrunningだったInstanceはrunningを維持する。
+
+一方、Preflight自体はすべてのruntime operational checkを事前実行しているわけではない。API graphとArtifact/model/provider GateはPreflightで検証し、SSH接続・Host Key・Remote filesystem/runtime・ComfyUI/Scene Prompt capability等の一部はExecution開始後の各phaseで検証する。
 
 ## 8. 状態定義
 
