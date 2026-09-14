@@ -80,11 +80,13 @@ Application menu の File に `New Project...` / `Open Project...` を追加す�
 
 新しいWindowで開く場合、既存Project WindowのProject / Grok / Execution stateを変更しない。
 
+R2 File Manager / Civit Explorer / Vast.ai 等のStandalone Windowがfocusされている場合、「現在のWindow」は最後にfocusされたProject Windowを指す。Project Windowが存在しない場合は「現在のWindowで開く」を選択不可とし、「新しいWindowで開く」のみ許可する。Standalone Window自体はProject Windowへ変換しない。
+
 同一Project rootは同時に1 Windowのみ許可する。既に別Windowで開かれているProjectを指定した場合は、新しいWindowを作らず既存Windowをshow / focusする。
 
 Project WindowはExecutionを所有しない。Project AのExecution中にProject Bを別Windowで開いてもRun Aを停止・pause・discardしない。
 
-Project WindowのcloseとApplication quitを別操作として扱う。active Runがある場合、最後のProject Windowを閉じてもMain Processは継続する。明示的Quitではactive Runがあることを警告し、終了するかをユーザーに確認する。
+Project WindowのcloseとApplication quitを別操作として扱う。active Runがある場合、最後のProject Windowを閉じてもMain Processは継続する。Applicationはsingle-instanceとし、この状態で再度起動した場合は生存中のMain ProcessをactivateしてProject Windowを再生成する。明示的Quitではactive Runがあることを警告し、終了するかをユーザーに確認する。
 
 詳細なlifecycle / ownership / resource lockは `../architecture/project-window-execution-runtime.md` を正本とする。
 
