@@ -13,7 +13,7 @@ import { readProjectMeta, saveWorkflowBuild } from './project-meta.js';
 import { validateModels, validatePromptPlan, validateWorkflowManifest } from './validation.js';
 import { resolveWorkflowTemplatePaths } from './workflow-template-paths.js';
 import { buildApiGraph, hashCanonicalJson, validateCompiledApiGraph } from './workflow-api.js';
-import { compilePromptPlanPrompts } from './prompt-policy.js';
+import { compilePromptPlanPrompts } from '../shared/prompt-policy.js';
 
 type Node = {
   id: number;
