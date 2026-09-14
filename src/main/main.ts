@@ -616,7 +616,9 @@ async function prepareRemoteExecution(root: string, runId: string) {
       customNodes: settings.remoteCustomNodes,
     });
     await remoteStager().stage(root, runId);
-    remoteSceneExecutor().start(root, runId);
+    await remoteSceneExecutor().start(root, runId);
+    const settled = await getExecutionRun(root, runId);
+    if (settled?.lifecycle === 'DISCARDED') await finalizeRemoteInstance(root, runId);
   } catch (error) {
     const current = await getExecutionRun(root, runId);
     if (current?.lifecycle === 'PAUSED' || current?.lifecycle === 'INTERRUPTED') {
@@ -624,11 +626,12 @@ async function prepareRemoteExecution(root: string, runId: string) {
       return;
     }
     if (current?.lifecycle === 'DISCARDED') {
+      await finalizeRemoteInstance(root, runId);
       remoteExecutor().disconnect(root, runId);
       return;
     }
     if (current?.lifecycle === 'FAILED' && current.error?.code === 'REMOTE_INSTANCE_REPLACED') {
-      void finalizeRemoteInstance(root, runId);
+      await finalizeRemoteInstance(root, runId);
       remoteExecutor().disconnect(root, runId);
       return;
     }
@@ -675,6 +678,41 @@ async function prepareRemoteExecution(root: string, runId: string) {
     });
     await finalizeRemoteInstance(root, runId);
     remoteExecutor().disconnect(root, runId);
+  }
+}
+
+async function startExecutionRuntime(root: string, run: ExecutionRun) {
+  const ref = { projectRoot: path.resolve(root), runId: run.runId };
+  try {
+    if (run.executionTarget === 'local') {
+      const settings = await settingsStore().status();
+      void executionCoordinator.startLocal(ref, settings.comfyUiApiEndpoint, () =>
+        localExecutor().start(root, run.runId),
+      );
+      return;
+    }
+    const provider = run.remote?.provider,
+      instanceId = Number(run.remote?.instanceId);
+    if (provider !== 'vastai' || !Number.isInteger(instanceId) || instanceId < 1)
+      throw new Error('Remote Execution Run has no valid Vast.ai Instance.');
+    void executionCoordinator.startRemote(ref, provider, instanceId, () =>
+      prepareRemoteExecution(root, run.runId),
+    );
+  } catch (error) {
+    await mutateExecutionRun(root, run.runId, (current) => {
+      const failure = {
+        code: 'EXECUTION_RESOURCE_BUSY',
+        message: safeExecutionError(error),
+        phase: current.phase,
+        at: new Date().toISOString(),
+        retryable: true,
+      };
+      current.error = failure;
+      current.errorHistory.push(failure);
+      current.lifecycle = 'FAILED';
+      current.controls.scheduling = 'STOPPED';
+    });
+    throw error;
   }
 }
 async function resolveVastSshEndpoint(instanceId: number): Promise<VastAiSshEndpoint> {
