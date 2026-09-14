@@ -144,8 +144,8 @@ const baseModels = {
   );
   assert.match(
     task.prompt,
-    /promptFallbacks/,
-    'Prompt Plan instructions must explain how to apply prompt fallbacks',
+    /model_prompt_fallbacks\.json[\s\S]*positiveTags \/ negativeTags/,
+    'Prompt Plan instructions must explain how to categorize structured prompt fallbacks',
   );
 
   fs.writeFileSync(
