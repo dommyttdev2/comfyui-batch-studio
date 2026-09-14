@@ -398,11 +398,11 @@ Remote ComfyUI Portも同様に固定保存しない。Remote Workerがlocalhost
 
 ---
 
-## 14. Instance Manager
+## 14. Instance Manager / Offer Search
 
-Vast.ai service page では既存 Instance を一覧表示する。
+Vast.ai service page では既存 Instance の管理と、ComfyUI Template互換のOn-demand Offer検索・RENTを提供する。
 
-最低表示:
+Instance最低表示:
 
 ```text
 Instance ID
@@ -415,27 +415,43 @@ hourly cost
 current public SSH endpoint
 ```
 
-初期操作:
+Instance操作:
 
 ```text
-refresh
+refresh / 5秒ごとの自動更新
 start
-stop
-```
-
-初期 scope 外:
-
-```text
-new instance / offer search
+stop / scheduling cancel
 destroy
 reboot
+```
+
+`destroy` は取消不能のdestructive operationであるため、Rendererから直接確定せずMain Processの確認dialogを通す。
+
+Offer検索:
+
+```text
+ComfyUI Template互換
+On-demand
+Verified
+利用可能
+7日以上利用可能
+Storage
+minimum GPU TFLOPS
+GPU Count
+minimum Reliability
+excluded countries
+```
+
+検索結果は5秒ごとに更新し、コストが低い順で表示する。RENT直前にOfferとTemplateを再取得して確認dialogを表示し、RENT成功後は作成されたInstanceを一覧へ反映する。利用不能になったOfferは一定時間検索結果から抑止し、同じstale Offerを即座に再提示しない。
+
+現行scope外:
+
+```text
 bid modification
 label editing
 volume management
 billing
 ```
-
-特に `destroy` は destructive operation であり、Remote Execution の成立に不要なため初期 UI へ置かない。
 
 ---
 
@@ -610,7 +626,7 @@ Environment SettingsにRemote ComfyUI install pathが設定済み
 Remote ComfyUI environment is valid
 ```
 
-初期実装で Execution Service 未実装の項目を成功したように偽装しない。検証 capability が追加された時点で Preflight Gate を強化する。
+Preflightで未検証のruntime capabilityを成功したように偽装しない。現行ExecutionはInstance lifecycle、SSH/Host Key、Remote Worker、environment bootstrap等をRun開始後の各phaseでも検証するため、PreflightのREADYとruntime validationを区別する。
 
 ---
 
@@ -680,17 +696,20 @@ Batch Studio では reference runner process 自体を起動せず、Electron Ma
 1. Home から「サービス連携」を開ける。
 2. Home中央の主要actionから R2 / Civit を直接並列表示せず、連携済みserviceだけを左navigationへ条件付き表示する。
 3. R2 / Civitai credential は環境設定ではなくサービス連携から編集する。
-4. R2 File Manager / Civit Explorer はサービス連携、連携済み左navigation、application menuのWindowから開ける。
+4. R2 File Manager / Civit Explorer / Vast.ai はサービス連携、連携済み左navigation、application menuのWindowから開ける。
 5. クラウドインスタンス選択画面に Vast.ai が表示される。
 6. Vast.ai API Key を `safeStorage` で保存できる。
 7. `VASTAI_API_KEY` を environment fallback として利用できる。
 8. 保存済みAPI KeyをRendererへ返さない。
 9. SSH private key contentsを保存せずpathだけを保持する。
 10. Vast.ai Instance一覧をpagination-awareに取得できる。
-11. Instanceのstart / stopを実行できる。
-12. Destroy / Reboot / instance creationを初期UIに出さない。
+11. Instanceのstart / stop（scheduling cancelを含む）を実行できる。
+12. Instanceのdestroy / rebootを実行でき、destroyはMain Process確認dialogを必須とする。
 13. Remote Projectに `remoteProvider=vastai` と `remoteInstanceId` を保存できる。
 14. SSH host / portをProjectへ固定保存しない。
 15. 実行時にcurrent Vast.ai API responseから、選択Instance固有の `22/tcp.HostPort` を公開SSH接続先Portとして解決する。
 16. ComfyUI PortをVast.ai設定へ保存せず、current Instanceの `ports` から解決する。
 17. SSH Tunnelを導入しない。
+18. ComfyUI Template互換のOn-demand Offerを条件検索し、5秒ごとに更新できる。
+19. OfferをRENTする前に料金・Storage・Reliability・Templateを確認し、承認後にInstanceを作成できる。
+20. 利用不能Offerは一時的に検索結果から抑止し、自動再検索できる。
