@@ -1261,7 +1261,9 @@ function register() {
 
       if (candidate.lifecycle === 'RUNNING') {
         await requestStopScheduling(root, candidate.runId).catch(() => candidate);
-        await localExecutor().forceInterrupt(root, candidate.runId).catch(() => false);
+        await localExecutor()
+          .forceInterrupt(root, candidate.runId)
+          .catch(() => false);
         for (let poll = 0; poll < 120; poll++) {
           const latest = await getExecutionRun(root, candidate.runId);
           if (!latest || latest.lifecycle !== 'RUNNING') break;
