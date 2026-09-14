@@ -2,10 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const src = fs.readFileSync(
-  path.resolve(__dirname, '../src/renderer/PromptPlanStage.tsx'),
-  'utf8',
-);
+const src = fs.readFileSync(path.resolve(__dirname, '../src/renderer/PromptPlanStage.tsx'), 'utf8');
 
 assert.match(
   src,
