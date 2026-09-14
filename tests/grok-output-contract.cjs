@@ -128,7 +128,7 @@ matchCode(
 );
 matchCode(
   src,
-  /Batch Studio Compiler[sS]*自動注入/,
+  /Batch Studio Compiler[\s\S]*自動注入/,
   'Batch Studio must own trainedWords injection',
 );
 matchCode(
