@@ -384,6 +384,60 @@ function openStandaloneToolWindow(tool: StandaloneWindowTool) {
     console.error(`${title} window failed to load:`, error),
   );
 }
+async function chooseProjectOpeningTarget() {
+  const current = lastFocusedProjectWindow();
+  const buttons = current
+    ? ['キャンセル', '現在のWindowで開く', '新しいWindowで開く']
+    : ['キャンセル', '新しいWindowで開く'];
+  const result = await dialog.showMessageBox({
+    type: 'question',
+    title: 'Projectを開くWindow',
+    message: 'Projectをどこで開きますか？',
+    buttons,
+    defaultId: current ? 1 : 1,
+    cancelId: 0,
+    noLink: true,
+  });
+  if (result.response === 0) return null;
+  if (current && result.response === 1) return { mode: 'current' as const, state: current };
+  return { mode: 'new' as const, state: null };
+}
+async function handleProjectMenuAction(command: 'new' | 'open') {
+  const target = await chooseProjectOpeningTarget();
+  if (!target) return;
+  if (command === 'new') {
+    if (target.mode === 'current' && target.state) {
+      focusProjectWindow(target.state);
+      target.state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
+    } else createProjectWindow({ openCreateOnLoad: true });
+    return;
+  }
+
+  const defaultPath = await stateStore().lastProjectDirectoryPath();
+  const selected = await dialog.showOpenDialog({
+    title: 'プロジェクトフォルダーを選択',
+    defaultPath: defaultPath ?? undefined,
+    properties: ['openDirectory'],
+  });
+  if (selected.canceled || !selected.filePaths[0]) return;
+  const root = path.resolve(selected.filePaths[0]),
+    existing = projectWindowForRoot(root, target.state ?? undefined);
+  if (existing) {
+    focusProjectWindow(existing);
+    return;
+  }
+  if (target.mode === 'new') {
+    await stateStore().rememberProject(root);
+    createProjectWindow({ initialProjectRoot: root });
+    return;
+  }
+  const state = target.state;
+  if (!state) return;
+  const project = await scanWithCatalog(root);
+  await setWindowProject(state, root);
+  focusProjectWindow(state);
+  state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'open', project);
+}
 function installApplicationMenu() {
   const windowMenu: MenuItemConstructorOptions[] = [
     { label: 'R2 File Manager', click: () => openStandaloneToolWindow('r2') },
@@ -393,9 +447,16 @@ function installApplicationMenu() {
     { role: 'minimize' },
     { role: 'close' },
   ];
+  const fileMenu: MenuItemConstructorOptions[] = [
+    { label: 'New Project...', click: () => void handleProjectMenuAction('new') },
+    { label: 'Open Project...', click: () => void handleProjectMenuAction('open') },
+    { type: 'separator' },
+    { label: 'Close Window', role: 'close' },
+    { label: 'Quit', role: 'quit' },
+  ];
   const template: MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' } as MenuItemConstructorOptions] : []),
-    { role: 'fileMenu' },
+    { label: 'File', submenu: fileMenu },
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { label: 'Window', submenu: windowMenu },
