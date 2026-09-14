@@ -141,8 +141,8 @@ matchCode(
 );
 matchCode(
   executionSource,
-  /最初からやり直す/,
-  'Execution UI must expose a restart-from-scratch action',
+  /最新のPrompt Planで最初から実行/,
+  'Execution UI must expose a latest-Prompt-Plan restart action',
 );
 matchCode(
   executionSource,
