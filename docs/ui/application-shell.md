@@ -66,7 +66,7 @@ R2 File Manager / Civit Explorer / Vast.ai管理画面は「サービス連携�
 
 ## 4. Project Lifecycle / Home
 
-起動時は前回明示的に開いていたProjectが有効なら自動復元する。
+起動時は前回最後にfocusされていた有効Projectを1件だけ自動復元する。前回開いていた全Project WindowやWindow layoutは自動復元しない。復元対象が無効な場合はHomeを開く。
 
 ### 4.1 Multi Window Project opening
 
