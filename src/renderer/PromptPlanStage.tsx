@@ -22,31 +22,6 @@ type PlanSelection =
   | { type: 'matrix'; branch: number }
   | { type: 'leaf'; branch: number; leaf: number };
 
-function promptPlanIssueLocation(plan: PromptPlanArtifact, issue: ValidationIssue) {
-  const match = issue.path?.match(/^branches\.(\d+)\.leaves\.(\d+)(?:\.|$)/);
-  if (!match) return null;
-
-  const branchIndex = Number(match[1]);
-  const leafIndex = Number(match[2]);
-  const branch = plan.branches[branchIndex];
-  const leaf = branch?.leaves[leafIndex];
-
-  return [
-    `Matrix ${leafIndex + 1}行目`,
-    branch?.id ? `Branch ${branch.id}` : `Branch ${branchIndex + 1}`,
-    leaf?.id ? `Leaf ${leaf.id}` : null,
-  ]
-    .filter(Boolean)
-    .join(' / ');
-}
-
-function promptPlanIssues(plan: PromptPlanArtifact | null, issues: ValidationIssue[]) {
-  if (!plan) return issues;
-  return issues.map((issue) => {
-    const location = promptPlanIssueLocation(plan, issue);
-    return location ? { ...issue, message: `[${location}] ${issue.message}` } : issue;
-  });
-}
 export function PromptPlanStage({
   project,
   setProject,
@@ -176,7 +151,7 @@ export function PromptPlanStage({
             )}
           </div>
         </div>
-        {issuesView(promptPlanIssues(plan, validation))}
+        {issuesView(validation)}
         {!plan ? (
           <p>Prompt Planはまだありません。Grokの結果を取り込んでください。</p>
         ) : (
