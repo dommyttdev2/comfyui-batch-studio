@@ -90,7 +90,6 @@ Remote executionの詳細設計は `../architecture/remote-execution.md` を正�
 現時点で必須責務としないもの:
 
 - Vast.ai instanceの自動契約・作成。
-- Vast.ai instance start / stopをRemote executionの必須要件とすること。
 - SSH Tunnel。
 - ComfyUI API portの外部公開。
 
@@ -289,9 +288,13 @@ Executionの詳細責務は `../architecture/remote-execution.md` を正本と�
 
 ### 7.4 Current implementation boundary
 
-現在のProject navigationは `概要 -> 基本設定 -> ストーリー -> モデル選定 -> プロンプト設計 -> ワークフロー -> モデル配置 -> 実行前チェック` まで実装済みである。
+現在のProject navigationは `概要 -> 基本設定 -> ストーリー -> モデル選定 -> プロンプト設計 -> ワークフロー -> モデル配置 -> 実行前チェック -> 実行` まで実装済みである。
 
-`実行` stage、Execution Run、Local ComfyUI API execution、SSH/Remote Worker、remote model staging、remote Scene Prompt execution、artifact deliveryは設計済みだが未実装である。したがって現行Preflightの `READY` はArtifact/model/provider選択の範囲であり、設計上の完全なoperational READYへは今後強化する必要がある。
+Executionではpersistent Run、Local ComfyUI API + Scene Prompt Tools連続生成、Stop scheduling / Force interrupt / Resume、Vast.ai Instance lifecycle、公開SSH + Host Key検証、Remote Worker、Remote環境bootstrap、R2からのmodel staging、Remote Scene Prompt連続生成、成果物ZIP/manifest作成、R2 upload、Local download、SHA-256検証、cleanupまで実装済みである。
+
+Vast.ai Remote Runは選択InstanceがstoppedならRun開始時に起動し、Batch Studioが起動したInstanceはRun終端後にinitial stateへ戻す。Run開始前からrunningだったInstanceはrunningを維持する。
+
+一方、Preflight自体はすべてのruntime operational checkを事前実行しているわけではない。API graphとArtifact/model/provider GateはPreflightで検証し、SSH接続・Host Key・Remote filesystem/runtime・ComfyUI/Scene Prompt capability等の一部はExecution開始後の各phaseで検証する。
 
 ## 8. 状態定義
 
