@@ -163,7 +163,10 @@ function layoutProjectWindow(state: ProjectWindowState) {
 }
 function projectWindowForSender(contents: WebContents) {
   for (const state of projectWindows.values())
-    if (state.localView.webContents.id === contents.id || state.grokView.webContents.id === contents.id)
+    if (
+      state.localView.webContents.id === contents.id ||
+      state.grokView.webContents.id === contents.id
+    )
       return state;
   throw new Error('Project Window was not found for IPC sender.');
 }
@@ -274,11 +277,13 @@ async function rememberMostRecentOpenProject(clearIfNone = true) {
   if (candidate?.projectRoot) await stateStore().rememberProject(candidate.projectRoot);
   else if (clearIfNone) await stateStore().clearProject();
 }
-function createProjectWindow(options: {
-  restoreLastProject?: boolean;
-  initialProjectRoot?: string | null;
-  openCreateOnLoad?: boolean;
-} = {}) {
+function createProjectWindow(
+  options: {
+    restoreLastProject?: boolean;
+    initialProjectRoot?: string | null;
+    openCreateOnLoad?: boolean;
+  } = {},
+) {
   const window = new BaseWindow({
       width: 1540,
       height: 920,
@@ -781,11 +786,7 @@ async function scanAndRemember(root: string) {
   await stateStore().rememberProject(root);
   return project;
 }
-async function setGrokContext(
-  state: ProjectWindowState,
-  root: string,
-  stage: GrokContextStage,
-) {
+async function setGrokContext(state: ProjectWindowState, root: string, stage: GrokContextStage) {
   validRoot(root);
   validGrokContextStage(stage);
   const resolvedRoot = path.resolve(root),
@@ -1705,10 +1706,7 @@ function register() {
     if (typeof x !== 'number' || !Number.isFinite(x)) throw new Error('Invalid divider position');
     const state = projectWindowForSender(event.sender),
       bounds = state.window.getContentBounds();
-    state.localRatio = Math.max(
-      0.3,
-      Math.min(0.7, (x - bounds.x) / Math.max(bounds.width, 1)),
-    );
+    state.localRatio = Math.max(0.3, Math.min(0.7, (x - bounds.x) / Math.max(bounds.width, 1)));
     layoutProjectWindow(state);
     return paneState(state);
   });
@@ -1762,8 +1760,7 @@ else
     else createProjectWindow({ restoreLastProject: true });
   });
 
-if (hasSingleInstanceLock)
-  app.whenReady().then(async () => {
+async function initializeApplication() {
   const userData = app.getPath('userData');
   civitaiPolicy = new CivitaiRequestPolicy();
   civitaiPolicy.install();
@@ -1814,7 +1811,9 @@ if (hasSingleInstanceLock)
     if (existing) focusProjectWindow(existing);
     else createProjectWindow({ restoreLastProject: true });
   });
-});
+
+}
+if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
 app.on('window-all-closed', () => {
   if (!executionCoordinator.hasActiveRuns() && process.platform !== 'darwin') app.quit();
 });
