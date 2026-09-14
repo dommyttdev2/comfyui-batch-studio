@@ -712,7 +712,6 @@ function validatePromptPlanV1(p: any, models: ModelsArtifact | null): Validation
     i.push({ severity: 'error', code: 'DUP_BRANCH_ID', message: 'Branch IDが重複しています。' });
   if (new Set(leafIds).size !== leafIds.length)
     i.push({ severity: 'error', code: 'DUP_LEAF_ID', message: '生成項目IDが重複しています。' });
-  annotatePromptPlanLeafLocations(i, branches);
   return ok(i);
 }
 
@@ -1095,6 +1094,7 @@ function validatePromptPlanV2(
     i.push({ severity: 'error', code: 'DUP_BRANCH_ID', message: 'Branch IDが重複しています。' });
   if (new Set(leafIds).size !== leafIds.length)
     i.push({ severity: 'error', code: 'DUP_LEAF_ID', message: '生成項目IDが重複しています。' });
+  annotatePromptPlanLeafLocations(i, branches);
   return ok(i);
 }
 
