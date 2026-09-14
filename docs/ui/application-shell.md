@@ -66,7 +66,29 @@ R2 File Manager / Civit Explorer / Vast.ai管理画面は「サービス連携�
 
 ## 4. Project Lifecycle / Home
 
-起動時は前回明示的に開いていたProjectが有効なら自動復元する。
+起動時は前回最後にfocusされていた有効Projectを1件だけ自動復元する。前回開いていた全Project WindowやWindow layoutは自動復元しない。復元対象が無効な場合はHomeを開く。
+
+### 4.1 Multi Window Project opening
+
+Application menu の File に `New Project...` / `Open Project...` を追加する。
+
+どちらも実行時に次を選択する。
+
+- 現在のWindowで開く。
+- 新しいWindowで開く。
+- キャンセル。
+
+新しいWindowで開く場合、既存Project WindowのProject / Grok / Execution stateを変更しない。
+
+R2 File Manager / Civit Explorer / Vast.ai 等のStandalone Windowがfocusされている場合、「現在のWindow」は最後にfocusされたProject Windowを指す。Project Windowが存在しない場合は「現在のWindowで開く」を選択不可とし、「新しいWindowで開く」のみ許可する。Standalone Window自体はProject Windowへ変換しない。
+
+同一Project rootは同時に1 Windowのみ許可する。既に別Windowで開かれているProjectを指定した場合は、新しいWindowを作らず既存Windowをshow / focusする。
+
+Project WindowはExecutionを所有しない。Project AのExecution中にProject Bを別Windowで開いてもRun Aを停止・pause・discardしない。
+
+Project WindowのcloseとApplication quitを別操作として扱う。active Runがある場合、最後のProject Windowを閉じてもMain Processは継続する。Applicationはsingle-instanceとし、この状態で再度起動した場合は生存中のMain ProcessをactivateしてProject Windowを再生成する。明示的Quitではactive Runがあることを警告し、終了するかをユーザーに確認する。
+
+詳細なlifecycle / ownership / resource lockは `../architecture/project-window-execution-runtime.md` を正本とする。
 
 Projectを開いている間は「プロジェクトを閉じる」を提供する。閉じる操作はProject artifactを削除せず、現在Projectの選択と次回起動時の自動復元記録だけを解除する。
 
@@ -334,7 +356,20 @@ Remote targetでは `generation completed` と `artifact delivery completed` を
 
 詳細は `../architecture/remote-execution.md` を正本とする。
 
-## 16. Grok Pane Controls
+## 16. Project Window-local Grok state
+
+Multi WindowではGrok login session用persistent partitionは共有してよいが、以下はProject Windowごとに独立させる。
+
+- Grok WebContentsView。
+- visible / hidden。
+- divider ratio。
+- active Project / Grok stage context。
+- navigation queue / context queue。
+- restoring state。
+
+Grok関連IPCは操作元の `event.sender` から対象Project Windowを解決し、単一global `grokView` を操作しない。
+
+## 17. Grok Pane Controls
 
 | 工程 / Tool | Grok pane |
 | --- | --- |

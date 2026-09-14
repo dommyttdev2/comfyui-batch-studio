@@ -1189,6 +1189,90 @@ Model Familyと基盤モデルの選定主体をユーザーへ変更し、Grok�
 
 ---
 
+## DEC-024: Project Windows do not own Execution Runtime
+
+Date: 2026-09-14
+Status: Accepted
+
+### Decision
+
+Multi Window対応では、Project Window、Project、Execution Run、Execution Runtimeを別のlifecycleとして扱う。
+
+```text
+Project
+  = 生成定義 + Projectに紐づく永続Run履歴
+
+ExecutionRun
+  = 1回の実行内容・進捗・evidence・履歴
+
+ExecutionCoordinator / Executors
+  = Electron Main Processのapp-wide Application Runtime
+
+Project Window
+  = Projectを表示・編集し、Executionを参照・操作するUI
+```
+
+`LocalExecutionService` / `RemoteExecutionService`、active worker、SSH session、runtime resource lockをProjectやProject Windowの所有物にしない。
+
+Project配下には `execution_runs/<runId>.json` 等のpersistent Run state/historyを保持する。これはProjectの再現性・監査履歴であり、Application Runtimeのownershipとは分離する。
+
+### Window lifecycle
+
+- File menuに `New Project...` / `Open Project...` を追加し、「現在のWindow」「新しいWindow」「キャンセル」を選べるようにする。
+- 複数Project Windowを同時に開ける。
+- 同一Project rootを複数Windowで同時に開かず、既存Windowをfocusする。
+- Project close / Project Window closeでactive Runをstop / pause / discardしない。
+- active Runがある場合、最後のProject Windowを閉じてもMain Processを終了しない。
+- Window closeとApplication Quitを分離し、明示的Quitではactive Runを警告する。
+
+### Grok boundary
+
+Grok login session用persistent partitionはapp-wideで共有してよいが、Grok WebContentsView、visible state、divider ratio、Project/stage context、navigation/context queueはProject Windowごとに分離する。
+
+Window固有IPCは `event.sender` から対象Project Windowを解決し、単一global `grokView` / `mainWindow` を操作しない。
+
+### Execution resource lock
+
+Multi Windowから複数Projectを操作できるため、共有Execution resourceの排他はProject UIではなくApplication Runtimeが所有する。
+
+初期policy:
+
+```text
+same Local ComfyUI API endpoint
+  -> one active Execution Run only
+
+same Vast.ai Instance
+  -> one active Execution Run only
+
+different Vast.ai Instances
+  -> parallel Remote Runs allowed
+```
+
+同一Vast.ai Instanceの共有を禁止する理由は、Remote environment update / ComfyUI queue / interrupt / initial-state restoreによるInstance stopが別Runへ影響し得るためである。
+
+### Rationale
+
+- Windowを閉じたことで長時間生成が停止する構造を避ける。
+- UI lifecycleと生成lifecycleを分離し、background generationを明確にする。
+- Project Aの生成中にProject Bを別Windowで安全に編集できるようにする。
+- Projectは「何を生成したか」の履歴を保持しつつ、executorをProject componentへ閉じ込めない。
+- shared ComfyUI / Vast.ai resourceの競合をUIの偶然の状態ではなくruntime policyで防止する。
+
+### Consequence
+
+Main ProcessにはProject Window registryとExecutionCoordinator / resource lock相当の責務が必要になる。現在の単一global `mainWindow` / `localView` / `grokView` / `activeGrokContext` はWindow-local stateへ分離する。
+
+実装詳細・acceptance criteriaは `../architecture/project-window-execution-runtime.md` を正本とする。
+
+### Resolves
+
+- `REQ-PROJ-004`
+- `REQ-EXEC-010`
+- `REQ-EXEC-011`
+- `REQ-EXEC-012`
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07

@@ -117,7 +117,9 @@ Local targetでは必須モデルのLocal配置を要求する。Remote target�
 
 ### 2.8 Execution Service
 
-Local / Remote の生成実行を Main Process serviceとして所有する。
+Local / Remote の生成実行を **Project / Project Window から独立した app-wide Main Process service** として所有する。
+
+Project配下に保持するのは persistent Execution Run の状態・履歴であり、`LocalExecutionService` / `RemoteExecutionService`、active worker、SSH session、runtime resource lock は Project lifecycle に属さない。
 
 ```text
 ExecutionService
@@ -144,7 +146,30 @@ ExecutionService
 - Scene Prompt Expand連続生成はfrontend button操作ではなくAPI orchestrationで再現。
 - Remote RunはR2 upload、Local download、hash verificationまで成功して完了。
 
-詳細は `remote-execution.md` を正本とする。
+Local / Remote の個別実行手順は `remote-execution.md` を正本とする。Project Window / Project / Execution Runtime の ownership と lifecycle は `project-window-execution-runtime.md` を正本とする。
+
+### 2.9 Project Window Manager / Execution Coordinator
+
+Multi Windowでは各Project WindowがLocal Renderer / Grok View / window-local UI stateを所有し、Executionを所有しない。
+
+```text
+Project Window A ----+
+Project Window B ----+--> Main Process
+Project Window C ----+      |
+                            +-- ProjectWindowManager
+                            +-- ExecutionCoordinator
+                                  +-- LocalExecutionService
+                                  +-- RemoteExecutionService
+                                  +-- ExecutionResourceLockManager
+```
+
+`ExecutionCoordinator` はRun start / resume / stop / interrupt、executor選択、active Run追跡、runtime resource lockをApplication-levelで担当する。RemoteのVast.ai起動、SSH、bootstrap、model staging、generation、artifact delivery、finalizationを含むRun lifecycle全体をactive executionとして扱う。
+
+Project Windowを閉じてもExecutionCoordinatorやexecutorをdisposeしない。active Runが存在する場合、最後のProject Windowを閉じてもMain Processを終了しない。
+
+同一Project rootは同時に1 Project Windowのみとし、既に開かれているProjectを再度Openした場合は既存Windowをfocusする。
+
+詳細は `project-window-execution-runtime.md` を正本とする。
 
 ## 3. Renderer の責務
 

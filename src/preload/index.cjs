@@ -11,6 +11,7 @@ const I = {
   PROJECT_CLOSE: 'project:close',
   PROJECT_SELECT_PARENT: 'project:select-parent',
   PROJECT_CREATE: 'project:create',
+  PROJECT_MENU_COMMAND: 'project:menu-command',
   PROJECT_SCAN: 'project:scan',
   PROJECT_OPEN_FOLDER: 'project:open-folder',
   PROJECT_SAVE_SETTINGS: 'project:save-settings',
@@ -114,6 +115,11 @@ contextBridge.exposeInMainWorld('batchStudio', {
     close: () => ipcRenderer.invoke(I.PROJECT_CLOSE),
     selectParent: () => ipcRenderer.invoke(I.PROJECT_SELECT_PARENT),
     create: (p, b) => ipcRenderer.invoke(I.PROJECT_CREATE, p, b),
+    onMenuCommand: (listener) => {
+      const handler = (_event, command, project) => listener(command, project);
+      ipcRenderer.on(I.PROJECT_MENU_COMMAND, handler);
+      return () => ipcRenderer.removeListener(I.PROJECT_MENU_COMMAND, handler);
+    },
     scan: (r) => ipcRenderer.invoke(I.PROJECT_SCAN, r),
     openFolder: (r) => ipcRenderer.invoke(I.PROJECT_OPEN_FOLDER, r),
     saveSettings: (r, s) => ipcRenderer.invoke(I.PROJECT_SAVE_SETTINGS, r, s),

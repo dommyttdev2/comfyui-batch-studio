@@ -107,6 +107,7 @@ function App() {
   const openRecent = (root: string) =>
     run(async () => {
       const p = await window.batchStudio.project.open(root);
+      if (!p) return;
       setProject(p);
       rememberRecent(p);
       setTool(null);
@@ -137,6 +138,22 @@ function App() {
       cancelled = true;
     };
   }, []);
+  useEffect(
+    () =>
+      window.batchStudio.project.onMenuCommand((command, openedProject) => {
+        if (command === 'new') {
+          setCreateOpen(true);
+          return;
+        }
+        if (command === 'open' && openedProject) {
+          setProject(openedProject);
+          rememberRecent(openedProject);
+          setTool(null);
+          setStage('概要');
+        }
+      }),
+    [],
+  );
   useEffect(() => {
     let cancelled = false;
     void window.batchStudio.project

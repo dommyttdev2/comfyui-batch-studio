@@ -10,6 +10,7 @@ export const IPC = {
   PROJECT_CLOSE: 'project:close',
   PROJECT_SELECT_PARENT: 'project:select-parent',
   PROJECT_CREATE: 'project:create',
+  PROJECT_MENU_COMMAND: 'project:menu-command',
   PROJECT_SCAN: 'project:scan',
   PROJECT_OPEN_FOLDER: 'project:open-folder',
   PROJECT_SAVE_SETTINGS: 'project:save-settings',

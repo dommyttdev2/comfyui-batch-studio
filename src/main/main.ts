@@ -19,6 +19,7 @@ import type {
   CivitaiConnectionInput,
   GrokContextStage,
   GrokPaneState,
+  ExecutionRun,
   ProjectBriefInput,
   ProjectSettings,
   PromptPlanArtifact,
@@ -62,6 +63,7 @@ import {
   startExecutionRun,
 } from './execution-run.js';
 import { LocalExecutionService } from './local-execution.js';
+import { ExecutionCoordinator } from './execution-coordinator.js';
 import {
   canonicalGrokConversationUrl,
   GROK_PARTITION,
@@ -104,11 +106,26 @@ const standaloneToolTitles: Record<StandaloneWindowTool, string> = {
   vastai: 'Vast.ai',
 };
 const standaloneToolWindows = new Map<StandaloneWindowTool, StandaloneToolWindowState>();
-let mainWindow: BaseWindow | null = null,
-  localView: WebContentsView | null = null,
-  grokView: WebContentsView | null = null,
-  grokVisible = false,
-  localRatio = 0.45,
+const executionCoordinator = new ExecutionCoordinator();
+type ProjectWindowState = {
+  window: BaseWindow;
+  localView: WebContentsView;
+  grokView: WebContentsView;
+  projectRoot: string | null;
+  restoreLastProject: boolean;
+  grokVisible: boolean;
+  localRatio: number;
+  activeGrokContext: { root: string; stage: GrokContextStage } | null;
+  restoringGrokContext: boolean;
+  grokNavigationQueue: GrokNavigationQueue;
+  grokContextQueue: LatestGrokContextQueue<GrokPaneState>;
+  lastFocusedAt: number;
+};
+const projectWindows = new Map<number, ProjectWindowState>();
+let lastFocusedProjectWindowId: number | null = null,
+  projectWindowFocusSequence = 0,
+  quitApproved = false,
+  quitPromptOpen = false,
   civitaiCatalog: CivitaiCatalogService | null = null,
   civitaiPolicy: CivitaiRequestPolicy | null = null,
   civitaiConfig: CivitaiConfigStore | null = null,
@@ -124,25 +141,67 @@ let mainWindow: BaseWindow | null = null,
   remoteModelStager: RemoteModelStager | null = null,
   remoteEnvironmentBootstrap: RemoteEnvironmentBootstrap | null = null,
   remoteExecutionService: RemoteExecutionService | null = null,
-  remoteInstanceLifecycleService: RemoteInstanceLifecycleService | null = null,
-  activeGrokContext: { root: string; stage: GrokContextStage } | null = null,
-  restoringGrokContext = false;
-const grokNavigationQueue = new GrokNavigationQueue(),
-  grokContextQueue = new LatestGrokContextQueue<GrokPaneState>();
-function state(): GrokPaneState {
-  return { visible: grokVisible, ratio: localRatio };
+  remoteInstanceLifecycleService: RemoteInstanceLifecycleService | null = null;
+
+function projectRootKey(root: string) {
+  const resolved = path.resolve(root);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
-function layout() {
-  if (!mainWindow || !localView || !grokView) return;
-  const { width, height } = mainWindow.getContentBounds();
-  if (!grokVisible || width < 840) {
-    localView.setBounds({ x: 0, y: 0, width, height });
-    grokView.setBounds({ x: width, y: 0, width: 0, height });
+function paneState(state: ProjectWindowState): GrokPaneState {
+  return { visible: state.grokVisible, ratio: state.localRatio };
+}
+function layoutProjectWindow(state: ProjectWindowState) {
+  const { width, height } = state.window.getContentBounds();
+  if (!state.grokVisible || width < 840) {
+    state.localView.setBounds({ x: 0, y: 0, width, height });
+    state.grokView.setBounds({ x: width, y: 0, width: 0, height });
     return;
   }
-  const lw = Math.max(420, Math.min(width - 420, Math.round(width * localRatio)));
-  localView.setBounds({ x: 0, y: 0, width: lw, height });
-  grokView.setBounds({ x: lw, y: 0, width: width - lw, height: height });
+  const lw = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio)));
+  state.localView.setBounds({ x: 0, y: 0, width: lw, height });
+  state.grokView.setBounds({ x: lw, y: 0, width: width - lw, height });
+}
+function projectWindowForSender(contents: WebContents) {
+  for (const state of projectWindows.values())
+    if (
+      state.localView.webContents.id === contents.id ||
+      state.grokView.webContents.id === contents.id
+    )
+      return state;
+  throw new Error('Project Window was not found for IPC sender.');
+}
+function lastFocusedProjectWindow() {
+  if (lastFocusedProjectWindowId != null) {
+    const state = projectWindows.get(lastFocusedProjectWindowId);
+    if (state) return state;
+  }
+  return [...projectWindows.values()].sort((a, b) => b.lastFocusedAt - a.lastFocusedAt)[0] ?? null;
+}
+function projectWindowForRoot(root: string, except?: ProjectWindowState) {
+  const key = projectRootKey(root);
+  return (
+    [...projectWindows.values()].find(
+      (state) => state !== except && state.projectRoot && projectRootKey(state.projectRoot) === key,
+    ) ?? null
+  );
+}
+function focusProjectWindow(state: ProjectWindowState) {
+  state.window.show();
+  state.window.focus();
+}
+async function setWindowProject(state: ProjectWindowState, root: string | null) {
+  if (!root) {
+    state.projectRoot = null;
+    return;
+  }
+  const resolved = path.resolve(root),
+    existing = projectWindowForRoot(resolved, state);
+  if (existing) {
+    focusProjectWindow(existing);
+    throw new Error('このプロジェクトは既に別のWindowで開かれています。');
+  }
+  state.projectRoot = resolved;
+  await stateStore().rememberProject(resolved);
 }
 async function loadRenderer(v: WebContentsView, tool?: StandaloneWindowTool) {
   const dev = process.env.VITE_DEV_SERVER_URL;
@@ -193,61 +252,104 @@ function chatStore() {
   if (!grokChatState) throw new Error('Grok chat state storeが初期化されていません。');
   return grokChatState;
 }
-async function rememberGrokConversation(url: string) {
-  if (restoringGrokContext || !activeGrokContext) return;
+async function rememberGrokConversation(state: ProjectWindowState, url: string) {
+  if (state.restoringGrokContext || !state.activeGrokContext) return;
   const canonical = canonicalGrokConversationUrl(url);
   if (!canonical) return;
-  await chatStore().remember(activeGrokContext.root, activeGrokContext.stage, canonical);
+  await chatStore().remember(
+    state.activeGrokContext.root,
+    state.activeGrokContext.stage,
+    canonical,
+  );
 }
-function attachGrokHistoryTracking(contents: WebContents) {
-  contents.on('did-navigate', (_e, url) => {
-    void rememberGrokConversation(url);
+function attachGrokHistoryTracking(state: ProjectWindowState) {
+  state.grokView.webContents.on('did-navigate', (_e, url) => {
+    void rememberGrokConversation(state, url);
   });
-  contents.on('did-navigate-in-page', (_e, url) => {
-    void rememberGrokConversation(url);
+  state.grokView.webContents.on('did-navigate-in-page', (_e, url) => {
+    void rememberGrokConversation(state, url);
   });
 }
-function createWindow() {
-  mainWindow = new BaseWindow({
-    width: 1540,
-    height: 920,
-    minWidth: 900,
-    minHeight: 640,
-    title: 'ComfyUI Batch Studio',
-  });
-  localView = new WebContentsView({
-    webPreferences: {
-      preload: path.resolve(__dirname, '../preload/index.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  grokView = new WebContentsView({
-    webPreferences: {
-      partition: GROK_PARTITION,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  mainWindow.contentView.addChildView(localView);
-  mainWindow.contentView.addChildView(grokView);
+async function rememberMostRecentOpenProject(clearIfNone = true) {
+  const candidate = [...projectWindows.values()]
+    .filter((state) => Boolean(state.projectRoot))
+    .sort((a, b) => b.lastFocusedAt - a.lastFocusedAt)[0];
+  if (candidate?.projectRoot) await stateStore().rememberProject(candidate.projectRoot);
+  else if (clearIfNone) await stateStore().clearProject();
+}
+function createProjectWindow(
+  options: {
+    restoreLastProject?: boolean;
+    initialProjectRoot?: string | null;
+    openCreateOnLoad?: boolean;
+  } = {},
+) {
+  const window = new BaseWindow({
+      width: 1540,
+      height: 920,
+      minWidth: 900,
+      minHeight: 640,
+      title: 'ComfyUI Batch Studio',
+    }),
+    localView = new WebContentsView({
+      webPreferences: {
+        preload: path.resolve(__dirname, '../preload/index.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
+    grokView = new WebContentsView({
+      webPreferences: {
+        partition: GROK_PARTITION,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
+    state: ProjectWindowState = {
+      window,
+      localView,
+      grokView,
+      projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
+      restoreLastProject: Boolean(options.restoreLastProject),
+      grokVisible: false,
+      localRatio: 0.45,
+      activeGrokContext: null,
+      restoringGrokContext: false,
+      grokNavigationQueue: new GrokNavigationQueue(),
+      grokContextQueue: new LatestGrokContextQueue<GrokPaneState>(),
+      lastFocusedAt: ++projectWindowFocusSequence,
+    };
+  projectWindows.set(window.id, state);
+  lastFocusedProjectWindowId = window.id;
+  window.contentView.addChildView(localView);
+  window.contentView.addChildView(grokView);
   configureGrokContents(grokView.webContents);
-  attachGrokHistoryTracking(grokView.webContents);
-  mainWindow.on('resize', layout);
-  mainWindow.on('closed', () => {
-    localView?.webContents.close();
-    grokView?.webContents.close();
-    mainWindow = null;
-    localView = null;
-    grokView = null;
+  attachGrokHistoryTracking(state);
+  window.on('focus', () => {
+    state.lastFocusedAt = ++projectWindowFocusSequence;
+    lastFocusedProjectWindowId = window.id;
+    if (state.projectRoot) void stateStore().rememberProject(state.projectRoot);
   });
-  layout();
+  window.on('resize', () => layoutProjectWindow(state));
+  window.on('closed', () => {
+    localView.webContents.close();
+    grokView.webContents.close();
+    projectWindows.delete(window.id);
+    if (lastFocusedProjectWindowId === window.id) lastFocusedProjectWindowId = null;
+    void rememberMostRecentOpenProject(false);
+  });
+  layoutProjectWindow(state);
+  if (options.openCreateOnLoad)
+    localView.webContents.once('did-finish-load', () => {
+      localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
+    });
   void loadRenderer(localView);
-  void grokNavigationQueue
+  void state.grokNavigationQueue
     .navigate(grokView.webContents, GROK_URL)
     .catch((error) => console.warn('Initial Grok navigation failed:', error));
+  return state;
 }
 function openStandaloneToolWindow(tool: StandaloneWindowTool) {
   const existing = standaloneToolWindows.get(tool);
@@ -289,6 +391,60 @@ function openStandaloneToolWindow(tool: StandaloneWindowTool) {
     console.error(`${title} window failed to load:`, error),
   );
 }
+async function chooseProjectOpeningTarget() {
+  const current = lastFocusedProjectWindow();
+  const buttons = current
+    ? ['キャンセル', '現在のWindowで開く', '新しいWindowで開く']
+    : ['キャンセル', '新しいWindowで開く'];
+  const result = await dialog.showMessageBox({
+    type: 'question',
+    title: 'Projectを開くWindow',
+    message: 'Projectをどこで開きますか？',
+    buttons,
+    defaultId: current ? 1 : 1,
+    cancelId: 0,
+    noLink: true,
+  });
+  if (result.response === 0) return null;
+  if (current && result.response === 1) return { mode: 'current' as const, state: current };
+  return { mode: 'new' as const, state: null };
+}
+async function handleProjectMenuAction(command: 'new' | 'open') {
+  const target = await chooseProjectOpeningTarget();
+  if (!target) return;
+  if (command === 'new') {
+    if (target.mode === 'current' && target.state) {
+      focusProjectWindow(target.state);
+      target.state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
+    } else createProjectWindow({ openCreateOnLoad: true });
+    return;
+  }
+
+  const defaultPath = await stateStore().lastProjectDirectoryPath();
+  const selected = await dialog.showOpenDialog({
+    title: 'プロジェクトフォルダーを選択',
+    defaultPath: defaultPath ?? undefined,
+    properties: ['openDirectory'],
+  });
+  if (selected.canceled || !selected.filePaths[0]) return;
+  const root = path.resolve(selected.filePaths[0]),
+    existing = projectWindowForRoot(root, target.state ?? undefined);
+  if (existing) {
+    focusProjectWindow(existing);
+    return;
+  }
+  if (target.mode === 'new') {
+    await stateStore().rememberProject(root);
+    createProjectWindow({ initialProjectRoot: root });
+    return;
+  }
+  const state = target.state;
+  if (!state) return;
+  const project = await scanWithCatalog(root);
+  await setWindowProject(state, root);
+  focusProjectWindow(state);
+  state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'open', project);
+}
 function installApplicationMenu() {
   const windowMenu: MenuItemConstructorOptions[] = [
     { label: 'R2 File Manager', click: () => openStandaloneToolWindow('r2') },
@@ -298,9 +454,16 @@ function installApplicationMenu() {
     { role: 'minimize' },
     { role: 'close' },
   ];
+  const fileMenu: MenuItemConstructorOptions[] = [
+    { label: 'New Project...', click: () => void handleProjectMenuAction('new') },
+    { label: 'Open Project...', click: () => void handleProjectMenuAction('open') },
+    { type: 'separator' },
+    { label: 'Close Window', role: 'close' },
+    { label: 'Quit', click: () => app.quit() },
+  ];
   const template: MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' } as MenuItemConstructorOptions] : []),
-    { role: 'fileMenu' },
+    { label: 'File', submenu: fileMenu },
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { label: 'Window', submenu: windowMenu },
@@ -460,7 +623,9 @@ async function prepareRemoteExecution(root: string, runId: string) {
       customNodes: settings.remoteCustomNodes,
     });
     await remoteStager().stage(root, runId);
-    remoteSceneExecutor().start(root, runId);
+    await remoteSceneExecutor().start(root, runId);
+    const settled = await getExecutionRun(root, runId);
+    if (settled?.lifecycle === 'DISCARDED') await finalizeRemoteInstance(root, runId);
   } catch (error) {
     const current = await getExecutionRun(root, runId);
     if (current?.lifecycle === 'PAUSED' || current?.lifecycle === 'INTERRUPTED') {
@@ -468,11 +633,12 @@ async function prepareRemoteExecution(root: string, runId: string) {
       return;
     }
     if (current?.lifecycle === 'DISCARDED') {
+      await finalizeRemoteInstance(root, runId);
       remoteExecutor().disconnect(root, runId);
       return;
     }
     if (current?.lifecycle === 'FAILED' && current.error?.code === 'REMOTE_INSTANCE_REPLACED') {
-      void finalizeRemoteInstance(root, runId);
+      await finalizeRemoteInstance(root, runId);
       remoteExecutor().disconnect(root, runId);
       return;
     }
@@ -519,6 +685,41 @@ async function prepareRemoteExecution(root: string, runId: string) {
     });
     await finalizeRemoteInstance(root, runId);
     remoteExecutor().disconnect(root, runId);
+  }
+}
+
+async function startExecutionRuntime(root: string, run: ExecutionRun) {
+  const ref = { projectRoot: path.resolve(root), runId: run.runId };
+  try {
+    if (run.executionTarget === 'local') {
+      const settings = await settingsStore().status();
+      void executionCoordinator
+        .startLocal(ref, settings.comfyUiApiEndpoint, () => localExecutor().start(root, run.runId))
+        .finally(maybeQuitAfterExecution);
+      return;
+    }
+    const provider = run.remote?.provider,
+      instanceId = Number(run.remote?.instanceId);
+    if (provider !== 'vastai' || !Number.isInteger(instanceId) || instanceId < 1)
+      throw new Error('Remote Execution Run has no valid Vast.ai Instance.');
+    void executionCoordinator
+      .startRemote(ref, provider, instanceId, () => prepareRemoteExecution(root, run.runId))
+      .finally(maybeQuitAfterExecution);
+  } catch (error) {
+    await mutateExecutionRun(root, run.runId, (current) => {
+      const failure = {
+        code: 'EXECUTION_RESOURCE_BUSY',
+        message: safeExecutionError(error),
+        phase: current.phase,
+        at: new Date().toISOString(),
+        retryable: true,
+      };
+      current.error = failure;
+      current.errorHistory.push(failure);
+      current.lifecycle = 'FAILED';
+      current.controls.scheduling = 'STOPPED';
+    });
+    throw error;
   }
 }
 async function resolveVastSshEndpoint(instanceId: number): Promise<VastAiSshEndpoint> {
@@ -580,41 +781,39 @@ function integratedCatalogStatus(): CivitaiCatalogStatus {
 async function scanWithCatalog(root: string) {
   return scanProject(root);
 }
-async function scanAndRemember(root: string) {
-  const project = await scanWithCatalog(root);
-  await stateStore().rememberProject(root);
-  return project;
-}
-async function setGrokContext(root: string, stage: GrokContextStage) {
+async function setGrokContext(state: ProjectWindowState, root: string, stage: GrokContextStage) {
   validRoot(root);
   validGrokContextStage(stage);
   const resolvedRoot = path.resolve(root),
     key = `${resolvedRoot}\0${stage}`;
-  return grokContextQueue.run(key, async (isLatest) => {
-    if (!isLatest()) return state();
-    if (grokView && activeGrokContext) {
-      const current = canonicalGrokConversationUrl(grokView.webContents.getURL());
+  return state.grokContextQueue.run(key, async (isLatest) => {
+    if (!isLatest()) return paneState(state);
+    if (state.activeGrokContext) {
+      const current = canonicalGrokConversationUrl(state.grokView.webContents.getURL());
       if (current)
-        await chatStore().remember(activeGrokContext.root, activeGrokContext.stage, current);
+        await chatStore().remember(
+          state.activeGrokContext.root,
+          state.activeGrokContext.stage,
+          current,
+        );
     }
-    if (!isLatest()) return state();
-    activeGrokContext = { root: resolvedRoot, stage };
-    if (!grokView) return state();
+    if (!isLatest()) return paneState(state);
+    state.activeGrokContext = { root: resolvedRoot, stage };
     const saved = await chatStore().get(resolvedRoot, stage);
-    if (!isLatest()) return state();
+    if (!isLatest()) return paneState(state);
     const target = saved ?? GROK_URL,
-      current = grokView.webContents.getURL(),
+      current = state.grokView.webContents.getURL(),
       currentCanonical = canonicalGrokConversationUrl(current);
     const alreadyThere = saved ? currentCanonical === saved : current === GROK_URL;
     if (!alreadyThere) {
-      restoringGrokContext = true;
+      state.restoringGrokContext = true;
       try {
-        await grokNavigationQueue.navigate(grokView.webContents, target);
+        await state.grokNavigationQueue.navigate(state.grokView.webContents, target);
       } finally {
-        restoringGrokContext = false;
+        state.restoringGrokContext = false;
       }
     }
-    return state();
+    return paneState(state);
   });
 }
 function validCivitaiUrl(value: unknown) {
@@ -760,21 +959,46 @@ function register() {
     ensureCatalogRuntimePath();
     return result;
   });
-  ipcMain.handle(IPC.PROJECT_SELECT, async () => {
-    const defaultPath = await stateStore().lastProjectDirectoryPath();
+  ipcMain.handle(IPC.PROJECT_SELECT, async (event) => {
+    const state = projectWindowForSender(event.sender),
+      defaultPath = await stateStore().lastProjectDirectoryPath();
     const r = await dialog.showOpenDialog({
       title: 'プロジェクトフォルダーを選択',
       defaultPath: defaultPath ?? undefined,
       properties: ['openDirectory'],
     });
-    return r.canceled ? null : scanAndRemember(r.filePaths[0]);
+    if (r.canceled || !r.filePaths[0]) return null;
+    const root = path.resolve(r.filePaths[0]),
+      existing = projectWindowForRoot(root, state);
+    if (existing) {
+      focusProjectWindow(existing);
+      return null;
+    }
+    const project = await scanWithCatalog(root);
+    await setWindowProject(state, root);
+    return project;
   });
-  ipcMain.handle(IPC.PROJECT_LAST, async () => {
-    const root = await stateStore().lastProjectPath();
+  ipcMain.handle(IPC.PROJECT_LAST, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    let root = state.projectRoot;
+    if (!root && state.restoreLastProject) {
+      state.restoreLastProject = false;
+      root = await stateStore().lastProjectPath();
+    }
     if (!root) return null;
+    const existing = projectWindowForRoot(root, state);
+    if (existing) {
+      focusProjectWindow(existing);
+      state.projectRoot = null;
+      return null;
+    }
     try {
-      return await scanWithCatalog(root);
+      const project = await scanWithCatalog(root);
+      state.projectRoot = path.resolve(root);
+      await stateStore().rememberProject(state.projectRoot);
+      return project;
     } catch {
+      state.projectRoot = null;
       return null;
     }
   });
@@ -791,15 +1015,25 @@ function register() {
     validRoot(root);
     await stateStore().removeRecentProject(root);
   });
-  ipcMain.handle(IPC.PROJECT_OPEN, async (_e, root: unknown) => {
+  ipcMain.handle(IPC.PROJECT_OPEN, async (event, root: unknown) => {
     validRoot(root);
-    return scanAndRemember(root);
+    const state = projectWindowForSender(event.sender),
+      existing = projectWindowForRoot(root, state);
+    if (existing) {
+      focusProjectWindow(existing);
+      return null;
+    }
+    const project = await scanWithCatalog(root);
+    await setWindowProject(state, root);
+    return project;
   });
-  ipcMain.handle(IPC.PROJECT_CLOSE, async () => {
-    await stateStore().clearProject();
-    activeGrokContext = null;
-    grokVisible = false;
-    layout();
+  ipcMain.handle(IPC.PROJECT_CLOSE, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    state.projectRoot = null;
+    state.activeGrokContext = null;
+    state.grokVisible = false;
+    layoutProjectWindow(state);
+    await rememberMostRecentOpenProject();
   });
   ipcMain.handle(IPC.PROJECT_SELECT_PARENT, async () => {
     const r = await dialog.showOpenDialog({
@@ -808,9 +1042,18 @@ function register() {
     });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle(IPC.PROJECT_CREATE, async (_e, parent: unknown, brief: ProjectBriefInput) => {
+  ipcMain.handle(IPC.PROJECT_CREATE, async (event, parent: unknown, brief: ProjectBriefInput) => {
     if (typeof parent !== 'string') throw new Error('Invalid parent path');
-    return scanAndRemember(await createProject(parent, brief));
+    const state = projectWindowForSender(event.sender),
+      root = await createProject(parent, brief),
+      existing = projectWindowForRoot(root, state);
+    if (existing) {
+      focusProjectWindow(existing);
+      return scanWithCatalog(root);
+    }
+    const project = await scanWithCatalog(root);
+    await setWindowProject(state, root);
+    return project;
   });
   ipcMain.handle(IPC.PROJECT_SCAN, (_e, root: unknown) => {
     validRoot(root);
@@ -1054,8 +1297,7 @@ function register() {
   ipcMain.handle(IPC.EXECUTION_START, async (_e, root: unknown) => {
     validRoot(root);
     const run = await startExecutionRun(root, () => executionPreflight(root));
-    if (run.executionTarget === 'local') localExecutor().start(root, run.runId);
-    else void prepareRemoteExecution(root, run.runId);
+    await startExecutionRuntime(root, run);
     return run;
   });
   ipcMain.handle(IPC.EXECUTION_STATUS, async (_e, root: unknown) => {
@@ -1162,10 +1404,7 @@ function register() {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     const run = await resumeExecutionRun(root, runId, () => executionPreflight(root));
-    if (run.executionTarget === 'local' && run.lifecycle === 'RUNNING')
-      localExecutor().start(root, runId);
-    else if (run.executionTarget === 'remote' && run.lifecycle === 'RUNNING')
-      void prepareRemoteExecution(root, runId);
+    if (run.lifecycle === 'RUNNING') await startExecutionRuntime(root, run);
     return run;
   });
   ipcMain.handle(IPC.EXECUTION_RESTART_REMOTE, async (_e, root: unknown, runId: unknown) => {
@@ -1199,7 +1438,7 @@ function register() {
       Number(next.remote.instanceId) !== replacementId
     )
       throw new Error('Replacement Run did not capture the selected Vast.ai Instance.');
-    void prepareRemoteExecution(root, next.runId);
+    await startExecutionRuntime(root, next);
     return next;
   });
   ipcMain.handle(IPC.EXECUTION_RESTART_FROM_SCRATCH, async (_e, root: unknown, runId: unknown) => {
@@ -1252,6 +1491,10 @@ function register() {
           remoteExecutor().disconnect(root, candidate.runId);
           await executor.waitForSettled(candidate.runId);
           await finalizeRemoteInstance(root, candidate.runId);
+          await executionCoordinator.waitForSettled({
+            projectRoot: path.resolve(root),
+            runId: candidate.runId,
+          });
           await discardExecutionRun(root, candidate.runId);
         } finally {
           executor.endDiscard(candidate.runId);
@@ -1275,6 +1518,11 @@ function register() {
             `Local Run ${candidate.runId} の停止完了を確認できませんでした。Runの状態を確認して再実行してください。`,
           );
       }
+      await localExecutor().waitForSettled(candidate.runId);
+      await executionCoordinator.waitForSettled({
+        projectRoot: path.resolve(root),
+        runId: candidate.runId,
+      });
       await discardExecutionRun(root, candidate.runId);
     }
 
@@ -1285,8 +1533,7 @@ function register() {
         `Execution cannot restart with latest Prompt Plan: Preflight is BLOCKED: ${preflight.blocking.map((item) => item.message).join(' / ')}`,
       );
     const next = await startExecutionRun(root, async () => preflight);
-    if (next.executionTarget === 'local') localExecutor().start(root, next.runId);
-    else void prepareRemoteExecution(root, next.runId);
+    await startExecutionRuntime(root, next);
     return next;
   });
   ipcMain.handle(IPC.CAPTION_STATUS, (_e, root: unknown) => {
@@ -1432,35 +1679,83 @@ function register() {
     if (typeof text !== 'string') throw new Error('Clipboard text must be string');
     clipboard.writeText(text);
   });
-  ipcMain.handle(IPC.GROK_SET_VISIBLE, (_e, v: unknown) => {
-    grokVisible = v === true;
-    layout();
-    return state();
+  ipcMain.handle(IPC.GROK_SET_VISIBLE, (event, v: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    state.grokVisible = v === true;
+    layoutProjectWindow(state);
+    return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_SET_CONTEXT, (_e, root: unknown, stage: unknown) => {
+  ipcMain.handle(IPC.GROK_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
     validRoot(root);
     validGrokContextStage(stage);
-    return setGrokContext(root, stage);
+    return setGrokContext(projectWindowForSender(event.sender), root, stage);
   });
-  ipcMain.handle(IPC.GROK_SET_RATIO, (_e, r: unknown) => {
+  ipcMain.handle(IPC.GROK_SET_RATIO, (event, r: unknown) => {
     if (typeof r !== 'number' || !Number.isFinite(r)) throw new Error('Invalid ratio');
-    localRatio = Math.max(0.3, Math.min(0.7, r));
-    layout();
-    return state();
+    const state = projectWindowForSender(event.sender);
+    state.localRatio = Math.max(0.3, Math.min(0.7, r));
+    layoutProjectWindow(state);
+    return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_SET_DIVIDER_X, (_e, x: unknown) => {
-    if (typeof x !== 'number' || !Number.isFinite(x) || !mainWindow)
-      throw new Error('Invalid divider position');
-    const bounds = mainWindow.getContentBounds();
-    localRatio = Math.max(0.3, Math.min(0.7, (x - bounds.x) / Math.max(bounds.width, 1)));
-    layout();
-    return state();
+  ipcMain.handle(IPC.GROK_SET_DIVIDER_X, (event, x: unknown) => {
+    if (typeof x !== 'number' || !Number.isFinite(x)) throw new Error('Invalid divider position');
+    const state = projectWindowForSender(event.sender),
+      bounds = state.window.getContentBounds();
+    state.localRatio = Math.max(0.3, Math.min(0.7, (x - bounds.x) / Math.max(bounds.width, 1)));
+    layoutProjectWindow(state);
+    return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_RELOAD, () => grokView?.webContents.reload());
+  ipcMain.handle(IPC.GROK_RELOAD, (event) =>
+    projectWindowForSender(event.sender).grokView.webContents.reload(),
+  );
   ipcMain.handle(IPC.GROK_OPEN_EXTERNAL, () => shell.openExternal(GROK_URL));
 }
 
-app.whenReady().then(async () => {
+function maybeQuitAfterExecution() {
+  if (
+    process.platform !== 'darwin' &&
+    projectWindows.size === 0 &&
+    standaloneToolWindows.size === 0 &&
+    !executionCoordinator.hasActiveRuns()
+  )
+    app.quit();
+}
+
+app.on('before-quit', (event) => {
+  if (quitApproved || !executionCoordinator.hasActiveRuns()) return;
+  event.preventDefault();
+  if (quitPromptOpen) return;
+  quitPromptOpen = true;
+  void dialog
+    .showMessageBox({
+      type: 'warning',
+      title: '実行中のRunがあります',
+      message: '実行中のRunがあります。Batch Studioを終了しますか？',
+      detail: 'Applicationを終了すると、Windowを閉じる場合と異なり実行中Runも停止します。',
+      buttons: ['キャンセル', '終了'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    })
+    .then((result) => {
+      quitPromptOpen = false;
+      if (result.response !== 1) return;
+      quitApproved = true;
+      app.quit();
+    });
+});
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) app.quit();
+else
+  app.on('second-instance', () => {
+    if (!app.isReady()) return;
+    const existing = lastFocusedProjectWindow();
+    if (existing) focusProjectWindow(existing);
+    else createProjectWindow({ restoreLastProject: true });
+  });
+
+async function initializeApplication() {
   const userData = app.getPath('userData');
   civitaiPolicy = new CivitaiRequestPolicy();
   civitaiPolicy.install();
@@ -1505,11 +1800,14 @@ app.whenReady().then(async () => {
   if (initial.state === 'idle' && initial.apiKeyConfigured) void civitaiCatalog.startSync();
   register();
   installApplicationMenu();
-  createWindow();
+  createProjectWindow({ restoreLastProject: true });
   app.on('activate', () => {
-    if (!mainWindow) createWindow();
+    const existing = lastFocusedProjectWindow();
+    if (existing) focusProjectWindow(existing);
+    else createProjectWindow({ restoreLastProject: true });
   });
-});
+}
+if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (!executionCoordinator.hasActiveRuns() && process.platform !== 'darwin') app.quit();
 });

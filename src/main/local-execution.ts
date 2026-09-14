@@ -188,12 +188,18 @@ export class LocalExecutionService {
       scene: new ScenePromptRunClient(endpoint),
     }),
   ) {}
-  start(root: string, runId: string) {
-    if (this.workers.has(runId)) return;
+  start(root: string, runId: string): Promise<void> {
+    const existing = this.workers.get(runId);
+    if (existing) return existing;
     const worker = this.execute(root, runId)
       .catch((error) => failRun(root, runId, 'LOCAL_EXECUTION_FAILED', error).then(() => undefined))
       .finally(() => this.workers.delete(runId));
     this.workers.set(runId, worker);
+    return worker;
+  }
+  async waitForSettled(runId: string) {
+    const task = this.workers.get(runId);
+    if (task) await task.catch(() => {});
   }
   async forceInterrupt(root: string, runId: string) {
     const run = await getExecutionRun(root, runId);

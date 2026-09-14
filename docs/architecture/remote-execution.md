@@ -196,8 +196,14 @@ R2 credentialはElectron Main Process内に留め、Remoteへ渡さない。
 
 ## 7. Main Process Architecture
 
+Execution executorはProject WindowやProject componentの所有物ではなく、Electron Main Processのapp-wide runtimeとして存在する。Project配下に永続化するのはExecution Run state/historyであり、active worker / SSH session / runtime resource lockはApplication Runtimeが所有する。
+
 ```text
-ExecutionService
+ExecutionCoordinator
+|
++-- ExecutionResourceLockManager
+|
++-- ExecutionService
 |
 +-- LocalExecutionService
 |
@@ -227,6 +233,8 @@ ServiceIntegrations
 ```
 
 Rendererはcredential本体・SSH private key contents・R2 secretへ直接アクセスしない。
+
+Multi Window時も各RendererはExecutionを所有せず、`projectRoot + runId` でpersistent Runを参照・操作する。Project Window closeはExecution stop/pause/discardの契機にしない。
 
 ---
 
