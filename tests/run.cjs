@@ -435,11 +435,7 @@ function plan() {
   writeJson(path.join(promptDraftRoot, 'prompt_plan.json'), plan());
   writeJson(promptDraftPath, { schemaVersion: 2 });
 
-  const hiddenMalformedDraft = await artifacts.readArtifact(
-    promptDraftRoot,
-    'promptPlan',
-    'draft',
-  );
+  const hiddenMalformedDraft = await artifacts.readArtifact(promptDraftRoot, 'promptPlan', 'draft');
   assert.equal(
     hiddenMalformedDraft.exists,
     false,
