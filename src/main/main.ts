@@ -923,21 +923,46 @@ function register() {
     ensureCatalogRuntimePath();
     return result;
   });
-  ipcMain.handle(IPC.PROJECT_SELECT, async () => {
-    const defaultPath = await stateStore().lastProjectDirectoryPath();
+  ipcMain.handle(IPC.PROJECT_SELECT, async (event) => {
+    const state = projectWindowForSender(event.sender),
+      defaultPath = await stateStore().lastProjectDirectoryPath();
     const r = await dialog.showOpenDialog({
       title: 'プロジェクトフォルダーを選択',
       defaultPath: defaultPath ?? undefined,
       properties: ['openDirectory'],
     });
-    return r.canceled ? null : scanAndRemember(r.filePaths[0]);
+    if (r.canceled || !r.filePaths[0]) return null;
+    const root = path.resolve(r.filePaths[0]),
+      existing = projectWindowForRoot(root, state);
+    if (existing) {
+      focusProjectWindow(existing);
+      return null;
+    }
+    const project = await scanWithCatalog(root);
+    await setWindowProject(state, root);
+    return project;
   });
-  ipcMain.handle(IPC.PROJECT_LAST, async () => {
-    const root = await stateStore().lastProjectPath();
+  ipcMain.handle(IPC.PROJECT_LAST, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    let root = state.projectRoot;
+    if (!root && state.restoreLastProject) {
+      state.restoreLastProject = false;
+      root = await stateStore().lastProjectPath();
+    }
     if (!root) return null;
+    const existing = projectWindowForRoot(root, state);
+    if (existing) {
+      focusProjectWindow(existing);
+      state.projectRoot = null;
+      return null;
+    }
     try {
-      return await scanWithCatalog(root);
+      const project = await scanWithCatalog(root);
+      state.projectRoot = path.resolve(root);
+      await stateStore().rememberProject(state.projectRoot);
+      return project;
     } catch {
+      state.projectRoot = null;
       return null;
     }
   });
@@ -954,15 +979,25 @@ function register() {
     validRoot(root);
     await stateStore().removeRecentProject(root);
   });
-  ipcMain.handle(IPC.PROJECT_OPEN, async (_e, root: unknown) => {
+  ipcMain.handle(IPC.PROJECT_OPEN, async (event, root: unknown) => {
     validRoot(root);
-    return scanAndRemember(root);
+    const state = projectWindowForSender(event.sender),
+      existing = projectWindowForRoot(root, state);
+    if (existing) {
+      focusProjectWindow(existing);
+      return null;
+    }
+    const project = await scanWithCatalog(root);
+    await setWindowProject(state, root);
+    return project;
   });
-  ipcMain.handle(IPC.PROJECT_CLOSE, async () => {
-    await stateStore().clearProject();
-    activeGrokContext = null;
-    grokVisible = false;
-    layout();
+  ipcMain.handle(IPC.PROJECT_CLOSE, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    state.projectRoot = null;
+    state.activeGrokContext = null;
+    state.grokVisible = false;
+    layoutProjectWindow(state);
+    await rememberMostRecentOpenProject();
   });
   ipcMain.handle(IPC.PROJECT_SELECT_PARENT, async () => {
     const r = await dialog.showOpenDialog({
@@ -971,9 +1006,18 @@ function register() {
     });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle(IPC.PROJECT_CREATE, async (_e, parent: unknown, brief: ProjectBriefInput) => {
+  ipcMain.handle(IPC.PROJECT_CREATE, async (event, parent: unknown, brief: ProjectBriefInput) => {
     if (typeof parent !== 'string') throw new Error('Invalid parent path');
-    return scanAndRemember(await createProject(parent, brief));
+    const state = projectWindowForSender(event.sender),
+      root = await createProject(parent, brief),
+      existing = projectWindowForRoot(root, state);
+    if (existing) {
+      focusProjectWindow(existing);
+      return scanWithCatalog(root);
+    }
+    const project = await scanWithCatalog(root);
+    await setWindowProject(state, root);
+    return project;
   });
   ipcMain.handle(IPC.PROJECT_SCAN, (_e, root: unknown) => {
     validRoot(root);
