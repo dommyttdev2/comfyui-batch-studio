@@ -722,7 +722,7 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
             <h3>Execution Run</h3>
             <p>
               永続化された Run State を監視し、Start / Stop scheduling / Force interrupt / Resume /
-              最初からやり直す を操作します。
+              最新のPrompt Planで最初から実行 を操作します。
             </p>
           </div>
           <button onClick={() => void refreshPreflight()} disabled={checking}>
@@ -770,7 +770,7 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
               )
             }
           >
-            最初からやり直す
+            最新のPrompt Planで最初から実行
           </button>
           <button
             disabled={!canStopScheduling}
