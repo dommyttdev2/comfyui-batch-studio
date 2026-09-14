@@ -1,4 +1,4 @@
-import type { PromptPlanArtifact, StructuredPrompt } from './types';
+import type { PromptPlanArtifact, StructuredPrompt } from './types.js';
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
