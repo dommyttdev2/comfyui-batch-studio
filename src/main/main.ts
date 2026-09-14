@@ -244,61 +244,102 @@ function chatStore() {
   if (!grokChatState) throw new Error('Grok chat state storeが初期化されていません。');
   return grokChatState;
 }
-async function rememberGrokConversation(url: string) {
-  if (restoringGrokContext || !activeGrokContext) return;
+async function rememberGrokConversation(state: ProjectWindowState, url: string) {
+  if (state.restoringGrokContext || !state.activeGrokContext) return;
   const canonical = canonicalGrokConversationUrl(url);
   if (!canonical) return;
-  await chatStore().remember(activeGrokContext.root, activeGrokContext.stage, canonical);
+  await chatStore().remember(
+    state.activeGrokContext.root,
+    state.activeGrokContext.stage,
+    canonical,
+  );
 }
-function attachGrokHistoryTracking(contents: WebContents) {
-  contents.on('did-navigate', (_e, url) => {
-    void rememberGrokConversation(url);
+function attachGrokHistoryTracking(state: ProjectWindowState) {
+  state.grokView.webContents.on('did-navigate', (_e, url) => {
+    void rememberGrokConversation(state, url);
   });
-  contents.on('did-navigate-in-page', (_e, url) => {
-    void rememberGrokConversation(url);
+  state.grokView.webContents.on('did-navigate-in-page', (_e, url) => {
+    void rememberGrokConversation(state, url);
   });
 }
-function createWindow() {
-  mainWindow = new BaseWindow({
-    width: 1540,
-    height: 920,
-    minWidth: 900,
-    minHeight: 640,
-    title: 'ComfyUI Batch Studio',
-  });
-  localView = new WebContentsView({
-    webPreferences: {
-      preload: path.resolve(__dirname, '../preload/index.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  grokView = new WebContentsView({
-    webPreferences: {
-      partition: GROK_PARTITION,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  mainWindow.contentView.addChildView(localView);
-  mainWindow.contentView.addChildView(grokView);
+async function rememberMostRecentOpenProject() {
+  const candidate = [...projectWindows.values()]
+    .filter((state) => Boolean(state.projectRoot))
+    .sort((a, b) => b.lastFocusedAt - a.lastFocusedAt)[0];
+  if (candidate?.projectRoot) await stateStore().rememberProject(candidate.projectRoot);
+  else await stateStore().clearProject();
+}
+function createProjectWindow(options: {
+  restoreLastProject?: boolean;
+  initialProjectRoot?: string | null;
+  openCreateOnLoad?: boolean;
+} = {}) {
+  const window = new BaseWindow({
+      width: 1540,
+      height: 920,
+      minWidth: 900,
+      minHeight: 640,
+      title: 'ComfyUI Batch Studio',
+    }),
+    localView = new WebContentsView({
+      webPreferences: {
+        preload: path.resolve(__dirname, '../preload/index.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
+    grokView = new WebContentsView({
+      webPreferences: {
+        partition: GROK_PARTITION,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
+    state: ProjectWindowState = {
+      window,
+      localView,
+      grokView,
+      projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
+      restoreLastProject: Boolean(options.restoreLastProject),
+      grokVisible: false,
+      localRatio: 0.45,
+      activeGrokContext: null,
+      restoringGrokContext: false,
+      grokNavigationQueue: new GrokNavigationQueue(),
+      grokContextQueue: new LatestGrokContextQueue<GrokPaneState>(),
+      lastFocusedAt: ++projectWindowFocusSequence,
+    };
+  projectWindows.set(window.id, state);
+  lastFocusedProjectWindowId = window.id;
+  window.contentView.addChildView(localView);
+  window.contentView.addChildView(grokView);
   configureGrokContents(grokView.webContents);
-  attachGrokHistoryTracking(grokView.webContents);
-  mainWindow.on('resize', layout);
-  mainWindow.on('closed', () => {
-    localView?.webContents.close();
-    grokView?.webContents.close();
-    mainWindow = null;
-    localView = null;
-    grokView = null;
+  attachGrokHistoryTracking(state);
+  window.on('focus', () => {
+    state.lastFocusedAt = ++projectWindowFocusSequence;
+    lastFocusedProjectWindowId = window.id;
+    if (state.projectRoot) void stateStore().rememberProject(state.projectRoot);
   });
-  layout();
+  window.on('resize', () => layoutProjectWindow(state));
+  window.on('closed', () => {
+    localView.webContents.close();
+    grokView.webContents.close();
+    projectWindows.delete(window.id);
+    if (lastFocusedProjectWindowId === window.id) lastFocusedProjectWindowId = null;
+    void rememberMostRecentOpenProject();
+  });
+  layoutProjectWindow(state);
+  if (options.openCreateOnLoad)
+    localView.webContents.once('did-finish-load', () => {
+      localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
+    });
   void loadRenderer(localView);
-  void grokNavigationQueue
+  void state.grokNavigationQueue
     .navigate(grokView.webContents, GROK_URL)
     .catch((error) => console.warn('Initial Grok navigation failed:', error));
+  return state;
 }
 function openStandaloneToolWindow(tool: StandaloneWindowTool) {
   const existing = standaloneToolWindows.get(tool);
