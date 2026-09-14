@@ -1299,8 +1299,7 @@ function register() {
   ipcMain.handle(IPC.EXECUTION_START, async (_e, root: unknown) => {
     validRoot(root);
     const run = await startExecutionRun(root, () => executionPreflight(root));
-    if (run.executionTarget === 'local') localExecutor().start(root, run.runId);
-    else void prepareRemoteExecution(root, run.runId);
+    await startExecutionRuntime(root, run);
     return run;
   });
   ipcMain.handle(IPC.EXECUTION_STATUS, async (_e, root: unknown) => {
@@ -1407,10 +1406,7 @@ function register() {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     const run = await resumeExecutionRun(root, runId, () => executionPreflight(root));
-    if (run.executionTarget === 'local' && run.lifecycle === 'RUNNING')
-      localExecutor().start(root, runId);
-    else if (run.executionTarget === 'remote' && run.lifecycle === 'RUNNING')
-      void prepareRemoteExecution(root, runId);
+    if (run.lifecycle === 'RUNNING') await startExecutionRuntime(root, run);
     return run;
   });
   ipcMain.handle(IPC.EXECUTION_RESTART_REMOTE, async (_e, root: unknown, runId: unknown) => {
@@ -1444,7 +1440,7 @@ function register() {
       Number(next.remote.instanceId) !== replacementId
     )
       throw new Error('Replacement Run did not capture the selected Vast.ai Instance.');
-    void prepareRemoteExecution(root, next.runId);
+    await startExecutionRuntime(root, next);
     return next;
   });
   ipcMain.handle(IPC.EXECUTION_RESTART_FROM_SCRATCH, async (_e, root: unknown, runId: unknown) => {
@@ -1520,6 +1516,11 @@ function register() {
             `Local Run ${candidate.runId} の停止完了を確認できませんでした。Runの状態を確認して再実行してください。`,
           );
       }
+      await localExecutor().waitForSettled(candidate.runId);
+      await executionCoordinator.waitForSettled({
+        projectRoot: path.resolve(root),
+        runId: candidate.runId,
+      });
       await discardExecutionRun(root, candidate.runId);
     }
 
@@ -1530,8 +1531,7 @@ function register() {
         `Execution cannot restart with latest Prompt Plan: Preflight is BLOCKED: ${preflight.blocking.map((item) => item.message).join(' / ')}`,
       );
     const next = await startExecutionRun(root, async () => preflight);
-    if (next.executionTarget === 'local') localExecutor().start(root, next.runId);
-    else void prepareRemoteExecution(root, next.runId);
+    await startExecutionRuntime(root, next);
     return next;
   });
   ipcMain.handle(IPC.CAPTION_STATUS, (_e, root: unknown) => {
