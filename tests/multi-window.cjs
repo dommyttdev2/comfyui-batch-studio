@@ -23,7 +23,11 @@ matchCode(main, /IPC\.PROJECT_MENU_COMMAND/);
 matchCode(app, /project\.onMenuCommand/);
 matchCode(preload, /PROJECT_MENU_COMMAND/);
 
-doesNotMatchCode(main, /let mainWindow:/, 'Project windows must not use a single global mainWindow');
+doesNotMatchCode(
+  main,
+  /let mainWindow:/,
+  'Project windows must not use a single global mainWindow',
+);
 doesNotMatchCode(main, /let grokView:/, 'Grok views must be Project Window-local');
 doesNotMatchCode(main, /let activeGrokContext:/, 'Grok context must be Project Window-local');
 
