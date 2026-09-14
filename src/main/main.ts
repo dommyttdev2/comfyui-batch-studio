@@ -781,11 +781,6 @@ function integratedCatalogStatus(): CivitaiCatalogStatus {
 async function scanWithCatalog(root: string) {
   return scanProject(root);
 }
-async function scanAndRemember(root: string) {
-  const project = await scanWithCatalog(root);
-  await stateStore().rememberProject(root);
-  return project;
-}
 async function setGrokContext(state: ProjectWindowState, root: string, stage: GrokContextStage) {
   validRoot(root);
   validGrokContextStage(stage);
@@ -1811,7 +1806,6 @@ async function initializeApplication() {
     if (existing) focusProjectWindow(existing);
     else createProjectWindow({ restoreLastProject: true });
   });
-
 }
 if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
 app.on('window-all-closed', () => {
