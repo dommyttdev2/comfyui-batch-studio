@@ -210,7 +210,14 @@ Grokの返却ファイル名は **`model_loras.json`** とする。本文へ同�
 {
   "schemaVersion": 1,
   "loras": [],
-  "promptFallbacks": [],
+  "promptFallbacks": [
+    {
+      "requirement": "camera angle",
+      "positiveTags": ["from_below"],
+      "negativeTags": [],
+      "reason": "Promptだけで十分に代替可能"
+    }
+  ],
   "missingRequirements": []
 }
 ```
@@ -219,6 +226,8 @@ Grokの返却ファイル名は **`model_loras.json`** とする。本文へ同�
 
 - unresolved `missingRequirements` が1件でもあればConfirm不可。
 - `promptFallbacks` は確定 `models.json` へ残さず、`._batch_studio/model_prompt_fallbacks.json` に分離保存する。
+- Prompt fallbackはcategoryを持たず、`positiveTags[]` / `negativeTags[]` の1要素1tagで保存する。最終categoryへの配置はPrompt Planning工程が担当する。
+- Legacyの `positive` / `negative` comma stringは互換読み取り時にtag arrayへnormalizeできる。
 - current `model_catalog.json` とidentity照合できたLoRAだけ確定可能。
 - Model Familyに応じたPrompt dialectを守り、`trainedWords` はCatalog文字列を勝手に変換しない。
 
@@ -226,58 +235,163 @@ Grokの返却ファイル名は **`model_loras.json`** とする。本文へ同�
 
 ### 6.1 Purpose
 
-Grok は ComfyUI Workflow を作らない。
+Grok は ComfyUI Workflow や最終Prompt文字列を作らない。
 
-Grok が作るのは Workflow Compiler に必要な**意味情報**である。
+Grok が作るのは Workflow Compiler に必要な **Schema v2の構造化意味情報** である。
 
 ### 6.2 Input
 
 - 確定 `story.md`
 - 確定 `models.json`
 - `project_brief.json` の目標画像枚数等の計画条件
-- Prompt 設計上のルール
+- 必要に応じて `._batch_studio/model_prompt_fallbacks.json`
+- Prompt設計上のルール
 - ユーザーの追加入力
 
-新規プロジェクトの `prompt_tree.md` は入力にしない。Workflow Template JSON 自体も原則 Grok へ渡さない。Grok に Template の内部構造を理解させる必要がないためである。
+新規プロジェクトの `prompt_tree.md` は入力にしない。Workflow Template JSON自体も原則Grokへ渡さない。
 
 ### 6.3 Grok duties
 
 Grok は次を決める。
 
-- プロジェクト共通 positive / negative prompt。
+- `common` に置く全画像不変tag。
+- `branch.prompt` に置くBranch内不変tag。
+- `leaf.prompt` に置く画像固有差分tag。
+- Positive / Negative の意味category。
+- Cameraの `pov / angle / framing / gaze / focus` 分類。
 - 全枝共通で使用する Root LoRA。
-- 必要な Branch 数。
-- 各 Branch の意味・label。
-- 各 Branch で使用する LoRA。
-- 各 Branch に属する leaf prompts。
-- leaf ごとの positive / negative 差分。
-- `1 leaf = 1 image` を前提とした、目標画像枚数に近い leaf 数。
+- Branch分割と各BranchのLoRA。
+- Leaf数と生成順。
 - Root / Branch LoRA の実適用 `strengthModel` / `strengthClip`。
+- Prompt fallback tagのStory上適切なscope/categoryへの配置。
 
-`models.json` に `strengthBaseline.value = w` があり、その値を初期値として採用する場合は `strengthModel=w` / `strengthClip=w` と機械的に同値展開する。baseline が存在しない場合は経験則の暗黙defaultで埋めず、Grokまたはユーザーが実適用値を明示する。
+親scopeに存在するtagを子scopeへ再掲しない。
 
-### 6.4 Grok must not output
+途中で変化する衣装、状態、場所を `common` へ置かない。
 
-- Workflow JSON
-- ComfyUI node ID
-- link ID
-- group ID
-- node position
-- `mode` / bypass
-- `widgets_values`
-- `scene_matrix_json`
-- `SCENE_MATRIX_LINE` の Compiler-owned boilerplate
-- Save node path widget
-- KSampler internal values
-- v1 schema に存在しない汎用 metadata / extension field
+`models.json` に `strengthBaseline.value = w` があり、その値を初期値として採用する場合は `strengthModel=w` / `strengthClip=w` と展開する。baselineが無い場合は暗黙defaultで埋めない。
 
-### 6.5 Output
+### 6.4 Prompt category
 
-**`prompt_plan.json` という名前のダウンロード可能な JSON ファイル**として Prompt Plan を返す。JSON 本文をチャット本文や code block へ再掲しない。
+Positive:
 
-意味 schema は `prompt-plan.md` および `schemas/prompt-plan.schema.json` を正本とする。
+```text
+subject
+identity
+appearance
+style
+outfit
+expression
+action
+pose
+camera
+environment
+lighting
+effects
+```
 
-未知 field を追加しない。
+Camera:
+
+```text
+pov
+angle
+framing
+gaze
+focus
+```
+
+Negative:
+
+```text
+anatomy
+identity
+appearance
+subject
+outfit
+action
+camera
+environment
+artifacts
+content
+```
+
+1 array element は1tagだけを持つ。
+
+Illustriousの通常tagはunderscore form、Animaはspace formとする。
+
+### 6.5 trainedWords ownership
+
+Grok は `models.json` の Base Model / LoRA `trainedWords` を `prompt_plan.json` へ転記しない。
+
+Batch Studio Compilerが直接 `models.json` を読み、次へ注入する。
+
+```text
+Base Model trainedWords -> Common compiled positive
+Root LoRA trainedWords  -> Common compiled positive
+Branch LoRA trainedWords -> Branch配下各Leaf compiled positive
+```
+
+このためPrompt Planにtrigger wordの複製を持たない。
+
+### 6.6 Batch Studio-owned Prompt policy
+
+Grokは次を出力しない。
+
+- Model Family quality preset。
+- compile order。
+- exact dedupe rule。
+- 最終positive / negative string。
+- Workflow JSON。
+- ComfyUI node / link / group ID。
+- node position。
+- `mode` / bypass。
+- `widgets_values`。
+- `scene_matrix_json`。
+- `positive_base` / `negative_base`。
+- Save node path。
+- KSampler内部値。
+
+これらはBatch Studioが所有する。
+
+### 6.7 Output
+
+**`prompt_plan.json` という名前のダウンロード可能なJSONファイル**としてSchema v2 Prompt Planを返す。JSON本文をチャット本文やcode blockへ再掲しない。
+
+最小shape:
+
+```json
+{
+  "schemaVersion": 2,
+  "common": {
+    "positive": {},
+    "negative": {}
+  },
+  "rootLoras": [],
+  "branches": [
+    {
+      "id": "b01",
+      "label": "Example",
+      "loras": [],
+      "leaves": [
+        {
+          "id": "s1-01-c1",
+          "name": "S1-01_C1_example",
+          "prompt": {
+            "positive": {},
+            "negative": {}
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+意味schemaは `prompt-plan.md` および `schemas/prompt-plan.schema.json` を正本とする。
+
+未知fieldを追加しない。
+
+既存Schema v1はBatch Studio側で読み取り・Compile互換を維持するが、新規Grok出力はSchema v2とする。
 
 ## 7. Manual Attachment Checklist
 

@@ -75,6 +75,7 @@ story.md 本文を次の見出し順で記述してください。
 
 制約:
 - Prompt Planそのもの、LoRA選定、Checkpoint選定、ComfyUIノード情報は書きません。
+- Prompt Planでscope分離できるよう、全編で不変の外見・関係性・舞台と、途中で変化する衣装・状態・場所を区別して記述します。
 - Scene内で個別画像のpositive/negative promptは書きません。
 - 上記の最上位見出しを省略・改名・追加しません。`;
 const loraFallbackDecisionRules = `## LoRA不足時の必須探索順序
@@ -104,8 +105,8 @@ model_loras.json は次の形だけにしてください。
   "promptFallbacks": [
     {
       "requirement": "LoRAで満たせなかった表現要件",
-      "positive": "positive promptへ追加するDanbooru実在タグ列",
-      "negative": "negative promptへ追加するDanbooru実在タグ列。不要なら空文字列",
+      "positiveTags": ["positive promptへ追加するDanbooru実在タグ"],
+      "negativeTags": ["negative promptへ追加するDanbooru実在タグ"],
       "reason": "なぜLoRAなしでPrompt代替が十分と判断したか"
     }
   ]
@@ -115,40 +116,119 @@ model_loras.json は次の形だけにしてください。
 - JSONとしてparse可能な厳密な構文にしてください。コメント、末尾カンマ、擬似値は出力しません。
 - ref は project 全体で一意にしてください。LoRA ref は ^lora\\.[a-z][a-z0-9._-]{0,58}$ に従います。
 - loras の ID / name / URL / trainedWords / strengthBaseline は model_catalog.json から正確に転記してください。
-- promptFallbacks はPromptだけで十分に代替可能と判断した要件だけを入れます。requirement / reason は空にせず、positive / negative の少なくとも一方を空でない文字列にしてください。
+- promptFallbacks はPromptだけで十分に代替可能と判断した要件だけを入れます。requirement / reason は空にせず、positiveTags / negativeTags の少なくとも一方を1件以上指定してください。
+- positiveTags / negativeTags は1配列要素につき1つのDanbooruタグだけを入れ、カンマ区切り文字列にはしません。
 - promptFallbacks が無い場合は promptFallbacks を出力しません。
 - 全探索を行っても解決できない要件、または外部Civitai上に候補が見つかったがカタログ未登録の要件だけ、root の missingRequirements 配列へ {"role":"lora","requirement":"...","reason":"..."} を記載してください。
 - 不足が無い場合は missingRequirements を出力しません。
 - 定義されていない追加フィールドを出力しません。`;
 const planShape = `${artifactFileOutputRules('prompt_plan.json')}
-prompt_plan.json は次の形だけにしてください。
+prompt_plan.json は Schema v2 の構造化Promptとして出力してください。
 {
-  "schemaVersion": 1,
-  "common": { "positive": "...", "negative": "..." },
-  "rootLoras": [ { "modelRef": "lora.xxx", "strengthModel": 0.0, "strengthClip": 0.0 } ],
+  "schemaVersion": 2,
+  "common": {
+    "positive": {
+      "subject": [],
+      "identity": [],
+      "appearance": [],
+      "style": []
+    },
+    "negative": {}
+  },
+  "rootLoras": [
+    { "modelRef": "lora.xxx", "strengthModel": 0.0, "strengthClip": 0.0 }
+  ],
   "branches": [
     {
-      "id": "b01", "label": "人間向け表示名",
-      "loras": [ { "modelRef": "lora.xxx", "strengthModel": 0.0, "strengthClip": 0.0 } ],
-      "leaves": [ { "id": "s1-01-c1", "name": "...", "positive": "...", "negative": "..." } ]
+      "id": "b01",
+      "label": "人間向け表示名",
+      "loras": [
+        { "modelRef": "lora.xxx", "strengthModel": 0.0, "strengthClip": 0.0 }
+      ],
+      "prompt": {
+        "positive": {
+          "outfit": [],
+          "environment": []
+        },
+        "negative": {}
+      },
+      "leaves": [
+        {
+          "id": "s1-01-c1",
+          "name": "S1-01_C1_example",
+          "prompt": {
+            "positive": {
+              "expression": ["smile"],
+              "pose": ["standing"],
+              "camera": {
+                "angle": ["from_below"],
+                "framing": ["cowboy_shot"],
+                "gaze": ["looking_at_viewer"]
+              }
+            },
+            "negative": {}
+          }
+        }
+      ]
     }
   ]
 }
-- JSONとしてparse可能な厳密な構文にしてください。コメント、末尾カンマ、擬似値は出力しません。
+
+## Scopeルール
+- common には全Branch・全Leafで不変のタグだけを置いてください。
+- branch.prompt にはそのBranch配下の全Leafで不変のタグだけを置いてください。Branch共通タグが無い場合は prompt field 自体を省略できます。
+- leaf.prompt にはその画像だけに必要な差分を置いてください。
+- 親scopeに存在するタグを子scopeへ再掲してはいけません。
+- 途中で変化する衣装、背景、状態を common へ置いてはいけません。
+- common と各 leaf.prompt は positive / negative object を必ず持たせてください。空categoryは省略できます。
+
+## Positive category
+使用可能なkeyは次だけです。
+subject, identity, appearance, style, outfit, expression, action, pose, camera, environment, lighting, effects
+
+camera は次のsubcategoryだけを使用できます。
+pov, angle, framing, gaze, focus
+
+- angle / framing / gaze は最終画像につき原則1タグです。
+- 競合する構図タグを同じ最終画像に指定しません。
+- expression は原則3タグ以内とします。
+
+## Negative category
+使用可能なkeyは次だけです。
+anatomy, identity, appearance, subject, outfit, action, camera, environment, artifacts, content
+
+- Project固有で除外する必要がある内容だけを記述してください。
+- 一般的なquality/anatomy presetを大量に生成しません。Batch StudioがModel Family policyとして付与します。
+- 同一タグをpositiveとnegativeの両方へ入れてはいけません。
+
+## Tag形式
+- 1配列要素 = 1タグです。カンマ区切りの複数タグを1文字列へ入れてはいけません。
+- 同じタグを同一categoryや親子scopeへ重複させません。
+- 通常タグはDanbooru canonical tagを使用してください。
+- Illustriousではunderscore形式、Animaではspace形式を使用します。
+
+## trainedWords
+- models.json の checkpoint / diffusion model / LoRA trainedWords を prompt_plan.json へ転記してはいけません。
+- trainedWordsはBatch Studio Compilerがmodels.jsonから直接読み、Base Model / Root LoRA / Branch LoRAの適用scopeへ自動注入します。
+- trainedWordsを通常Danbooruタグへ変換、翻訳、正規化しません。
+
+## LoRA
+- modelRef は models.json に存在する LoRA ref だけを使ってください。
+- models.json に strengthBaseline.value = w があるLoRAは、初期値として strengthModel=w / strengthClip=w を使用してください。
+- strengthBaseline が無いLoRAも strengthModel / strengthClip は必須です。暗黙defaultで埋めず、Storyと用途から明示的に値を決めてください。
+
+## Prompt fallback
+- model_prompt_fallbacks.json が添付されている場合、positiveTags / negativeTags はLoRA不足をPromptで解決済みと判断したタグです。
+- requirement と Story を照合して、該当する common / branch.prompt / leaf.prompt の適切なcategoryへ分類してください。
+- 無関係なSceneへ一律適用しません。
+- fallbackタグを省略したり反対の意味へ変更したりしません。重複だけは1回にまとめて構いません。
+
+## Identity / ordering
 - Branch / Leaf id は ^[a-z][a-z0-9._-]{0,63}$ に従い、各々project全体で一意にしてください。
 - 配列順が生成順です。order field は追加しません。
 - 1 Leaf = 1 image です。目標画像枚数に近づくようLeaf数を設計してください。ただし意味上必要なら目標と完全一致しなくても構いません。
-- modelRef は models.json に存在する LoRA ref だけを使ってください。checkpoint.main / text_encoder.main / vae.main / 旧schemaのclip.main はLoRA適用に使いません。
-- models.json の trainedWords はトリガーワードとして扱い、文字列を変更・翻訳・正規化せず positive prompt に含めてください。
-- checkpoint.main.trainedWords と rootLoras で参照する LoRA の trainedWords は common.positive に含めてください。
-- Branch の loras で参照する LoRA の trainedWords は、その Branch 配下のすべての Leaf の positive に含めてください。
-- trainedWords が空配列ならトリガーワードを捏造しません。同じ文字列が複数の適用元から重複する場合は、適用先の positive 内では1回にまとめてください。
-- trainedWords を negative prompt へ入れません。
-- models.json に strengthBaseline.value = w があるLoRAは、初期値として strengthModel=w / strengthClip=w を使用してください。
-- strengthBaseline が無いLoRAも strengthModel / strengthClip は必須です。1.0や0.7等の暗黙defaultで埋めず、Storyと用途から明示的に値を決めてください。
-- model_prompt_fallbacks.json が添付されている場合、その promptFallbacks はLoRA不足をPromptで解決済みと判断した要件です。各 requirement と Story を照合し、該当する common / Branch / Leaf の positive・negativeへ記録済み文字列を反映してください。無関係なSceneへ一律適用せず、必要な範囲へ配置してください。
-- promptFallbacks の positive / negative は代替策として確定したPromptなので、省略したり反対の意味へ書き換えたりしません。重複だけは適用先Prompt内で1回にまとめて構いません。
-- common / rootLoras / branches / leaves の意味情報だけを出力し、Workflow内部fieldや未知fieldを追加しません。`;
+- common / rootLoras / branches / branch.prompt / leaves / leaf.prompt の意味情報だけを出力し、Workflow内部fieldや未知fieldを追加しません。
+- JSONとしてparse可能な厳密な構文にしてください。コメント、末尾カンマ、擬似値は出力しません。`;
 const captionShape = `${artifactFileOutputRules('caption_content.json')}
 caption_content.json は次の形だけにしてください。
 {
@@ -269,7 +349,7 @@ export async function buildGrokTask(
   return {
     stage,
     title: stage === 'prompt-plan' ? 'プロンプト設計' : 'プロンプト設計修正',
-    prompt: `${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan を作成してください。共通Prompt、全体共通LoRA、意味的なBranch分割、Branch LoRA、各Leafのpositive/negative差分を設計してください。models.json の trainedWords はトリガーワードとして、適用される positive prompt に必ず含めてください。${Number.isInteger(target) ? `\n計画上の目標画像枚数は ${target} 枚です。` : ''}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${planShape}${extra ? `\n\n修正条件:\n${extra}` : ''}`,
+    prompt: `${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan Schema v2 を作成してください。最終Prompt文字列を直接作らず、common / branch / leaf のscopeと意味categoryへDanbooruタグを構造化してください。models.json の trainedWords はPrompt Planへ転記せず、Batch Studio Compilerが自動注入します。${Number.isInteger(target) ? `\n計画上の目標画像枚数は ${target} 枚です。` : ''}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${planShape}${extra ? `\n\n修正条件:\n${extra}` : ''}`,
     attachments: [
       await attachment('project_brief.json', brief, '画像枚数などの計画条件'),
       await attachment('story.md', story, '確定ストーリー'),

@@ -576,10 +576,7 @@ function validateUsage(
       path,
     });
 }
-export function validatePromptPlan(
-  p: PromptPlanArtifact,
-  models: ModelsArtifact | null,
-): ValidationResult {
+function validatePromptPlanV1(p: any, models: ModelsArtifact | null): ValidationResult {
   const i: ValidationIssue[] = [];
   if (!object(p))
     return ok([
@@ -630,10 +627,14 @@ export function validatePromptPlan(
       path: 'branches',
     });
   const modelRefs = new Set<string>(models ? models.loras.map((x) => x.ref) : []);
-  (p.rootLoras ?? []).forEach((u, n) => validateUsage(u, `rootLoras.${n}`, modelRefs, models, i));
+  const rootLoras = Array.isArray(p.rootLoras) ? p.rootLoras : [];
+  const branches = Array.isArray(p.branches) ? p.branches : [];
+  rootLoras.forEach((u: unknown, n: number) =>
+    validateUsage(u, `rootLoras.${n}`, modelRefs, models, i),
+  );
   const branchIds: string[] = [];
   const leafIds: string[] = [];
-  for (const [bi, b] of (p.branches ?? []).entries()) {
+  for (const [bi, b] of branches.entries()) {
     const bp = `branches.${bi}`;
     if (!object(b)) {
       i.push({ severity: 'error', code: 'BRANCH_TYPE', message: 'Branchが不正です。', path: bp });
@@ -648,7 +649,7 @@ export function validatePromptPlan(
         message: `Branch IDが不正です: ${String(b.id ?? '')}`,
         path: `${bp}.id`,
       });
-    branchIds.push(b.id);
+    branchIds.push(String(b.id ?? ''));
     if (typeof b.label !== 'string' || !b.label.trim())
       i.push({
         severity: 'error',
@@ -663,15 +664,19 @@ export function validatePromptPlan(
         message: 'Branch lorasは配列が必要です。',
         path: `${bp}.loras`,
       });
-    else b.loras.forEach((u, n) => validateUsage(u, `${bp}.loras.${n}`, modelRefs, models, i));
-    if (!Array.isArray(b.leaves) || b.leaves.length < 1)
+    else
+      b.loras.forEach((u: unknown, n: number) =>
+        validateUsage(u, `${bp}.loras.${n}`, modelRefs, models, i),
+      );
+    const leaves = Array.isArray(b.leaves) ? b.leaves : [];
+    if (!leaves.length)
       i.push({
         severity: 'error',
         code: 'LEAVES_EMPTY',
         message: `${b.id ?? bp}に生成項目がありません。`,
         path: `${bp}.leaves`,
       });
-    for (const [li, l] of (b.leaves ?? []).entries()) {
+    for (const [li, l] of leaves.entries()) {
       const lp = `${bp}.leaves.${li}`;
       if (!object(l)) {
         i.push({ severity: 'error', code: 'LEAF_TYPE', message: '生成項目が不正です。', path: lp });
@@ -686,7 +691,7 @@ export function validatePromptPlan(
           message: `生成項目IDが不正です: ${String(l.id ?? '')}`,
           path: `${lp}.id`,
         });
-      leafIds.push(l.id);
+      leafIds.push(String(l.id ?? ''));
       if (typeof l.name !== 'string' || !l.name.trim())
         i.push({
           severity: 'error',
@@ -709,6 +714,394 @@ export function validatePromptPlan(
     i.push({ severity: 'error', code: 'DUP_LEAF_ID', message: '生成項目IDが重複しています。' });
   return ok(i);
 }
+
+const positivePromptKeys = [
+  'subject',
+  'identity',
+  'appearance',
+  'style',
+  'outfit',
+  'expression',
+  'action',
+  'pose',
+  'camera',
+  'environment',
+  'lighting',
+  'effects',
+] as const;
+const cameraPromptKeys = ['pov', 'angle', 'framing', 'gaze', 'focus'] as const;
+const negativePromptKeys = [
+  'anatomy',
+  'identity',
+  'appearance',
+  'subject',
+  'outfit',
+  'action',
+  'camera',
+  'environment',
+  'artifacts',
+  'content',
+] as const;
+
+function validateTagArray(
+  value: unknown,
+  path: string,
+  family: ModelsArtifact['modelFamily'] | undefined,
+  issues: ValidationIssue[],
+) {
+  if (!Array.isArray(value)) {
+    issues.push({
+      severity: 'error',
+      code: 'PROMPT_TAG_ARRAY',
+      message: 'Prompt categoryは文字列配列が必要です。',
+      path,
+    });
+    return;
+  }
+  const seen = new Set<string>();
+  value.forEach((raw, index) => {
+    const tagPath = `${path}.${index}`;
+    if (typeof raw !== 'string' || !raw.trim()) {
+      issues.push({
+        severity: 'error',
+        code: 'PROMPT_TAG',
+        message: 'Prompt tagは空でない文字列が必要です。',
+        path: tagPath,
+      });
+      return;
+    }
+    const tag = raw.trim();
+    if (tag !== raw || /[\r\n,]/.test(tag))
+      issues.push({
+        severity: 'error',
+        code: 'PROMPT_TAG_FORMAT',
+        message: '1配列要素には前後空白・改行・カンマを含まない1タグだけを指定してください。',
+        path: tagPath,
+      });
+    if (family === 'illustrious' && /\s/.test(tag))
+      issues.push({
+        severity: 'error',
+        code: 'ILLUSTRIOUS_TAG_DIALECT',
+        message: 'Illustriousの通常タグはunderscore形式で指定してください。',
+        path: tagPath,
+      });
+    if (seen.has(tag))
+      issues.push({
+        severity: 'warning',
+        code: 'DUPLICATE_TAG',
+        message: `同じcategory内でタグが重複しています: ${tag}`,
+        path,
+      });
+    seen.add(tag);
+  });
+}
+
+function validateStructuredPrompt(
+  value: unknown,
+  path: string,
+  family: ModelsArtifact['modelFamily'] | undefined,
+  issues: ValidationIssue[],
+) {
+  if (!object(value)) {
+    issues.push({
+      severity: 'error',
+      code: 'STRUCTURED_PROMPT',
+      message: '構造化Promptはobjectが必要です。',
+      path,
+    });
+    return;
+  }
+  extraKeys(value, ['positive', 'negative'], path, issues);
+  required(value, ['positive', 'negative'], path, issues);
+  if (object(value.positive)) {
+    extraKeys(value.positive, [...positivePromptKeys], `${path}.positive`, issues);
+    for (const key of positivePromptKeys) {
+      if (!(key in value.positive)) continue;
+      if (key === 'camera') {
+        const camera = value.positive.camera;
+        if (!object(camera)) {
+          issues.push({
+            severity: 'error',
+            code: 'CAMERA_PROMPT',
+            message: 'cameraはobjectが必要です。',
+            path: `${path}.positive.camera`,
+          });
+          continue;
+        }
+        extraKeys(camera, [...cameraPromptKeys], `${path}.positive.camera`, issues);
+        for (const cameraKey of cameraPromptKeys)
+          if (cameraKey in camera)
+            validateTagArray(
+              camera[cameraKey],
+              `${path}.positive.camera.${cameraKey}`,
+              family,
+              issues,
+            );
+      } else validateTagArray(value.positive[key], `${path}.positive.${key}`, family, issues);
+    }
+  } else
+    issues.push({
+      severity: 'error',
+      code: 'POSITIVE_PROMPT',
+      message: 'positiveはobjectが必要です。',
+      path: `${path}.positive`,
+    });
+  if (object(value.negative)) {
+    extraKeys(value.negative, [...negativePromptKeys], `${path}.negative`, issues);
+    for (const key of negativePromptKeys)
+      if (key in value.negative)
+        validateTagArray(value.negative[key], `${path}.negative.${key}`, family, issues);
+  } else
+    issues.push({
+      severity: 'error',
+      code: 'NEGATIVE_PROMPT',
+      message: 'negativeはobjectが必要です。',
+      path: `${path}.negative`,
+    });
+}
+
+function values(value: unknown) {
+  return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : [];
+}
+
+function flattenPositive(value: any) {
+  if (!object(value?.positive)) return [] as string[];
+  const result: string[] = [];
+  for (const key of positivePromptKeys) {
+    if (key === 'camera') {
+      const camera = value.positive.camera;
+      if (!object(camera)) continue;
+      for (const cameraKey of cameraPromptKeys) result.push(...values(camera[cameraKey]));
+    } else result.push(...values(value.positive[key]));
+  }
+  return result;
+}
+
+function flattenNegative(value: any) {
+  if (!object(value?.negative)) return [] as string[];
+  return negativePromptKeys.flatMap((key) => values(value.negative[key]));
+}
+
+function cameraValues(value: any, key: (typeof cameraPromptKeys)[number]) {
+  return object(value?.positive?.camera) ? values(value.positive.camera[key]) : [];
+}
+
+function positiveValues(value: any, key: Exclude<(typeof positivePromptKeys)[number], 'camera'>) {
+  return object(value?.positive) ? values(value.positive[key]) : [];
+}
+
+function unique(values: string[]) {
+  return [...new Set(values)];
+}
+
+function validateEffectivePrompt(
+  common: any,
+  branch: any,
+  leaf: any,
+  path: string,
+  issues: ValidationIssue[],
+) {
+  const scopes = [common, branch, leaf].filter(Boolean);
+  const positiveByScope = scopes.map(flattenPositive);
+  const negativeByScope = scopes.map(flattenNegative);
+  const positive = unique(positiveByScope.flat());
+  const negative = unique(negativeByScope.flat());
+  const negativeSet = new Set(negative);
+  const conflicts = positive.filter((tag) => negativeSet.has(tag));
+  if (conflicts.length)
+    issues.push({
+      severity: 'error',
+      code: 'POSITIVE_NEGATIVE_CONFLICT',
+      message: `PositiveとNegativeに同じタグがあります: ${conflicts.join(', ')}`,
+      path,
+    });
+  for (const [label, key] of [
+    ['angle', 'angle'],
+    ['framing', 'framing'],
+    ['gaze', 'gaze'],
+  ] as const) {
+    const tags = unique(scopes.flatMap((scope) => cameraValues(scope, key)));
+    if (tags.length > 1)
+      issues.push({
+        severity: 'error',
+        code: `CAMERA_${label.toUpperCase()}_CONFLICT`,
+        message: `camera.${label}は最終画像につき原則1タグです: ${tags.join(', ')}`,
+        path,
+      });
+  }
+  const expressions = unique(scopes.flatMap((scope) => positiveValues(scope, 'expression')));
+  if (expressions.length > 3)
+    issues.push({
+      severity: 'warning',
+      code: 'EXPRESSION_OVERDEFINED',
+      message: `expressionが${expressions.length}タグあります。3タグ以内を推奨します。`,
+      path,
+    });
+  const occurrences = new Map<string, number>();
+  for (const tags of positiveByScope)
+    for (const tag of new Set(tags)) occurrences.set(tag, (occurrences.get(tag) ?? 0) + 1);
+  const duplicates = [...occurrences.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([tag]) => tag);
+  if (duplicates.length)
+    issues.push({
+      severity: 'warning',
+      code: 'DUPLICATE_TAG',
+      message: `親子scopeで同じPositiveタグが重複しています: ${duplicates.join(', ')}`,
+      path,
+    });
+  const subjects = new Set(scopes.flatMap((scope) => positiveValues(scope, 'subject')));
+  if (subjects.has('solo') && subjects.has('1girl') && subjects.has('1boy'))
+    issues.push({
+      severity: 'error',
+      code: 'SUBJECT_CONFLICT',
+      message: 'solo と 1girl + 1boy は同時指定できません。',
+      path,
+    });
+  const outfits = unique(scopes.flatMap((scope) => positiveValues(scope, 'outfit')));
+  if ((positive.includes('nude') || positive.includes('completely_nude')) && outfits.length)
+    issues.push({
+      severity: 'warning',
+      code: 'OUTFIT_STATE_CONFLICT',
+      message: 'nude系タグとoutfitタグが同じ最終Promptにあります。意図した併用か確認してください。',
+      path,
+    });
+}
+
+function validatePromptPlanV2(
+  p: PromptPlanArtifact,
+  models: ModelsArtifact | null,
+): ValidationResult {
+  const i: ValidationIssue[] = [];
+  const plan = p as any;
+  extraKeys(plan, ['schemaVersion', 'common', 'rootLoras', 'branches'], '', i);
+  required(plan, ['schemaVersion', 'common', 'rootLoras', 'branches'], '', i);
+  const family = models?.modelFamily;
+  validateStructuredPrompt(plan.common, 'common', family, i);
+  if (!Array.isArray(plan.rootLoras))
+    i.push({
+      severity: 'error',
+      code: 'PLAN_ROOT_LORAS',
+      message: 'rootLorasは配列が必要です。',
+      path: 'rootLoras',
+    });
+  if (!Array.isArray(plan.branches) || plan.branches.length < 1)
+    i.push({
+      severity: 'error',
+      code: 'PLAN_STRUCTURE',
+      message: 'branchesは1件以上必要です。',
+      path: 'branches',
+    });
+  const modelRefs = new Set<string>(models ? models.loras.map((x) => x.ref) : []);
+  const rootLoras = Array.isArray(plan.rootLoras) ? plan.rootLoras : [];
+  const branches = Array.isArray(plan.branches) ? plan.branches : [];
+  rootLoras.forEach((u: unknown, n: number) =>
+    validateUsage(u, `rootLoras.${n}`, modelRefs, models, i),
+  );
+  const branchIds: string[] = [];
+  const leafIds: string[] = [];
+  for (const [bi, b] of branches.entries()) {
+    const bp = `branches.${bi}`;
+    if (!object(b)) {
+      i.push({ severity: 'error', code: 'BRANCH_TYPE', message: 'Branchが不正です。', path: bp });
+      continue;
+    }
+    extraKeys(b, ['id', 'label', 'loras', 'prompt', 'leaves'], bp, i);
+    required(b, ['id', 'label', 'loras', 'leaves'], bp, i);
+    if (!idRe.test(String(b.id ?? '')))
+      i.push({
+        severity: 'error',
+        code: 'BRANCH_ID',
+        message: `Branch IDが不正です: ${String(b.id ?? '')}`,
+        path: `${bp}.id`,
+      });
+    branchIds.push(String(b.id ?? ''));
+    if (typeof b.label !== 'string' || !b.label.trim())
+      i.push({
+        severity: 'error',
+        code: 'BRANCH_LABEL',
+        message: 'Branch labelは必須です。',
+        path: `${bp}.label`,
+      });
+    if (!Array.isArray(b.loras))
+      i.push({
+        severity: 'error',
+        code: 'BRANCH_LORAS',
+        message: 'Branch lorasは配列が必要です。',
+        path: `${bp}.loras`,
+      });
+    else
+      b.loras.forEach((u: unknown, n: number) =>
+        validateUsage(u, `${bp}.loras.${n}`, modelRefs, models, i),
+      );
+    if ('prompt' in b && b.prompt != null)
+      validateStructuredPrompt(b.prompt, `${bp}.prompt`, family, i);
+    const leaves = Array.isArray(b.leaves) ? b.leaves : [];
+    if (!leaves.length)
+      i.push({
+        severity: 'error',
+        code: 'LEAVES_EMPTY',
+        message: `${String(b.id ?? bp)}に生成項目がありません。`,
+        path: `${bp}.leaves`,
+      });
+    for (const [li, l] of leaves.entries()) {
+      const lp = `${bp}.leaves.${li}`;
+      if (!object(l)) {
+        i.push({ severity: 'error', code: 'LEAF_TYPE', message: '生成項目が不正です。', path: lp });
+        continue;
+      }
+      extraKeys(l, ['id', 'name', 'prompt'], lp, i);
+      required(l, ['id', 'name', 'prompt'], lp, i);
+      if (!idRe.test(String(l.id ?? '')))
+        i.push({
+          severity: 'error',
+          code: 'LEAF_ID',
+          message: `生成項目IDが不正です: ${String(l.id ?? '')}`,
+          path: `${lp}.id`,
+        });
+      leafIds.push(String(l.id ?? ''));
+      if (typeof l.name !== 'string' || !l.name.trim())
+        i.push({
+          severity: 'error',
+          code: 'LEAF_NAME',
+          message: '生成項目名は必須です。',
+          path: `${lp}.name`,
+        });
+      validateStructuredPrompt(l.prompt, `${lp}.prompt`, family, i);
+      validateEffectivePrompt(plan.common, b.prompt, l.prompt, lp, i);
+    }
+  }
+  if (new Set(branchIds).size !== branchIds.length)
+    i.push({ severity: 'error', code: 'DUP_BRANCH_ID', message: 'Branch IDが重複しています。' });
+  if (new Set(leafIds).size !== leafIds.length)
+    i.push({ severity: 'error', code: 'DUP_LEAF_ID', message: '生成項目IDが重複しています。' });
+  return ok(i);
+}
+
+export function validatePromptPlan(
+  p: PromptPlanArtifact,
+  models: ModelsArtifact | null,
+): ValidationResult {
+  if (!object(p))
+    return ok([
+      {
+        severity: 'error',
+        code: 'PLAN_TYPE',
+        message: 'prompt_plan.jsonのrootはobjectが必要です。',
+      },
+    ]);
+  if ((p as any).schemaVersion === 1) return validatePromptPlanV1(p, models);
+  if ((p as any).schemaVersion === 2) return validatePromptPlanV2(p, models);
+  return ok([
+    {
+      severity: 'error',
+      code: 'PLAN_SCHEMA',
+      message: 'prompt_plan.json schemaVersionは1または2が必要です。',
+      path: 'schemaVersion',
+    },
+  ]);
+}
+
 const commonRequiredRoles = ['rootLoraStack', 'planCommonPrompt', 'promptOutput'] as const;
 const commonRoleNames = [
   'checkpoint',

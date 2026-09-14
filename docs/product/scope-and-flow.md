@@ -18,7 +18,7 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - Story案の生成とユーザーとの会話による調整。
 - `story.md` の作成。
 - `model_catalog.json` を根拠にしたLoRA選定。基盤モデルはユーザー選択済みのものを変更しない。
-- 共通プロンプト、Root LoRA、Branch、Leaf promptsの意味設計。
+- Common / Branch / Leaf scopeへの構造化Danbooru tag設計、Root / Branch LoRAの意味設計。
 
 ### 2.2 Batch Studio の責務
 
@@ -31,7 +31,8 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - Civitai observed LoRA strength baseline集計。
 - Collection / Model / Version選択テンプレート管理。
 - ユーザーが選択した基盤モデルとGrokが選定したLoRAのModel / Version / File実在確認。
-- Prompt Plan検証。
+- Prompt Plan schema / semantic validation。
+- Model Family別Prompt policy、trainedWords注入、category順、exact dedupeによる最終Promptの決定論的compile。
 - Workflow TemplateとPrompt PlanからComfyUI Workflowを決定論的に生成。
 - Cloudflare R2 credentialのMain Process内管理。
 - R2 bucket / object / upload / download / move / delete / URL生成。
@@ -141,15 +142,17 @@ story.md + models.json
         |
         v
 Grok
-  -> Common Prompt / Root LoRA / Branch / Leaf prompts
+  -> Schema v2 Common / Branch / Leaf structured tags
+  -> Root / Branch LoRA usage
+  -> trainedWordsはPrompt Planへ転記しない
         |
         v
 prompt_plan.json Draft
         |
         v
 Batch Studio
-  -> schema / refs validation
-  -> left-to-right pseudo Workflow tree review/edit
+  -> schema / refs / semantic validation
+  -> category editor / compiled prompt preview
   -> User Confirm
         |
         v
@@ -158,6 +161,9 @@ Template + Manifest + prompt_plan.json + models.json
         |
         v
 Workflow Compiler
+  -> Model Family quality policy
+  -> Base / Root / Branch trainedWords injection
+  -> category-order compile / exact dedupe
         |
         v
 LoRA_{project-destination-folder}.json
@@ -225,7 +231,7 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 | 基本設定 | ユーザー入力 | `project_brief.json` | 必須Brief有効 |
 | ストーリー | Brief / 参考資料 | `story.md` | User Confirm / validation成功 |
 | モデル選定 | `story.md`, app-wide `model_catalog.json`, Local/R2 model inventory | `models.json` | Model Family/基盤モデル選択済み、LoRA identity実在、unresolved `missingRequirements` なし |
-| プロンプト設計 | story, models | `prompt_plan.json` | schema / refs / branch-leaf整合性有効 |
+| プロンプト設計 | story, models | `prompt_plan.json` | schema / refs / structured tag semantic validation / branch-leaf整合性有効 |
 | ワークフロー | Template, Manifest, models, plan | UI Workflow + Execution API graph | UI Workflow / API graph生成、構造validation、hash / workflow identity整合が成功 |
 | モデル配置 | models, Local, integrated R2, executionTarget | 所在状態 / R2操作 | Local targetはLocal配置済み。Remote targetはR2配置済み |
 | 実行前チェック | 全成果物 + target環境 | READY / BLOCKED | artifact/model validationとtarget-specific operational checkにblocking errorなし |

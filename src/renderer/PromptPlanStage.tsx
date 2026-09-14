@@ -2,10 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import type {
   LoraUsage,
   ModelsArtifact,
+  NegativePromptGroups,
+  PositivePromptGroups,
   ProjectSummary,
   PromptPlanArtifact,
+  StructuredPrompt,
   ValidationIssue,
 } from '../shared/types';
+import { compilePromptPlanPrompts } from '../shared/prompt-policy';
 import type { Runner } from './ui';
 import { issuesView } from './ui';
 import { GrokBridge } from './GrokStages';
@@ -243,6 +247,158 @@ function PlanModal(props: {
   );
 }
 
+const positiveGroupKeys: Array<Exclude<keyof PositivePromptGroups, 'camera'>> = [
+  'subject',
+  'identity',
+  'appearance',
+  'style',
+  'outfit',
+  'expression',
+  'action',
+  'pose',
+  'environment',
+  'lighting',
+  'effects',
+];
+const cameraGroupKeys: Array<keyof NonNullable<PositivePromptGroups['camera']>> = [
+  'pov',
+  'angle',
+  'framing',
+  'gaze',
+  'focus',
+];
+const negativeGroupKeys: Array<keyof NegativePromptGroups> = [
+  'anatomy',
+  'identity',
+  'appearance',
+  'subject',
+  'outfit',
+  'action',
+  'camera',
+  'environment',
+  'artifacts',
+  'content',
+];
+
+function TagArrayEditor({
+  label,
+  value,
+  editable,
+  onChange,
+}: {
+  label: string;
+  value: string[] | undefined;
+  editable: boolean;
+  onChange: (value: string[]) => void;
+}) {
+  return (
+    <label>
+      {label}
+      <textarea
+        className="prompt-tag-list"
+        readOnly={!editable}
+        placeholder="1行につき1タグ"
+        value={(value ?? []).join('\n')}
+        onChange={(e) =>
+          onChange(
+            e.target.value
+              .split(/\r?\n/)
+              .map((tag) => tag.trim())
+              .filter(Boolean),
+          )
+        }
+      />
+    </label>
+  );
+}
+
+function StructuredPromptEditor({
+  value,
+  editable,
+  onChange,
+}: {
+  value: StructuredPrompt;
+  editable: boolean;
+  onChange: (value: StructuredPrompt) => void;
+}) {
+  const updatePositive = (key: Exclude<keyof PositivePromptGroups, 'camera'>, tags: string[]) => {
+    const next = structuredClone(value);
+    if (tags.length) next.positive[key] = tags;
+    else delete next.positive[key];
+    onChange(next);
+  };
+  const updateCamera = (key: keyof NonNullable<PositivePromptGroups['camera']>, tags: string[]) => {
+    const next = structuredClone(value);
+    const camera = { ...(next.positive.camera ?? {}) };
+    if (tags.length) camera[key] = tags;
+    else delete camera[key];
+    if (Object.keys(camera).length) next.positive.camera = camera;
+    else delete next.positive.camera;
+    onChange(next);
+  };
+  const updateNegative = (key: keyof NegativePromptGroups, tags: string[]) => {
+    const next = structuredClone(value);
+    if (tags.length) next.negative[key] = tags;
+    else delete next.negative[key];
+    onChange(next);
+  };
+  return (
+    <div className="structured-prompt-editor">
+      <h4>Positive</h4>
+      <div className="prompt-group-grid">
+        {positiveGroupKeys.map((key) => (
+          <TagArrayEditor
+            key={key}
+            label={key}
+            value={value.positive[key]}
+            editable={editable}
+            onChange={(tags) => updatePositive(key, tags)}
+          />
+        ))}
+      </div>
+      <h4>Camera</h4>
+      <div className="prompt-group-grid">
+        {cameraGroupKeys.map((key) => (
+          <TagArrayEditor
+            key={key}
+            label={`camera.${key}`}
+            value={value.positive.camera?.[key]}
+            editable={editable}
+            onChange={(tags) => updateCamera(key, tags)}
+          />
+        ))}
+      </div>
+      <h4>Negative</h4>
+      <div className="prompt-group-grid">
+        {negativeGroupKeys.map((key) => (
+          <TagArrayEditor
+            key={key}
+            label={key}
+            value={value.negative[key]}
+            editable={editable}
+            onChange={(tags) => updateNegative(key, tags)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CompiledPreview({ positive, negative }: { positive: string; negative: string }) {
+  return (
+    <div className="compiled-prompt-preview">
+      <h4>Compiled Prompt Preview</h4>
+      <label>
+        Positive
+        <textarea readOnly value={positive} />
+      </label>
+      <label>
+        Negative
+        <textarea readOnly value={negative} />
+      </label>
+    </div>
+  );
+}
 function PlanInspector({
   plan,
   models,
@@ -260,11 +416,15 @@ function PlanInspector({
 }) {
   const [query, setQuery] = useState('');
   const modelByRef = useMemo(() => new Map((models?.loras ?? []).map((l) => [l.ref, l])), [models]);
-  function mutate(fn: (p: PromptPlanArtifact) => void) {
+  const compiled = useMemo(
+    () => (models ? compilePromptPlanPrompts(plan, models) : null),
+    [models, plan],
+  );
+  function mutate(fn: (p: any) => void) {
     if (!editable) return;
     const n = structuredClone(plan);
     fn(n);
-    setPlan(n);
+    setPlan(n as PromptPlanArtifact);
   }
   const loraEditor = (items: LoraUsage[], path: 'root' | number) => (
     <div className="lora-list">
@@ -375,28 +535,63 @@ function PlanInspector({
       )}
     </div>
   );
-  if (selected.type === 'common')
+  if (selected.type === 'common') {
+    if (plan.schemaVersion === 1)
+      return (
+        <div className="inspector modal-inspector">
+          <h3>共通プロンプト</h3>
+          <label>
+            Positive
+            <textarea
+              readOnly={!editable}
+              value={plan.common.positive}
+              onChange={(e) =>
+                mutate((p) => {
+                  if (p.schemaVersion === 1) p.common.positive = e.target.value;
+                })
+              }
+            />
+          </label>
+          <label>
+            Negative
+            <textarea
+              readOnly={!editable}
+              value={plan.common.negative}
+              onChange={(e) =>
+                mutate((p) => {
+                  if (p.schemaVersion === 1) p.common.negative = e.target.value;
+                })
+              }
+            />
+          </label>
+        </div>
+      );
     return (
       <div className="inspector modal-inspector">
-        <h3>共通プロンプト</h3>
-        <label>
-          Positive
-          <textarea
-            readOnly={!editable}
-            value={plan.common.positive}
-            onChange={(e) => mutate((p) => (p.common.positive = e.target.value))}
+        <div className="panelhead">
+          <div>
+            <span className="eyebrow">SCHEMA V2</span>
+            <h3>共通プロンプト</h3>
+          </div>
+        </div>
+        <StructuredPromptEditor
+          value={plan.common}
+          editable={editable}
+          onChange={(value) =>
+            mutate((p) => {
+              if (p.schemaVersion === 2) p.common = value;
+            })
+          }
+        />
+        {compiled && (
+          <CompiledPreview
+            positive={compiled.common.positive}
+            negative={compiled.common.negative}
           />
-        </label>
-        <label>
-          Negative
-          <textarea
-            readOnly={!editable}
-            value={plan.common.negative}
-            onChange={(e) => mutate((p) => (p.common.negative = e.target.value))}
-          />
-        </label>
+        )}
       </div>
     );
+  }
   if (selected.type === 'root')
     return (
       <div className="inspector modal-inspector">
@@ -404,7 +599,7 @@ function PlanInspector({
         {loraEditor(plan.rootLoras, 'root')}
       </div>
     );
-  const branch = plan.branches[selected.branch];
+  const branch: any = plan.branches[selected.branch];
   if (selected.type === 'branch')
     return (
       <div className="inspector modal-inspector">
@@ -456,10 +651,29 @@ function PlanInspector({
         </label>
         <h3>使用LoRA</h3>
         {loraEditor(branch.loras, selected.branch)}
+        {plan.schemaVersion === 2 && (
+          <>
+            <h3>Branch共通Prompt</h3>
+            <StructuredPromptEditor
+              value={
+                branch.prompt ?? {
+                  positive: {},
+                  negative: {},
+                }
+              }
+              editable={editable}
+              onChange={(value) =>
+                mutate((p) => {
+                  if (p.schemaVersion === 2) p.branches[selected.branch].prompt = value;
+                })
+              }
+            />
+          </>
+        )}
       </div>
     );
   if (selected.type === 'leaf') {
-    const leaf = branch.leaves[selected.leaf];
+    const leaf: any = branch.leaves[selected.leaf];
     return (
       <div className="inspector modal-inspector">
         <div className="panelhead">
@@ -531,41 +745,67 @@ function PlanInspector({
             }
           />
         </label>
-        <label>
-          Positive
-          <textarea
-            readOnly={!editable}
-            value={leaf.positive}
-            onChange={(e) =>
-              mutate(
-                (p) =>
-                  (p.branches[selected.branch].leaves[selected.leaf].positive = e.target.value),
-              )
-            }
-          />
-        </label>
-        <label>
-          Negative
-          <textarea
-            readOnly={!editable}
-            value={leaf.negative}
-            onChange={(e) =>
-              mutate(
-                (p) =>
-                  (p.branches[selected.branch].leaves[selected.leaf].negative = e.target.value),
-              )
-            }
-          />
-        </label>
+        {plan.schemaVersion === 1 ? (
+          <>
+            <label>
+              Positive
+              <textarea
+                readOnly={!editable}
+                value={leaf.positive}
+                onChange={(e) =>
+                  mutate(
+                    (p) =>
+                      (p.branches[selected.branch].leaves[selected.leaf].positive = e.target.value),
+                  )
+                }
+              />
+            </label>
+            <label>
+              Negative
+              <textarea
+                readOnly={!editable}
+                value={leaf.negative}
+                onChange={(e) =>
+                  mutate(
+                    (p) =>
+                      (p.branches[selected.branch].leaves[selected.leaf].negative = e.target.value),
+                  )
+                }
+              />
+            </label>
+          </>
+        ) : (
+          <>
+            <StructuredPromptEditor
+              value={leaf.prompt}
+              editable={editable}
+              onChange={(value) =>
+                mutate((p) => (p.branches[selected.branch].leaves[selected.leaf].prompt = value))
+              }
+            />
+            {compiled &&
+              (() => {
+                const compiledLeaf = compiled.branches
+                  .find((item) => item.id === branch.id)
+                  ?.leaves.find((item) => item.id === leaf.id);
+                return compiledLeaf ? (
+                  <CompiledPreview
+                    positive={compiledLeaf.positive}
+                    negative={compiledLeaf.negative}
+                  />
+                ) : null;
+              })()}
+          </>
+        )}
       </div>
     );
   }
   const visible = branch.leaves
-    .map((l, i) => ({ l, i }))
+    .map((l: any, i: number) => ({ l, i }))
     .filter(
-      ({ l }) =>
+      ({ l }: { l: any }) =>
         !query.trim() ||
-        `${l.id} ${l.name} ${l.positive} ${l.negative}`
+        `${l.id} ${l.name} ${plan.schemaVersion === 1 ? `${l.positive} ${l.negative}` : JSON.stringify(l.prompt)}`
           .toLowerCase()
           .includes(query.trim().toLowerCase()),
     );
@@ -586,7 +826,7 @@ function PlanInspector({
         onChange={(e) => setQuery(e.target.value)}
       />
       <div className="leaflist modal-leaflist">
-        {visible.map(({ l, i }) => (
+        {visible.map(({ l, i }: { l: any; i: number }) => (
           <button
             key={l.id}
             onClick={() => setSelected({ type: 'leaf', branch: selected.branch, leaf: i })}

@@ -227,24 +227,82 @@ export interface LoraUsage {
   strengthModel: number;
   strengthClip: number;
 }
-export interface PromptLeaf {
+export interface PromptLeafV1 {
   id: string;
   name: string;
   positive: string;
   negative: string;
 }
-export interface PromptBranch {
+export interface PromptBranchV1 {
   id: string;
   label: string;
   loras: LoraUsage[];
-  leaves: PromptLeaf[];
+  leaves: PromptLeafV1[];
 }
-export interface PromptPlanArtifact {
+export interface PromptPlanArtifactV1 {
   schemaVersion: 1;
   common: { positive: string; negative: string };
   rootLoras: LoraUsage[];
-  branches: PromptBranch[];
+  branches: PromptBranchV1[];
 }
+export interface CameraPromptGroups {
+  pov?: string[];
+  angle?: string[];
+  framing?: string[];
+  gaze?: string[];
+  focus?: string[];
+}
+export interface PositivePromptGroups {
+  subject?: string[];
+  identity?: string[];
+  appearance?: string[];
+  style?: string[];
+  outfit?: string[];
+  expression?: string[];
+  action?: string[];
+  pose?: string[];
+  camera?: CameraPromptGroups;
+  environment?: string[];
+  lighting?: string[];
+  effects?: string[];
+}
+export interface NegativePromptGroups {
+  anatomy?: string[];
+  identity?: string[];
+  appearance?: string[];
+  subject?: string[];
+  outfit?: string[];
+  action?: string[];
+  camera?: string[];
+  environment?: string[];
+  artifacts?: string[];
+  content?: string[];
+}
+export interface StructuredPrompt {
+  positive: PositivePromptGroups;
+  negative: NegativePromptGroups;
+}
+export interface PromptLeafV2 {
+  id: string;
+  name: string;
+  prompt: StructuredPrompt;
+}
+export interface PromptBranchV2 {
+  id: string;
+  label: string;
+  loras: LoraUsage[];
+  prompt?: StructuredPrompt;
+  leaves: PromptLeafV2[];
+}
+export interface PromptPlanArtifactV2 {
+  schemaVersion: 2;
+  common: StructuredPrompt;
+  rootLoras: LoraUsage[];
+  branches: PromptBranchV2[];
+}
+export type PromptLeaf = PromptLeafV1 | PromptLeafV2;
+export type PromptBranch = PromptBranchV1 | PromptBranchV2;
+export type PromptPlanArtifact = PromptPlanArtifactV1 | PromptPlanArtifactV2;
 export interface CatalogFile {
   id: number;
   name: string;

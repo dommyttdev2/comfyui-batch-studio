@@ -222,7 +222,7 @@ promptOutput
 
 - `checkpoint`: `models.json.checkpoint` を反映する Node。
 - `rootLoraStack`: `prompt_plan.rootLoras` を反映する全 Branch 共通 LoRA Stack。
-- `planCommonPrompt`: `prompt_plan.common` を反映する plan-owned prompt Node。
+- `planCommonPrompt`: Schema v1では `prompt_plan.common` のflat string、Schema v2ではPrompt PolicyでcompileしたCommon positive/negativeを反映する plan-owned prompt Node。
 - `promptOutput`: Common prompt trunk から Branch へ fan-out する出力 Node。
 
 Role は同一 Node ID を共有してよい。例えば Template 構造上 `planCommonPrompt` と `promptOutput` が同じ Node なら、両 role に同じ `nodeId` を指定できる。
@@ -473,7 +473,40 @@ Node の `pos` と複製対象 Group の bounding へ同じ offset を適用す�
 
 ## 12. Branch Configuration / Naming / Count Policy v1
 
-各 `prompt_plan.branches[]` について次を設定する。
+各 `prompt_plan.branches[]` について次を設定する。Naming / count policyのv1表記はWorkflow出力policyのversionであり、Prompt Plan Schema versionとは独立する。
+
+### 12.0 Prompt compilation boundary
+
+Prompt Plan Schema v2では、Grokが最終positive/negative文字列を作らない。
+
+Compilerは `models.json` と構造化Promptから次を決定論的に構築する。
+
+```text
+Common compiled positive
+  = Model Family quality preset
+  + Base Model trainedWords
+  + Root LoRA trainedWords
+  + common positive categories
+
+Common compiled negative
+  = Model Family negative preset
+  + common negative categories
+
+Leaf positive_base
+  = Branch LoRA trainedWords
+  + branch.prompt positive categories
+  + leaf.prompt positive categories
+  - Commonとexact duplicateするtag
+
+Leaf negative_base
+  = branch.prompt negative categories
+  + leaf.prompt negative categories
+  - Commonとexact duplicateするtag
+```
+
+Category順、quality preset、trainedWords注入、exact dedupeはBatch Studio Prompt Policyが所有する。`trainedWords`は`models.json`の文字列を変更せず使用する。
+
+Schema v1では互換性のため従来の`common.positive/negative`と`leaf.positive/negative`をそのまま使用し、Schema v2 policyを後付けしない。
 
 ### 12.1 Branch LoRA Stack
 
@@ -490,16 +523,26 @@ LoRA が0件でも Branch 自体に有効な leaf が存在するなら、その
 
 ### 12.2 Main SceneMatrix / Leaf identity
 
-Grok の leaf を `SCENE_MATRIX_LINE` へ変換する。
+Grok の leaf を `SCENE_MATRIX_LINE` へ変換する。Schema v2ではleaf自体は構造化tagを持ち、CompilerがBranch共通tag・Branch LoRA trainedWordsと合わせて`positive_base` / `negative_base`へcompileする。
 
-Grok 側:
+Grok 側 Schema v2:
 
 ```json
 {
   "id": "s1-01-c1",
-  "name": "s1-01-c1",
-  "positive": "sitting, desk, looking at viewer",
-  "negative": "standing"
+  "name": "S1-01_C1_sitting_desk",
+  "prompt": {
+    "positive": {
+      "pose": ["sitting"],
+      "camera": {
+        "framing": ["cowboy_shot"],
+        "gaze": ["looking_at_viewer"]
+      }
+    },
+    "negative": {
+      "pose": ["standing"]
+    }
+  }
 }
 ```
 
@@ -512,11 +555,11 @@ Compiler 側の概念出力:
   "row_id": "s1-01-c1",
   "node_id": "",
   "category": "",
-  "name": "S1-01_C1_sitting_desk",
+  "name": "s1-01-c1",
   "path_label": "s1-01-c1",
   "enabled": true,
   "filename_enabled": true,
-  "positive_base": "sitting, desk, looking at viewer",
+  "positive_base": "pose_trigger, branch_outfit, sitting, cowboy_shot, looking_at_viewer",
   "positive_json": "{\"version\":1,\"categories\":{}}",
   "negative_base": "standing",
   "negative_json": "{\"version\":1,\"categories\":{}}",
@@ -527,6 +570,8 @@ Compiler 側の概念出力:
   "display_label_groups": []
 }
 ```
+
+`positive_base` / `negative_base` の具体的な文字列はPrompt Policy入力に依存するため、上記は構造説明用の例である。
 
 正式 mapping:
 

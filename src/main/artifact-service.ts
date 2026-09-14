@@ -48,7 +48,12 @@ type GrokResponseStage =
   | 'models-fix'
   | 'prompt-plan'
   | 'prompt-plan-fix';
-type PromptFallback = { requirement: string; positive: string; negative: string; reason: string };
+type PromptFallback = {
+  requirement: string;
+  positiveTags: string[];
+  negativeTags: string[];
+  reason: string;
+};
 type ModelsDraftSource = { schemaVersion: 1; stage: 'models' | 'models-fix' };
 export const internalDir = (root: string) => path.join(root, '._batch_studio');
 export function draftPath(root: string, key: ArtifactKey) {
@@ -99,24 +104,52 @@ function missing(parsed: any): MissingRequirement[] {
       )
     : [];
 }
-function validPromptFallback(x: any): x is PromptFallback {
-  return (
-    !!x &&
-    typeof x === 'object' &&
-    !Array.isArray(x) &&
-    Object.keys(x).every((k) => ['requirement', 'positive', 'negative', 'reason'].includes(k)) &&
-    typeof x.requirement === 'string' &&
-    !!x.requirement.trim() &&
-    typeof x.positive === 'string' &&
-    typeof x.negative === 'string' &&
-    !!(x.positive.trim() || x.negative.trim()) &&
-    typeof x.reason === 'string' &&
-    !!x.reason.trim()
-  );
+function fallbackTags(value: unknown) {
+  if (Array.isArray(value))
+    return value
+      .filter((tag): tag is string => typeof tag === 'string')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  if (typeof value === 'string')
+    return value
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  return [];
+}
+function normalizePromptFallback(x: any): PromptFallback | null {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+  const allowed = new Set([
+    'requirement',
+    'positiveTags',
+    'negativeTags',
+    'positive',
+    'negative',
+    'reason',
+  ]);
+  if (Object.keys(x).some((key) => !allowed.has(key))) return null;
+  if (typeof x.requirement !== 'string' || !x.requirement.trim()) return null;
+  if (typeof x.reason !== 'string' || !x.reason.trim()) return null;
+  const positiveTags = fallbackTags(x.positiveTags ?? x.positive);
+  const negativeTags = fallbackTags(x.negativeTags ?? x.negative);
+  if (!positiveTags.length && !negativeTags.length) return null;
+  if ([...positiveTags, ...negativeTags].some((tag) => /[\r\n,]/.test(tag) || !tag.trim()))
+    return null;
+  return {
+    requirement: x.requirement.trim(),
+    positiveTags,
+    negativeTags,
+    reason: x.reason.trim(),
+  };
+}
+function validPromptFallback(x: any) {
+  return normalizePromptFallback(x) != null;
 }
 function promptFallbacks(parsed: any): PromptFallback[] {
   return Array.isArray(parsed?.promptFallbacks)
-    ? parsed.promptFallbacks.filter(validPromptFallback)
+    ? parsed.promptFallbacks
+        .map(normalizePromptFallback)
+        .filter((value: PromptFallback | null): value is PromptFallback => value != null)
     : [];
 }
 function promptFallbacksValid(parsed: any) {
@@ -194,7 +227,7 @@ async function validateContent(
         severity: 'error',
         code: 'PROMPT_FALLBACKS_FORMAT',
         message:
-          'promptFallbacksの形式が不正です。requirement/reasonは必須で、positive/negativeの少なくとも一方が必要です。',
+          'promptFallbacksの形式が不正です。requirement/reasonは必須で、positiveTags/negativeTagsの少なくとも一方が必要です。',
       });
     if (hasMissing) {
       if (
@@ -420,7 +453,7 @@ export async function importGrok(
       return rejectedModelsImport(
         extracted,
         'PROMPT_FALLBACKS_FORMAT',
-        'promptFallbacksは requirement / positive / negative / reason を持ち、positive / negative の少なくとも一方を指定してください。',
+        'promptFallbacksは requirement / positiveTags / negativeTags / reason を持ち、positiveTags / negativeTags の少なくとも一方を指定してください。',
         miss,
       );
     const fallbacks = promptFallbacks(payload);
@@ -499,7 +532,7 @@ export async function confirmArtifact(root: string, key: 'story' | 'models' | 'p
     await writeJsonAtomic(target, nextModels);
     if (fallbacks.length)
       await writeJsonAtomic(promptFallbacksPath(root), {
-        schemaVersion: 1,
+        schemaVersion: 2,
         promptFallbacks: fallbacks,
       });
     else await removeIfExists(promptFallbacksPath(root));

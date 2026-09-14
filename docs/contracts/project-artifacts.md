@@ -34,7 +34,7 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 | `project_brief.json` | Batch Studio / User | 初期画面 | Story作成前の最小入力 |
 | `story.md` | Grok + User | Brief / reference | 作品・場面設計の人間可読正本 |
 | `models.json` | User base selection + Grok LoRA selection + Batch Studio validation | `story.md`, app-wide model inventory / `model_catalog.json` | Model Family、基盤モデル、LoRA集合とCivitai由来の基準情報 |
-| `prompt_plan.json` | Grok + Batch Studio validation + User approval | `story.md`, `models.json` | Workflow Compiler が読む確定済みの機械可読 Prompt Plan。実際の LoRA 適用強度も保持する |
+| `prompt_plan.json` | Grok + Batch Studio validation + User approval | `story.md`, `models.json` | Workflow Compiler が読む確定済みの機械可読 Prompt Plan。Schema v2ではCommon/Branch/Leafの構造化tagと実際のLoRA適用強度を保持する |
 | `LoRA_{project-destination-folder}.json` | Workflow Compiler | Template, Manifest, models, plan, `project.id`, Project実フォルダ親名 | 最終ComfyUI UI Workflow |
 | `project_meta.json` | Batch Studio | System | Artifact status、version、Workflow build provenance 等 |
 
@@ -52,7 +52,7 @@ Brief は Story 全体の詳細 schema ではなく、Grok に最初の提案を
 
 `project.id` は表示名とは独立したstable filesystem identityであり、ComfyUI生成物保存先等の内部identityに使用する。Workflow JSONファイル名だけはProject実フォルダの親フォルダ名から派生する。
 
-`generation.target_image_count` はPrompt設計の目標値であり、実生成予定枚数の正本ではない。v1の実生成予定枚数は確定 `prompt_plan.json` のleaf総数からCompilerが算出する。
+`generation.target_image_count` はPrompt設計の目標値であり、実生成予定枚数の正本ではない。実生成予定枚数は確定 `prompt_plan.json` のleaf総数からCompilerが算出する。
 
 ## 5. story.md
 
@@ -393,17 +393,21 @@ Grok response
 
 Workflow 内部形式を含まず、主に次を持つ。
 
-- project common prompt
+- Schema v2のCommon structured prompt
 - root LoRA references
 - root LoRA の実適用強度
 - branches
+- branch structured prompt
 - branch LoRA references
 - branch LoRA の実適用強度
-- branch leaves / matrix prompts
+- leaf structured prompt
+- Schema v1 compatibility用のlegacy prompt strings
 
 `models.json` の強度はモデル基準情報、`prompt_plan.json` の強度は当該プロジェクトで実際に Workflow へ適用する可変値であり、役割が異なる。
 
 人間向けの確認・編集は `prompt_plan.json` から構築した Batch Studio の Prompt Plan Web UI で行う。Markdown など別の人間可読 Artifact を正本として並行管理しない。
+
+Schema v2では最終Prompt文字列を正本として保存しない。Model Family quality preset、`models.json.trainedWords`、category compile order、exact dedupeはBatch Studio Prompt Compilerが所有し、構造化tagからScenePrompter / SceneMatrix向け文字列を決定論的に生成する。既存Schema v1は従来文字列を変更せずCompileする。
 
 ## 8. Legacy prompt_tree.md
 

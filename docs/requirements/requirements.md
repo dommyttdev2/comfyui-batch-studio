@@ -42,13 +42,15 @@ Status: Active
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
-| REQ-PLAN-001 | Decided | Grok から Workflow JSON を受け取らず、共通プロンプト、ルート LoRA、枝ごとの LoRA、枝内 Matrix 用プロンプト群を JSON で受け取る。 | `contracts/prompt-plan.md` |
+| REQ-PLAN-001 | Decided | Grok から Workflow JSON を受け取らず、Common / Branch / Leaf scopeへ分類した構造化Prompt tag、Root / Branch LoRA usageをJSONで受け取る。最終Prompt文字列はBatch Studioがcompileする。 | `contracts/prompt-plan.md` |
 | REQ-PLAN-002 | Decided | Grok の JSON は ComfyUI の Node ID、Link ID、`widgets_values`、`scene_matrix_json` 等の内部形式を含まない。 | `contracts/prompt-plan.md` |
 | REQ-PLAN-003 | Decided | Grok から受け取り、Batch Studio の検証とユーザー承認を経て確定する構造化 Prompt Plan の標準ファイル名を `prompt_plan.json` とする。プロジェクトごとに確定版は1ファイルとし、Workflow Compiler はこのファイルを Prompt Plan の機械可読入力として使用する。確定前の回答や旧版は `prompt_plan.json` を上書きせず Draft / History 領域で管理する。 | `contracts/prompt-plan.md` |
 | REQ-PLAN-004 | Decided | `prompt_plan.json` を Prompt 設計の機械可読な正本とし、人間向けの確認・編集は Batch Studio の Prompt Plan Web UI で提供する。新規プロジェクトでは `prompt_tree.md` を標準 Artifact として生成・維持せず、Workflow Compiler の入力にも使用しない。既存の `prompt_tree.md` は Legacy Artifact としてのみ扱う。 | `contracts/project-artifacts.md` |
 | REQ-PLAN-005 | Decided | `prompt_plan.json` は Root / Branch で実際に適用する LoRA 強度を保持する。この値は Batch Studio の Web UI から調整可能とし、`models.json` に保存した Civitai 由来の推奨・基準値を書き換えない。 | `contracts/prompt-plan.md` |
-| REQ-PLAN-006 | Decided | `prompt_plan.json` Schema v1 の正式 field name と構造を固定し、機械可読 schema を `schemas/prompt-plan.schema.json` とする。Branch ID / Leaf ID は Project 全体で一意とし、配列順を順序の正本とする。LoRA の `modelRef` / `strengthModel` / `strengthClip` は必須、未知 field と汎用 metadata/extensions 領域は v1 で許可しない。 | `contracts/prompt-plan.md` |
+| REQ-PLAN-006 | Decided | `prompt_plan.json` の機械可読schemaを `schemas/prompt-plan.schema.json` とする。Schema v1は既存Projectのread/edit/compile互換として維持し、新規Prompt PlanはSchema v2を使用する。Branch ID / Leaf IDはProject全体で一意、配列順を順序の正本とし、LoRA usageとstrict unknown-field policyを維持する。 | `contracts/prompt-plan.md` |
 | REQ-PLAN-007 | Decided | `models.json` に Civitai 由来 `strengthBaseline.value = w` が存在し、そのbaselineを Prompt Plan の初期値に使用する場合は `strengthModel = w`、`strengthClip = w` と同値展開する。この展開は単一source scalarの機械的初期化であり、CivitaiがModel/CLIP別値を推奨した意味ではない。baselineが存在しない場合、Batch Studioは経験則による暗黙defaultを補完せず、Grokまたはユーザーが実適用値を明示する。 | `contracts/prompt-plan.md` |
+| REQ-PLAN-008 | Implemented | Schema v2ではPromptを意味category別tag arrayとして保存し、Model Family quality preset、Base/Root/Branch LoRA trainedWords注入、category順、exact dedupe、最終positive/negative文字列化をBatch Studio Prompt Compilerが所有する。GrokはtrainedWordsをPrompt Planへ転記しない。 | `contracts/prompt-plan.md` / `architecture/workflow-compiler.md` |
+| REQ-PLAN-009 | Implemented | Schema v2 Prompt Planをsemantic validationし、Model Family tag dialect、Positive/Negative conflict、parent/child duplicate、camera angle/framing/gaze conflict等を検出する。Prompt Plan UIではcategory編集とCompiled Prompt Previewを提供する。 | `contracts/prompt-plan.md` |
 
 ## 5. Workflow Compiler
 

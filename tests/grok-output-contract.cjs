@@ -115,31 +115,33 @@ matchCode(
 );
 matchCode(src, /trainedWords は例外[\s\S]*1文字も変更せず/, 'trainedWords must remain exact');
 matchCode(src, /1 Leaf = 1 image/, 'Prompt Plan output must preserve leaf cardinality');
+matchCode(src, /schemaVersion": 2/, 'new Prompt Plan output must use schemaVersion 2');
 matchCode(
   src,
-  /models\.json の trainedWords はトリガーワードとして扱い/,
-  'Prompt Plan must treat trainedWords as trigger words',
+  /common[\s\S]*branch\.prompt[\s\S]*leaf\.prompt/,
+  'Prompt Plan must define common/branch/leaf prompt scopes',
 );
 matchCode(
   src,
-  /checkpoint\.main\.trainedWords と rootLoras[\s\S]*common\.positive/,
-  'checkpoint and root LoRA trigger words must be applied to common positive',
+  /trainedWords を prompt_plan.json へ転記してはいけません/,
+  'Prompt Plan must not copy trainedWords into semantic prompt data',
 );
 matchCode(
   src,
-  /Branch の loras[\s\S]*すべての Leaf の positive/,
-  'branch LoRA trigger words must be applied to every leaf positive',
+  /Batch Studio Compiler[\s\S]*自動注入/,
+  'Batch Studio must own trainedWords injection',
 );
 matchCode(
   src,
-  /trainedWords が空配列ならトリガーワードを捏造しません/,
-  'empty trainedWords must not be invented',
+  /subject, identity, appearance, style, outfit, expression, action, pose, camera, environment, lighting, effects/,
+  'Prompt Plan positive categories must be explicit',
 );
 matchCode(
   src,
-  /trainedWords を negative prompt へ入れません/,
-  'trigger words must not be applied to negative prompts',
+  /pov, angle, framing, gaze, focus/,
+  'Prompt Plan camera categories must be explicit',
 );
+matchCode(src, /positiveTags \/ negativeTags/, 'Prompt fallback contract must use tag arrays');
 matchCode(src, /const danbooruTagRules=/, 'Danbooru tag selection policy must be defined');
 matchCode(
   src,
@@ -184,12 +186,12 @@ assert.equal(
 );
 matchCode(
   src,
-  /positive promptへ追加するDanbooru実在タグ列/,
+  /positive promptへ追加するDanbooru実在タグ/,
   'LoRA prompt fallback positive must require Danbooru tags',
 );
 matchCode(
   src,
-  /negative promptへ追加するDanbooru実在タグ列/,
+  /negative promptへ追加するDanbooru実在タグ/,
   'LoRA prompt fallback negative must require Danbooru tags',
 );
 matchCode(

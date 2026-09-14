@@ -13,6 +13,8 @@ export type ManualResetScope =
   | 'workflow';
 type PromptFallbackLike = {
   requirement?: unknown;
+  positiveTags?: unknown;
+  negativeTags?: unknown;
   positive?: unknown;
   negative?: unknown;
   reason?: unknown;
@@ -33,11 +35,33 @@ function selectionImpact(value: any) {
     };
   return { ref: value.ref, fileName: value.fileName };
 }
-function fallbackImpact(value: PromptFallbackLike) {
+function normalizedFallbackTags(value: unknown) {
+  if (Array.isArray(value))
+    return value
+      .filter((tag): tag is string => typeof tag === 'string')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  if (typeof value === 'string')
+    return value
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  return [];
+}
+function normalizedFallback(value: PromptFallbackLike) {
   return {
     requirement: typeof value.requirement === 'string' ? value.requirement : '',
-    positive: typeof value.positive === 'string' ? value.positive : '',
-    negative: typeof value.negative === 'string' ? value.negative : '',
+    positiveTags: normalizedFallbackTags(value.positiveTags ?? value.positive),
+    negativeTags: normalizedFallbackTags(value.negativeTags ?? value.negative),
+    reason: typeof value.reason === 'string' ? value.reason : '',
+  };
+}
+function fallbackImpact(value: PromptFallbackLike) {
+  const fallback = normalizedFallback(value);
+  return {
+    requirement: fallback.requirement,
+    positiveTags: fallback.positiveTags,
+    negativeTags: fallback.negativeTags,
   };
 }
 export function modelGenerationInputs(
@@ -246,10 +270,12 @@ export async function manualResetFrom(root: string, scope: ManualResetScope) {
     await archiveModelState(ctx, { initialHistory: false, fixHistory: true, fallbacks: true });
     const restored: any = { ...cleanBase(current), loras: initial.loras };
     await writeJsonAtomic(path.join(ctx.root, 'models.json'), restored);
-    const initialFallbacks = Array.isArray(initial.promptFallbacks) ? initial.promptFallbacks : [];
+    const initialFallbacks = Array.isArray(initial.promptFallbacks)
+      ? initial.promptFallbacks.map(normalizedFallback)
+      : [];
     if (initialFallbacks.length)
       await writeJsonAtomic(path.join(ctx.internal, 'model_prompt_fallbacks.json'), {
-        schemaVersion: 1,
+        schemaVersion: 2,
         promptFallbacks: initialFallbacks,
       });
     await resetPromptAndWorkflow(ctx);

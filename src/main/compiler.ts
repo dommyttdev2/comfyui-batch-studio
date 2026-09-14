@@ -13,6 +13,7 @@ import { readProjectMeta, saveWorkflowBuild } from './project-meta.js';
 import { validateModels, validatePromptPlan, validateWorkflowManifest } from './validation.js';
 import { resolveWorkflowTemplatePaths } from './workflow-template-paths.js';
 import { buildApiGraph, hashCanonicalJson, validateCompiledApiGraph } from './workflow-api.js';
+import { compilePromptPlanPrompts } from '../shared/prompt-policy.js';
 
 type Node = {
   id: number;
@@ -108,29 +109,36 @@ function loraStack(usages: any[], models: ModelsArtifact) {
     }),
   });
 }
-function sceneMatrix(branch: any) {
+function sceneMatrix(
+  branch: any,
+  compiledLeaves: Map<string, { positive: string; negative: string }>,
+) {
   return JSON.stringify({
     version: 1,
-    sets: branch.leaves.map((l: any) => ({
-      type: 'SCENE_MATRIX_LINE',
-      version: 1,
-      row_id: l.id,
-      node_id: '',
-      category: '',
-      name: l.id,
-      path_label: l.id,
-      enabled: true,
-      filename_enabled: true,
-      positive_base: l.positive,
-      positive_json: emptyJson,
-      negative_base: l.negative,
-      negative_json: emptyJson,
-      category_order: '',
-      positive_parts: [],
-      negative_parts: [],
-      display_labels: [],
-      display_label_groups: [],
-    })),
+    sets: branch.leaves.map((l: any) => {
+      const compiled = compiledLeaves.get(l.id);
+      if (!compiled) throw new Error(`Compiled prompt missing for ${branch.id}/${l.id}`);
+      return {
+        type: 'SCENE_MATRIX_LINE',
+        version: 1,
+        row_id: l.id,
+        node_id: '',
+        category: '',
+        name: l.id,
+        path_label: l.id,
+        enabled: true,
+        filename_enabled: true,
+        positive_base: compiled.positive,
+        positive_json: emptyJson,
+        negative_base: compiled.negative,
+        negative_json: emptyJson,
+        category_order: '',
+        positive_parts: [],
+        negative_parts: [],
+        display_labels: [],
+        display_label_groups: [],
+      };
+    }),
   });
 }
 function patchPrompter(node: Node, positive: string, negative: string) {
@@ -341,6 +349,7 @@ export async function compileWorkflow(root: string): Promise<CompileResult> {
         .map((x) => x.message)
         .join('\n'),
     );
+  const compiledPrompts = compilePromptPlanPrompts(plan, models);
   const meta = await readProjectMeta(root);
   const projectId = await projectIdFromBrief(root);
   const family = familyOf(models);
@@ -400,8 +409,8 @@ export async function compileWorkflow(root: string): Promise<CompileResult> {
   rootNode.widgets_values = [loraStack(plan.rootLoras, models), null, null];
   patchPrompter(
     getNode(w, roleNode(manifest, 'common', 'planCommonPrompt')),
-    plan.common.positive,
-    plan.common.negative,
+    compiledPrompts.common.positive,
+    compiledPrompts.common.negative,
   );
   const baseNodeMax = maxId(w.nodes.map((n) => n.id)),
     baseGroupMax = maxId((w.groups ?? []).map((g) => g.id));
@@ -421,7 +430,20 @@ export async function compileWorkflow(root: string): Promise<CompileResult> {
     lora.mode = branch.loras.length > 0 ? 0 : 4;
     lora.title = `LoRA - ${branch.id} - ${label}`;
     const matrix = getNode(w, id('mainMatrix'));
-    matrix.widgets_values = [sceneMatrix(branch), ''];
+    const compiledBranch = compiledPrompts.branches.find((item) => item.id === branch.id);
+    if (!compiledBranch) throw new Error(`Compiled branch missing: ${branch.id}`);
+    matrix.widgets_values = [
+      sceneMatrix(
+        branch,
+        new Map(
+          compiledBranch.leaves.map((leaf) => [
+            leaf.id,
+            { positive: leaf.positive, negative: leaf.negative },
+          ]),
+        ),
+      ),
+      '',
+    ];
     matrix.title = `Prompt - ${branch.id} - ${label} (${count})`;
     const counter = getNode(w, id('counter'));
     counter.widgets_values = [1];
@@ -525,7 +547,7 @@ export async function compileWorkflow(root: string): Promise<CompileResult> {
     apiSha256 = hashCanonicalJson(apiGraph),
     workflowIdentity = hashCanonicalJson({ uiSha256, apiSha256 });
   await saveWorkflowBuild(root, {
-    compilerVersion: '2.1.0',
+    compilerVersion: '2.2.0',
     generatedAt: new Date().toISOString(),
     template: {
       id: manifest.template.id,
