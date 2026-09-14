@@ -113,7 +113,7 @@ contextBridge.exposeInMainWorld('batchStudio', {
     removeRecent: (r) => ipcRenderer.invoke(I.PROJECT_REMOVE_RECENT, r),
     open: (r) => ipcRenderer.invoke(I.PROJECT_OPEN, r),
     close: () => ipcRenderer.invoke(I.PROJECT_CLOSE),
-    selectParent: () => ipcRenderer.invoke(I.PROJECT_SELECT_PARENT),
+    selectParent: (defaultPath) => ipcRenderer.invoke(I.PROJECT_SELECT_PARENT, defaultPath),
     create: (p, b) => ipcRenderer.invoke(I.PROJECT_CREATE, p, b),
     onMenuCommand: (listener) => {
       const handler = (_event, command, project) => listener(command, project);
