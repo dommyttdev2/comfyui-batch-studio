@@ -128,6 +128,11 @@ const writeJson = (file, value) => {
   assert.equal(fs.existsSync(path.join(root, 'execution_runs', started.runId + '.json')), true);
   assert.equal((await execution.getCurrentExecutionRun(root)).runId, started.runId);
   assert.equal((await execution.getExecutionRun(root, started.runId)).runId, started.runId);
+  assert.deepEqual(
+    (await execution.listExecutionRuns(root)).map((run) => run.runId),
+    [started.runId],
+    'persisted Run listing must include the active Run',
+  );
   await assert.rejects(
     () => execution.startExecutionRun(root, async () => ready),
     /already active/,
