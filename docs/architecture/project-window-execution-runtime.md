@@ -530,6 +530,13 @@ Application processが明示的に終了した後もRunを継続する要件は�
 
 ---
 
+## 16.1 Accepted refinements (2026-09-14)
+
+- Startup restore: restore only the last-focused valid Project.
+- Headless active-run reactivation: use a single Electron instance and reopen a Project Window in the surviving Main Process.
+- Standalone Window project opening: use the last-focused Project Window as the current target; if none exists, only new-window opening is available.
+- Resource locks: acquire before Local ComfyUI or Remote Vast.ai side effects and release only after terminal cleanup/finalization.
+
 ## 17. Acceptance criteria
 
 実装は最低限次を満たす。
