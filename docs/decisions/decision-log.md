@@ -197,13 +197,17 @@ Manifest の正式 JSON Schema と ownership / boundary rule は `DEC-019` で�
 ## DEC-010: R2 physical operations remain owned by R2 File Manager initially
 
 Date: 2026-09-07
-Status: Accepted
+Status: Superseded
 
 ### Decision
 
 Batch Studio はモデル所在を照合するが、初期段階の upload/download/delete/move は既存 R2 File Manager へ委譲する。
 
 直接 API 統合は authentication / token ownership / concurrency を別途設計してから追加する。
+
+### Superseded by
+
+2026-09-08以降、R2のbucket/object/upload/download/delete/move、signed URL、Execution用transferはBatch Studio Main ProcessのIntegrated R2 Managerへ統合された。現行仕様は `REQ-INT-002` と `integrations/external-tools.md` を正本とし、旧 `r2-file-manager` はStandalone/Legacyとして扱う。
 
 ---
 
@@ -288,7 +292,7 @@ Images API の `withMeta=true` では、投稿画像で使用された `meta.civ
 
 投稿画像 weight から基準値を導出する場合は、source / basis / aggregation method 等の provenance を保持する。
 
-Batch Studio 自身は Civitai API を直接呼ばず、必要な Civitai 情報は `civit-model-viewer` -> `model_catalog.json` の境界を維持する。
+当初は `civit-model-viewer` -> `model_catalog.json` の外部境界を前提としていたが、このAPI ownershipは後にBatch Studio Main ProcessのIntegrated Civitai Catalog Serviceへ統合された。LoRA strengthを「model baseline」と「plan application」に分離する本Decision自体は維持し、現行のCivitai通信・secret ownershipは `REQ-INT-001` / `REQ-INT-004` と `integrations/external-tools.md` を正本とする。
 
 ---
 
@@ -950,7 +954,7 @@ Status: Accepted
 
 Civitai投稿画像metadataのLoRA weightからmodel/version側の `strengthBaseline` を導出する場合、v1の正式policyを固定する。
 
-Civitai API通信と集計は `civit-model-viewer` が所有し、Batch Studioは保存済み `model_catalog.json` の結果だけを読む。
+Civitai API通信と集計はBatch Studio Main ProcessのIntegrated Civitai Catalog Serviceが所有し、version-specific optional `strengthBaseline` をapp-wide `model_catalog.json` へ保存する。旧 `civit-model-viewer` はStandalone/Legacyであり、新規フローの外部依存にしない。
 
 ### Source / sampling
 
@@ -1019,7 +1023,7 @@ Model / Version descriptionの文章をregexやLLMで解析して `creator-decla
 
 ### Catalog / models boundary
 
-viewerはversion-specific optional `strengthBaseline` を `model_catalog.json` へexportする。
+Integrated Civitai Catalog Serviceはversion-specific optional `strengthBaseline` を `model_catalog.json` へexportする。
 
 Batch Studioは選定versionのbaselineを利用可能な場合、同じvalue/provenanceを `models.json` のoptional `strengthBaseline` に固定できる。
 
@@ -1048,7 +1052,7 @@ baselineが存在しない場合、Batch Studioは `1.0 / 1.0` や `0.7 / 0.7` �
 - exact version identityを維持し、別versionのweight混入を防ぐ。
 - medianにより複雑な外れ値ruleを導入せずrobustな中心値を得る。
 - observed usageとcreator recommendationをprovenance上分離する。
-- Civitai API ownershipをviewerに維持し、Batch Studioへsecret/API責務を持ち込まない。
+- Civitai API / secret ownershipをBatch Studio Main Processへ集約し、Renderer / Grok / Projectへcredentialを渡さない。
 - single scalarからModel/CLIPの差を推測せず、初期化後のProject調整余地を残す。
 
 ### Resolves
