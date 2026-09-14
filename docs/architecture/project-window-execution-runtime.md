@@ -532,10 +532,12 @@ Application processが明示的に終了した後もRunを継続する要件は�
 
 ## 16.1 Accepted refinements (2026-09-14)
 
-- Startup restore: restore only the last-focused valid Project.
-- Headless active-run reactivation: use a single Electron instance and reopen a Project Window in the surviving Main Process.
-- Standalone Window project opening: use the last-focused Project Window as the current target; if none exists, only new-window opening is available.
-- Resource locks: acquire before Local ComfyUI or Remote Vast.ai side effects and release only after terminal cleanup/finalization.
+- Startup restore: restore only the last-focused valid Project. Do not restore every previously open Project Window or its layout.
+- Headless active-run reactivation: use a single Electron instance. If active execution keeps Main Process alive after all Project Windows are closed, a later app launch activates that existing Main Process and creates a Project Window instead of starting a second Main Process.
+- Standalone Window project opening: use the last-focused Project Window as the current target. A Standalone Window is never converted into a Project Window. If no Project Window exists, current-window opening is unavailable and only new-window opening is allowed.
+- Local resource lock: acquire before Local ComfyUI connection / queue side effects. Resume reacquires the same endpoint lock before work restarts.
+- Remote resource lock: acquire before any Vast.ai start request, bootstrap, staging, generation, or other shared-instance side effect. Resume reacquires the same instance lock before work restarts.
+- Lock release: Project / Window close never releases an Execution lock. Local release occurs after terminal output verification/cleanup. Remote release occurs only after artifact cleanup and Instance finalization / initial-state restoration are complete.
 
 ## 17. Acceptance criteria
 
