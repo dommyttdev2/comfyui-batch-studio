@@ -9,6 +9,7 @@ const appSettings = read('src/main/app-settings.ts');
 const artifactService = read('src/main/artifact-service.ts');
 const environmentSettings = read('src/renderer/EnvironmentSettings.tsx');
 const app = read('src/renderer/App.tsx');
+const main = read('src/main/main.ts');
 
 matchCode(appSettings, /interface StoredAppSettingsV6/, '環境設定schema v6を持つ');
 matchCode(appSettings, /BATCH_STUDIO_GITHUB_PAT/, 'GitHub PATの環境変数fallbackを持つ');
@@ -56,6 +57,16 @@ matchCode(
   app,
   /projectRoot.*setParent\(projectRoot\)/s,
   '新規プロジェクト作成先の初期値へProject rootを反映する',
+);
+matchCode(
+  app,
+  /selectParent\(parent\)/,
+  '新規プロジェクトの作成先選択へ現在の入力済みパスを渡す',
+);
+matchCode(
+  main,
+  /PROJECT_SELECT_PARENT.*defaultPath.*showOpenDialog\(\{.*defaultPath: initialDirectory/s,
+  '新規プロジェクトの作成先選択は入力済みパスを初期表示に使う',
 );
 matchCode(
   artifactService,
