@@ -627,10 +627,14 @@ function validatePromptPlanV1(p: any, models: ModelsArtifact | null): Validation
       path: 'branches',
     });
   const modelRefs = new Set<string>(models ? models.loras.map((x) => x.ref) : []);
-  (p.rootLoras ?? []).forEach((u, n) => validateUsage(u, `rootLoras.${n}`, modelRefs, models, i));
+  const rootLoras = Array.isArray(p.rootLoras) ? p.rootLoras : [];
+  const branches = Array.isArray(p.branches) ? p.branches : [];
+  rootLoras.forEach((u: unknown, n: number) =>
+    validateUsage(u, `rootLoras.${n}`, modelRefs, models, i),
+  );
   const branchIds: string[] = [];
   const leafIds: string[] = [];
-  for (const [bi, b] of (p.branches ?? []).entries()) {
+  for (const [bi, b] of branches.entries()) {
     const bp = `branches.${bi}`;
     if (!object(b)) {
       i.push({ severity: 'error', code: 'BRANCH_TYPE', message: 'Branchが不正です。', path: bp });
@@ -645,7 +649,7 @@ function validatePromptPlanV1(p: any, models: ModelsArtifact | null): Validation
         message: `Branch IDが不正です: ${String(b.id ?? '')}`,
         path: `${bp}.id`,
       });
-    branchIds.push(b.id);
+    branchIds.push(String(b.id ?? ''));
     if (typeof b.label !== 'string' || !b.label.trim())
       i.push({
         severity: 'error',
@@ -660,15 +664,19 @@ function validatePromptPlanV1(p: any, models: ModelsArtifact | null): Validation
         message: 'Branch lorasは配列が必要です。',
         path: `${bp}.loras`,
       });
-    else b.loras.forEach((u, n) => validateUsage(u, `${bp}.loras.${n}`, modelRefs, models, i));
-    if (!Array.isArray(b.leaves) || b.leaves.length < 1)
+    else
+      b.loras.forEach((u: unknown, n: number) =>
+        validateUsage(u, `${bp}.loras.${n}`, modelRefs, models, i),
+      );
+    const leaves = Array.isArray(b.leaves) ? b.leaves : [];
+    if (!leaves.length)
       i.push({
         severity: 'error',
         code: 'LEAVES_EMPTY',
         message: `${b.id ?? bp}に生成項目がありません。`,
         path: `${bp}.leaves`,
       });
-    for (const [li, l] of (b.leaves ?? []).entries()) {
+    for (const [li, l] of leaves.entries()) {
       const lp = `${bp}.leaves.${li}`;
       if (!object(l)) {
         i.push({ severity: 'error', code: 'LEAF_TYPE', message: '生成項目が不正です。', path: lp });
@@ -683,7 +691,7 @@ function validatePromptPlanV1(p: any, models: ModelsArtifact | null): Validation
           message: `生成項目IDが不正です: ${String(l.id ?? '')}`,
           path: `${lp}.id`,
         });
-      leafIds.push(l.id);
+      leafIds.push(String(l.id ?? ''));
       if (typeof l.name !== 'string' || !l.name.trim())
         i.push({
           severity: 'error',
@@ -985,12 +993,14 @@ function validatePromptPlanV2(
       path: 'branches',
     });
   const modelRefs = new Set<string>(models ? models.loras.map((x) => x.ref) : []);
-  (plan.rootLoras ?? []).forEach((u: unknown, n: number) =>
+  const rootLoras = Array.isArray(plan.rootLoras) ? plan.rootLoras : [];
+  const branches = Array.isArray(plan.branches) ? plan.branches : [];
+  rootLoras.forEach((u: unknown, n: number) =>
     validateUsage(u, `rootLoras.${n}`, modelRefs, models, i),
   );
   const branchIds: string[] = [];
   const leafIds: string[] = [];
-  for (const [bi, b] of (plan.branches ?? []).entries()) {
+  for (const [bi, b] of branches.entries()) {
     const bp = `branches.${bi}`;
     if (!object(b)) {
       i.push({ severity: 'error', code: 'BRANCH_TYPE', message: 'Branchが不正です。', path: bp });
@@ -1026,14 +1036,15 @@ function validatePromptPlanV2(
       );
     if ('prompt' in b && b.prompt != null)
       validateStructuredPrompt(b.prompt, `${bp}.prompt`, family, i);
-    if (!Array.isArray(b.leaves) || b.leaves.length < 1)
+    const leaves = Array.isArray(b.leaves) ? b.leaves : [];
+    if (!leaves.length)
       i.push({
         severity: 'error',
         code: 'LEAVES_EMPTY',
         message: `${String(b.id ?? bp)}に生成項目がありません。`,
         path: `${bp}.leaves`,
       });
-    for (const [li, l] of (b.leaves ?? []).entries()) {
+    for (const [li, l] of leaves.entries()) {
       const lp = `${bp}.leaves.${li}`;
       if (!object(l)) {
         i.push({ severity: 'error', code: 'LEAF_TYPE', message: '生成項目が不正です。', path: lp });
