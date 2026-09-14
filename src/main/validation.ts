@@ -577,7 +577,7 @@ function validateUsage(
     });
 }
 function validatePromptPlanV1(
-  p: PromptPlanArtifact,
+  p: any,
   models: ModelsArtifact | null,
 ): ValidationResult {
   const i: ValidationIssue[] = [];
