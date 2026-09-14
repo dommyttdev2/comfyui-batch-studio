@@ -576,10 +576,7 @@ function validateUsage(
       path,
     });
 }
-function validatePromptPlanV1(
-  p: any,
-  models: ModelsArtifact | null,
-): ValidationResult {
+function validatePromptPlanV1(p: any, models: ModelsArtifact | null): ValidationResult {
   const i: ValidationIssue[] = [];
   if (!object(p))
     return ok([
@@ -832,13 +829,7 @@ function validateStructuredPrompt(
               family,
               issues,
             );
-      } else
-        validateTagArray(
-          value.positive[key],
-          `${path}.positive.${key}`,
-          family,
-          issues,
-        );
+      } else validateTagArray(value.positive[key], `${path}.positive.${key}`, family, issues);
     }
   } else
     issues.push({
