@@ -801,9 +801,9 @@ function PlanInspector({
     );
   }
   const visible = branch.leaves
-    .map((l, i) => ({ l, i }))
+    .map((l: any, i: number) => ({ l, i }))
     .filter(
-      ({ l }) =>
+      ({ l }: { l: any }) =>
         !query.trim() ||
         `${l.id} ${l.name} ${plan.schemaVersion === 1 ? `${l.positive} ${l.negative}` : JSON.stringify(l.prompt)}`
           .toLowerCase()
@@ -826,7 +826,7 @@ function PlanInspector({
         onChange={(e) => setQuery(e.target.value)}
       />
       <div className="leaflist modal-leaflist">
-        {visible.map(({ l, i }) => (
+        {visible.map(({ l, i }: { l: any; i: number }) => (
           <button
             key={l.id}
             onClick={() => setSelected({ type: 'leaf', branch: selected.branch, leaf: i })}
