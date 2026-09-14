@@ -252,7 +252,7 @@ matchCode(
 matchCode(executionSource, /Startできない理由/, 'blocked Preflight reason must be visible');
 matchCode(
   executionSource,
-  /既存Runが実行中のため新規Startできません/,
+  /既存Runが実行中です/,
   'READY banner must not claim Start is possible while a Run is active',
 );
 matchCode(
