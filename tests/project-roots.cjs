@@ -58,11 +58,7 @@ matchCode(
   /projectRoot.*setParent\(projectRoot\)/s,
   '新規プロジェクト作成先の初期値へProject rootを反映する',
 );
-matchCode(
-  app,
-  /selectParent\(parent\)/,
-  '新規プロジェクトの作成先選択へ現在の入力済みパスを渡す',
-);
+matchCode(app, /selectParent\(parent\)/, '新規プロジェクトの作成先選択へ現在の入力済みパスを渡す');
 matchCode(
   main,
   /PROJECT_SELECT_PARENT.*defaultPath.*showOpenDialog\(\{.*defaultPath: initialDirectory/s,
