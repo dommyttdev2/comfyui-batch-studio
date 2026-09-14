@@ -180,7 +180,7 @@ function initialPayload(
     schemaVersion: 1,
     loras: [lora],
     promptFallbacks: [
-      { requirement: 'camera', positive: fallbackTag, negative: '', reason: 'initial' },
+      { requirement: 'camera', positiveTags: [fallbackTag], negativeTags: [], reason: 'initial' },
     ],
   };
 }
@@ -196,7 +196,12 @@ function prepareManual(root, current = models(3, 3)) {
   writeJson(path.join(root, '._batch_studio', 'model_prompt_fallbacks.json'), {
     schemaVersion: 1,
     promptFallbacks: [
-      { requirement: 'camera', positive: 'current_tag', negative: '', reason: 'current' },
+      {
+        requirement: 'camera',
+        positiveTags: ['current_tag'],
+        negativeTags: [],
+        reason: 'current',
+      },
     ],
   });
 }
@@ -233,9 +238,9 @@ function archiveEntries(root) {
   assert.equal(
     modelGenerationInputsChanged(
       a,
-      [{ requirement: 'pose', positive: 'tag_a', negative: '', reason: 'old' }],
+      [{ requirement: 'pose', positiveTags: ['tag_a'], negativeTags: [], reason: 'old' }],
       a,
-      [{ requirement: 'pose', positive: 'tag_b', negative: '', reason: 'new' }],
+      [{ requirement: 'pose', positiveTags: ['tag_b'], negativeTags: [], reason: 'new' }],
     ),
     true,
     'prompt fallback content affects prompt generation',
@@ -243,9 +248,16 @@ function archiveEntries(root) {
   assert.equal(
     modelGenerationInputsChanged(
       a,
-      [{ requirement: 'pose', positive: 'tag_a', negative: '', reason: 'old' }],
+      [{ requirement: 'pose', positiveTags: ['tag_a'], negativeTags: [], reason: 'old' }],
       a,
-      [{ requirement: 'pose', positive: 'tag_a', negative: '', reason: 'new reason only' }],
+      [
+        {
+          requirement: 'pose',
+          positiveTags: ['tag_a'],
+          negativeTags: [],
+          reason: 'new reason only',
+        },
+      ],
     ),
     false,
     'fallback reason alone must not reset downstream',
@@ -356,7 +368,7 @@ function archiveEntries(root) {
   const restoredFallback = JSON.parse(
     fs.readFileSync(path.join(manualFix, '._batch_studio', 'model_prompt_fallbacks.json'), 'utf8'),
   );
-  assert.equal(restoredFallback.promptFallbacks[0].positive, 'initial_tag');
+  assert.deepEqual(restoredFallback.promptFallbacks[0].positiveTags, ['initial_tag']);
   assert.equal(exists(path.join(manualFix, 'prompt_plan.json')), false);
   const manualBase = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-reset-base-'));
   prepareManual(manualBase);
@@ -397,8 +409,8 @@ function archiveEntries(root) {
       promptFallbacks: [
         {
           requirement: 'camera angle',
-          positive: 'from_below',
-          negative: '',
+          positiveTags: ['from_below'],
+          negativeTags: [],
           reason: 'prompt is sufficient',
         },
       ],
@@ -430,7 +442,7 @@ function archiveEntries(root) {
     fs.readFileSync(path.join(root, '._batch_studio', 'model_prompt_fallbacks.json'), 'utf8'),
   );
   assert.equal(
-    fallback.promptFallbacks[0].positive,
+    fallback.promptFallbacks[0].positiveTags[0],
     'from_below',
     'new fallback must survive downstream reset',
   );
