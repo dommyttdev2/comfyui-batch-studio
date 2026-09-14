@@ -25,21 +25,14 @@ function promptGroups(value: unknown, allowCameraObject: boolean) {
   if (!record(value)) return false;
   return Object.entries(value).every(([key, item]) => {
     if (allowCameraObject && key === 'camera') {
-      return (
-        record(item) &&
-        Object.values(item).every((cameraTags) => stringArray(cameraTags))
-      );
+      return record(item) && Object.values(item).every((cameraTags) => stringArray(cameraTags));
     }
     return stringArray(item);
   });
 }
 
 function structuredPrompt(value: unknown): value is StructuredPrompt {
-  return (
-    record(value) &&
-    promptGroups(value.positive, true) &&
-    promptGroups(value.negative, false)
-  );
+  return record(value) && promptGroups(value.positive, true) && promptGroups(value.negative, false);
 }
 
 function v1Branch(value: unknown) {
@@ -79,7 +72,8 @@ function v2Branch(value: unknown) {
 }
 
 export function isRenderablePromptPlan(value: unknown): value is PromptPlanArtifact {
-  if (!record(value) || !loraUsages(value.rootLoras) || !Array.isArray(value.branches)) return false;
+  if (!record(value) || !loraUsages(value.rootLoras) || !Array.isArray(value.branches))
+    return false;
   if (value.schemaVersion === 1) {
     return (
       record(value.common) &&
