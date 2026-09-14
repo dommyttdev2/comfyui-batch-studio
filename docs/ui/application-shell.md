@@ -50,6 +50,7 @@ Projectを開いている場合:
 ワークフロー
 モデル配置
 実行前チェック
+実行
 ```
 
 Projectを閉じている場合:
@@ -117,14 +118,21 @@ Vast.ai画面では次を提供する。
 - API Key保存状態。
 - `VASTAI_API_KEY` environment利用状態。
 - API接続テスト。
-- SSH private key path選択。
+- SSH private/public key path選択。
 - SSH User。
-- Remote ComfyUI Port。
-- Instance一覧・更新。
-- Instance start / stop。
+- Instance一覧・5秒ごとの自動更新。
+- Instance start。
+- Instance stop / scheduling cancel。
+- Instance destroy（Main Process確認dialog必須）。
+- Instance reboot。
 - GPU / status / cost / current SSH endpoint表示。
+- ComfyUI Template互換On-demand Offer検索。
+- Storage / GPU計算性能 / GPU数 / Reliability / 除外国等の検索条件。
+- Offer検索結果の5秒ごとの更新。
+- 利用不能Offerの一時抑止と再検索。
+- Offer選択後の確認dialogを経たRENT / Instance作成。
 
-Instance creation / destroy / rebootは初期UIへ置かない。
+SSH Port / Remote ComfyUI Portは設定へ固定保存せず、選択Instanceのcurrent API responseから実行時に解決する。
 
 詳細は `../integrations/service-integrations.md` を正本とする。
 
@@ -218,7 +226,7 @@ GrokではなくCompiler工程。
 - Compile。
 - generated branch / node / link summary。
 - UI Workflow output path。
-- Execution API graphは未実装のため、現行画面ではavailability/validation statusを表示しない。
+- Execution API graphの出力path / validation status / workflow identityをWorkflow build provenanceとして扱う。
 - structure validation。
 - Workflow生成済みの場合の「フォルダを開く」。
 
@@ -292,7 +300,7 @@ Vast.ai/SSH/Remote Worker capabilityの実装に応じて次を段階的にblock
 
 ## 15. Execution Screen
 
-> Current implementation: `実行` stageをProject navigationへ実装済み。persistent Execution Runを復元・ポーリングし、Start / Stop scheduling / Force interrupt / Resumeとphase/progress/error監視を提供する。ComfyUI実submitやartifact transfer本体は後続Execution実装の責務。
+> Current implementation: `実行` stage、persistent Execution Run、Local ComfyUI連続生成、Remote Vast.ai lifecycle / SSH / bootstrap / model staging / Scene Prompt連続生成 / artifact package・R2 upload・Local download・SHA-256検証まで実装済み。Start / Stop scheduling / Force interrupt / Resume / 別Instanceで新しく実行 / 最初からやり直すと、phase/progress/error/推定残り時間監視を提供する。
 
 Grok paneは非表示とし、Local UIを全幅使用する。
 
