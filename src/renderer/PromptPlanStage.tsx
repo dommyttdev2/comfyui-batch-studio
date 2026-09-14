@@ -432,11 +432,11 @@ function PlanInspector({
     () => (models ? compilePromptPlanPrompts(plan, models) : null),
     [models, plan],
   );
-  function mutate(fn: (p: PromptPlanArtifact) => void) {
+  function mutate(fn: (p: any) => void) {
     if (!editable) return;
     const n = structuredClone(plan);
     fn(n);
-    setPlan(n);
+    setPlan(n as PromptPlanArtifact);
   }
   const loraEditor = (items: LoraUsage[], path: 'root' | number) => (
     <div className="lora-list">
@@ -611,7 +611,7 @@ function PlanInspector({
         {loraEditor(plan.rootLoras, 'root')}
       </div>
     );
-  const branch = plan.branches[selected.branch];
+  const branch: any = plan.branches[selected.branch];
   if (selected.type === 'branch')
     return (
       <div className="inspector modal-inspector">
@@ -663,10 +663,29 @@ function PlanInspector({
         </label>
         <h3>使用LoRA</h3>
         {loraEditor(branch.loras, selected.branch)}
+        {plan.schemaVersion === 2 && (
+          <>
+            <h3>Branch共通Prompt</h3>
+            <StructuredPromptEditor
+              value={
+                branch.prompt ?? {
+                  positive: {},
+                  negative: {},
+                }
+              }
+              editable={editable}
+              onChange={(value) =>
+                mutate((p) => {
+                  if (p.schemaVersion === 2) p.branches[selected.branch].prompt = value;
+                })
+              }
+            />
+          </>
+        )}
       </div>
     );
   if (selected.type === 'leaf') {
-    const leaf = branch.leaves[selected.leaf];
+    const leaf: any = branch.leaves[selected.leaf];
     return (
       <div className="inspector modal-inspector">
         <div className="panelhead">
@@ -738,32 +757,59 @@ function PlanInspector({
             }
           />
         </label>
-        <label>
-          Positive
-          <textarea
-            readOnly={!editable}
-            value={leaf.positive}
-            onChange={(e) =>
-              mutate(
-                (p) =>
-                  (p.branches[selected.branch].leaves[selected.leaf].positive = e.target.value),
-              )
-            }
-          />
-        </label>
-        <label>
-          Negative
-          <textarea
-            readOnly={!editable}
-            value={leaf.negative}
-            onChange={(e) =>
-              mutate(
-                (p) =>
-                  (p.branches[selected.branch].leaves[selected.leaf].negative = e.target.value),
-              )
-            }
-          />
-        </label>
+        {plan.schemaVersion === 1 ? (
+          <>
+            <label>
+              Positive
+              <textarea
+                readOnly={!editable}
+                value={leaf.positive}
+                onChange={(e) =>
+                  mutate(
+                    (p) =>
+                      (p.branches[selected.branch].leaves[selected.leaf].positive = e.target.value),
+                  )
+                }
+              />
+            </label>
+            <label>
+              Negative
+              <textarea
+                readOnly={!editable}
+                value={leaf.negative}
+                onChange={(e) =>
+                  mutate(
+                    (p) =>
+                      (p.branches[selected.branch].leaves[selected.leaf].negative = e.target.value),
+                  )
+                }
+              />
+            </label>
+          </>
+        ) : (
+          <>
+            <StructuredPromptEditor
+              value={leaf.prompt}
+              editable={editable}
+              onChange={(value) =>
+                mutate(
+                  (p) => (p.branches[selected.branch].leaves[selected.leaf].prompt = value),
+                )
+              }
+            />
+            {compiled && (() => {
+              const compiledLeaf = compiled.branches
+                .find((item) => item.id === branch.id)
+                ?.leaves.find((item) => item.id === leaf.id);
+              return compiledLeaf ? (
+                <CompiledPreview
+                  positive={compiledLeaf.positive}
+                  negative={compiledLeaf.negative}
+                />
+              ) : null;
+            })()}
+          </>
+        )}
       </div>
     );
   }
@@ -772,7 +818,7 @@ function PlanInspector({
     .filter(
       ({ l }) =>
         !query.trim() ||
-        `${l.id} ${l.name} ${l.positive} ${l.negative}`
+        `${l.id} ${l.name} ${plan.schemaVersion === 1 ? `${l.positive} ${l.negative}` : JSON.stringify(l.prompt)}`
           .toLowerCase()
           .includes(query.trim().toLowerCase()),
     );
