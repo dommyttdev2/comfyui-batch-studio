@@ -54,6 +54,7 @@ import {
   discardExecutionRun,
   getCurrentExecutionRun,
   getExecutionRun,
+  listExecutionRuns,
   mutateExecutionRun,
   requestForceInterrupt,
   requestStopScheduling,
@@ -1206,52 +1207,86 @@ function register() {
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     const current = await getExecutionRun(root, runId);
     if (!current) throw new Error(`Execution Run ${runId} was not found.`);
-    if (current.executionTarget !== 'remote' || current.remote?.provider !== 'vastai')
-      throw new Error('Restart from scratch currently supports Vast.ai Remote Runs only.');
-    if (
-      current.lifecycle === 'RUNNING' &&
-      !isRemotePreGenerationPhase(current.phase) &&
-      current.phase !== 'EXECUTING'
-    )
+
+    const runs = await listExecutionRuns(root);
+    const restartable = runs.filter(
+      (candidate) =>
+        ['RUNNING', 'PAUSED', 'INTERRUPTED'].includes(candidate.lifecycle) ||
+        (candidate.runId === runId && candidate.lifecycle === 'FAILED'),
+    );
+    const unsafeRemote = restartable.find(
+      (candidate) =>
+        candidate.executionTarget === 'remote' &&
+        candidate.lifecycle === 'RUNNING' &&
+        !isRemotePreGenerationPhase(candidate.phase) &&
+        candidate.phase !== 'EXECUTING',
+    );
+    if (unsafeRemote)
       throw new Error(
-        '生成完了後のArtifact処理中は「最初からやり直す」を実行できません。処理完了または失敗後に再実行してください。',
+        `Run ${unsafeRemote.runId} は生成完了後のArtifact処理中です。処理完了または失敗後に最新Prompt Planで再実行してください。`,
       );
-    const preflight = await executionPreflight(root);
-    if (preflight.state !== 'READY')
-      throw new Error(
-        `Execution cannot restart from scratch: Preflight is BLOCKED: ${preflight.blocking.map((item) => item.message).join(' / ')}`,
-      );
+
     const confirm = await dialog.showMessageBox({
       type: 'warning',
-      title: '最初からやり直す',
-      message: '現在のRunを破棄して、生成を最初からやり直しますか？',
+      title: '最新のPrompt Planで最初から実行',
+      message: '未完了のRunを停止して、最新のprompt_plan.jsonで最初から実行しますか？',
       detail:
-        '旧RunのRemote/R2一時成果物は削除します。Localへ回収済みの成果物は削除しません。新しいRun IDで0から実行します。',
-      buttons: ['キャンセル', '最初からやり直す'],
+        `${restartable.length}件の未完了Runを破棄し、最新prompt_plan.jsonからWorkflow/API graphを再生成して、新しいRun IDで0から実行します。旧RunのRemote/R2一時成果物は削除しますが、Localへ回収済みの成果物は削除しません。`,
+      buttons: ['キャンセル', '最新のPrompt Planで実行'],
       defaultId: 0,
       cancelId: 0,
       noLink: true,
     });
     if (confirm.response !== 1) return current;
-    const executor = remoteSceneExecutor();
-    executor.beginDiscard(runId);
-    try {
-      if (current.lifecycle === 'RUNNING' && current.phase === 'EXECUTING') {
-        await executor.stopScheduling(root, runId).catch(() => false);
-        await executor.forceInterrupt(root, runId).catch(() => false);
+
+    for (const candidate of restartable) {
+      if (candidate.executionTarget === 'remote') {
+        const executor = remoteSceneExecutor();
+        executor.beginDiscard(candidate.runId);
+        try {
+          if (candidate.lifecycle === 'RUNNING' && candidate.phase === 'EXECUTING') {
+            await executor.stopScheduling(root, candidate.runId).catch(() => false);
+            await executor.forceInterrupt(root, candidate.runId).catch(() => false);
+          }
+          await executor.discardArtifacts(root, candidate.runId);
+          await discardExecutionRun(root, candidate.runId);
+          remoteExecutor().disconnect(root, candidate.runId);
+          await executor.waitForSettled(candidate.runId);
+          await finalizeRemoteInstance(root, candidate.runId);
+          await discardExecutionRun(root, candidate.runId);
+        } finally {
+          executor.endDiscard(candidate.runId);
+        }
+        continue;
       }
-      await executor.discardArtifacts(root, runId);
-      await discardExecutionRun(root, runId);
-      remoteExecutor().disconnect(root, runId);
-      await executor.waitForSettled(runId);
-      await finalizeRemoteInstance(root, runId);
-      await discardExecutionRun(root, runId);
-      const next = await startExecutionRun(root, async () => preflight);
-      void prepareRemoteExecution(root, next.runId);
-      return next;
-    } finally {
-      executor.endDiscard(runId);
+
+      if (candidate.lifecycle === 'RUNNING') {
+        await requestStopScheduling(root, candidate.runId).catch(() => candidate);
+        await localExecutor().forceInterrupt(root, candidate.runId).catch(() => false);
+        for (let poll = 0; poll < 120; poll++) {
+          const latest = await getExecutionRun(root, candidate.runId);
+          if (!latest || latest.lifecycle !== 'RUNNING') break;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        const latest = await getExecutionRun(root, candidate.runId);
+        if (latest?.lifecycle === 'RUNNING')
+          throw new Error(
+            `Local Run ${candidate.runId} の停止完了を確認できませんでした。Runの状態を確認して再実行してください。`,
+          );
+      }
+      await discardExecutionRun(root, candidate.runId);
     }
+
+    await compileWorkflow(root);
+    const preflight = await executionPreflight(root);
+    if (preflight.state !== 'READY')
+      throw new Error(
+        `Execution cannot restart with latest Prompt Plan: Preflight is BLOCKED: ${preflight.blocking.map((item) => item.message).join(' / ')}`,
+      );
+    const next = await startExecutionRun(root, async () => preflight);
+    if (next.executionTarget === 'local') localExecutor().start(root, next.runId);
+    else void prepareRemoteExecution(root, next.runId);
+    return next;
   });
   ipcMain.handle(IPC.CAPTION_STATUS, (_e, root: unknown) => {
     validRoot(root);
