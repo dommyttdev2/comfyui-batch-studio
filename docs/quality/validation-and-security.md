@@ -91,13 +91,24 @@ Blocking:
 - branch id duplicate。
 - branch leaf が0件。
 - model reference unresolved。
-- 必須 string field の型不正。
+- Schema v1 の必須string field型不正。
+- Schema v2 のStructured Prompt shape / category / tag array型不正。
+- Schema v2 Illustrious通常tagにspace形式が混入。
+- 同一final PromptのPositive / Negative exact conflict。
+- camera angle / framing / gaze の競合。
+- 明白なsubject conflict。
 
 Warning:
 
 - 同じ LoRA の重複指定。
-- 空 positive / negative が不自然な場合。
+- Schema v2で同一tagをparent / child scopeへ重複配置。
+- expressionの過剰指定。
+- nude系状態とoutfit categoryの同時指定。
 - 極端に多い branch / leaf。
+
+Schema v2のCompiled Prompt Previewは保存Artifactではなく、現在のPrompt Plan / models / Model Family Prompt Policyから決定論的に導出する。
+
+Schema v1は互換性のため従来flat stringをそのまま検証・Compileし、Schema v2のquality/trainedWords policyを後付けしない。
 
 LoRA weight の数値範囲は別仕様として決めるまで恣意的に 0..1 へ clamp しない。
 
