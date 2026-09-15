@@ -19,6 +19,10 @@ const thumbnailCss = fs.readFileSync(
   'utf8',
 );
 const service = fs.readFileSync(path.join(repo, 'src', 'main', 'thumbnail-service.ts'), 'utf8');
+const finalArtifactImageService = fs.readFileSync(
+  path.join(repo, 'src', 'main', 'final-artifact-image-service.ts'),
+  'utf8',
+);
 const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
 const runtimeCopy = fs.readFileSync(path.join(repo, 'scripts', 'copy-runtime.cjs'), 'utf8');
@@ -125,8 +129,13 @@ matchCode(
 );
 matchCode(
   service,
+  /readThumbnailPreview[\s\S]*readImagePreview\(imagePath\)/,
+  'thumbnail preview must delegate to the shared final artifact image service',
+);
+matchCode(
+  finalArtifactImageService,
   /nativeImage[\s\S]*resize\(\{ width: 320/,
-  'gallery previews must be lightweight',
+  'shared gallery previews must remain lightweight',
 );
 matchCode(
   preload,
