@@ -96,6 +96,11 @@ matchCode(
   '新規プロジェクトのIDがフォルダ名であることを明示する',
 );
 matchCode(
+  projectStages,
+  /プロジェクトID \(フォルダ名\)/,
+  '基本設定でもプロジェクトIDがフォルダ名であることを明示する',
+);
+matchCode(
   main,
   /PROJECT_SELECT_PARENT.*defaultPath.*showOpenDialog\(\{.*defaultPath: initialDirectory/s,
   '新規プロジェクトの作成先選択は入力済みパスを初期表示に使う',
