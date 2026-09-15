@@ -1,22 +1,34 @@
 import { useState } from 'react';
 import { CivitExplorerStage } from './CivitExplorerStage';
 import { R2ManagerStage } from './R2ManagerStage';
+import { MarketplaceImagePickerWindow } from './MarketplaceImagePickerWindow';
 import { ThumbnailPickerWindow } from './ThumbnailPickerWindow';
 import { VastAiIntegrationPanel } from './integrations/VastAiIntegrationPanel';
 import type { Runner } from './ui';
 
-export type StandaloneWindowTool = 'r2' | 'civit' | 'vastai' | 'thumbnail-picker';
+export type StandaloneWindowTool =
+  | 'r2'
+  | 'civit'
+  | 'vastai'
+  | 'thumbnail-picker'
+  | 'marketplace-picker';
 
 export function standaloneToolFromSearch(search: string): StandaloneWindowTool | null {
   const tool = new URLSearchParams(search).get('tool');
-  return tool === 'r2' || tool === 'civit' || tool === 'vastai' || tool === 'thumbnail-picker'
-    ? tool
-    : null;
+  return
+    tool === 'r2' ||
+    tool === 'civit' ||
+    tool === 'vastai' ||
+    tool === 'thumbnail-picker' ||
+    tool === 'marketplace-picker'
+      ? tool
+      : null;
 }
 
 export function StandaloneToolApp({ tool }: { tool: StandaloneWindowTool }) {
   const [error, setError] = useState('');
   if (tool === 'thumbnail-picker') return <ThumbnailPickerWindow />;
+  if (tool === 'marketplace-picker') return <MarketplaceImagePickerWindow />;
   const run: Runner = async (fn) => {
     setError('');
     try {
