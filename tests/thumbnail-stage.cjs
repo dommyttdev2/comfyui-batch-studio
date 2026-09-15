@@ -169,6 +169,11 @@ matchCode(
   'image picker must load in its own Electron window',
 );
 matchCode(
+  main,
+  /openThumbnailPickerWindow[\s\S]*autoHideMenuBar:\s*true[\s\S]*window\.removeMenu\(\)[\s\S]*window\.setMenuBarVisibility\(false\)/,
+  'thumbnail picker window must not show the application menu bar',
+);
+matchCode(
   picker,
   /tentativeRef\.current === item\.path[\s\S]*commitPicker\(item\.path\)[\s\S]*previewPicker\(item\.path\)/,
   'first click must preview while selecting the same image again commits it',
