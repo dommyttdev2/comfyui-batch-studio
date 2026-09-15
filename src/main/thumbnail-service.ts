@@ -1,6 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { nativeImage } from 'electron';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   ThumbnailDocument,
@@ -14,6 +13,7 @@ import type {
   ThumbnailTemplateSource,
 } from '../shared/types.js';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
+import { listImageFiles, readImagePreview, readImageSource } from './final-artifact-image-service.js';
 
 const PATTERNS = new Set<ThumbnailPattern>([
   '3-images',
@@ -218,48 +218,17 @@ export async function saveThumbnailState(
 }
 
 export async function listThumbnailImages(directory: string): Promise<ThumbnailImageItem[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  return entries
-    .filter(
-      (entry) =>
-        entry.isFile() && IMAGE_TYPES[path.extname(entry.name).toLowerCase()] !== undefined,
-    )
-    .map((entry) => ({ path: path.join(directory, entry.name), name: entry.name }))
-    .sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }),
-    );
+  return listImageFiles(directory);
 }
 
 export async function readThumbnailPreview(
   imagePath: string,
 ): Promise<ThumbnailImageSource | null> {
-  const resolved = path.resolve(imagePath);
-  if (!IMAGE_TYPES[path.extname(resolved).toLowerCase()]) return null;
-  const image = nativeImage.createFromPath(resolved);
-  if (image.isEmpty()) return null;
-  const size = image.getSize();
-  const preview = size.width > 320 ? image.resize({ width: 320, quality: 'good' }) : image;
-  return {
-    path: resolved,
-    name: path.basename(resolved),
-    dataUrl: preview.toDataURL(),
-  };
+  return readImagePreview(imagePath);
 }
 
 export async function readThumbnailImage(imagePath: string): Promise<ThumbnailImageSource | null> {
-  const resolved = path.resolve(imagePath);
-  const mime = IMAGE_TYPES[path.extname(resolved).toLowerCase()];
-  if (!mime) return null;
-  try {
-    const bytes = await readFile(resolved);
-    return {
-      path: resolved,
-      name: path.basename(resolved),
-      dataUrl: `data:${mime};base64,${bytes.toString('base64')}`,
-    };
-  } catch {
-    return null;
-  }
+  return readImageSource(imagePath);
 }
 
 export async function readThumbnailTemplate(
