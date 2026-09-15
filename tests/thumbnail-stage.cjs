@@ -9,6 +9,7 @@ const stage = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ThumbnailStage
 const service = fs.readFileSync(path.join(repo, 'src', 'main', 'thumbnail-service.ts'), 'utf8');
 const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
+const runtimeCopy = fs.readFileSync(path.join(repo, 'scripts', 'copy-runtime.cjs'), 'utf8');
 
 matchCode(ui, /'キャプション',\s*'サムネイル'/, 'thumbnail stage must follow caption');
 matchCode(app, /case 'サムネイル':\s*return <ThumbnailStage/, 'thumbnail stage must render');
@@ -32,5 +33,10 @@ matchCode(
 );
 matchCode(preload, /thumbnail:[\s\S]*exportImage/, 'thumbnail API must be exposed through preload');
 matchCode(main, /IPC\.THUMBNAIL_EXPORT/, 'main process must handle image export');
+matchCode(
+  runtimeCopy,
+  /thumbnail\/psd-templates/,
+  'runtime PSD templates must be copied from the dedicated thumbnail directory',
+);
 
 console.log('Thumbnail stage contract tests passed.');

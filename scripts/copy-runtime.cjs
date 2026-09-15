@@ -4,7 +4,7 @@ fs.mkdirSync('dist-electron/preload', { recursive: true });
 fs.copyFileSync('src/preload/index.cjs', 'dist-electron/preload/index.cjs');
 fs.rmSync('dist-electron/templates', { recursive: true, force: true });
 fs.cpSync('templates', 'dist-electron/templates', { recursive: true });
-const thumbnailTemplates = 'output/psd-templates';
+const thumbnailTemplates = 'thumbnail/psd-templates';
 const thumbnailRuntime = 'dist-electron/thumbnail-templates';
 fs.rmSync(thumbnailRuntime, { recursive: true, force: true });
 fs.mkdirSync(thumbnailRuntime, { recursive: true });
