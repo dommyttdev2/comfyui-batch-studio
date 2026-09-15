@@ -74,7 +74,7 @@ matchCode(
   /for \(const target of targets\)/,
   'all marketplace targets must be rendered independently',
 );
-matchCode(service, /toJPEG\(100\)/, 'JPEG quality must remain fixed at 100');
+matchCode(imagePipeline, /toJPEG\(100\)/, 'JPEG quality must remain fixed at 100');
 matchCode(
   service,
   /renderLanczosCrop/,
