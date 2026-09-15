@@ -9,6 +9,7 @@ import {
   WebContentsView,
 } from 'electron';
 import type { MenuItemConstructorOptions, WebContents } from 'electron';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC } from '../shared/ipc.js';
@@ -24,6 +25,7 @@ import type {
   ProjectSettings,
   PromptPlanArtifact,
   GrokTask,
+  ThumbnailSlotKey,
   R2ConnectionInput,
   ValidationIssue,
   VastAiConnectionInput,
@@ -110,13 +112,25 @@ const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
 const GROK_URL = 'https://grok.com/';
 type StandaloneWindowTool = 'r2' | 'civit' | 'vastai';
+type RendererWindowTool = StandaloneWindowTool | 'thumbnail-picker';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
+type ThumbnailPickerWindowState = {
+  window: BaseWindow;
+  view: WebContentsView;
+  opener: WebContents;
+  root: string;
+  slot: ThumbnailSlotKey;
+  currentImagePath: string;
+  sessionId: string;
+  committed: boolean;
+};
 const standaloneToolTitles: Record<StandaloneWindowTool, string> = {
   r2: 'R2 File Manager',
   civit: 'Civit Explorer',
   vastai: 'Vast.ai',
 };
 const standaloneToolWindows = new Map<StandaloneWindowTool, StandaloneToolWindowState>();
+const thumbnailPickerWindows = new Map<number, ThumbnailPickerWindowState>();
 const executionCoordinator = new ExecutionCoordinator();
 type ProjectWindowState = {
   window: BaseWindow;
@@ -214,7 +228,7 @@ async function setWindowProject(state: ProjectWindowState, root: string | null) 
   state.projectRoot = resolved;
   await stateStore().rememberProject(resolved);
 }
-async function loadRenderer(v: WebContentsView, tool?: StandaloneWindowTool) {
+async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
   const dev = process.env.VITE_DEV_SERVER_URL;
   if (dev) {
     const url = new URL(dev);
@@ -346,6 +360,9 @@ function createProjectWindow(
   });
   window.on('resize', () => layoutProjectWindow(state));
   window.on('closed', () => {
+    for (const picker of thumbnailPickerWindows.values()) {
+      if (picker.opener.id === localView.webContents.id) picker.window.close();
+    }
     localView.webContents.close();
     grokView.webContents.close();
     projectWindows.delete(windowId);
@@ -403,6 +420,81 @@ function openStandaloneToolWindow(tool: StandaloneWindowTool) {
     console.error(`${title} window failed to load:`, error),
   );
 }
+function thumbnailPickerForSender(contents: WebContents) {
+  const state = thumbnailPickerWindows.get(contents.id);
+  if (!state) throw new Error('Thumbnail picker Window was not found for IPC sender.');
+  return state;
+}
+
+async function validateThumbnailPickerImage(state: ThumbnailPickerWindowState, imagePath: unknown) {
+  if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
+  const finalArtifact = await getFinalArtifactStatus(state.root);
+  if (!finalArtifact.exists || !finalArtifact.directory)
+    throw new Error('最終成果物ディレクトリが設定されていません。');
+  const resolved = path.resolve(imagePath);
+  const allowed = (await listThumbnailImages(finalArtifact.directory)).some(
+    (item) => projectRootKey(item.path) === projectRootKey(resolved),
+  );
+  if (!allowed) throw new Error('最終成果物ディレクトリ外の画像は選択できません。');
+  return resolved;
+}
+
+function openThumbnailPickerWindow(
+  opener: WebContents,
+  root: string,
+  slot: ThumbnailSlotKey,
+  currentImagePath: string,
+) {
+  for (const existing of thumbnailPickerWindows.values()) {
+    if (existing.opener.id === opener.id) existing.window.close();
+  }
+  const window = new BaseWindow({
+      width: 1180,
+      height: 860,
+      minWidth: 760,
+      minHeight: 560,
+      title: 'サムネイル画像を選択 - ComfyUI Batch Studio',
+    }),
+    view = new WebContentsView({
+      webPreferences: {
+        preload: path.resolve(__dirname, '../preload/index.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
+    sessionId = randomUUID(),
+    state: ThumbnailPickerWindowState = {
+      window,
+      view,
+      opener,
+      root,
+      slot,
+      currentImagePath,
+      sessionId,
+      committed: false,
+    },
+    contentsId = view.webContents.id;
+  thumbnailPickerWindows.set(contentsId, state);
+  window.contentView.addChildView(view);
+  const resize = () => {
+    const { width, height } = window.getContentBounds();
+    view.setBounds({ x: 0, y: 0, width, height });
+  };
+  window.on('resize', resize);
+  window.on('closed', () => {
+    if (!state.committed && !state.opener.isDestroyed())
+      state.opener.send(IPC.THUMBNAIL_PICKER_CANCELLED, { sessionId: state.sessionId });
+    if (!view.webContents.isDestroyed()) view.webContents.close();
+    thumbnailPickerWindows.delete(contentsId);
+  });
+  resize();
+  void loadRenderer(view, 'thumbnail-picker').catch((error) =>
+    console.error('Thumbnail picker window failed to load:', error),
+  );
+  return { sessionId };
+}
+
 async function chooseProjectOpeningTarget() {
   const current = lastFocusedProjectWindow();
   const buttons = current
@@ -1631,6 +1723,61 @@ function register() {
       pattern,
     ),
   );
+  ipcMain.handle(
+    IPC.THUMBNAIL_PICKER_OPEN,
+    (event, root: unknown, slot: unknown, currentImagePath: unknown) => {
+      validRoot(root);
+      const validSlots = new Set<ThumbnailSlotKey>([
+        'LEFT',
+        'LEFT_TOP',
+        'LEFT_BOTTOM',
+        'CENTER_MAIN',
+        'RIGHT',
+        'RIGHT_TOP',
+        'RIGHT_BOTTOM',
+      ]);
+      if (typeof slot !== 'string' || !validSlots.has(slot as ThumbnailSlotKey))
+        throw new Error('Invalid thumbnail slot');
+      if (typeof currentImagePath !== 'string') throw new Error('Invalid thumbnail image path');
+      return openThumbnailPickerWindow(
+        event.sender,
+        root,
+        slot as ThumbnailSlotKey,
+        currentImagePath,
+      );
+    },
+  );
+  ipcMain.handle(IPC.THUMBNAIL_PICKER_CONTEXT, (event) => {
+    const state = thumbnailPickerForSender(event.sender);
+    return {
+      sessionId: state.sessionId,
+      root: state.root,
+      slot: state.slot,
+      currentImagePath: state.currentImagePath,
+    };
+  });
+  ipcMain.handle(IPC.THUMBNAIL_PICKER_PREVIEW, async (event, imagePath: unknown) => {
+    const state = thumbnailPickerForSender(event.sender);
+    const resolved = await validateThumbnailPickerImage(state, imagePath);
+    if (!state.opener.isDestroyed())
+      state.opener.send(IPC.THUMBNAIL_PICKER_PREVIEWED, {
+        sessionId: state.sessionId,
+        slot: state.slot,
+        imagePath: resolved,
+      });
+  });
+  ipcMain.handle(IPC.THUMBNAIL_PICKER_COMMIT, async (event, imagePath: unknown) => {
+    const state = thumbnailPickerForSender(event.sender);
+    const resolved = await validateThumbnailPickerImage(state, imagePath);
+    state.committed = true;
+    if (!state.opener.isDestroyed())
+      state.opener.send(IPC.THUMBNAIL_PICKER_COMMITTED, {
+        sessionId: state.sessionId,
+        slot: state.slot,
+        imagePath: resolved,
+      });
+    state.window.close();
+  });
   ipcMain.handle(
     IPC.THUMBNAIL_EXPORT,
     (_e, root: unknown, documentId: unknown, format: unknown, dataUrl: unknown) => {

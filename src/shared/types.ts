@@ -598,6 +598,21 @@ export interface ThumbnailImageSource extends ThumbnailImageItem {
   dataUrl: string;
 }
 
+export interface ThumbnailPickerSession {
+  sessionId: string;
+}
+
+export interface ThumbnailPickerContext extends ThumbnailPickerSession {
+  root: string;
+  slot: ThumbnailSlotKey;
+  currentImagePath: string;
+}
+
+export interface ThumbnailPickerSelection extends ThumbnailPickerSession {
+  slot: ThumbnailSlotKey;
+  imagePath: string;
+}
+
 export interface ThumbnailTemplateSource {
   name: string;
   dataUrl: string;
@@ -1072,6 +1087,17 @@ export interface BatchStudioApi {
     readImage: (imagePath: string) => Promise<ThumbnailImageSource | null>;
     readPreview: (imagePath: string) => Promise<ThumbnailImageSource | null>;
     readTemplate: (pattern: ThumbnailPattern) => Promise<ThumbnailTemplateSource>;
+    openPicker: (
+      root: string,
+      slot: ThumbnailSlotKey,
+      currentImagePath: string,
+    ) => Promise<ThumbnailPickerSession>;
+    pickerContext: () => Promise<ThumbnailPickerContext>;
+    previewPicker: (imagePath: string) => Promise<void>;
+    commitPicker: (imagePath: string) => Promise<void>;
+    onPickerPreview: (listener: (selection: ThumbnailPickerSelection) => void) => () => void;
+    onPickerCommit: (listener: (selection: ThumbnailPickerSelection) => void) => () => void;
+    onPickerCancel: (listener: (session: ThumbnailPickerSession) => void) => () => void;
     exportImage: (
       root: string,
       documentId: number,

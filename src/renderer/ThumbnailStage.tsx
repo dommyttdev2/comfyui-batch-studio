@@ -4,7 +4,6 @@ import type {
   ProjectSummary,
   ThumbnailDocument,
   ThumbnailEditorState,
-  ThumbnailImageItem,
   ThumbnailImageSource,
   ThumbnailPattern,
   ThumbnailSlotKey,
@@ -310,11 +309,17 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   const [format, setFormat] = useState<'png' | 'jpeg'>('png');
   const [notice, setNotice] = useState('');
   const [lastExportPath, setLastExportPath] = useState('');
-  const [pickerSlot, setPickerSlot] = useState<ThumbnailSlotKey | null>(null);
-  const [pickerItems, setPickerItems] = useState<ThumbnailImageItem[]>([]);
-  const [pickerLoading, setPickerLoading] = useState(false);
-  const [pickerError, setPickerError] = useState('');
-  const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerSession, setPickerSession] = useState<{
+    sessionId: string;
+    slot: ThumbnailSlotKey;
+  } | null>(null);
+  const [pickerPreview, setPickerPreview] = useState<{
+    sessionId: string;
+    slot: ThumbnailSlotKey;
+    imagePath: string;
+  } | null>(null);
+  const pickerSessionRef = useRef<typeof pickerSession>(null);
+  const pickerPreviewPathRef = useRef<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{
     slot: ThumbnailSlotKey;
@@ -331,12 +336,21 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
     [state],
   );
   const visibleSlots = active ? slotsFor(active.pattern) : [];
-  const filteredPickerItems = useMemo(() => {
-    const needle = pickerQuery.trim().toLocaleLowerCase();
-    return needle
-      ? pickerItems.filter((item) => item.name.toLocaleLowerCase().includes(needle))
-      : pickerItems;
-  }, [pickerItems, pickerQuery]);
+  const displayActive = useMemo(() => {
+    if (!active || !pickerPreview) return active;
+    return {
+      ...active,
+      slots: {
+        ...active.slots,
+        [pickerPreview.slot]: {
+          imagePath: pickerPreview.imagePath,
+          offsetX: 0,
+          offsetY: 0,
+          scale: 1,
+        },
+      },
+    };
+  }, [active, pickerPreview]);
 
   useEffect(() => {
     let cancelled = false;
@@ -387,9 +401,9 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   }, [project.rootPath]);
 
   useEffect(() => {
-    if (!active || !canvasRef.current) return;
-    renderThumbnail(canvasRef.current, active, images, templates[active.pattern]);
-  }, [active, images, templates]);
+    if (!displayActive || !canvasRef.current) return;
+    renderThumbnail(canvasRef.current, displayActive, images, templates[displayActive.pattern]);
+  }, [displayActive, images, templates]);
 
   useEffect(() => {
     if (!active || templates[active.pattern]) return;
@@ -414,15 +428,6 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   useEffect(() => {
     if (active && !visibleSlots.includes(selectedSlot)) setSelectedSlot('CENTER_MAIN');
   }, [active?.pattern]);
-
-  useEffect(() => {
-    if (!pickerSlot) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPickerSlot(null);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [pickerSlot]);
 
   const updateDocument = (update: (document: ThumbnailDocument) => ThumbnailDocument) => {
     setState(
@@ -475,32 +480,77 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
       };
     });
   };
+  useEffect(() => {
+    const removePreview = window.batchStudio.thumbnail.onPickerPreview((selection) => {
+      const session = pickerSessionRef.current;
+      if (!session || session.sessionId !== selection.sessionId || session.slot !== selection.slot)
+        return;
+      pickerPreviewPathRef.current = selection.imagePath;
+      void run(async () => {
+        const source = await window.batchStudio.thumbnail.readImage(selection.imagePath);
+        if (!source) throw new Error('画像を読み込めませんでした。');
+        const image = await loadBrowserImage(source);
+        if (
+          pickerSessionRef.current?.sessionId !== selection.sessionId ||
+          pickerPreviewPathRef.current !== selection.imagePath
+        )
+          return;
+        setImages((current) => ({ ...current, [source.path]: image }));
+        setPickerPreview(selection);
+      });
+    });
+    const removeCommit = window.batchStudio.thumbnail.onPickerCommit((selection) => {
+      const session = pickerSessionRef.current;
+      if (!session || session.sessionId !== selection.sessionId || session.slot !== selection.slot)
+        return;
+      pickerPreviewPathRef.current = null;
+      void run(async () => {
+        const source = await window.batchStudio.thumbnail.readImage(selection.imagePath);
+        if (!source) throw new Error('画像を読み込めませんでした。');
+        const image = await loadBrowserImage(source);
+        if (pickerSessionRef.current?.sessionId !== selection.sessionId) return;
+        setImages((current) => ({ ...current, [source.path]: image }));
+        updateSlot(selection.slot, {
+          imagePath: source.path,
+          offsetX: 0,
+          offsetY: 0,
+          scale: 1,
+        });
+        setNotice(`${SLOT_LABELS[selection.slot]}へ ${source.name} を設定しました。`);
+        pickerSessionRef.current = null;
+        setPickerSession(null);
+        setPickerPreview(null);
+      });
+    });
+    const removeCancel = window.batchStudio.thumbnail.onPickerCancel((session) => {
+      if (pickerSessionRef.current?.sessionId !== session.sessionId) return;
+      pickerSessionRef.current = null;
+      pickerPreviewPathRef.current = null;
+      setPickerSession(null);
+      setPickerPreview(null);
+    });
+    return () => {
+      removePreview();
+      removeCommit();
+      removeCancel();
+    };
+  }, []);
+
   const openImagePicker = (slot: ThumbnailSlotKey) => {
     setSelectedSlot(slot);
-    setPickerSlot(slot);
-    setPickerQuery('');
-    setPickerItems([]);
-    setPickerError('');
-    setPickerLoading(true);
-    void window.batchStudio.thumbnail
-      .listImages(project.rootPath)
-      .then((items) => setPickerItems(items))
-      .catch((error: unknown) =>
-        setPickerError(error instanceof Error ? error.message : '画像一覧を読み込めませんでした。'),
-      )
-      .finally(() => setPickerLoading(false));
-  };
-  const chooseGalleryImage = (item: ThumbnailImageItem) =>
+    setPickerPreview(null);
+    pickerPreviewPathRef.current = null;
     void run(async () => {
-      if (!pickerSlot) return;
-      const source = await window.batchStudio.thumbnail.readImage(item.path);
-      if (!source) throw new Error(`${item.name} を読み込めませんでした。`);
-      const image = await loadBrowserImage(source);
-      setImages((current) => ({ ...current, [source.path]: image }));
-      updateSlot(pickerSlot, { imagePath: source.path, offsetX: 0, offsetY: 0, scale: 1 });
-      setNotice(`${SLOT_LABELS[pickerSlot]}へ ${source.name} を設定しました。`);
-      setPickerSlot(null);
+      const opened = await window.batchStudio.thumbnail.openPicker(
+        project.rootPath,
+        slot,
+        active?.slots[slot]?.imagePath ?? '',
+      );
+      const session = { sessionId: opened.sessionId, slot };
+      pickerSessionRef.current = session;
+      setPickerSession(session);
     });
+  };
   const chooseFileImage = () =>
     void run(async () => {
       const source = await window.batchStudio.thumbnail.selectImage(project.rootPath);
@@ -754,137 +804,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
           </section>
         </aside>
       </div>
-      {pickerSlot && (
-        <div
-          className="thumbnail-image-picker-backdrop"
-          role="presentation"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) setPickerSlot(null);
-          }}
-        >
-          <section
-            className="thumbnail-image-picker"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="thumbnail-image-picker-title"
-          >
-            <header className="thumbnail-image-picker-head">
-              <div>
-                <h3 id="thumbnail-image-picker-title">
-                  {SLOT_LABELS[pickerSlot]}に使用する画像を選択
-                </h3>
-                <small>最終成果物ディレクトリの画像から選択します。</small>
-              </div>
-              <button
-                type="button"
-                className="thumbnail-image-picker-close"
-                aria-label="画像選択を閉じる"
-                onClick={() => setPickerSlot(null)}
-              >
-                ×
-              </button>
-            </header>
-            <div className="thumbnail-image-picker-toolbar">
-              <input
-                type="search"
-                placeholder="ファイル名で絞り込み"
-                value={pickerQuery}
-                onChange={(event) => setPickerQuery(event.target.value)}
-                autoFocus
-              />
-              <span>
-                {filteredPickerItems.length} / {pickerItems.length} 枚
-              </span>
-            </div>
-            {pickerLoading ? (
-              <div className="thumbnail-image-picker-message">画像一覧を読み込んでいます…</div>
-            ) : pickerError ? (
-              <div className="thumbnail-image-picker-message error">{pickerError}</div>
-            ) : filteredPickerItems.length ? (
-              <div className="thumbnail-image-picker-grid">
-                {filteredPickerItems.map((item) => (
-                  <ThumbnailImageChoice
-                    key={item.path}
-                    item={item}
-                    selected={active.slots[pickerSlot]?.imagePath === item.path}
-                    onSelect={() => chooseGalleryImage(item)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="thumbnail-image-picker-message">
-                {pickerItems.length
-                  ? '条件に一致する画像はありません。'
-                  : '最終成果物ディレクトリに選択できる画像がありません。'}
-              </div>
-            )}
-          </section>
-        </div>
-      )}
     </div>
-  );
-}
-
-function ThumbnailImageChoice({
-  item,
-  selected,
-  onSelect,
-}: {
-  item: ThumbnailImageItem;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [preview, setPreview] = useState<ThumbnailImageSource | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    const element = buttonRef.current;
-    if (!element) return;
-    let cancelled = false;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        observer.disconnect();
-        void window.batchStudio.thumbnail
-          .readPreview(item.path)
-          .then((source) => {
-            if (cancelled) return;
-            if (source) setPreview(source);
-            else setFailed(true);
-          })
-          .catch(() => {
-            if (!cancelled) setFailed(true);
-          });
-      },
-      { rootMargin: '240px' },
-    );
-    observer.observe(element);
-    return () => {
-      cancelled = true;
-      observer.disconnect();
-    };
-  }, [item.path]);
-
-  return (
-    <button
-      ref={buttonRef}
-      type="button"
-      className={`thumbnail-image-choice${selected ? ' selected' : ''}`}
-      aria-pressed={selected}
-      title={item.name}
-      onClick={onSelect}
-    >
-      <span className="thumbnail-image-choice-preview">
-        {preview ? (
-          <img src={preview.dataUrl} alt="" />
-        ) : (
-          <span>{failed ? 'プレビューなし' : '読み込み中…'}</span>
-        )}
-      </span>
-      <span className="thumbnail-image-choice-name">{item.name}</span>
-      {selected && <span className="thumbnail-image-choice-current">選択中</span>}
-    </button>
   );
 }
 
