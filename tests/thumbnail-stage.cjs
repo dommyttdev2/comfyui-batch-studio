@@ -155,13 +155,23 @@ matchCode(
 );
 matchCode(
   thumbnailCss,
-  /thumbnail-image-choice-preview img[\s\S]*object-fit:\s*contain/,
-  'gallery previews must show the whole image without cropping',
+  /thumbnail-image-choice-preview img[\s\S]*height:\s*auto[\s\S]*object-fit:\s*contain/,
+  'gallery previews must preserve the source aspect ratio and show the whole image',
+);
+doesNotMatchCode(
+  thumbnailCss,
+  /thumbnail-image-choice-preview\s*\{[\s\S]*?aspect-ratio:\s*4\s*\/\s*3/,
+  'gallery preview containers must not force images into a 4:3 frame',
 );
 matchCode(
   main,
   /loadRenderer\(view, 'thumbnail-picker'\)/,
   'image picker must load in its own Electron window',
+);
+matchCode(
+  main,
+  /openThumbnailPickerWindow[\s\S]*autoHideMenuBar:\s*true[\s\S]*window\.removeMenu\(\)[\s\S]*window\.setMenuBarVisibility\(false\)/,
+  'thumbnail picker window must not show the application menu bar',
 );
 matchCode(
   picker,
