@@ -96,7 +96,11 @@ matchCode(
   /THUMBNAIL_LIST_IMAGES[\s\S]*getFinalArtifactStatus\(root\)[\s\S]*listThumbnailImages/,
   'thumbnail gallery must use the final artifact directory',
 );
-matchCode(service, /nativeImage[\s\S]*resize\(\{ width: 320/, 'gallery previews must be lightweight');
+matchCode(
+  service,
+  /nativeImage[\s\S]*resize\(\{ width: 320/,
+  'gallery previews must be lightweight',
+);
 matchCode(
   preload,
   /thumbnail:[\s\S]*listImages:[\s\S]*readPreview:[\s\S]*exportImage/,
