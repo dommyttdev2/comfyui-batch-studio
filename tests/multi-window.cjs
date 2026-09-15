@@ -29,6 +29,29 @@ matchCode(main, /executionCoordinator\.startRemote/);
 matchCode(main, /IPC\.PROJECT_MENU_COMMAND/);
 matchCode(app, /project\.onMenuCommand/);
 matchCode(preload, /PROJECT_MENU_COMMAND/);
+matchCode(main, /label: 'ファイル'/);
+matchCode(main, /label: '編集'/);
+matchCode(main, /label: '表示'/);
+matchCode(main, /label: 'ウィンドウ'/);
+matchCode(main, /label: 'R2 File Manager'/);
+matchCode(main, /label: 'Civit Explorer'/);
+matchCode(main, /label: 'Vast.ai'/);
+matchCode(main, /label: '現在のフォルダを開く'/);
+matchCode(main, /label: '設定'/);
+matchCode(main, /label: 'プロジェクトを閉じる'/);
+doesNotMatchCode(main, /role: 'viewMenu'/, 'View menu must be explicitly localized');
+doesNotMatchCode(main, /toggleDevTools/, 'Developer Tools must not be exposed in the native menu');
+matchCode(app, /command === 'settings'/);
+matchCode(app, /command === 'close'/);
+doesNotMatchCode(app, />開く<\/button>/, 'Header must not duplicate the native Open command');
+doesNotMatchCode(app, />新規作成<\/button>/, 'Header must not duplicate the native New command');
+doesNotMatchCode(app, />環境設定<\/button>/, 'Settings must live in the native File menu');
+doesNotMatchCode(app, />フォルダー<\/button>/, 'Open folder must live in the native File menu');
+doesNotMatchCode(
+  app,
+  />プロジェクトを閉じる<\/button>/,
+  'Close Project must live in the native File menu',
+);
 
 doesNotMatchCode(
   main,

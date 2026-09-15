@@ -984,7 +984,7 @@ export interface BatchStudioApi {
     selectParent: (defaultPath?: string) => Promise<string | null>;
     create: (parent: string, brief: ProjectBriefInput) => Promise<ProjectSummary>;
     onMenuCommand: (
-      listener: (command: 'new' | 'open', project?: ProjectSummary) => void,
+      listener: (command: 'new' | 'open' | 'settings' | 'close', project?: ProjectSummary) => void,
     ) => () => void;
     scan: (root: string) => Promise<ProjectSummary>;
     openFolder: (root: string) => Promise<void>;
