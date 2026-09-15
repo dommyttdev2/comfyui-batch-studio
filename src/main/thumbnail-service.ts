@@ -34,12 +34,6 @@ const SLOT_KEYS = new Set<ThumbnailSlotKey>([
   'RIGHT_TOP',
   'RIGHT_BOTTOM',
 ]);
-const IMAGE_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp',
-};
 const WINDOWS_FONT_FALLBACK = ['Segoe UI', 'Times New Roman', 'Meiryo', 'Yu Mincho'];
 
 function runPowerShell(command: string) {
