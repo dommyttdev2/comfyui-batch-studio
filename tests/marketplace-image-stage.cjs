@@ -75,11 +75,7 @@ matchCode(
   /resize\(\{ width, height, quality: 'best' \}\)/,
   'native image output must use the highest Electron resize quality',
 );
-matchCode(
-  stage,
-  /toDataURL\('image\/webp', 1\)/,
-  'WebP quality must remain fixed at 100 percent',
-);
+matchCode(stage, /toDataURL\('image\/webp', 1\)/, 'WebP quality must remain fixed at 100 percent');
 matchCode(
   service,
   /MAX_INPUT_BYTES = 100 \* 1024 \* 1024/,
@@ -95,16 +91,8 @@ matchCode(
   /finalArtifact\.listImages\(nextContext\.root\)/,
   'marketplace picker must list Final Artifact images',
 );
-matchCode(
-  picker,
-  /marketplace\.previewPicker/,
-  'first picker click must preview the image',
-);
-matchCode(
-  picker,
-  /marketplace[\s\S]*commitPicker/,
-  'second picker click must commit the image',
-);
+matchCode(picker, /marketplace\.previewPicker/, 'first picker click must preview the image');
+matchCode(picker, /marketplace[\s\S]*commitPicker/, 'second picker click must commit the image');
 matchCode(
   main,
   /autoHideMenuBar: true[\s\S]*販売サイト用画像を選択/,
