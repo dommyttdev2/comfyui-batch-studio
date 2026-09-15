@@ -10,6 +10,7 @@ export type Stage =
   | 'モデル配置'
   | '実行前チェック'
   | '実行'
+  | '最終成果物'
   | 'キャプション'
   | 'サムネイル';
 export type Runner = <T>(fn: () => Promise<T>) => Promise<T | undefined>;
@@ -23,6 +24,7 @@ export const stages: Stage[] = [
   'モデル配置',
   '実行前チェック',
   '実行',
+  '最終成果物',
   'キャプション',
   'サムネイル',
 ];

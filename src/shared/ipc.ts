@@ -63,6 +63,8 @@ export const IPC = {
   EXECUTION_RESUME: 'execution:resume',
   EXECUTION_RESTART_REMOTE: 'execution:restart-remote',
   EXECUTION_RESTART_FROM_SCRATCH: 'execution:restart-from-scratch',
+  FINAL_ARTIFACT_STATUS: 'final-artifact:status',
+  FINAL_ARTIFACT_SELECT_DIRECTORY: 'final-artifact:select-directory',
   CAPTION_STATUS: 'caption:status',
   CAPTION_SELECT_SOURCE_DIRECTORY: 'caption:select-source-directory',
   CAPTION_IMPORT_GROK: 'caption:import-grok',

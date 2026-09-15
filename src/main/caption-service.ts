@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   CaptionBuildInfo,
@@ -11,9 +10,7 @@ import type {
   ValidationResult,
 } from '../shared/types.js';
 import { exists, readJson, writeJsonAtomic, writeTextAtomic } from './fs-utils.js';
-import { readProjectMeta } from './project-meta.js';
-
-const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+import { getFinalArtifactStatus } from './final-artifact-service.js';
 
 function internalDir(root: string) {
   return path.join(root, '._batch_studio');
@@ -143,21 +140,6 @@ export function validateCaptionContent(value: unknown): ValidationResult {
   return { valid: !issues.some((issue) => issue.severity === 'error'), issues };
 }
 
-async function isDirectory(directory: string) {
-  try {
-    return (await stat(directory)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-async function countImages(directory: string): Promise<number> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  return entries.filter(
-    (entry) => entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()),
-  ).length;
-}
-
 function renderContents(lines: string[], prefix: string) {
   return lines.map((line) => `${prefix}${line.trim()}`).join('\n');
 }
@@ -215,11 +197,10 @@ async function readDraft(root: string) {
 }
 
 export async function getCaptionStatus(root: string): Promise<CaptionStatus> {
-  const meta = await readProjectMeta(root);
-  const configured = meta?.settings.captionSourceDirectory?.trim() ?? '';
-  const sourceDirectory = configured || null;
-  const sourceExists = sourceDirectory ? await isDirectory(sourceDirectory) : false;
-  const imageCount = sourceExists && sourceDirectory ? await countImages(sourceDirectory) : 0;
+  const finalArtifact = await getFinalArtifactStatus(root);
+  const sourceDirectory = finalArtifact.directory;
+  const sourceExists = finalArtifact.exists;
+  const imageCount = finalArtifact.imageCount;
   const draft = await readDraft(root);
   const captionPath = outputPath(root);
   const captionExists = await exists(captionPath);
@@ -257,7 +238,7 @@ export async function getCaptionStatus(root: string): Promise<CaptionStatus> {
     sourceDirectory,
     sourceExists,
     imageCount,
-    imageExtensions: [...IMAGE_EXTENSIONS],
+    imageExtensions: finalArtifact.imageExtensions,
     content: draft.content,
     contentValidation: draft.validation,
     captionPath,

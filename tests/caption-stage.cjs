@@ -6,12 +6,11 @@ const service = fs.readFileSync(path.resolve(__dirname, '../src/main/caption-ser
 const grok = fs.readFileSync(path.resolve(__dirname, '../src/main/grok-context.ts'), 'utf8');
 const ui = fs.readFileSync(path.resolve(__dirname, '../src/renderer/ui.tsx'), 'utf8');
 const stage = fs.readFileSync(path.resolve(__dirname, '../src/renderer/CaptionStage.tsx'), 'utf8');
-const types = fs.readFileSync(path.resolve(__dirname, '../src/shared/types.ts'), 'utf8');
 
 matchCode(
   ui,
-  /'実行',[\s\S]*'キャプション'/,
-  'caption stage must appear after execution in project navigation',
+  /'実行',\s*'最終成果物',\s*'キャプション'/,
+  'caption stage must appear after the final artifact stage',
 );
 matchCode(
   ui,
@@ -19,19 +18,9 @@ matchCode(
   'caption stage must use its own Grok conversation context',
 );
 matchCode(
-  types,
-  /captionSourceDirectory\?: string/,
-  'final artifact directory must be persisted in project settings',
-);
-matchCode(
   service,
-  /new Set\(\['\.png', '\.jpg', '\.jpeg', '\.webp'\]\)/,
-  'caption image count must use the agreed supported image extensions',
-);
-doesNotMatchCode(
-  service,
-  /entry\.isDirectory\(\)/,
-  'caption image count must not include images from subdirectories',
+  /getFinalArtifactStatus\(root\)/,
+  'caption image count must come from the shared final artifact service',
 );
 matchCode(
   service,
@@ -74,12 +63,13 @@ matchCode(
   'Grok must not provide the final image count',
 );
 matchCode(grok, /定型注意書きは出力しません/, 'Grok must not own deterministic disclaimers');
-matchCode(
+doesNotMatchCode(
   stage,
   /caption\.selectSourceDirectory/,
-  'caption UI must allow the user to select the final artifact directory',
+  'caption UI must not own final artifact directory selection',
 );
-matchCode(stage, /caption\.status/, 'caption UI must rescan actual image count');
+matchCode(stage, /caption\.status/, 'caption UI must rescan the shared final artifact input');
+matchCode(stage, /<h3>2\. caption\.txt<\/h3>/, 'caption.txt must become the second caption step');
 matchCode(stage, /caption\.generate/, 'caption UI must generate caption.txt deterministically');
 
 console.log('Caption stage contract tests passed.');

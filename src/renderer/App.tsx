@@ -5,6 +5,7 @@ import { Overview, Settings } from './ProjectStages';
 import { StoryStage, ModelsStage } from './GrokStages';
 import { PromptPlanStage } from './PromptPlanStage';
 import { CaptionStage } from './CaptionStage';
+import { FinalArtifactStage } from './FinalArtifactStage';
 import { ThumbnailStage } from './ThumbnailStage';
 import {
   WorkflowStage,
@@ -630,6 +631,8 @@ function StageView(props: {
       return <PreflightStage {...props} />;
     case '実行':
       return <ExecutionStage {...props} />;
+    case '最終成果物':
+      return <FinalArtifactStage {...props} />;
     case 'キャプション':
       return <CaptionStage {...props} />;
     case 'サムネイル':
