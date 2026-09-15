@@ -15,14 +15,13 @@ export type StandaloneWindowTool =
 
 export function standaloneToolFromSearch(search: string): StandaloneWindowTool | null {
   const tool = new URLSearchParams(search).get('tool');
-  return
-    tool === 'r2' ||
+  return tool === 'r2' ||
     tool === 'civit' ||
     tool === 'vastai' ||
     tool === 'thumbnail-picker' ||
     tool === 'marketplace-picker'
-      ? tool
-      : null;
+    ? tool
+    : null;
 }
 
 export function StandaloneToolApp({ tool }: { tool: StandaloneWindowTool }) {
