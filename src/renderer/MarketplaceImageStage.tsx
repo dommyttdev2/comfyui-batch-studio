@@ -79,6 +79,27 @@ function loadBrowserImage(source: FinalArtifactImageSource) {
   });
 }
 
+function browserSizedSource(source: FinalArtifactImageSource, image: HTMLImageElement) {
+  const width = source.width > 0 ? source.width : image.naturalWidth;
+  const height = source.height > 0 ? source.height : image.naturalHeight;
+  if (width < 1 || height < 1) throw new Error(`${source.name} の画像サイズを取得できませんでした。`);
+  return { ...source, width, height };
+}
+
+function normalizedWebpSourcePng(
+  source: FinalArtifactImageSource,
+  image: HTMLImageElement,
+) {
+  if (!source.path.toLocaleLowerCase().endsWith('.webp')) return undefined;
+  const canvas = document.createElement('canvas');
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('WebP入力画像の正規化Canvasを作成できませんでした。');
+  context.drawImage(image, 0, 0, source.width, source.height);
+  return canvas.toDataURL('image/png');
+}
+
 function encodePngAsWebp(dataUrl: string, width: number, height: number) {
   return new Promise<string>((resolve, reject) => {
     const image = new Image();
@@ -157,12 +178,13 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     );
     if (!nextSource) throw new Error('選択した画像を読み込めませんでした。');
     const nextImage = await loadBrowserImage(nextSource);
+    const sizedSource = browserSizedSource(nextSource, nextImage);
     const nextTargets: MarketplaceImageEditorState['targets'] = {};
     for (const target of targetDefinitions) {
       nextTargets[target.id] = {
         crop: normalizeCrop(
           preserveExisting ? (baseState.targets[target.id]?.crop ?? null) : null,
-          nextSource,
+          sizedSource,
           target.width,
           target.height,
         ),
@@ -170,7 +192,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     }
     const customCrop = normalizeCrop(
       preserveExisting ? baseState.custom.crop : null,
-      nextSource,
+      sizedSource,
       baseState.custom.width,
       baseState.custom.height,
     );
@@ -180,7 +202,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       targets: nextTargets,
       custom: { ...baseState.custom, crop: customCrop },
     };
-    setSource(nextSource);
+    setSource(sizedSource);
     setImage(nextImage);
     setState(nextState);
     return nextState;
@@ -207,17 +229,18 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         if (!nextSource || cancelled) return;
         const nextImage = await loadBrowserImage(nextSource);
         if (cancelled) return;
+        const sizedSource = browserSizedSource(nextSource, nextImage);
         const normalizedTargets: MarketplaceImageEditorState['targets'] = {};
         for (const target of nextTargets)
           normalizedTargets[target.id] = {
             crop: normalizeCrop(
               nextState.targets[target.id]?.crop ?? null,
-              nextSource,
+              sizedSource,
               target.width,
               target.height,
             ),
           };
-        setSource(nextSource);
+        setSource(sizedSource);
         setImage(nextImage);
         setState({
           ...nextState,
@@ -226,7 +249,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
             ...nextState.custom,
             crop: normalizeCrop(
               nextState.custom.crop,
-              nextSource,
+              sizedSource,
               nextState.custom.width,
               nextState.custom.height,
             ),
@@ -296,8 +319,9 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
           before.sourceImagePath,
         );
         if (!restored) return;
-        setSource(restored);
-        setImage(await loadBrowserImage(restored));
+        const restoredImage = await loadBrowserImage(restored);
+        setSource(browserSizedSource(restored, restoredImage));
+        setImage(restoredImage);
         setNotice('画像選択をキャンセルし、元の画像へ戻しました。');
       });
     });
@@ -484,6 +508,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   const generate = () =>
     void run(async () => {
       if (!state || !source || !image) return;
+      const sourcePngDataUrl = normalizedWebpSourcePng(source, image);
       let webpDataUrls: Record<string, string> | undefined;
       if (state.format === 'webp') {
         webpDataUrls = {};
@@ -496,6 +521,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
             crop,
             target.width,
             target.height,
+            sourcePngDataUrl,
           );
           webpDataUrls[target.id] = await encodePngAsWebp(png, target.width, target.height);
         }
@@ -504,6 +530,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         project.rootPath,
         state,
         webpDataUrls,
+        sourcePngDataUrl,
       );
       setLastPath(result.outputPaths.at(-1) ?? result.outputDirectory);
       setNotice(`4種類を生成しました: ${result.outputDirectory}`);
@@ -523,6 +550,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   const exportCustom = () =>
     void run(async () => {
       if (!state || !source || !image || !state.custom.crop) return;
+      const sourcePngDataUrl = normalizedWebpSourcePng(source, image);
       const webp =
         state.format === 'webp'
           ? await encodePngAsWebp(
@@ -532,6 +560,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
                 state.custom.crop,
                 state.custom.width,
                 state.custom.height,
+                sourcePngDataUrl,
               ),
               state.custom.width,
               state.custom.height,
@@ -541,6 +570,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         project.rootPath,
         state,
         webp,
+        sourcePngDataUrl,
       );
       setLastPath(result.outputPaths[0] ?? result.outputDirectory);
       setNotice(`カスタム画像を生成しました: ${result.outputPaths[0]}`);
