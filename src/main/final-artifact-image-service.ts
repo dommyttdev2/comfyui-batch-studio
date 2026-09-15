@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { FinalArtifactImageItem, FinalArtifactImageSource } from '../shared/types.js';
 import { getFinalArtifactStatus } from './final-artifact-service.js';
@@ -50,8 +50,20 @@ export async function assertFinalArtifactImage(root: string, imagePath: string) 
 
 export async function readImageSource(imagePath: string): Promise<FinalArtifactImageSource | null> {
   const resolved = path.resolve(imagePath);
-  if (!FINAL_ARTIFACT_IMAGE_MIME_TYPES[path.extname(resolved).toLowerCase()]) return null;
+  const extension = path.extname(resolved).toLowerCase();
+  const mime = FINAL_ARTIFACT_IMAGE_MIME_TYPES[extension];
+  if (!mime) return null;
   try {
+    if (extension === '.webp') {
+      const bytes = await readFile(resolved);
+      return {
+        path: resolved,
+        name: path.basename(resolved),
+        width: 0,
+        height: 0,
+        dataUrl: `data:${mime};base64,${bytes.toString('base64')}`,
+      };
+    }
     const { image, width, height } = await readOrientedNativeImage(resolved);
     return {
       path: resolved,
@@ -69,8 +81,20 @@ export async function readImagePreview(
   imagePath: string,
 ): Promise<FinalArtifactImageSource | null> {
   const resolved = path.resolve(imagePath);
-  if (!FINAL_ARTIFACT_IMAGE_MIME_TYPES[path.extname(resolved).toLowerCase()]) return null;
+  const extension = path.extname(resolved).toLowerCase();
+  const mime = FINAL_ARTIFACT_IMAGE_MIME_TYPES[extension];
+  if (!mime) return null;
   try {
+    if (extension === '.webp') {
+      const bytes = await readFile(resolved);
+      return {
+        path: resolved,
+        name: path.basename(resolved),
+        width: 0,
+        height: 0,
+        dataUrl: `data:${mime};base64,${bytes.toString('base64')}`,
+      };
+    }
     const { image, width } = await readOrientedNativeImage(resolved);
     const preview = width > 320 ? image.resize({ width: 320, quality: 'good' }) : image;
     const size = preview.getSize();
