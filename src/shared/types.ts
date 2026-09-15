@@ -1184,6 +1184,7 @@ export interface BatchStudioApi {
       root: string,
       state: MarketplaceImageEditorState,
       webpDataUrls?: Record<string, string>,
+      sourcePngDataUrl?: string,
     ) => Promise<MarketplaceGenerationResult>;
     generateZip: (
       root: string,
@@ -1193,6 +1194,7 @@ export interface BatchStudioApi {
       root: string,
       state: MarketplaceImageEditorState,
       webpDataUrl?: string,
+      sourcePngDataUrl?: string,
     ) => Promise<MarketplaceGenerationResult>;
     renderPng: (
       root: string,
@@ -1200,6 +1202,7 @@ export interface BatchStudioApi {
       crop: MarketplaceCropRect,
       width: number,
       height: number,
+      sourcePngDataUrl?: string,
     ) => Promise<string>;
     openPicker: (root: string, currentImagePath: string) => Promise<MarketplacePickerSession>;
     pickerContext: () => Promise<MarketplacePickerContext>;
