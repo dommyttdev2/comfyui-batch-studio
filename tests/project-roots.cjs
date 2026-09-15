@@ -88,6 +88,12 @@ matchCode(
   '新規プロジェクト作成先の初期値へProject rootを反映する',
 );
 matchCode(app, /selectParent\(parent\)/, '新規プロジェクトの作成先選択へ現在の入力済みパスを渡す');
+matchCode(app, /Project root/, '新規プロジェクトの作成先ラベルをProject rootと表示する');
+matchCode(
+  app,
+  /プロジェクトID \(フォルダ名\)/,
+  '新規プロジェクトのIDがフォルダ名であることを明示する',
+);
 matchCode(
   main,
   /PROJECT_SELECT_PARENT.*defaultPath.*showOpenDialog\(\{.*defaultPath: initialDirectory/s,
