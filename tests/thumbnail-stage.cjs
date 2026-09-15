@@ -134,8 +134,8 @@ matchCode(
 );
 matchCode(
   finalArtifactImageService,
-  /nativeImage[\s\S]*resize\(\{ width: 320/,
-  'shared gallery previews must remain lightweight',
+  /readOrientedNativeImage[\s\S]*resize\(\{ width: 320/,
+  'shared gallery previews must remain EXIF-aware and lightweight',
 );
 matchCode(
   preload,
