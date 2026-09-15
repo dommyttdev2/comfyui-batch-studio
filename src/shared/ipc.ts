@@ -94,6 +94,7 @@ export const IPC = {
   MARKETPLACE_GENERATE: 'marketplace:generate',
   MARKETPLACE_GENERATE_ZIP: 'marketplace:generate-zip',
   MARKETPLACE_EXPORT_CUSTOM: 'marketplace:export-custom',
+  MARKETPLACE_RENDER_PNG: 'marketplace:render-png',
   MARKETPLACE_PICKER_OPEN: 'marketplace-picker:open',
   MARKETPLACE_PICKER_CONTEXT: 'marketplace-picker:context',
   MARKETPLACE_PICKER_PREVIEW: 'marketplace-picker:preview',
