@@ -106,6 +106,11 @@ matchCode(
   /thumbnail:[\s\S]*listImages:[\s\S]*readPreview:[\s\S]*exportImage/,
   'thumbnail gallery API must be exposed through preload',
 );
+matchCode(
+  preload,
+  /THUMBNAIL_LIST_IMAGES:\s*'thumbnail:list-images'[\s\S]*THUMBNAIL_READ_PREVIEW:\s*'thumbnail:read-preview'/,
+  'preload IPC constants must define thumbnail gallery channels',
+);
 matchCode(preload, /thumbnail:[\s\S]*exportImage/, 'thumbnail API must be exposed through preload');
 matchCode(main, /IPC\.THUMBNAIL_EXPORT/, 'main process must handle image export');
 matchCode(
