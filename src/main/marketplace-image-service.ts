@@ -127,22 +127,17 @@ export async function normalizeMarketplaceImageState(
         : undefined;
     normalizedTargets[target.id] = {
       crop:
-        raw && typeof raw === 'object'
-          ? cropFromUnknown((raw as { crop?: unknown }).crop)
-          : null,
+        raw && typeof raw === 'object' ? cropFromUnknown((raw as { crop?: unknown }).crop) : null,
     };
   }
   const activeTargetId = targets.some((target) => target.id === candidate.activeTargetId)
     ? (candidate.activeTargetId as string)
     : defaults.activeTargetId;
   const custom =
-    candidate.custom && typeof candidate.custom === 'object'
-      ? candidate.custom
-      : defaults.custom;
+    candidate.custom && typeof candidate.custom === 'object' ? candidate.custom : defaults.custom;
   return {
     schemaVersion: 1,
-    sourceImagePath:
-      typeof candidate.sourceImagePath === 'string' ? candidate.sourceImagePath : '',
+    sourceImagePath: typeof candidate.sourceImagePath === 'string' ? candidate.sourceImagePath : '',
     mode: candidate.mode === 'custom' ? 'custom' : 'marketplace',
     activeTargetId,
     format,
@@ -208,7 +203,10 @@ function webpBuffer(dataUrl: string | undefined) {
   return bytes;
 }
 
-function encodeNative(image: Electron.NativeImage, format: Exclude<MarketplaceOutputFormat, 'webp'>) {
+function encodeNative(
+  image: Electron.NativeImage,
+  format: Exclude<MarketplaceOutputFormat, 'webp'>,
+) {
   return format === 'jpeg' ? image.toJPEG(100) : image.toPNG();
 }
 
@@ -258,10 +256,7 @@ export async function generateMarketplaceImages(
     const bytes =
       state.format === 'webp'
         ? webpBuffer(webpDataUrls?.[target.id])
-        : encodeNative(
-            renderNative(image, crop, target.width, target.height),
-            state.format,
-          );
+        : encodeNative(renderNative(image, crop, target.width, target.height), state.format);
     await writeAtomic(outputPath, bytes);
     outputPaths.push(outputPath);
   }
