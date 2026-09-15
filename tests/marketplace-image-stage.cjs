@@ -107,6 +107,26 @@ matchCode(
   'final artifact image access must validate project scope',
 );
 matchCode(
+  imageService,
+  /extension === '\.webp'[\s\S]*readFile\(resolved\)[\s\S]*data:\$\{mime\};base64/,
+  'WebP final artifacts must be passed through for Chromium decoding',
+);
+matchCode(
+  stage,
+  /normalizedWebpSourcePng[\s\S]*toDataURL\('image\/png'\)/,
+  'WebP source images must be normalized to PNG in Chromium',
+);
+matchCode(
+  service,
+  /path\.extname\(resolved\)\.toLowerCase\(\) === '\.webp'[\s\S]*normalizedPngImage/,
+  'Main Process must decode normalized PNG for WebP source images',
+);
+matchCode(
+  preload,
+  /generate: \(r, s, w, p\)[\s\S]*renderPng: \(r, p, c, w, h, s\)/,
+  'WebP normalization payload must cross preload explicitly',
+);
+matchCode(
   picker,
   /finalArtifact\.listImages\(nextContext\.root\)/,
   'marketplace picker must list Final Artifact images',
