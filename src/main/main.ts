@@ -585,11 +585,7 @@ async function validateMarketplacePickerImage(
   return assertFinalArtifactImage(state.root, imagePath);
 }
 
-function openMarketplacePickerWindow(
-  opener: WebContents,
-  root: string,
-  currentImagePath: string,
-) {
+function openMarketplacePickerWindow(opener: WebContents, root: string, currentImagePath: string) {
   for (const existing of marketplacePickerWindows.values()) {
     if (existing.opener.id === opener.id) existing.window.close();
   }
@@ -1870,22 +1866,16 @@ function register() {
     validRoot(root);
     return listFinalArtifactImages(root);
   });
-  ipcMain.handle(
-    IPC.FINAL_ARTIFACT_READ_IMAGE,
-    (_e, root: unknown, imagePath: unknown) => {
-      validRoot(root);
-      if (typeof imagePath !== 'string') throw new Error('Invalid final artifact image path');
-      return readFinalArtifactImage(root, imagePath);
-    },
-  );
-  ipcMain.handle(
-    IPC.FINAL_ARTIFACT_READ_PREVIEW,
-    (_e, root: unknown, imagePath: unknown) => {
-      validRoot(root);
-      if (typeof imagePath !== 'string') throw new Error('Invalid final artifact image path');
-      return readFinalArtifactPreview(root, imagePath);
-    },
-  );
+  ipcMain.handle(IPC.FINAL_ARTIFACT_READ_IMAGE, (_e, root: unknown, imagePath: unknown) => {
+    validRoot(root);
+    if (typeof imagePath !== 'string') throw new Error('Invalid final artifact image path');
+    return readFinalArtifactImage(root, imagePath);
+  });
+  ipcMain.handle(IPC.FINAL_ARTIFACT_READ_PREVIEW, (_e, root: unknown, imagePath: unknown) => {
+    validRoot(root);
+    if (typeof imagePath !== 'string') throw new Error('Invalid final artifact image path');
+    return readFinalArtifactPreview(root, imagePath);
+  });
   ipcMain.handle(IPC.CAPTION_STATUS, (_e, root: unknown) => {
     validRoot(root);
     return getCaptionStatus(root);
@@ -2046,14 +2036,11 @@ function register() {
       );
     },
   );
-  ipcMain.handle(
-    IPC.MARKETPLACE_PICKER_OPEN,
-    (event, root: unknown, currentImagePath: unknown) => {
-      validRoot(root);
-      if (typeof currentImagePath !== 'string') throw new Error('Invalid marketplace image path');
-      return openMarketplacePickerWindow(event.sender, root, currentImagePath);
-    },
-  );
+  ipcMain.handle(IPC.MARKETPLACE_PICKER_OPEN, (event, root: unknown, currentImagePath: unknown) => {
+    validRoot(root);
+    if (typeof currentImagePath !== 'string') throw new Error('Invalid marketplace image path');
+    return openMarketplacePickerWindow(event.sender, root, currentImagePath);
+  });
   ipcMain.handle(IPC.MARKETPLACE_PICKER_CONTEXT, (event) => {
     const state = marketplacePickerForSender(event.sender);
     return {
