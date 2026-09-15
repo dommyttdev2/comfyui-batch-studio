@@ -155,8 +155,13 @@ matchCode(
 );
 matchCode(
   thumbnailCss,
-  /thumbnail-image-choice-preview img[\s\S]*object-fit:\s*contain/,
-  'gallery previews must show the whole image without cropping',
+  /thumbnail-image-choice-preview img[\s\S]*height:\s*auto[\s\S]*object-fit:\s*contain/,
+  'gallery previews must preserve the source aspect ratio and show the whole image',
+);
+doesNotMatchCode(
+  thumbnailCss,
+  /thumbnail-image-choice-preview\s*\{[\s\S]*?aspect-ratio:\s*4\s*\/\s*3/,
+  'gallery preview containers must not force images into a 4:3 frame',
 );
 matchCode(
   main,
