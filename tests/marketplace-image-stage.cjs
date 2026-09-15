@@ -18,10 +18,7 @@ const service = fs.readFileSync(
   path.join(repo, 'src', 'main', 'marketplace-image-service.ts'),
   'utf8',
 );
-const imagePipeline = fs.readFileSync(
-  path.join(repo, 'src', 'main', 'image-pipeline.ts'),
-  'utf8',
-);
+const imagePipeline = fs.readFileSync(path.join(repo, 'src', 'main', 'image-pipeline.ts'), 'utf8');
 const imagePipelineCore = fs.readFileSync(
   path.join(repo, 'src', 'main', 'image-pipeline-core.ts'),
   'utf8',
