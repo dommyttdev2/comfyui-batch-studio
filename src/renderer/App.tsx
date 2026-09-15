@@ -152,7 +152,13 @@ function App() {
           rememberRecent(openedProject);
           setTool(null);
           setStage('概要');
+          return;
         }
+        if (command === 'settings') {
+          setEnvironmentOpen(true);
+          return;
+        }
+        if (command === 'close') void closeProject();
       }),
     [],
   );
@@ -215,17 +221,6 @@ function App() {
           <small>{project?.rootPath}</small>
         </div>
         <div className="actions">
-          <button onClick={() => void openProject()}>開く</button>
-          <button onClick={() => setCreateOpen(true)}>新規作成</button>
-          <button onClick={() => setEnvironmentOpen(true)}>環境設定</button>
-          {project && (
-            <>
-              <button onClick={() => window.batchStudio.project.openFolder(project.rootPath)}>
-                フォルダー
-              </button>
-              <button onClick={() => void closeProject()}>プロジェクトを閉じる</button>
-            </>
-          )}
           {project && !tool && shouldShowGrok(stage) && (
             <button
               onClick={async () => {
