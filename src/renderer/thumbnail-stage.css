@@ -202,7 +202,7 @@
 }
 .thumbnail-image-picker-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 14px;
   padding: 12px 20px;
@@ -213,12 +213,41 @@
   font-size: 13px;
   white-space: nowrap;
 }
+.thumbnail-image-picker-size {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid #3a4350;
+  border-radius: 7px;
+}
+.thumbnail-image-picker-size button {
+  min-width: 42px;
+  padding: 6px 10px;
+  border: 0;
+  border-right: 1px solid #3a4350;
+  border-radius: 0;
+  background: #11161d;
+}
+.thumbnail-image-picker-size button:last-child {
+  border-right: 0;
+}
+.thumbnail-image-picker-size button.active {
+  background: #2563eb;
+  color: #fff;
+}
 .thumbnail-image-picker-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
   overflow: auto;
   padding: 16px 20px 22px;
+}
+.thumbnail-image-picker-grid.large {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.thumbnail-image-picker-grid.medium {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.thumbnail-image-picker-grid.small {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 .thumbnail-image-choice {
   position: relative;
@@ -254,7 +283,7 @@
 .thumbnail-image-choice-preview img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 .thumbnail-image-choice-name {
   overflow: hidden;
