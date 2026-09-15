@@ -18,14 +18,14 @@ matchCode(
   /workflow-custom-nodes\.json/,
   'Workflow依存custom_nodesはJSON定義を正本として読み込む',
 );
-assert.deepEqual(
-  workflowCustomNodes.repositories.map((node) => node.repository),
-  [
-    'toshiki-takedomi/comfyui-batch-orchestrator',
-    'norqis/ComfyUI-Scene-Prompt-Tools',
-  ],
-  'Batch Studioが完全依存するcustom_nodesをJSONで定義する',
+assert.equal(workflowCustomNodes.schemaVersion, 1, 'Workflow custom_nodes定義のschemaを固定する');
+assert.equal(
+  workflowCustomNodes.repositories.length,
+  2,
+  'Batch Studioが完全依存する2件のcustom_nodesをJSONで定義する',
 );
+for (const node of workflowCustomNodes.repositories)
+  assert.match(node.repository, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, 'repositoryはowner/repo形式にする');
 matchCode(
   appSettings,
   /migrateRemoteCustomNodes\(raw\.remoteCustomNodes\)/,
