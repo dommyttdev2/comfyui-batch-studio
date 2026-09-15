@@ -6,6 +6,18 @@ const repo = path.resolve(__dirname, '..');
 const ui = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8');
 const app = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8');
 const stage = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ThumbnailStage.tsx'), 'utf8');
+const picker = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'ThumbnailPickerWindow.tsx'),
+  'utf8',
+);
+const standalone = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'StandaloneToolApp.tsx'),
+  'utf8',
+);
+const thumbnailCss = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'thumbnail-stage.css'),
+  'utf8',
+);
 const service = fs.readFileSync(path.join(repo, 'src', 'main', 'thumbnail-service.ts'), 'utf8');
 const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
@@ -83,11 +95,26 @@ matchCode(
 );
 matchCode(
   stage,
-  /\.listImages\(project\.rootPath\)/,
-  'image picker must list final artifact images',
+  /\.openPicker\([\s\S]*project\.rootPath[\s\S]*slot/,
+  'preview click must open the image picker in a dedicated window',
+);
+doesNotMatchCode(
+  stage,
+  /thumbnail-image-picker-backdrop/,
+  'thumbnail image selection must not render as a modal in the project window',
 );
 matchCode(
-  stage,
+  standalone,
+  /thumbnail-picker[\s\S]*ThumbnailPickerWindow/,
+  'thumbnail picker must be routed as a standalone renderer window',
+);
+matchCode(
+  picker,
+  /\.listImages\(nextContext\.root\)/,
+  'picker window must list final artifact images',
+);
+matchCode(
+  picker,
   /IntersectionObserver[\s\S]*readPreview\(item\.path\)/,
   'image picker previews must load lazily',
 );
@@ -103,33 +130,68 @@ matchCode(
 );
 matchCode(
   preload,
-  /thumbnail:[\s\S]*listImages:[\s\S]*readPreview:[\s\S]*exportImage/,
-  'thumbnail gallery API must be exposed through preload',
+  /thumbnail:[\s\S]*listImages:[\s\S]*readPreview:[\s\S]*openPicker:[\s\S]*pickerContext/,
+  'thumbnail gallery and picker window APIs must be exposed through preload',
 );
 matchCode(
   preload,
-  /THUMBNAIL_LIST_IMAGES:\s*'thumbnail:list-images'[\s\S]*THUMBNAIL_READ_PREVIEW:\s*'thumbnail:read-preview'/,
-  'preload IPC constants must define thumbnail gallery channels',
+  /THUMBNAIL_LIST_IMAGES:\s*'thumbnail:list-images'[\s\S]*THUMBNAIL_PICKER_OPEN:\s*'thumbnail-picker:open'/,
+  'preload IPC constants must define gallery and picker channels',
 );
 matchCode(
-  stage,
+  picker,
   /\['large', '大'\][\s\S]*\['medium', '中'\][\s\S]*\['small', '小'\]/,
   'image picker must expose large medium small display sizes',
 );
 matchCode(
-  stage,
-  /thumbnail-image-picker-grid \$\{pickerSize\}/,
+  picker,
+  /thumbnail-image-picker-grid \$\{size\}/,
   'image picker grid must reflect the selected display size',
 );
 matchCode(
-  fs.readFileSync(path.join(repo, 'src', 'renderer', 'thumbnail-stage.css'), 'utf8'),
+  thumbnailCss,
   /thumbnail-image-picker-grid\.large[\s\S]*repeat\(3,[\s\S]*thumbnail-image-picker-grid\.medium[\s\S]*repeat\(5,[\s\S]*thumbnail-image-picker-grid\.small[\s\S]*repeat\(7,/,
   'gallery display sizes must render 3, 5, and 7 columns',
 );
 matchCode(
-  fs.readFileSync(path.join(repo, 'src', 'renderer', 'thumbnail-stage.css'), 'utf8'),
+  thumbnailCss,
   /thumbnail-image-choice-preview img[\s\S]*object-fit:\s*contain/,
   'gallery previews must show the whole image without cropping',
+);
+matchCode(
+  main,
+  /loadRenderer\(view, 'thumbnail-picker'\)/,
+  'image picker must load in its own Electron window',
+);
+matchCode(
+  picker,
+  /tentativeRef\.current === item\.path[\s\S]*commitPicker\(item\.path\)[\s\S]*previewPicker\(item\.path\)/,
+  'first click must preview while selecting the same image again commits it',
+);
+matchCode(
+  main,
+  /THUMBNAIL_PICKER_COMMIT[\s\S]*state\.committed = true[\s\S]*THUMBNAIL_PICKER_COMMITTED[\s\S]*state\.window\.close\(\)/,
+  'committing an image must notify the project preview and close the picker window',
+);
+matchCode(
+  main,
+  /window\.on\('closed'[\s\S]*!state\.committed[\s\S]*THUMBNAIL_PICKER_CANCELLED/,
+  'closing an uncommitted picker must cancel the tentative preview',
+);
+matchCode(
+  stage,
+  /onPickerPreview[\s\S]*setPickerPreview\(selection\)/,
+  'first selection must update the project preview immediately',
+);
+matchCode(
+  stage,
+  /onPickerCommit[\s\S]*updateSlot\(selection\.slot,[\s\S]*setPickerPreview\(null\)/,
+  'confirmed selection must persist to the thumbnail slot',
+);
+matchCode(
+  stage,
+  /onPickerCancel[\s\S]*setPickerPreview\(null\)/,
+  'closing without confirmation must remove the tentative preview',
 );
 matchCode(preload, /thumbnail:[\s\S]*exportImage/, 'thumbnail API must be exposed through preload');
 matchCode(main, /IPC\.THUMBNAIL_EXPORT/, 'main process must handle image export');
