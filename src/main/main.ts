@@ -2013,13 +2013,24 @@ function register() {
   });
   ipcMain.handle(
     IPC.MARKETPLACE_GENERATE,
-    (_e, root: unknown, state: unknown, webpDataUrls: unknown) => {
+    (
+      _e,
+      root: unknown,
+      state: unknown,
+      webpDataUrls: unknown,
+      sourcePngDataUrl: unknown,
+    ) => {
       validRoot(root);
       const data =
         webpDataUrls && typeof webpDataUrls === 'object'
           ? (webpDataUrls as Record<string, string>)
           : undefined;
-      return generateMarketplaceImages(root, state, data);
+      return generateMarketplaceImages(
+        root,
+        state,
+        data,
+        typeof sourcePngDataUrl === 'string' ? sourcePngDataUrl : undefined,
+      );
     },
   );
   ipcMain.handle(IPC.MARKETPLACE_GENERATE_ZIP, (_e, root: unknown, format: unknown) => {
@@ -2028,12 +2039,19 @@ function register() {
   });
   ipcMain.handle(
     IPC.MARKETPLACE_EXPORT_CUSTOM,
-    (_e, root: unknown, state: unknown, webpDataUrl: unknown) => {
+    (
+      _e,
+      root: unknown,
+      state: unknown,
+      webpDataUrl: unknown,
+      sourcePngDataUrl: unknown,
+    ) => {
       validRoot(root);
       return exportCustomMarketplaceImage(
         root,
         state,
         typeof webpDataUrl === 'string' ? webpDataUrl : undefined,
+        typeof sourcePngDataUrl === 'string' ? sourcePngDataUrl : undefined,
       );
     },
   );
@@ -2046,6 +2064,7 @@ function register() {
       crop: unknown,
       width: unknown,
       height: unknown,
+      sourcePngDataUrl: unknown,
     ) => {
       validRoot(root);
       if (typeof sourceImagePath !== 'string') throw new Error('Invalid marketplace image path');
@@ -2058,6 +2077,7 @@ function register() {
         crop as import('../shared/types.js').MarketplaceCropRect,
         width,
         height,
+        typeof sourcePngDataUrl === 'string' ? sourcePngDataUrl : undefined,
       );
     },
   );
