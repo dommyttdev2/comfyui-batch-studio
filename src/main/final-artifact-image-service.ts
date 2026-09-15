@@ -52,7 +52,7 @@ export async function readImageSource(imagePath: string): Promise<FinalArtifactI
   const resolved = path.resolve(imagePath);
   if (!FINAL_ARTIFACT_IMAGE_MIME_TYPES[path.extname(resolved).toLowerCase()]) return null;
   try {
-    const { image, width, height } = await readOrientedNativeImage(resolved);
+    const { image, width } = await readOrientedNativeImage(resolved);
     return {
       path: resolved,
       name: path.basename(resolved),
