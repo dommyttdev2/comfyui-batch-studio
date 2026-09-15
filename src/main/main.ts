@@ -94,6 +94,14 @@ import { RemoteEnvironmentBootstrap } from './remote-environment-bootstrap.js';
 import { RemoteExecutionService } from './remote-execution.js';
 import { RemoteInstanceLifecycleService } from './remote-instance-lifecycle.js';
 import { generateCaption, getCaptionStatus, importCaptionGrok } from './caption-service.js';
+import {
+  exportThumbnail,
+  listThumbnailFonts,
+  loadThumbnailState,
+  readThumbnailImage,
+  readThumbnailTemplate,
+  saveThumbnailState,
+} from './thumbnail-service.js';
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
@@ -1567,6 +1575,47 @@ function register() {
     validRoot(root);
     return generateCaption(root);
   });
+  ipcMain.handle(IPC.THUMBNAIL_FONTS, () => listThumbnailFonts());
+  ipcMain.handle(IPC.THUMBNAIL_LOAD, (_e, root: unknown) => {
+    validRoot(root);
+    return loadThumbnailState(root);
+  });
+  ipcMain.handle(IPC.THUMBNAIL_SAVE, (_e, root: unknown, state: unknown) => {
+    validRoot(root);
+    return saveThumbnailState(root, state);
+  });
+  ipcMain.handle(IPC.THUMBNAIL_SELECT_IMAGE, async (_e, root: unknown) => {
+    validRoot(root);
+    const result = await dialog.showOpenDialog({
+      title: 'サムネイルへ挿入する画像を選択',
+      defaultPath: root,
+      properties: ['openFile'],
+      filters: [{ name: '画像', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return readThumbnailImage(result.filePaths[0]);
+  });
+  ipcMain.handle(IPC.THUMBNAIL_READ_IMAGE, (_e, imagePath: unknown) => {
+    if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
+    return readThumbnailImage(imagePath);
+  });
+  ipcMain.handle(IPC.THUMBNAIL_READ_TEMPLATE, (_e, pattern: unknown) =>
+    readThumbnailTemplate(
+      path.join(app.getAppPath(), 'dist-electron', 'thumbnail-templates'),
+      pattern,
+    ),
+  );
+  ipcMain.handle(
+    IPC.THUMBNAIL_EXPORT,
+    (_e, root: unknown, documentId: unknown, format: unknown, dataUrl: unknown) => {
+      validRoot(root);
+      if (typeof documentId !== 'number' || documentId < 1 || documentId > 6)
+        throw new Error('Invalid thumbnail document');
+      if (format !== 'png' && format !== 'jpeg') throw new Error('Invalid thumbnail format');
+      if (typeof dataUrl !== 'string') throw new Error('Invalid thumbnail image data');
+      return exportThumbnail(root, documentId, format, dataUrl);
+    },
+  );
   ipcMain.handle(IPC.R2_SETTINGS, () => r2().settings());
   ipcMain.handle(IPC.R2_ENVIRONMENT, () => r2().environment());
   ipcMain.handle(IPC.R2_TEST, (_e, input: R2ConnectionInput) => r2().test(input));
