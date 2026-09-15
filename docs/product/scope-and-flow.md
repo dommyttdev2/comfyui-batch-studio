@@ -4,7 +4,7 @@ Status: Active
 
 ## 1. 目的
 
-ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、企画入力から Story、Civitaiモデルカタログ同期、モデル選定、プロンプト計画、Workflow生成、モデル所在確認、Cloudflare R2管理、生成実行前Preflight、Local / Remote ComfyUIでの実行、成果物回収までを一つのデスクトップアプリで支援する。
+ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、企画入力から Story、Civitaiモデルカタログ同期、モデル選定、プロンプト計画、Workflow生成、モデル所在確認、Cloudflare R2管理、生成実行前Preflight、Local / Remote ComfyUIでの実行、成果物回収、最終成果物選定後のCaption・サムネイル・販売サイト用画像作成までを一つのデスクトップアプリで支援する。
 
 本製品は「AIに全部やらせるアプリ」ではない。意味的判断、機械処理、最終決定を明確に分離する。
 
@@ -42,6 +42,10 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - Scene Prompt Tools `ScenePrompterExpand` の連続生成 orchestration。
 - Remote実行時のR2経由モデル配置、成果物upload、Local回収、完全性検証。
 - Execution Runのprogress / stop / resume状態管理。
+- 手作業で選定・モザイク処理された最終成果物ディレクトリの指定と後工程への引き渡し。
+- 最終成果物の実画像枚数を用いたCaption組み立て。
+- 最終成果物を素材とするサムネイル編集・書き出し。
+- 最終成果物を素材とするFANZA / DLsite向け画像の独立クロップ、Lanczos3リサイズ、JPEG / PNG / WebP出力、ZIP化。
 
 ### 2.3 ユーザーの責務
 
@@ -205,6 +209,30 @@ executionTarget == remote
         |
         v
 COMPLETED
+        |
+        v
+[10. Final Artifact]
+User + Batch Studio
+  -> 手作業で選定・モザイク処理した最終成果物ディレクトリを指定
+        |
+        v
+[11. Caption]
+Grok + Batch Studio
+  -> title / description JSON
+  -> Batch Studioが最終成果物の実画像枚数を数えてcaption.txtを組み立て
+        |
+        v
+[12. Thumbnail]
+User + Batch Studio
+  -> 最終成果物画像からサムネイルを編集・生成
+        |
+        v
+[13. Marketplace Images]
+User + Batch Studio
+  -> 最終成果物画像からFANZA / DLsite各ターゲットを独立クロップ
+  -> marketplace/FANZA/*
+  -> marketplace/DLsite/*
+  -> marketplace-images.zip
 ```
 
 Workflow JSON名の `{project-destination-folder}` はProject実フォルダの1階層上のフォルダ名を使う。
@@ -236,6 +264,10 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 | モデル配置 | models, Local, integrated R2, executionTarget | 所在状態 / R2操作 | Local targetはLocal配置済み。Remote targetはR2配置済み |
 | 実行前チェック | 全成果物 + target環境 | READY / BLOCKED | artifact/model validationとtarget-specific operational checkにblocking errorなし |
 | 実行 | READY Project + executionTarget | Execution Run / Local成果物 | Localは生成+成果物確認、Remoteは生成+R2経由Local回収+hash検証成功 |
+| 最終成果物 | ユーザーが選定・処理した画像ディレクトリ | 最終成果物directory設定 | directoryが存在し画像を1枚以上含む |
+| キャプション | 最終成果物、Grok caption content | `caption.txt` | caption content有効、最終成果物の実画像枚数をBatch Studioが取得可能 |
+| サムネイル | 最終成果物画像 | Project内thumbnail outputs | 必要な画像を選択・編集して書き出し可能 |
+| 販売サイト用画像 | 最終成果物画像 | `marketplace/FANZA/*`, `marketplace/DLsite/*`, ZIP | FANZA / DLsite各ターゲットのcropが有効で生成可能 |
 
 ## 6. UI工程ナビゲーション
 
@@ -248,6 +280,11 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 ワークフロー
 モデル配置
 実行前チェック
+実行
+最終成果物
+キャプション
+サムネイル
+販売サイト用画像
 ```
 
 Grok pane既定表示:
@@ -294,7 +331,7 @@ Executionの詳細責務は `../architecture/remote-execution.md` を正本と�
 
 ### 7.4 Current implementation boundary
 
-現在のProject navigationは `概要 -> 基本設定 -> ストーリー -> モデル選定 -> プロンプト設計 -> ワークフロー -> モデル配置 -> 実行前チェック -> 実行` まで実装済みである。
+現在のProject navigationは `概要 -> 基本設定 -> ストーリー -> モデル選定 -> プロンプト設計 -> ワークフロー -> モデル配置 -> 実行前チェック -> 実行 -> 最終成果物 -> キャプション -> サムネイル -> 販売サイト用画像` まで実装済みである。
 
 Executionではpersistent Run、Local ComfyUI API + Scene Prompt Tools連続生成、Stop scheduling / Force interrupt / Resume、Vast.ai Instance lifecycle、公開SSH + Host Key検証、Remote Worker、Remote環境bootstrap、R2からのmodel staging、Remote Scene Prompt連続生成、成果物ZIP/manifest作成、R2 upload、Local download、SHA-256検証、cleanupまで実装済みである。
 
