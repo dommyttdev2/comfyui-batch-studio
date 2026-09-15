@@ -71,7 +71,9 @@ export async function listThumbnailFonts(): Promise<string[]> {
       .filter((value): value is string => typeof value === 'string')
       .map((value) => value.trim())
       .filter(Boolean);
-    return fonts.length ? [...new Set(fonts)].sort((a, b) => a.localeCompare(b)) : WINDOWS_FONT_FALLBACK;
+    return fonts.length
+      ? [...new Set(fonts)].sort((a, b) => a.localeCompare(b))
+      : WINDOWS_FONT_FALLBACK;
   } catch {
     return WINDOWS_FONT_FALLBACK;
   }
