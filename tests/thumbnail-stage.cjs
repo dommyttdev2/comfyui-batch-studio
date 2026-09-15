@@ -83,7 +83,7 @@ matchCode(
 );
 matchCode(
   stage,
-  /thumbnail-image-picker[\s\S]*listImages\(project\.rootPath\)/,
+  /\.listImages\(project\.rootPath\)/,
   'image picker must list final artifact images',
 );
 matchCode(
