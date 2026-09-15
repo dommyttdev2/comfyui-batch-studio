@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { nativeImage } from 'electron';
 import type {
   MarketplaceCropRect,
   MarketplaceGenerationResult,
@@ -12,6 +11,11 @@ import type {
 } from '../shared/types.js';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
 import { assertFinalArtifactImage } from './final-artifact-image-service.js';
+import {
+  encodeLanczosImage,
+  readOrientedNativeImage,
+  renderLanczosCrop,
+} from './image-pipeline.js';
 
 const MAX_INPUT_BYTES = 100 * 1024 * 1024;
 const __filename = fileURLToPath(import.meta.url);
@@ -189,9 +193,12 @@ async function loadSource(root: string, sourceImagePath: string) {
   const info = await stat(resolved);
   if (!info.isFile()) throw new Error('入力画像が見つかりません。');
   if (info.size > MAX_INPUT_BYTES) throw new Error('入力画像は100MB以下にしてください。');
-  const image = nativeImage.createFromPath(resolved);
-  if (image.isEmpty()) throw new Error('入力画像を読み込めませんでした。');
-  return { resolved, image, size: image.getSize() };
+  const oriented = await readOrientedNativeImage(resolved);
+  return {
+    resolved,
+    image: oriented.image,
+    size: { width: oriented.width, height: oriented.height },
+  };
 }
 
 function webpBuffer(dataUrl: string | undefined) {
@@ -203,13 +210,6 @@ function webpBuffer(dataUrl: string | undefined) {
   return bytes;
 }
 
-function encodeNative(
-  image: Electron.NativeImage,
-  format: Exclude<MarketplaceOutputFormat, 'webp'>,
-) {
-  return format === 'jpeg' ? image.toJPEG(100) : image.toPNG();
-}
-
 async function writeAtomic(outputPath: string, bytes: Buffer) {
   await mkdir(path.dirname(outputPath), { recursive: true });
   const temp = path.join(
@@ -218,15 +218,6 @@ async function writeAtomic(outputPath: string, bytes: Buffer) {
   );
   await writeFile(temp, bytes);
   await rename(temp, outputPath);
-}
-
-function renderNative(
-  source: Electron.NativeImage,
-  crop: MarketplaceCropRect,
-  width: number,
-  height: number,
-) {
-  return source.crop(crop).resize({ width, height, quality: 'best' });
 }
 
 export async function generateMarketplaceImages(
@@ -256,7 +247,10 @@ export async function generateMarketplaceImages(
     const bytes =
       state.format === 'webp'
         ? webpBuffer(webpDataUrls?.[target.id])
-        : encodeNative(renderNative(image, crop, target.width, target.height), state.format);
+        : encodeLanczosImage(
+            renderLanczosCrop(image, crop, target.width, target.height),
+            state.format,
+          );
     await writeAtomic(outputPath, bytes);
     outputPaths.push(outputPath);
   }
@@ -283,8 +277,8 @@ export async function exportCustomMarketplaceImage(
   const bytes =
     state.format === 'webp'
       ? webpBuffer(webpDataUrl)
-      : encodeNative(
-          renderNative(image, crop, state.custom.width, state.custom.height),
+      : encodeLanczosImage(
+          renderLanczosCrop(image, crop, state.custom.width, state.custom.height),
           state.format,
         );
   await writeAtomic(outputPath, bytes);
@@ -369,6 +363,20 @@ function storedZip(entries: Array<{ name: string; bytes: Buffer }>) {
   end.writeUInt32LE(offset, 16);
   end.writeUInt16LE(0, 20);
   return Buffer.concat([...localParts, centralDirectory, end]);
+}
+
+export async function renderMarketplacePng(
+  root: string,
+  sourceImagePath: string,
+  cropValue: MarketplaceCropRect,
+  widthValue: number,
+  heightValue: number,
+) {
+  const width = Math.round(finite(widthValue, 1, 1, 20000));
+  const height = Math.round(finite(heightValue, 1, 1, 20000));
+  const { image, size } = await loadSource(root, sourceImagePath);
+  const crop = clampCrop(cropValue, size.width, size.height, width, height);
+  return renderLanczosCrop(image, crop, width, height).toDataURL();
 }
 
 export async function generateMarketplaceZip(
