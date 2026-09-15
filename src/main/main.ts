@@ -111,6 +111,29 @@ import {
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
 const GROK_URL = 'https://grok.com/';
+const GROK_LOADING_HTML = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="color-scheme" content="dark" />
+<style>
+html,body{width:100%;height:100%;margin:0;background:#101318;color:#e8ebef;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+body{display:grid;place-items:center}
+.loading{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.spinner{width:30px;height:30px;border:3px solid #39414d;border-top-color:#3474ef;border-radius:50%;animation:spin .8s linear infinite}
+.title{font-size:15px;font-weight:600}
+.note{font-size:12px;color:#8993a2}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="loading" role="status" aria-live="polite">
+<div class="spinner" aria-hidden="true"></div>
+<div class="title">Grokを読み込み中…</div>
+<div class="note">読み込みが完了すると、このPaneにGrokが表示されます。</div>
+</div>
+</body>
+</html>`;
 type StandaloneWindowTool = 'r2' | 'civit' | 'vastai';
 type RendererWindowTool = StandaloneWindowTool | 'thumbnail-picker';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
@@ -136,9 +159,12 @@ type ProjectWindowState = {
   window: BaseWindow;
   localView: WebContentsView;
   grokView: WebContentsView;
+  grokLoadingView: WebContentsView;
   projectRoot: string | null;
   restoreLastProject: boolean;
   grokVisible: boolean;
+  grokLoading: boolean;
+  grokLoadingGeneration: number;
   localRatio: number;
   activeGrokContext: { root: string; stage: GrokContextStage } | null;
   restoringGrokContext: boolean;
@@ -180,11 +206,16 @@ function layoutProjectWindow(state: ProjectWindowState) {
   if (!state.grokVisible || width < 840) {
     state.localView.setBounds({ x: 0, y: 0, width, height });
     state.grokView.setBounds({ x: width, y: 0, width: 0, height });
+    state.grokLoadingView.setBounds({ x: width, y: 0, width: 0, height });
     return;
   }
-  const lw = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio)));
+  const lw = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio))),
+    grokBounds = { x: lw, y: 0, width: width - lw, height };
   state.localView.setBounds({ x: 0, y: 0, width: lw, height });
-  state.grokView.setBounds({ x: lw, y: 0, width: width - lw, height });
+  state.grokView.setBounds(grokBounds);
+  state.grokLoadingView.setBounds(
+    state.grokLoading ? grokBounds : { x: width, y: 0, width: 0, height },
+  );
 }
 function projectWindowForSender(contents: WebContents) {
   for (const state of projectWindows.values())
@@ -332,13 +363,23 @@ function createProjectWindow(
         sandbox: true,
       },
     }),
+    grokLoadingView = new WebContentsView({
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
     state: ProjectWindowState = {
       window,
       localView,
       grokView,
+      grokLoadingView,
       projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
       restoreLastProject: Boolean(options.restoreLastProject),
       grokVisible: false,
+      grokLoading: false,
+      grokLoadingGeneration: 0,
       localRatio: 0.45,
       activeGrokContext: null,
       restoringGrokContext: false,
@@ -351,6 +392,10 @@ function createProjectWindow(
   lastFocusedProjectWindowId = windowId;
   window.contentView.addChildView(localView);
   window.contentView.addChildView(grokView);
+  window.contentView.addChildView(grokLoadingView);
+  void grokLoadingView.webContents
+    .loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(GROK_LOADING_HTML)}`)
+    .catch((error) => console.warn('Grok loading placeholder failed:', error));
   configureGrokContents(grokView.webContents);
   attachGrokHistoryTracking(state);
   window.on('focus', () => {
@@ -365,6 +410,7 @@ function createProjectWindow(
     }
     localView.webContents.close();
     grokView.webContents.close();
+    grokLoadingView.webContents.close();
     projectWindows.delete(windowId);
     if (lastFocusedProjectWindowId === windowId) lastFocusedProjectWindowId = null;
     void rememberMostRecentOpenProject(false);
@@ -937,36 +983,46 @@ async function setGrokContext(state: ProjectWindowState, root: string, stage: Gr
   validRoot(root);
   validGrokContextStage(stage);
   const resolvedRoot = path.resolve(root),
-    key = `${resolvedRoot}\0${stage}`;
-  return state.grokContextQueue.run(key, async (isLatest) => {
-    if (!isLatest()) return paneState(state);
-    if (state.activeGrokContext) {
-      const current = canonicalGrokConversationUrl(state.grokView.webContents.getURL());
-      if (current)
-        await chatStore().remember(
-          state.activeGrokContext.root,
-          state.activeGrokContext.stage,
-          current,
-        );
-    }
-    if (!isLatest()) return paneState(state);
-    state.activeGrokContext = { root: resolvedRoot, stage };
-    const saved = await chatStore().get(resolvedRoot, stage);
-    if (!isLatest()) return paneState(state);
-    const target = saved ?? GROK_URL,
-      current = state.grokView.webContents.getURL(),
-      currentCanonical = canonicalGrokConversationUrl(current);
-    const alreadyThere = saved ? currentCanonical === saved : current === GROK_URL;
-    if (!alreadyThere) {
-      state.restoringGrokContext = true;
-      try {
-        await state.grokNavigationQueue.navigate(state.grokView.webContents, target);
-      } finally {
-        state.restoringGrokContext = false;
+    key = `${resolvedRoot}\0${stage}`,
+    loadingGeneration = ++state.grokLoadingGeneration;
+  state.grokLoading = true;
+  layoutProjectWindow(state);
+  try {
+    return await state.grokContextQueue.run(key, async (isLatest) => {
+      if (!isLatest()) return paneState(state);
+      if (state.activeGrokContext) {
+        const current = canonicalGrokConversationUrl(state.grokView.webContents.getURL());
+        if (current)
+          await chatStore().remember(
+            state.activeGrokContext.root,
+            state.activeGrokContext.stage,
+            current,
+          );
       }
+      if (!isLatest()) return paneState(state);
+      state.activeGrokContext = { root: resolvedRoot, stage };
+      const saved = await chatStore().get(resolvedRoot, stage);
+      if (!isLatest()) return paneState(state);
+      const target = saved ?? GROK_URL,
+        current = state.grokView.webContents.getURL(),
+        currentCanonical = canonicalGrokConversationUrl(current);
+      const alreadyThere = saved ? currentCanonical === saved : current === GROK_URL;
+      if (!alreadyThere) {
+        state.restoringGrokContext = true;
+        try {
+          await state.grokNavigationQueue.navigate(state.grokView.webContents, target);
+        } finally {
+          state.restoringGrokContext = false;
+        }
+      }
+      return paneState(state);
+    });
+  } finally {
+    if (loadingGeneration === state.grokLoadingGeneration) {
+      state.grokLoading = false;
+      layoutProjectWindow(state);
     }
-    return paneState(state);
-  });
+  }
 }
 function validCivitaiUrl(value: unknown) {
   if (typeof value !== 'string') return false;
