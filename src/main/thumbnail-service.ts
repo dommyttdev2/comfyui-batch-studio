@@ -225,7 +225,9 @@ export async function listThumbnailImages(directory: string): Promise<ThumbnailI
         entry.isFile() && IMAGE_TYPES[path.extname(entry.name).toLowerCase()] !== undefined,
     )
     .map((entry) => ({ path: path.join(directory, entry.name), name: entry.name }))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }),
+    );
 }
 
 export async function readThumbnailPreview(
