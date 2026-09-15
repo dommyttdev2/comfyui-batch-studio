@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nativeImage } from 'electron';
 import type {
   MarketplaceCropRect,
   MarketplaceGenerationResult,
@@ -187,12 +188,33 @@ function clampCrop(
   return { x, y, width, height };
 }
 
-async function loadSource(root: string, sourceImagePath: string) {
+function normalizedPngImage(dataUrl: string | undefined) {
+  if (!dataUrl || !dataUrl.startsWith('data:image/png;base64,'))
+    throw new Error('WebP入力画像の正規化PNGデータが不足しています。');
+  const bytes = Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64');
+  if (!bytes.length || bytes.length > 200 * 1024 * 1024)
+    throw new Error('WebP入力画像の正規化PNGデータが不正です。');
+  const image = nativeImage.createFromBuffer(bytes);
+  if (image.isEmpty()) throw new Error('WebP入力画像の正規化PNGを読み込めませんでした。');
+  return image;
+}
+
+async function loadSource(
+  root: string,
+  sourceImagePath: string,
+  sourcePngDataUrl?: string,
+) {
   if (!sourceImagePath) throw new Error('入力画像を選択してください。');
   const resolved = await assertFinalArtifactImage(root, sourceImagePath);
   const info = await stat(resolved);
   if (!info.isFile()) throw new Error('入力画像が見つかりません。');
   if (info.size > MAX_INPUT_BYTES) throw new Error('入力画像は100MB以下にしてください。');
+
+  if (path.extname(resolved).toLowerCase() === '.webp') {
+    const image = normalizedPngImage(sourcePngDataUrl);
+    return { resolved, image, size: image.getSize() };
+  }
+
   const oriented = await readOrientedNativeImage(resolved);
   return {
     resolved,
@@ -224,10 +246,11 @@ export async function generateMarketplaceImages(
   root: string,
   value: unknown,
   webpDataUrls?: Record<string, string>,
+  sourcePngDataUrl?: string,
 ): Promise<MarketplaceGenerationResult> {
   const state = await saveMarketplaceImageState(root, value);
   const targets = await getMarketplaceImageTargets();
-  const { image, size } = await loadSource(root, state.sourceImagePath);
+  const { image, size } = await loadSource(root, state.sourceImagePath, sourcePngDataUrl);
   const outputDirectory = path.join(root, 'marketplace');
   const extension = FORMAT_EXTENSIONS[state.format];
   const outputPaths: string[] = [];
@@ -261,9 +284,10 @@ export async function exportCustomMarketplaceImage(
   root: string,
   value: unknown,
   webpDataUrl?: string,
+  sourcePngDataUrl?: string,
 ): Promise<MarketplaceGenerationResult> {
   const state = await saveMarketplaceImageState(root, value);
-  const { image, size } = await loadSource(root, state.sourceImagePath);
+  const { image, size } = await loadSource(root, state.sourceImagePath, sourcePngDataUrl);
   const crop = clampCrop(
     state.custom.crop,
     size.width,
@@ -371,10 +395,11 @@ export async function renderMarketplacePng(
   cropValue: MarketplaceCropRect,
   widthValue: number,
   heightValue: number,
+  sourcePngDataUrl?: string,
 ) {
   const width = Math.round(finite(widthValue, 1, 1, 20000));
   const height = Math.round(finite(heightValue, 1, 1, 20000));
-  const { image, size } = await loadSource(root, sourceImagePath);
+  const { image, size } = await loadSource(root, sourceImagePath, sourcePngDataUrl);
   const crop = clampCrop(cropValue, size.width, size.height, width, height);
   return renderLanczosCrop(image, crop, width, height).toDataURL();
 }
