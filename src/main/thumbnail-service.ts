@@ -13,7 +13,11 @@ import type {
   ThumbnailTemplateSource,
 } from '../shared/types.js';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
-import { listImageFiles, readImagePreview, readImageSource } from './final-artifact-image-service.js';
+import {
+  listImageFiles,
+  readImagePreview,
+  readImageSource,
+} from './final-artifact-image-service.js';
 
 const PATTERNS = new Set<ThumbnailPattern>([
   '3-images',
