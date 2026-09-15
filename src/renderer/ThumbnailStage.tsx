@@ -800,6 +800,7 @@ function FontFamilyComboBox({
                 key={font}
                 className={index === activeIndex ? 'active' : ''}
                 style={{ fontFamily: font }}
+                onMouseDown={(event) => event.preventDefault()}
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => selectFont(font)}
               >
@@ -838,14 +839,14 @@ function TextInspector({
         テキスト
         <input value={value.text} onChange={(event) => set('text', event.target.value)} />
       </label>
-      <label>
-        フォント
+      <div className="thumbnail-control-label">
+        <span>フォント</span>
         <FontFamilyComboBox
           value={value.fontFamily}
           options={fontOptions}
           onChange={(fontFamily) => set('fontFamily', fontFamily)}
         />
-      </label>
+      </div>
       <div className="thumbnail-number-grid">
         <label>
           サイズ

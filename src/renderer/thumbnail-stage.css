@@ -69,7 +69,8 @@
   margin-bottom: 12px;
 }
 .thumbnail-inspector label,
-.thumbnail-preview-head label {
+.thumbnail-preview-head label,
+.thumbnail-control-label {
   display: flex;
   flex-direction: column;
   gap: 5px;
