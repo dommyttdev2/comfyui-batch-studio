@@ -47,6 +47,11 @@ matchCode(
   'thumbnail API must expose system fonts',
 );
 matchCode(main, /IPC\.THUMBNAIL_FONTS/, 'main process must handle font enumeration');
+matchCode(
+  main,
+  /THUMBNAIL_SELECT_IMAGE[\s\S]*getFinalArtifactStatus\(root\)[\s\S]*defaultPath:\s*finalArtifact\.exists/,
+  'thumbnail image picker must default to the final artifact directory',
+);
 matchCode(service, /InstalledFontCollection/, 'Windows installed font families must be enumerated');
 matchCode(
   stage,

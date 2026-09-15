@@ -94,6 +94,7 @@ import { RemoteEnvironmentBootstrap } from './remote-environment-bootstrap.js';
 import { RemoteExecutionService } from './remote-execution.js';
 import { RemoteInstanceLifecycleService } from './remote-instance-lifecycle.js';
 import { generateCaption, getCaptionStatus, importCaptionGrok } from './caption-service.js';
+import { getFinalArtifactStatus } from './final-artifact-service.js';
 import {
   exportThumbnail,
   listThumbnailFonts,
@@ -1548,22 +1549,34 @@ function register() {
     await startExecutionRuntime(root, next);
     return next;
   });
+  const selectFinalArtifactDirectory = async (root: string) => {
+    const currentStatus = await getFinalArtifactStatus(root);
+    const meta = await readProjectMeta(root);
+    const fallback = meta?.settings.artifactOutputPath?.trim();
+    const result = await dialog.showOpenDialog({
+      title: '最終成果物ディレクトリを選択',
+      defaultPath: currentStatus.directory || fallback || root,
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) return currentStatus;
+    await saveProjectSettings(root, { finalArtifactDirectory: result.filePaths[0] });
+    return getFinalArtifactStatus(root);
+  };
+  ipcMain.handle(IPC.FINAL_ARTIFACT_STATUS, (_e, root: unknown) => {
+    validRoot(root);
+    return getFinalArtifactStatus(root);
+  });
+  ipcMain.handle(IPC.FINAL_ARTIFACT_SELECT_DIRECTORY, (_e, root: unknown) => {
+    validRoot(root);
+    return selectFinalArtifactDirectory(root);
+  });
   ipcMain.handle(IPC.CAPTION_STATUS, (_e, root: unknown) => {
     validRoot(root);
     return getCaptionStatus(root);
   });
   ipcMain.handle(IPC.CAPTION_SELECT_SOURCE_DIRECTORY, async (_e, root: unknown) => {
     validRoot(root);
-    const meta = await readProjectMeta(root);
-    const current = meta?.settings.captionSourceDirectory?.trim();
-    const fallback = meta?.settings.artifactOutputPath?.trim();
-    const result = await dialog.showOpenDialog({
-      title: '最終成果物ディレクトリを選択',
-      defaultPath: current || fallback || root,
-      properties: ['openDirectory'],
-    });
-    if (result.canceled || !result.filePaths[0]) return getCaptionStatus(root);
-    await saveProjectSettings(root, { captionSourceDirectory: result.filePaths[0] });
+    await selectFinalArtifactDirectory(root);
     return getCaptionStatus(root);
   });
   ipcMain.handle(IPC.CAPTION_IMPORT_GROK, (_e, root: unknown, raw: unknown) => {
@@ -1586,9 +1599,10 @@ function register() {
   });
   ipcMain.handle(IPC.THUMBNAIL_SELECT_IMAGE, async (_e, root: unknown) => {
     validRoot(root);
+    const finalArtifact = await getFinalArtifactStatus(root);
     const result = await dialog.showOpenDialog({
       title: 'サムネイルへ挿入する画像を選択',
-      defaultPath: root,
+      defaultPath: finalArtifact.exists && finalArtifact.directory ? finalArtifact.directory : root,
       properties: ['openFile'],
       filters: [{ name: '画像', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
     });

@@ -99,6 +99,8 @@ export interface ProjectSettings {
   remoteProvider?: CloudInstanceProviderId;
   remoteInstanceId?: number;
   artifactOutputPath?: string;
+  finalArtifactDirectory?: string;
+  /** @deprecated Read-only compatibility for projects created before the Final Artifact stage. */
   captionSourceDirectory?: string;
   r2IndexPath?: string;
   templatePath?: string;
@@ -602,6 +604,14 @@ export interface ThumbnailExportResult {
   path: string;
 }
 
+export interface FinalArtifactStatus {
+  state: 'unconfigured' | 'source-missing' | 'empty' | 'ready';
+  directory: string | null;
+  exists: boolean;
+  imageCount: number;
+  imageExtensions: string[];
+}
+
 export interface CaptionContent {
   schemaVersion: 1;
   title: { ja: string; en: string };
@@ -1039,6 +1049,10 @@ export interface BatchStudioApi {
     resume: (root: string, runId: string) => Promise<ExecutionRun>;
     restartRemote: (root: string, runId: string) => Promise<ExecutionRun>;
     restartFromScratch: (root: string, runId: string) => Promise<ExecutionRun>;
+  };
+  finalArtifact: {
+    status: (root: string) => Promise<FinalArtifactStatus>;
+    selectDirectory: (root: string) => Promise<FinalArtifactStatus>;
   };
   caption: {
     status: (root: string) => Promise<CaptionStatus>;

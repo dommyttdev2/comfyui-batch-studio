@@ -64,6 +64,8 @@ const I = {
   EXECUTION_RESUME: 'execution:resume',
   EXECUTION_RESTART_REMOTE: 'execution:restart-remote',
   EXECUTION_RESTART_FROM_SCRATCH: 'execution:restart-from-scratch',
+  FINAL_ARTIFACT_STATUS: 'final-artifact:status',
+  FINAL_ARTIFACT_SELECT_DIRECTORY: 'final-artifact:select-directory',
   CAPTION_STATUS: 'caption:status',
   CAPTION_SELECT_SOURCE_DIRECTORY: 'caption:select-source-directory',
   CAPTION_IMPORT_GROK: 'caption:import-grok',
@@ -191,6 +193,10 @@ contextBridge.exposeInMainWorld('batchStudio', {
     resume: (r, id) => ipcRenderer.invoke(I.EXECUTION_RESUME, r, id),
     restartRemote: (r, id) => ipcRenderer.invoke(I.EXECUTION_RESTART_REMOTE, r, id),
     restartFromScratch: (r, id) => ipcRenderer.invoke(I.EXECUTION_RESTART_FROM_SCRATCH, r, id),
+  },
+  finalArtifact: {
+    status: (r) => ipcRenderer.invoke(I.FINAL_ARTIFACT_STATUS, r),
+    selectDirectory: (r) => ipcRenderer.invoke(I.FINAL_ARTIFACT_SELECT_DIRECTORY, r),
   },
   caption: {
     status: (r) => ipcRenderer.invoke(I.CAPTION_STATUS, r),
