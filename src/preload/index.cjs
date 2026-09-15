@@ -79,6 +79,13 @@ const I = {
   THUMBNAIL_READ_PREVIEW: 'thumbnail:read-preview',
   THUMBNAIL_READ_TEMPLATE: 'thumbnail:read-template',
   THUMBNAIL_EXPORT: 'thumbnail:export',
+  THUMBNAIL_PICKER_OPEN: 'thumbnail-picker:open',
+  THUMBNAIL_PICKER_CONTEXT: 'thumbnail-picker:context',
+  THUMBNAIL_PICKER_PREVIEW: 'thumbnail-picker:preview',
+  THUMBNAIL_PICKER_COMMIT: 'thumbnail-picker:commit',
+  THUMBNAIL_PICKER_PREVIEWED: 'thumbnail-picker:previewed',
+  THUMBNAIL_PICKER_COMMITTED: 'thumbnail-picker:committed',
+  THUMBNAIL_PICKER_CANCELLED: 'thumbnail-picker:cancelled',
   R2_SETTINGS: 'r2:settings',
   R2_ENVIRONMENT: 'r2:environment',
   R2_TEST: 'r2:test',
@@ -215,6 +222,25 @@ contextBridge.exposeInMainWorld('batchStudio', {
     readImage: (p) => ipcRenderer.invoke(I.THUMBNAIL_READ_IMAGE, p),
     readPreview: (p) => ipcRenderer.invoke(I.THUMBNAIL_READ_PREVIEW, p),
     readTemplate: (p) => ipcRenderer.invoke(I.THUMBNAIL_READ_TEMPLATE, p),
+    openPicker: (r, s, p) => ipcRenderer.invoke(I.THUMBNAIL_PICKER_OPEN, r, s, p),
+    pickerContext: () => ipcRenderer.invoke(I.THUMBNAIL_PICKER_CONTEXT),
+    previewPicker: (p) => ipcRenderer.invoke(I.THUMBNAIL_PICKER_PREVIEW, p),
+    commitPicker: (p) => ipcRenderer.invoke(I.THUMBNAIL_PICKER_COMMIT, p),
+    onPickerPreview: (listener) => {
+      const handler = (_event, selection) => listener(selection);
+      ipcRenderer.on(I.THUMBNAIL_PICKER_PREVIEWED, handler);
+      return () => ipcRenderer.removeListener(I.THUMBNAIL_PICKER_PREVIEWED, handler);
+    },
+    onPickerCommit: (listener) => {
+      const handler = (_event, selection) => listener(selection);
+      ipcRenderer.on(I.THUMBNAIL_PICKER_COMMITTED, handler);
+      return () => ipcRenderer.removeListener(I.THUMBNAIL_PICKER_COMMITTED, handler);
+    },
+    onPickerCancel: (listener) => {
+      const handler = (_event, session) => listener(session);
+      ipcRenderer.on(I.THUMBNAIL_PICKER_CANCELLED, handler);
+      return () => ipcRenderer.removeListener(I.THUMBNAIL_PICKER_CANCELLED, handler);
+    },
     exportImage: (r, i, f, d) => ipcRenderer.invoke(I.THUMBNAIL_EXPORT, r, i, f, d),
   },
   clipboard: { writeText: (t) => ipcRenderer.invoke(I.CLIPBOARD_WRITE_TEXT, t) },
