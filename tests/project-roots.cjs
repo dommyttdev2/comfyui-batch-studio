@@ -10,6 +10,7 @@ const workflowCustomNodes = JSON.parse(read('src/shared/workflow-custom-nodes.js
 const artifactService = read('src/main/artifact-service.ts');
 const environmentSettings = read('src/renderer/EnvironmentSettings.tsx');
 const app = read('src/renderer/App.tsx');
+const projectStages = read('src/renderer/ProjectStages.tsx');
 const main = read('src/main/main.ts');
 
 matchCode(appSettings, /interface StoredAppSettingsV7/, '環境設定schema v7を持つ');
