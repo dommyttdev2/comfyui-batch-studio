@@ -98,6 +98,20 @@ import { RemoteInstanceLifecycleService } from './remote-instance-lifecycle.js';
 import { generateCaption, getCaptionStatus, importCaptionGrok } from './caption-service.js';
 import { getFinalArtifactStatus } from './final-artifact-service.js';
 import {
+  assertFinalArtifactImage,
+  listFinalArtifactImages,
+  readFinalArtifactImage,
+  readFinalArtifactPreview,
+} from './final-artifact-image-service.js';
+import {
+  exportCustomMarketplaceImage,
+  generateMarketplaceImages,
+  generateMarketplaceZip,
+  getMarketplaceImageTargets,
+  loadMarketplaceImageState,
+  saveMarketplaceImageState,
+} from './marketplace-image-service.js';
+import {
   exportThumbnail,
   listThumbnailFonts,
   listThumbnailImages,
@@ -135,7 +149,7 @@ body{display:grid;place-items:center}
 </body>
 </html>`;
 type StandaloneWindowTool = 'r2' | 'civit' | 'vastai';
-type RendererWindowTool = StandaloneWindowTool | 'thumbnail-picker';
+type RendererWindowTool = StandaloneWindowTool | 'thumbnail-picker' | 'marketplace-picker';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
   window: BaseWindow;
@@ -147,6 +161,15 @@ type ThumbnailPickerWindowState = {
   sessionId: string;
   committed: boolean;
 };
+type MarketplacePickerWindowState = {
+  window: BaseWindow;
+  view: WebContentsView;
+  opener: WebContents;
+  root: string;
+  currentImagePath: string;
+  sessionId: string;
+  committed: boolean;
+};
 const standaloneToolTitles: Record<StandaloneWindowTool, string> = {
   r2: 'R2 File Manager',
   civit: 'Civit Explorer',
@@ -154,6 +177,7 @@ const standaloneToolTitles: Record<StandaloneWindowTool, string> = {
 };
 const standaloneToolWindows = new Map<StandaloneWindowTool, StandaloneToolWindowState>();
 const thumbnailPickerWindows = new Map<number, ThumbnailPickerWindowState>();
+const marketplacePickerWindows = new Map<number, MarketplacePickerWindowState>();
 const executionCoordinator = new ExecutionCoordinator();
 type ProjectWindowState = {
   window: BaseWindow;
@@ -408,6 +432,9 @@ function createProjectWindow(
     for (const picker of thumbnailPickerWindows.values()) {
       if (picker.opener.id === localView.webContents.id) picker.window.close();
     }
+    for (const picker of marketplacePickerWindows.values()) {
+      if (picker.opener.id === localView.webContents.id) picker.window.close();
+    }
     localView.webContents.close();
     grokView.webContents.close();
     grokLoadingView.webContents.close();
@@ -540,6 +567,77 @@ function openThumbnailPickerWindow(
   resize();
   void loadRenderer(view, 'thumbnail-picker').catch((error) =>
     console.error('Thumbnail picker window failed to load:', error),
+  );
+  return { sessionId };
+}
+
+function marketplacePickerForSender(contents: WebContents) {
+  const state = marketplacePickerWindows.get(contents.id);
+  if (!state) throw new Error('Marketplace image picker Window was not found for IPC sender.');
+  return state;
+}
+
+async function validateMarketplacePickerImage(
+  state: MarketplacePickerWindowState,
+  imagePath: unknown,
+) {
+  if (typeof imagePath !== 'string') throw new Error('Invalid marketplace image path');
+  return assertFinalArtifactImage(state.root, imagePath);
+}
+
+function openMarketplacePickerWindow(
+  opener: WebContents,
+  root: string,
+  currentImagePath: string,
+) {
+  for (const existing of marketplacePickerWindows.values()) {
+    if (existing.opener.id === opener.id) existing.window.close();
+  }
+  const window = new BaseWindow({
+      width: 1180,
+      height: 860,
+      minWidth: 760,
+      minHeight: 560,
+      autoHideMenuBar: true,
+      title: '販売サイト用画像を選択 - ComfyUI Batch Studio',
+    }),
+    view = new WebContentsView({
+      webPreferences: {
+        preload: path.resolve(__dirname, '../preload/index.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
+    sessionId = randomUUID(),
+    state: MarketplacePickerWindowState = {
+      window,
+      view,
+      opener,
+      root,
+      currentImagePath,
+      sessionId,
+      committed: false,
+    },
+    contentsId = view.webContents.id;
+  marketplacePickerWindows.set(contentsId, state);
+  window.removeMenu();
+  window.setMenuBarVisibility(false);
+  window.contentView.addChildView(view);
+  const resize = () => {
+    const { width, height } = window.getContentBounds();
+    view.setBounds({ x: 0, y: 0, width, height });
+  };
+  window.on('resize', resize);
+  window.on('closed', () => {
+    if (!state.committed && !state.opener.isDestroyed())
+      state.opener.send(IPC.MARKETPLACE_PICKER_CANCELLED, { sessionId: state.sessionId });
+    if (!view.webContents.isDestroyed()) view.webContents.close();
+    marketplacePickerWindows.delete(contentsId);
+  });
+  resize();
+  void loadRenderer(view, 'marketplace-picker').catch((error) =>
+    console.error('Marketplace image picker window failed to load:', error),
   );
   return { sessionId };
 }
@@ -1768,6 +1866,26 @@ function register() {
     validRoot(root);
     return selectFinalArtifactDirectory(root);
   });
+  ipcMain.handle(IPC.FINAL_ARTIFACT_LIST_IMAGES, (_e, root: unknown) => {
+    validRoot(root);
+    return listFinalArtifactImages(root);
+  });
+  ipcMain.handle(
+    IPC.FINAL_ARTIFACT_READ_IMAGE,
+    (_e, root: unknown, imagePath: unknown) => {
+      validRoot(root);
+      if (typeof imagePath !== 'string') throw new Error('Invalid final artifact image path');
+      return readFinalArtifactImage(root, imagePath);
+    },
+  );
+  ipcMain.handle(
+    IPC.FINAL_ARTIFACT_READ_PREVIEW,
+    (_e, root: unknown, imagePath: unknown) => {
+      validRoot(root);
+      if (typeof imagePath !== 'string') throw new Error('Invalid final artifact image path');
+      return readFinalArtifactPreview(root, imagePath);
+    },
+  );
   ipcMain.handle(IPC.CAPTION_STATUS, (_e, root: unknown) => {
     validRoot(root);
     return getCaptionStatus(root);
@@ -1893,6 +2011,77 @@ function register() {
       return exportThumbnail(root, documentId, format, dataUrl);
     },
   );
+  ipcMain.handle(IPC.MARKETPLACE_TARGETS, () => getMarketplaceImageTargets());
+  ipcMain.handle(IPC.MARKETPLACE_LOAD, (_e, root: unknown) => {
+    validRoot(root);
+    return loadMarketplaceImageState(root);
+  });
+  ipcMain.handle(IPC.MARKETPLACE_SAVE, (_e, root: unknown, state: unknown) => {
+    validRoot(root);
+    return saveMarketplaceImageState(root, state);
+  });
+  ipcMain.handle(
+    IPC.MARKETPLACE_GENERATE,
+    (_e, root: unknown, state: unknown, webpDataUrls: unknown) => {
+      validRoot(root);
+      const data =
+        webpDataUrls && typeof webpDataUrls === 'object'
+          ? (webpDataUrls as Record<string, string>)
+          : undefined;
+      return generateMarketplaceImages(root, state, data);
+    },
+  );
+  ipcMain.handle(IPC.MARKETPLACE_GENERATE_ZIP, (_e, root: unknown, format: unknown) => {
+    validRoot(root);
+    return generateMarketplaceZip(root, format);
+  });
+  ipcMain.handle(
+    IPC.MARKETPLACE_EXPORT_CUSTOM,
+    (_e, root: unknown, state: unknown, webpDataUrl: unknown) => {
+      validRoot(root);
+      return exportCustomMarketplaceImage(
+        root,
+        state,
+        typeof webpDataUrl === 'string' ? webpDataUrl : undefined,
+      );
+    },
+  );
+  ipcMain.handle(
+    IPC.MARKETPLACE_PICKER_OPEN,
+    (event, root: unknown, currentImagePath: unknown) => {
+      validRoot(root);
+      if (typeof currentImagePath !== 'string') throw new Error('Invalid marketplace image path');
+      return openMarketplacePickerWindow(event.sender, root, currentImagePath);
+    },
+  );
+  ipcMain.handle(IPC.MARKETPLACE_PICKER_CONTEXT, (event) => {
+    const state = marketplacePickerForSender(event.sender);
+    return {
+      sessionId: state.sessionId,
+      root: state.root,
+      currentImagePath: state.currentImagePath,
+    };
+  });
+  ipcMain.handle(IPC.MARKETPLACE_PICKER_PREVIEW, async (event, imagePath: unknown) => {
+    const state = marketplacePickerForSender(event.sender);
+    const resolved = await validateMarketplacePickerImage(state, imagePath);
+    if (!state.opener.isDestroyed())
+      state.opener.send(IPC.MARKETPLACE_PICKER_PREVIEWED, {
+        sessionId: state.sessionId,
+        imagePath: resolved,
+      });
+  });
+  ipcMain.handle(IPC.MARKETPLACE_PICKER_COMMIT, async (event, imagePath: unknown) => {
+    const state = marketplacePickerForSender(event.sender);
+    const resolved = await validateMarketplacePickerImage(state, imagePath);
+    state.committed = true;
+    if (!state.opener.isDestroyed())
+      state.opener.send(IPC.MARKETPLACE_PICKER_COMMITTED, {
+        sessionId: state.sessionId,
+        imagePath: resolved,
+      });
+    state.window.close();
+  });
   ipcMain.handle(IPC.R2_SETTINGS, () => r2().settings());
   ipcMain.handle(IPC.R2_ENVIRONMENT, () => r2().environment());
   ipcMain.handle(IPC.R2_TEST, (_e, input: R2ConnectionInput) => r2().test(input));
