@@ -82,14 +82,12 @@ function loadBrowserImage(source: FinalArtifactImageSource) {
 function browserSizedSource(source: FinalArtifactImageSource, image: HTMLImageElement) {
   const width = source.width > 0 ? source.width : image.naturalWidth;
   const height = source.height > 0 ? source.height : image.naturalHeight;
-  if (width < 1 || height < 1) throw new Error(`${source.name} の画像サイズを取得できませんでした。`);
+  if (width < 1 || height < 1)
+    throw new Error(`${source.name} の画像サイズを取得できませんでした。`);
   return { ...source, width, height };
 }
 
-function normalizedWebpSourcePng(
-  source: FinalArtifactImageSource,
-  image: HTMLImageElement,
-) {
+function normalizedWebpSourcePng(source: FinalArtifactImageSource, image: HTMLImageElement) {
   if (!source.path.toLocaleLowerCase().endsWith('.webp')) return undefined;
   const canvas = document.createElement('canvas');
   canvas.width = source.width;
