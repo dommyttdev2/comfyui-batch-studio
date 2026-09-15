@@ -78,6 +78,21 @@ interface StoredAppSettingsV6 {
   templatePath: string;
   manifestPath: string;
 }
+interface StoredAppSettingsV7 {
+  schemaVersion: 7;
+  comfyUiInstallPath: string;
+  remoteComfyUiInstallPath: string;
+  comfyUiApiEndpoint: string;
+  projectRoot: string;
+  artifactRoot: string;
+  remoteCustomNodes: RemoteCustomNodeRepository[];
+  catalogPath: string;
+  r2Bucket: string;
+  r2ModelPrefix: string;
+  r2IndexPath: string;
+  templatePath: string;
+  manifestPath: string;
+}
 interface StoredGithubAuthConfig {
   schemaVersion: 1;
   encryptedPat: string;
@@ -88,15 +103,23 @@ type StoredAppSettings =
   | StoredAppSettingsV3
   | StoredAppSettingsV4
   | StoredAppSettingsV5
-  | StoredAppSettingsV6;
+  | StoredAppSettingsV6
+  | StoredAppSettingsV7;
 type NormalizedAppSettings = Required<AppSettings>;
+export const DEFAULT_REMOTE_CUSTOM_NODES: ReadonlyArray<RemoteCustomNodeRepository> = [
+  { repository: 'toshiki-takedomi/comfyui-batch-orchestrator' },
+  { repository: 'norqis/ComfyUI-Scene-Prompt-Tools' },
+];
+function defaultRemoteCustomNodes(): RemoteCustomNodeRepository[] {
+  return DEFAULT_REMOTE_CUSTOM_NODES.map((node) => ({ ...node }));
+}
 const EMPTY: NormalizedAppSettings = {
   comfyUiInstallPath: '',
   remoteComfyUiInstallPath: '',
   comfyUiApiEndpoint: 'http://127.0.0.1:8188',
   projectRoot: '',
   artifactRoot: '',
-  remoteCustomNodes: [],
+  remoteCustomNodes: defaultRemoteCustomNodes(),
   catalogPath: '',
   r2Bucket: '',
   r2ModelPrefix: '',
@@ -203,6 +226,21 @@ function normalizeRemoteCustomNodes(value: unknown): RemoteCustomNodeRepository[
     return ref ? { repository, ref } : { repository };
   });
 }
+function migrateRemoteCustomNodes(value: unknown): RemoteCustomNodeRepository[] {
+  const existing = normalizeRemoteCustomNodes(value);
+  const existingByRepository = new Map(
+    existing.map((node) => [node.repository.toLowerCase(), node] as const),
+  );
+  const defaultKeys = new Set(
+    DEFAULT_REMOTE_CUSTOM_NODES.map((node) => node.repository.toLowerCase()),
+  );
+  return [
+    ...DEFAULT_REMOTE_CUSTOM_NODES.map(
+      (node) => existingByRepository.get(node.repository.toLowerCase()) ?? { ...node },
+    ),
+    ...existing.filter((node) => !defaultKeys.has(node.repository.toLowerCase())),
+  ];
+}
 function normalize(raw: StoredAppSettings | null): NormalizedAppSettings {
   if (raw?.schemaVersion === 1)
     return { ...EMPTY, comfyUiInstallPath: text(raw.comfyUiInstallPath) };
@@ -262,6 +300,23 @@ function normalize(raw: StoredAppSettings | null): NormalizedAppSettings {
       manifestPath: text(raw.manifestPath),
     };
   if (raw?.schemaVersion === 6)
+    return {
+      ...EMPTY,
+      ...raw,
+      comfyUiInstallPath: text(raw.comfyUiInstallPath),
+      remoteComfyUiInstallPath: text(raw.remoteComfyUiInstallPath),
+      comfyUiApiEndpoint: endpoint(raw.comfyUiApiEndpoint),
+      projectRoot: text(raw.projectRoot),
+      artifactRoot: text(raw.artifactRoot),
+      remoteCustomNodes: migrateRemoteCustomNodes(raw.remoteCustomNodes),
+      catalogPath: text(raw.catalogPath),
+      r2Bucket: text(raw.r2Bucket),
+      r2ModelPrefix: text(raw.r2ModelPrefix).replace(/^\/+|\/+$/g, ''),
+      r2IndexPath: text(raw.r2IndexPath),
+      templatePath: text(raw.templatePath),
+      manifestPath: text(raw.manifestPath),
+    };
+  if (raw?.schemaVersion === 7)
     return {
       ...EMPTY,
       ...raw,
@@ -395,9 +450,9 @@ export class AppSettingsStore {
       manifestPath: text(input?.manifestPath),
     };
     await writeJsonAtomic(this.filePath, {
-      schemaVersion: 6,
+      schemaVersion: 7,
       ...value,
-    } satisfies StoredAppSettingsV6);
+    } satisfies StoredAppSettingsV7);
     const githubPat = text(input?.githubPat);
     if (githubPat)
       await writeJsonAtomic(this.githubAuthPath, {
