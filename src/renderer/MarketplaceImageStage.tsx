@@ -100,13 +100,7 @@ function targetLabel(target: MarketplaceImageTarget) {
   return `${target.service} / ${target.label}`;
 }
 
-export function MarketplaceImageStage({
-  project,
-  run,
-}: {
-  project: ProjectSummary;
-  run: Runner;
-}) {
+export function MarketplaceImageStage({ project, run }: { project: ProjectSummary; run: Runner }) {
   const [targets, setTargets] = useState<MarketplaceImageTarget[]>([]);
   const [state, setState] = useState<MarketplaceImageEditorState | null>(null);
   const [source, setSource] = useState<FinalArtifactImageSource | null>(null);
@@ -123,10 +117,8 @@ export function MarketplaceImageStage({
     () => targets.find((target) => target.id === state?.activeTargetId) ?? targets[0] ?? null,
     [state?.activeTargetId, targets],
   );
-  const activeWidth =
-    state?.mode === 'custom' ? state.custom.width : (activeTarget?.width ?? 1);
-  const activeHeight =
-    state?.mode === 'custom' ? state.custom.height : (activeTarget?.height ?? 1);
+  const activeWidth = state?.mode === 'custom' ? state.custom.width : (activeTarget?.width ?? 1);
+  const activeHeight = state?.mode === 'custom' ? state.custom.height : (activeTarget?.height ?? 1);
   const activeCrop =
     state?.mode === 'custom'
       ? state.custom.crop
@@ -156,7 +148,10 @@ export function MarketplaceImageStage({
     targetDefinitions: MarketplaceImageTarget[],
     preserveExisting: boolean,
   ) => {
-    const nextSource = await window.batchStudio.finalArtifact.readImage(project.rootPath, imagePath);
+    const nextSource = await window.batchStudio.finalArtifact.readImage(
+      project.rootPath,
+      imagePath,
+    );
     if (!nextSource) throw new Error('選択した画像を読み込めませんでした。');
     const nextImage = await loadBrowserImage(nextSource);
     const nextTargets: MarketplaceImageEditorState['targets'] = {};
@@ -274,7 +269,9 @@ export function MarketplaceImageStage({
         pickerSessionRef.current = null;
         pickerBeforeStateRef.current = null;
         await window.batchStudio.marketplace.save(project.rootPath, nextState);
-        setNotice('入力画像を確定しました。4種類のクロップは新しい画像に合わせてリセットしました。');
+        setNotice(
+          '入力画像を確定しました。4種類のクロップは新しい画像に合わせてリセットしました。',
+        );
       });
     });
     const removeCancel = window.batchStudio.marketplace.onPickerCancel((session) => {
@@ -518,12 +515,7 @@ export function MarketplaceImageStage({
       if (!state || !source || !image || !state.custom.crop) return;
       const webp =
         state.format === 'webp'
-          ? renderWebp(
-              image,
-              state.custom.crop,
-              state.custom.width,
-              state.custom.height,
-            )
+          ? renderWebp(image, state.custom.crop, state.custom.width, state.custom.height)
           : undefined;
       const result = await window.batchStudio.marketplace.exportCustom(
         project.rootPath,
@@ -620,7 +612,10 @@ export function MarketplaceImageStage({
             </b>
           </span>
           <span>
-            Output <b>{activeWidth} × {activeHeight}</b>
+            Output{' '}
+            <b>
+              {activeWidth} × {activeHeight}
+            </b>
           </span>
         </div>
         {notice && <p className="marketplace-notice">{notice}</p>}
@@ -633,9 +628,7 @@ export function MarketplaceImageStage({
           <button className="primary" onClick={openPicker}>
             画像一覧から選択
           </button>
-          <small>
-            入力元: {finalArtifact.directory}（サムネイル工程の出力は参照しません）
-          </small>
+          <small>入力元: {finalArtifact.directory}（サムネイル工程の出力は参照しません）</small>
         </section>
 
         <section className="panel">
@@ -747,8 +740,7 @@ export function MarketplaceImageStage({
             <button
               disabled={!source}
               onClick={() =>
-                source &&
-                setCrop(fitCrop(source.width, source.height, activeWidth, activeHeight))
+                source && setCrop(fitCrop(source.width, source.height, activeWidth, activeHeight))
               }
             >
               フィット
