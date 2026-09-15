@@ -2013,13 +2013,7 @@ function register() {
   });
   ipcMain.handle(
     IPC.MARKETPLACE_GENERATE,
-    (
-      _e,
-      root: unknown,
-      state: unknown,
-      webpDataUrls: unknown,
-      sourcePngDataUrl: unknown,
-    ) => {
+    (_e, root: unknown, state: unknown, webpDataUrls: unknown, sourcePngDataUrl: unknown) => {
       validRoot(root);
       const data =
         webpDataUrls && typeof webpDataUrls === 'object'
@@ -2039,13 +2033,7 @@ function register() {
   });
   ipcMain.handle(
     IPC.MARKETPLACE_EXPORT_CUSTOM,
-    (
-      _e,
-      root: unknown,
-      state: unknown,
-      webpDataUrl: unknown,
-      sourcePngDataUrl: unknown,
-    ) => {
+    (_e, root: unknown, state: unknown, webpDataUrl: unknown, sourcePngDataUrl: unknown) => {
       validRoot(root);
       return exportCustomMarketplaceImage(
         root,
