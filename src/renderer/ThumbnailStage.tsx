@@ -644,7 +644,8 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
               if (!dragRef.current || !(event.buttons & 1)) return;
               const point = canvasPoint(event);
               const drag = dragRef.current;
-              const moved = drag.moved || Math.hypot(point[0] - drag.startX, point[1] - drag.startY) > 10;
+              const moved =
+                drag.moved || Math.hypot(point[0] - drag.startX, point[1] - drag.startY) > 10;
               if (!moved) return;
               moveSlot(drag.slot, point[0] - drag.lastX, point[1] - drag.lastY);
               dragRef.current = { ...drag, lastX: point[0], lastY: point[1], moved: true };
