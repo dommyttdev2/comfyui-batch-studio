@@ -48,20 +48,11 @@ export function renderLanczosCrop(
   });
   const sourceSize = cropped.getSize();
   const bitmap = cropped.toBitmap();
-  const resized = resizeLanczosBitmap(
-    bitmap,
-    sourceSize.width,
-    sourceSize.height,
-    width,
-    height,
-  );
+  const resized = resizeLanczosBitmap(bitmap, sourceSize.width, sourceSize.height, width, height);
   return nativeImage.createFromBitmap(resized, { width, height, scaleFactor: 1 });
 }
 
-export function encodeLanczosImage(
-  image: Electron.NativeImage,
-  format: 'jpeg' | 'png',
-) {
+export function encodeLanczosImage(image: Electron.NativeImage, format: 'jpeg' | 'png') {
   if (format === 'png') return image.toPNG();
   const size = image.getSize();
   const opaque = compositeBitmapOnWhite(image.toBitmap());
