@@ -10,7 +10,8 @@ export type Stage =
   | 'モデル配置'
   | '実行前チェック'
   | '実行'
-  | 'キャプション';
+  | 'キャプション'
+  | 'サムネイル';
 export type Runner = <T>(fn: () => Promise<T>) => Promise<T | undefined>;
 export const stages: Stage[] = [
   '概要',
@@ -23,6 +24,7 @@ export const stages: Stage[] = [
   '実行前チェック',
   '実行',
   'キャプション',
+  'サムネイル',
 ];
 const GROK_STAGE_CONTEXT: Partial<Record<Stage, GrokContextStage>> = {
   ストーリー: 'story',

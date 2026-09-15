@@ -542,6 +542,66 @@ export interface CatalogSelectionTemplateInput {
   name: string;
   selection: CatalogSelectionEntry[];
 }
+export type ThumbnailPattern =
+  | '3-images'
+  | '4-images-left-split'
+  | '4-images-right-split'
+  | '5-images-both-split';
+
+export type ThumbnailSlotKey =
+  | 'LEFT'
+  | 'LEFT_TOP'
+  | 'LEFT_BOTTOM'
+  | 'CENTER_MAIN'
+  | 'RIGHT'
+  | 'RIGHT_TOP'
+  | 'RIGHT_BOTTOM';
+
+export interface ThumbnailSlotState {
+  imagePath: string;
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+}
+
+export interface ThumbnailTextState {
+  text: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  fontFamily: string;
+  color: string;
+}
+
+export interface ThumbnailDocument {
+  id: number;
+  pattern: ThumbnailPattern;
+  slots: Partial<Record<ThumbnailSlotKey, ThumbnailSlotState>>;
+  title: ThumbnailTextState;
+  subtitle: ThumbnailTextState;
+}
+
+export interface ThumbnailEditorState {
+  schemaVersion: 1;
+  activeDocumentId: number;
+  documents: ThumbnailDocument[];
+}
+
+export interface ThumbnailImageSource {
+  path: string;
+  name: string;
+  dataUrl: string;
+}
+
+export interface ThumbnailTemplateSource {
+  name: string;
+  dataUrl: string;
+}
+
+export interface ThumbnailExportResult {
+  path: string;
+}
+
 export interface CaptionContent {
   schemaVersion: 1;
   title: { ja: string; en: string };
@@ -985,6 +1045,19 @@ export interface BatchStudioApi {
     selectSourceDirectory: (root: string) => Promise<CaptionStatus>;
     importGrok: (root: string, raw: string) => Promise<ImportResult>;
     generate: (root: string) => Promise<CaptionStatus>;
+  };
+  thumbnail: {
+    load: (root: string) => Promise<ThumbnailEditorState>;
+    save: (root: string, state: ThumbnailEditorState) => Promise<ThumbnailEditorState>;
+    selectImage: (root: string) => Promise<ThumbnailImageSource | null>;
+    readImage: (imagePath: string) => Promise<ThumbnailImageSource | null>;
+    readTemplate: (pattern: ThumbnailPattern) => Promise<ThumbnailTemplateSource>;
+    exportImage: (
+      root: string,
+      documentId: number,
+      format: 'png' | 'jpeg',
+      dataUrl: string,
+    ) => Promise<ThumbnailExportResult>;
   };
   clipboard: { writeText: (text: string) => Promise<void> };
   r2: {
