@@ -98,8 +98,10 @@ import { getFinalArtifactStatus } from './final-artifact-service.js';
 import {
   exportThumbnail,
   listThumbnailFonts,
+  listThumbnailImages,
   loadThumbnailState,
   readThumbnailImage,
+  readThumbnailPreview,
   readThumbnailTemplate,
   saveThumbnailState,
 } from './thumbnail-service.js';
@@ -1609,9 +1611,19 @@ function register() {
     if (result.canceled || !result.filePaths[0]) return null;
     return readThumbnailImage(result.filePaths[0]);
   });
+  ipcMain.handle(IPC.THUMBNAIL_LIST_IMAGES, async (_e, root: unknown) => {
+    validRoot(root);
+    const finalArtifact = await getFinalArtifactStatus(root);
+    if (!finalArtifact.exists || !finalArtifact.directory) return [];
+    return listThumbnailImages(finalArtifact.directory);
+  });
   ipcMain.handle(IPC.THUMBNAIL_READ_IMAGE, (_e, imagePath: unknown) => {
     if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
     return readThumbnailImage(imagePath);
+  });
+  ipcMain.handle(IPC.THUMBNAIL_READ_PREVIEW, (_e, imagePath: unknown) => {
+    if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
+    return readThumbnailPreview(imagePath);
   });
   ipcMain.handle(IPC.THUMBNAIL_READ_TEMPLATE, (_e, pattern: unknown) =>
     readThumbnailTemplate(

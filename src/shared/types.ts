@@ -589,9 +589,12 @@ export interface ThumbnailEditorState {
   documents: ThumbnailDocument[];
 }
 
-export interface ThumbnailImageSource {
+export interface ThumbnailImageItem {
   path: string;
   name: string;
+}
+
+export interface ThumbnailImageSource extends ThumbnailImageItem {
   dataUrl: string;
 }
 
@@ -1065,7 +1068,9 @@ export interface BatchStudioApi {
     load: (root: string) => Promise<ThumbnailEditorState>;
     save: (root: string, state: ThumbnailEditorState) => Promise<ThumbnailEditorState>;
     selectImage: (root: string) => Promise<ThumbnailImageSource | null>;
+    listImages: (root: string) => Promise<ThumbnailImageItem[]>;
     readImage: (imagePath: string) => Promise<ThumbnailImageSource | null>;
+    readPreview: (imagePath: string) => Promise<ThumbnailImageSource | null>;
     readTemplate: (pattern: ThumbnailPattern) => Promise<ThumbnailTemplateSource>;
     exportImage: (
       root: string,
