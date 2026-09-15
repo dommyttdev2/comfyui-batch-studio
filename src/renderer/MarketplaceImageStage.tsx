@@ -79,21 +79,24 @@ function loadBrowserImage(source: FinalArtifactImageSource) {
   });
 }
 
-function renderWebp(
-  image: HTMLImageElement,
-  crop: MarketplaceCropRect,
-  width: number,
-  height: number,
-) {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('WebP出力用Canvasを作成できませんでした。');
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
-  context.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, width, height);
-  return canvas.toDataURL('image/webp', 1);
+function encodePngAsWebp(dataUrl: string, width: number, height: number) {
+  return new Promise<string>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('WebP出力用Canvasを作成できませんでした。'));
+        return;
+      }
+      context.drawImage(image, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/webp', 1));
+    };
+    image.onerror = () => reject(new Error('Lanczos変換後画像をWebPへ変換できませんでした。'));
+    image.src = dataUrl;
+  });
 }
 
 function targetLabel(target: MarketplaceImageTarget) {
@@ -487,7 +490,14 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         for (const target of targets) {
           const crop = state.targets[target.id]?.crop;
           if (!crop) throw new Error(`${targetLabel(target)} のクロップを設定してください。`);
-          webpDataUrls[target.id] = renderWebp(image, crop, target.width, target.height);
+          const png = await window.batchStudio.marketplace.renderPng(
+            project.rootPath,
+            state.sourceImagePath,
+            crop,
+            target.width,
+            target.height,
+          );
+          webpDataUrls[target.id] = await encodePngAsWebp(png, target.width, target.height);
         }
       }
       const result = await window.batchStudio.marketplace.generate(
@@ -515,7 +525,17 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       if (!state || !source || !image || !state.custom.crop) return;
       const webp =
         state.format === 'webp'
-          ? renderWebp(image, state.custom.crop, state.custom.width, state.custom.height)
+          ? await encodePngAsWebp(
+              await window.batchStudio.marketplace.renderPng(
+                project.rootPath,
+                state.sourceImagePath,
+                state.custom.crop,
+                state.custom.width,
+                state.custom.height,
+              ),
+              state.custom.width,
+              state.custom.height,
+            )
           : undefined;
       const result = await window.batchStudio.marketplace.exportCustom(
         project.rootPath,
