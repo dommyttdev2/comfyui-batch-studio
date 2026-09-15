@@ -111,6 +111,26 @@ matchCode(
   /THUMBNAIL_LIST_IMAGES:\s*'thumbnail:list-images'[\s\S]*THUMBNAIL_READ_PREVIEW:\s*'thumbnail:read-preview'/,
   'preload IPC constants must define thumbnail gallery channels',
 );
+matchCode(
+  stage,
+  /\['large', '大'\][\s\S]*\['medium', '中'\][\s\S]*\['small', '小'\]/,
+  'image picker must expose large medium small display sizes',
+);
+matchCode(
+  stage,
+  /thumbnail-image-picker-grid \$\{pickerSize\}/,
+  'image picker grid must reflect the selected display size',
+);
+matchCode(
+  fs.readFileSync(path.join(repo, 'src', 'renderer', 'thumbnail-stage.css'), 'utf8'),
+  /thumbnail-image-picker-grid\.large[\s\S]*repeat\(3,[\s\S]*thumbnail-image-picker-grid\.medium[\s\S]*repeat\(5,[\s\S]*thumbnail-image-picker-grid\.small[\s\S]*repeat\(7,/,
+  'gallery display sizes must render 3, 5, and 7 columns',
+);
+matchCode(
+  fs.readFileSync(path.join(repo, 'src', 'renderer', 'thumbnail-stage.css'), 'utf8'),
+  /thumbnail-image-choice-preview img[\s\S]*object-fit:\s*contain/,
+  'gallery previews must show the whole image without cropping',
+);
 matchCode(preload, /thumbnail:[\s\S]*exportImage/, 'thumbnail API must be exposed through preload');
 matchCode(main, /IPC\.THUMBNAIL_EXPORT/, 'main process must handle image export');
 matchCode(
