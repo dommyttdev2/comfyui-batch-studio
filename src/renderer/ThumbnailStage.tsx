@@ -32,6 +32,7 @@ const RIGHT_MID_X = Math.round(
 type Point = [number, number];
 type LoadedImages = Record<string, HTMLImageElement>;
 type TemplateOverlay = { psdName: string };
+type ThumbnailPickerSize = 'large' | 'medium' | 'small';
 
 const PATTERN_LABELS: Record<ThumbnailPattern, string> = {
   '3-images': '3枚',
@@ -315,6 +316,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   const [pickerLoading, setPickerLoading] = useState(false);
   const [pickerError, setPickerError] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerSize, setPickerSize] = useState<ThumbnailPickerSize>('medium');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{
     slot: ThumbnailSlotKey;
@@ -792,6 +794,25 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
                 onChange={(event) => setPickerQuery(event.target.value)}
                 autoFocus
               />
+              <div className="thumbnail-image-picker-size" aria-label="画像表示サイズ">
+                {(
+                  [
+                    ['large', '大'],
+                    ['medium', '中'],
+                    ['small', '小'],
+                  ] as const
+                ).map(([size, label]) => (
+                  <button
+                    key={size}
+                    type="button"
+                    className={pickerSize === size ? 'active' : ''}
+                    aria-pressed={pickerSize === size}
+                    onClick={() => setPickerSize(size)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <span>
                 {filteredPickerItems.length} / {pickerItems.length} 枚
               </span>
@@ -801,7 +822,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
             ) : pickerError ? (
               <div className="thumbnail-image-picker-message error">{pickerError}</div>
             ) : filteredPickerItems.length ? (
-              <div className="thumbnail-image-picker-grid">
+              <div className={`thumbnail-image-picker-grid ${pickerSize}`}>
                 {filteredPickerItems.map((item) => (
                   <ThumbnailImageChoice
                     key={item.path}
