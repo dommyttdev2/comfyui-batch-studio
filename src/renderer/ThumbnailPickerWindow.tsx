@@ -20,9 +20,7 @@ export function ThumbnailPickerWindow() {
 
   const filteredItems = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    return needle
-      ? items.filter((item) => item.name.toLocaleLowerCase().includes(needle))
-      : items;
+    return needle ? items.filter((item) => item.name.toLocaleLowerCase().includes(needle)) : items;
   }, [items, query]);
 
   useEffect(() => {
