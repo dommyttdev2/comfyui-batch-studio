@@ -96,6 +96,7 @@ import { RemoteInstanceLifecycleService } from './remote-instance-lifecycle.js';
 import { generateCaption, getCaptionStatus, importCaptionGrok } from './caption-service.js';
 import {
   exportThumbnail,
+  listThumbnailFonts,
   loadThumbnailState,
   readThumbnailImage,
   readThumbnailTemplate,
@@ -1574,6 +1575,7 @@ function register() {
     validRoot(root);
     return generateCaption(root);
   });
+  ipcMain.handle(IPC.THUMBNAIL_FONTS, () => listThumbnailFonts());
   ipcMain.handle(IPC.THUMBNAIL_LOAD, (_e, root: unknown) => {
     validRoot(root);
     return loadThumbnailState(root);

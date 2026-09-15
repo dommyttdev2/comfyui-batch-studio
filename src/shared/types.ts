@@ -1047,6 +1047,7 @@ export interface BatchStudioApi {
     generate: (root: string) => Promise<CaptionStatus>;
   };
   thumbnail: {
+    fonts: () => Promise<string[]>;
     load: (root: string) => Promise<ThumbnailEditorState>;
     save: (root: string, state: ThumbnailEditorState) => Promise<ThumbnailEditorState>;
     selectImage: (root: string) => Promise<ThumbnailImageSource | null>;

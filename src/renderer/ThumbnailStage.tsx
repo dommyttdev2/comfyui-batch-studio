@@ -300,6 +300,7 @@ async function loadPsdOverlay(pattern: ThumbnailPattern): Promise<TemplateOverla
 
 export function ThumbnailStage({ project, run }: { project: ProjectSummary; run: Runner }) {
   const [state, setState] = useState<ThumbnailEditorState | null>(null);
+  const [fontFamilies, setFontFamilies] = useState<string[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<ThumbnailSlotKey>('CENTER_MAIN');
   const [images, setImages] = useState<LoadedImages>({});
   const [templates, setTemplates] = useState<Partial<Record<ThumbnailPattern, TemplateOverlay>>>(
@@ -317,6 +318,19 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
     [state],
   );
   const visibleSlots = active ? slotsFor(active.pattern) : [];
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.batchStudio.thumbnail
+      .fonts()
+      .then((fonts) => {
+        if (!cancelled) setFontFamilies(fonts);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -639,11 +653,13 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
           <TextInspector
             label="タイトル"
             value={active.title}
+            fontFamilies={fontFamilies}
             onChange={(title) => updateDocument((document) => ({ ...document, title }))}
           />
           <TextInspector
             label="サブタイトル"
             value={active.subtitle}
+            fontFamilies={fontFamilies}
             onChange={(subtitle) => updateDocument((document) => ({ ...document, subtitle }))}
           />
           <section className="panel thumbnail-export">
@@ -674,14 +690,19 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
 function TextInspector({
   label,
   value,
+  fontFamilies,
   onChange,
 }: {
   label: string;
   value: ThumbnailTextState;
+  fontFamilies: string[];
   onChange: (value: ThumbnailTextState) => void;
 }) {
   const set = <K extends keyof ThumbnailTextState>(key: K, next: ThumbnailTextState[K]) =>
     onChange({ ...value, [key]: next });
+  const fontOptions = fontFamilies.includes(value.fontFamily)
+    ? fontFamilies
+    : [value.fontFamily, ...fontFamilies];
   return (
     <section className="panel thumbnail-text-controls">
       <h3>{label}</h3>
@@ -695,10 +716,11 @@ function TextInspector({
           value={value.fontFamily}
           onChange={(event) => set('fontFamily', event.target.value)}
         >
-          <option>Times New Roman</option>
-          <option>Yu Mincho</option>
-          <option>Georgia</option>
-          <option>Meiryo</option>
+          {fontOptions.map((font) => (
+            <option key={font} value={font} style={{ fontFamily: font }}>
+              {font}
+            </option>
+          ))}
         </select>
       </label>
       <div className="thumbnail-number-grid">

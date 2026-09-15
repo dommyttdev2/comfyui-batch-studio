@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
@@ -33,6 +34,48 @@ const IMAGE_TYPES: Record<string, string> = {
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
 };
+const WINDOWS_FONT_FALLBACK = ['Segoe UI', 'Times New Roman', 'Meiryo', 'Yu Mincho'];
+
+function runPowerShell(command: string) {
+  const powershell = path.join(
+    process.env.SystemRoot || 'C:\\Windows',
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe',
+  );
+  return new Promise<string>((resolve, reject) => {
+    execFile(
+      powershell,
+      ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command],
+      { encoding: 'utf8', windowsHide: true, maxBuffer: 1024 * 1024 },
+      (error, stdout) => (error ? reject(error) : resolve(stdout)),
+    );
+  });
+}
+
+export async function listThumbnailFonts(): Promise<string[]> {
+  if (process.platform !== 'win32') return WINDOWS_FONT_FALLBACK;
+  const command = [
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    'Add-Type -AssemblyName System.Drawing',
+    '$collection = New-Object System.Drawing.Text.InstalledFontCollection',
+    '$collection.Families | ForEach-Object { $_.Name } | Where-Object { $_ } | Sort-Object -Unique | ConvertTo-Json -Compress',
+  ].join('; ');
+  try {
+    const stdout = (await runPowerShell(command)).trim();
+    if (!stdout) return WINDOWS_FONT_FALLBACK;
+    const parsed: unknown = JSON.parse(stdout);
+    const values = Array.isArray(parsed) ? parsed : typeof parsed === 'string' ? [parsed] : [];
+    const fonts = values
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    return fonts.length ? [...new Set(fonts)].sort((a, b) => a.localeCompare(b)) : WINDOWS_FONT_FALLBACK;
+  } catch {
+    return WINDOWS_FONT_FALLBACK;
+  }
+}
 
 function statePath(root: string) {
   return path.join(root, '._batch_studio', 'thumbnail-editor.json');

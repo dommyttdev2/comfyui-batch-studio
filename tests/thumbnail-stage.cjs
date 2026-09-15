@@ -41,6 +41,14 @@ matchCode(
   /フォント[\s\S]*サイズ[\s\S]*X位置[\s\S]*Y位置/,
   'text typography and position must be editable',
 );
+matchCode(preload, /thumbnail:[\s\S]*fonts:[\s\S]*exportImage/, 'thumbnail API must expose system fonts');
+matchCode(main, /IPC\.THUMBNAIL_FONTS/, 'main process must handle font enumeration');
+matchCode(service, /InstalledFontCollection/, 'Windows installed font families must be enumerated');
+matchCode(
+  stage,
+  /thumbnail[\s\S]*\.fonts\(\)[\s\S]*fontOptions\.map/,
+  'font selector must use the installed font list',
+);
 matchCode(preload, /thumbnail:[\s\S]*exportImage/, 'thumbnail API must be exposed through preload');
 matchCode(main, /IPC\.THUMBNAIL_EXPORT/, 'main process must handle image export');
 matchCode(

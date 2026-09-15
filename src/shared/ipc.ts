@@ -67,6 +67,7 @@ export const IPC = {
   CAPTION_SELECT_SOURCE_DIRECTORY: 'caption:select-source-directory',
   CAPTION_IMPORT_GROK: 'caption:import-grok',
   CAPTION_GENERATE: 'caption:generate',
+  THUMBNAIL_FONTS: 'thumbnail:fonts',
   THUMBNAIL_LOAD: 'thumbnail:load',
   THUMBNAIL_SAVE: 'thumbnail:save',
   THUMBNAIL_SELECT_IMAGE: 'thumbnail:select-image',
