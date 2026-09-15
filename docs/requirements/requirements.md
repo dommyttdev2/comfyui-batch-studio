@@ -107,7 +107,16 @@ Status: Active
 | REQ-EXEC-013 | Implemented | active RunによりWindow 0枚でもMain Processを継続する場合、Applicationをsingle-instanceとして再起動操作を既存Main Processへ転送し、新しいProject Windowを生成できる。 | `architecture/project-window-execution-runtime.md` |
 | REQ-EXEC-014 | Implemented | Local resource lockはLocal ComfyUIへの副作用前、Remote resource lockはVast.ai Instanceへのstart/bootstrap/staging等の副作用前に取得し、Resume時も再取得する。Window closeではreleaseせず、Localはterminal output verification/cleanup後、Remoteはartifact cleanupとInstance finalization完了後にreleaseする。 | `architecture/project-window-execution-runtime.md` |
 
-## 8. Validation / Security
+## 8. Post-processing
+
+| ID | Status | Requirement | Owner |
+| --- | --- | --- | --- |
+| REQ-POST-001 | Implemented | Execution後にユーザーが指定する最終成果物directoryを、Caption / Thumbnail / 販売サイト用画像の共通入力元とする。後工程はサムネイル生成物を最終成果物の代替sourceとして扱わない。 | `product/scope-and-flow.md` / `ui/application-shell.md` |
+| REQ-POST-002 | Implemented | 販売サイト用画像工程はサムネイルの次に配置し、FANZA / DLsiteのpackage / thumbnailを独立targetとしてcrop・renderする。同寸法targetでもcrop stateやrender結果を共有しない。 | `ui/application-shell.md` / `contracts/project-artifacts.md` |
+| REQ-POST-003 | Implemented | 販売サイトtargetのservice / image type / width / height / filenameはJSON catalogを正本とし、FANZA package 560×420、FANZA thumbnail 100×100、DLsite package 560×420、DLsite thumbnail 300×300を定義する。 | `contracts/project-artifacts.md` |
+| REQ-POST-004 | Implemented | 販売サイト用画像はcropを元画像内へclampし、EXIF orientationを考慮し、Lanczos3でresizeする。JPEG / PNG / WebPを出力し、JPEG / WebP品質は100固定とする。WebP入力はChromiumでPNGへ正規化してMain ProcessのLanczos3 pipelineへ渡す。 | `ui/application-shell.md` / `contracts/project-artifacts.md` |
+
+## 9. Validation / Security
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
