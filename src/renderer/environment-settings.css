@@ -33,10 +33,9 @@
   color: #9ba4b1;
   font-size: 12px;
 }
-.environment-custom-node-clone-url code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.environment-custom-node-clone-url input {
+  min-width: 0;
+  width: 100%;
 }
 
 .environment-actions {
