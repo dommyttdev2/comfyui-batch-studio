@@ -182,9 +182,18 @@ function App() {
     void (async () => {
       const visible = Boolean(project && !tool && shouldShowGrok(stage)),
         context = grokContextStage(stage);
-      if (visible && context && project)
-        await window.batchStudio.grok.setContext(project.rootPath, context);
-      const s = await window.batchStudio.grok.setVisible(visible);
+      if (visible && context && project) {
+        setGrok(true);
+        const contextLoad = window.batchStudio.grok.setContext(project.rootPath, context),
+          visibility = window.batchStudio.grok.setVisible(true),
+          [s] = await Promise.all([visibility, contextLoad]);
+        if (!cancelled) {
+          setGrok(s.visible);
+          setRatio(s.ratio);
+        }
+        return;
+      }
+      const s = await window.batchStudio.grok.setVisible(false);
       if (!cancelled) {
         setGrok(s.visible);
         setRatio(s.ratio);
