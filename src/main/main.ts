@@ -109,6 +109,7 @@ import {
   generateMarketplaceZip,
   getMarketplaceImageTargets,
   loadMarketplaceImageState,
+  renderMarketplacePng,
   saveMarketplaceImageState,
 } from './marketplace-image-service.js';
 import {
@@ -2033,6 +2034,30 @@ function register() {
         root,
         state,
         typeof webpDataUrl === 'string' ? webpDataUrl : undefined,
+      );
+    },
+  );
+  ipcMain.handle(
+    IPC.MARKETPLACE_RENDER_PNG,
+    (
+      _e,
+      root: unknown,
+      sourceImagePath: unknown,
+      crop: unknown,
+      width: unknown,
+      height: unknown,
+    ) => {
+      validRoot(root);
+      if (typeof sourceImagePath !== 'string') throw new Error('Invalid marketplace image path');
+      if (!crop || typeof crop !== 'object') throw new Error('Invalid marketplace crop');
+      if (typeof width !== 'number' || typeof height !== 'number')
+        throw new Error('Invalid marketplace output size');
+      return renderMarketplacePng(
+        root,
+        sourceImagePath,
+        crop as import('../shared/types.js').MarketplaceCropRect,
+        width,
+        height,
       );
     },
   );
