@@ -25,7 +25,11 @@ assert.equal(
   'Batch Studioが完全依存する2件のcustom_nodesをJSONで定義する',
 );
 for (const node of workflowCustomNodes.repositories)
-  assert.match(node.repository, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, 'repositoryはowner/repo形式にする');
+  assert.match(
+    node.repository,
+    /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/,
+    'repositoryはowner/repo形式にする',
+  );
 matchCode(
   appSettings,
   /migrateRemoteCustomNodes\(raw\.remoteCustomNodes\)/,
@@ -70,11 +74,7 @@ matchCode(
   /Workflow依存 custom_nodes/,
   '環境設定でRemote custom_nodesを編集できる',
 );
-matchCode(
-  environmentSettings,
-  /Clone URL/,
-  '各custom_nodeにGitHub clone URLを表示する',
-);
+matchCode(environmentSettings, /Clone URL/, '各custom_nodeにGitHub clone URLを表示する');
 matchCode(
   environmentSettings,
   /https:\/\/github\.com\/\$\{nameWithOwner\}\.git/,
