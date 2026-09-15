@@ -3,12 +3,8 @@ const LANCZOS_LOBES = 3;
 
 function tiffOrientation(bytes: Buffer, baseOffset = 0): number {
   if (bytes.length - baseOffset < 8) return 1;
-  const littleEndian =
-    bytes[baseOffset] === 0x49 &&
-    bytes[baseOffset + 1] === 0x49;
-  const bigEndian =
-    bytes[baseOffset] === 0x4d &&
-    bytes[baseOffset + 1] === 0x4d;
+  const littleEndian = bytes[baseOffset] === 0x49 && bytes[baseOffset + 1] === 0x49;
+  const bigEndian = bytes[baseOffset] === 0x4d && bytes[baseOffset + 1] === 0x4d;
   if (!littleEndian && !bigEndian) return 1;
 
   const read16 = (offset: number) => {
@@ -122,8 +118,7 @@ export function applyExifOrientation(
   height: number,
   orientation: number,
 ) {
-  if (orientation <= 1 || orientation > 8)
-    return { bitmap: Buffer.from(bitmap), width, height };
+  if (orientation <= 1 || orientation > 8) return { bitmap: Buffer.from(bitmap), width, height };
   const swapsAxes = orientation >= 5;
   const outputWidth = swapsAxes ? height : width;
   const outputHeight = swapsAxes ? width : height;
