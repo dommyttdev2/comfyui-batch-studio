@@ -1,8 +1,8 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { nativeImage } from 'electron';
 import type { FinalArtifactImageItem, FinalArtifactImageSource } from '../shared/types.js';
 import { getFinalArtifactStatus } from './final-artifact-service.js';
+import { readOrientedNativeImage } from './image-pipeline.js';
 
 export const FINAL_ARTIFACT_IMAGE_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -50,19 +50,15 @@ export async function assertFinalArtifactImage(root: string, imagePath: string) 
 
 export async function readImageSource(imagePath: string): Promise<FinalArtifactImageSource | null> {
   const resolved = path.resolve(imagePath);
-  const mime = FINAL_ARTIFACT_IMAGE_MIME_TYPES[path.extname(resolved).toLowerCase()];
-  if (!mime) return null;
+  if (!FINAL_ARTIFACT_IMAGE_MIME_TYPES[path.extname(resolved).toLowerCase()]) return null;
   try {
-    const bytes = await readFile(resolved);
-    const image = nativeImage.createFromBuffer(bytes);
-    if (image.isEmpty()) return null;
-    const size = image.getSize();
+    const { image, width, height } = await readOrientedNativeImage(resolved);
     return {
       path: resolved,
       name: path.basename(resolved),
-      width: size.width,
-      height: size.height,
-      dataUrl: `data:${mime};base64,${bytes.toString('base64')}`,
+      width,
+      height,
+      dataUrl: image.toDataURL(),
     };
   } catch {
     return null;
@@ -74,18 +70,20 @@ export async function readImagePreview(
 ): Promise<FinalArtifactImageSource | null> {
   const resolved = path.resolve(imagePath);
   if (!FINAL_ARTIFACT_IMAGE_MIME_TYPES[path.extname(resolved).toLowerCase()]) return null;
-  const image = nativeImage.createFromPath(resolved);
-  if (image.isEmpty()) return null;
-  const original = image.getSize();
-  const preview = original.width > 320 ? image.resize({ width: 320, quality: 'good' }) : image;
-  const size = preview.getSize();
-  return {
-    path: resolved,
-    name: path.basename(resolved),
-    width: size.width,
-    height: size.height,
-    dataUrl: preview.toDataURL(),
-  };
+  try {
+    const { image, width, height } = await readOrientedNativeImage(resolved);
+    const preview = width > 320 ? image.resize({ width: 320, quality: 'good' }) : image;
+    const size = preview.getSize();
+    return {
+      path: resolved,
+      name: path.basename(resolved),
+      width: size.width,
+      height: size.height,
+      dataUrl: preview.toDataURL(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function readFinalArtifactImage(
