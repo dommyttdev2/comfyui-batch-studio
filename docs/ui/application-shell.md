@@ -51,6 +51,10 @@ Projectを開いている場合:
 モデル配置
 実行前チェック
 実行
+最終成果物
+キャプション
+サムネイル
+販売サイト用画像
 ```
 
 Projectを閉じている場合:
@@ -356,6 +360,27 @@ Remote targetでは `generation completed` と `artifact delivery completed` を
 
 詳細は `../architecture/remote-execution.md` を正本とする。
 
+### 15.1 Post-processing stages
+
+Execution後のProject内後処理は次の順序とする。
+
+```text
+実行
+  -> 最終成果物
+  -> キャプション
+  -> サムネイル
+  -> 販売サイト用画像
+```
+
+- `最終成果物`: 手作業で選定・モザイク処理した最終成果物ディレクトリを指定する。後工程は原則このdirectoryを入力元とする。
+- `キャプション`: Grokは意味内容としてtitle / descriptionを返し、Batch Studioが最終成果物directoryの実画像枚数を数えて最終captionを組み立てる。
+- `サムネイル`: 最終成果物画像を素材として独立したサムネイル編集を行う。
+- `販売サイト用画像`: 配置順としてサムネイルの次に置くが、サムネイル生成物には依存しない。最終成果物画像を直接入力とする。
+- 販売サイト用画像ではFANZA / DLsiteのpackage / thumbnailを別ターゲットとして独立編集する。同じ560×420であってもrender結果を共有しない。
+- 販売サイトtarget定義はJSON catalogを正本とし、画面コードへ寸法を重複hard-codeしない。
+- Cropは元画像範囲外へ出さず、EXIF orientationを考慮し、最終resizeはLanczos3を使用する。
+- 出力形式はJPEG / PNG / WebP。JPEG / WebP品質は100固定でUIへ品質設定を露出しない。
+
 ## 16. Project Window-local Grok state
 
 Multi WindowではGrok login session用persistent partitionは共有してよいが、以下はProject Windowごとに独立させる。
@@ -382,6 +407,10 @@ Grok関連IPCは操作元の `event.sender` から対象Project Windowを解決�
 | モデル配置 | 非表示 |
 | 実行前チェック | 非表示 |
 | 実行 | 非表示 |
+| 最終成果物 | 非表示 |
+| キャプション | 表示 |
+| サムネイル | 非表示 |
+| 販売サイト用画像 | 非表示 |
 | Home / サービス連携 / R2 File Manager / Civit Explorer / Vast.ai | 非表示 |
 | `Window` から開いたStandalone R2/Civit window | 非表示 |
 
