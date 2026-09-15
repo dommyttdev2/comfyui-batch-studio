@@ -18,6 +18,14 @@ const service = fs.readFileSync(
   path.join(repo, 'src', 'main', 'marketplace-image-service.ts'),
   'utf8',
 );
+const imagePipeline = fs.readFileSync(
+  path.join(repo, 'src', 'main', 'image-pipeline.ts'),
+  'utf8',
+);
+const imagePipelineCore = fs.readFileSync(
+  path.join(repo, 'src', 'main', 'image-pipeline-core.ts'),
+  'utf8',
+);
 const imageService = fs.readFileSync(
   path.join(repo, 'src', 'main', 'final-artifact-image-service.ts'),
   'utf8',
@@ -72,10 +80,25 @@ matchCode(
 matchCode(service, /toJPEG\(100\)/, 'JPEG quality must remain fixed at 100');
 matchCode(
   service,
-  /resize\(\{ width, height, quality: 'best' \}\)/,
-  'native image output must use the highest Electron resize quality',
+  /renderLanczosCrop/,
+  'marketplace output must use the explicit Lanczos3 pipeline',
+);
+matchCode(
+  imagePipelineCore,
+  /LANCZOS_LOBES = 3[\s\S]*resizeLanczosBitmap/,
+  'image pipeline must implement Lanczos3 resizing',
+);
+matchCode(
+  imagePipeline,
+  /parseExifOrientation[\s\S]*applyExifOrientation/,
+  'image decoding must apply EXIF orientation before cropping',
 );
 matchCode(stage, /toDataURL\('image\/webp', 1\)/, 'WebP quality must remain fixed at 100 percent');
+matchCode(
+  stage,
+  /marketplace\.renderPng[\s\S]*encodePngAsWebp/,
+  'WebP must be encoded from the Lanczos-rendered target image',
+);
 matchCode(
   service,
   /MAX_INPUT_BYTES = 100 \* 1024 \* 1024/,
