@@ -1,10 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { nativeImage } from 'electron';
-import type {
-  FinalArtifactImageItem,
-  FinalArtifactImageSource,
-} from '../shared/types.js';
+import type { FinalArtifactImageItem, FinalArtifactImageSource } from '../shared/types.js';
 import { getFinalArtifactStatus } from './final-artifact-service.js';
 
 export const FINAL_ARTIFACT_IMAGE_MIME_TYPES: Record<string, string> = {
@@ -51,9 +48,7 @@ export async function assertFinalArtifactImage(root: string, imagePath: string) 
   return resolved;
 }
 
-export async function readImageSource(
-  imagePath: string,
-): Promise<FinalArtifactImageSource | null> {
+export async function readImageSource(imagePath: string): Promise<FinalArtifactImageSource | null> {
   const resolved = path.resolve(imagePath);
   const mime = FINAL_ARTIFACT_IMAGE_MIME_TYPES[path.extname(resolved).toLowerCase()];
   if (!mime) return null;
