@@ -9,6 +9,23 @@ import type { Runner } from './ui';
 
 type FormState = Required<AppSettings> & { githubPat: string };
 type StringField = Exclude<keyof Required<AppSettings>, 'remoteCustomNodes'>;
+function githubCloneUrl(repository: string) {
+  const raw = repository.trim().replace(/\.git$/i, '');
+  if (!raw) return '';
+  let nameWithOwner = raw;
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const url = new URL(raw);
+      if (url.hostname.toLowerCase() !== 'github.com') return '';
+      nameWithOwner = url.pathname.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '');
+    } catch {
+      return '';
+    }
+  }
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(nameWithOwner)) return '';
+  return `https://github.com/${nameWithOwner}.git`;
+}
+
 const EMPTY_SETTINGS: FormState = {
   comfyUiInstallPath: '',
   remoteComfyUiInstallPath: '',
@@ -306,7 +323,7 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
           ) : (
             <div className="table">
               {settings.remoteCustomNodes.map((node, index) => (
-                <div className="tablerow" key={index}>
+                <div className="tablerow environment-custom-node-row" key={index}>
                   <input
                     aria-label={'custom node repository ' + (index + 1)}
                     value={node.repository}
@@ -319,6 +336,15 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
                     onChange={(e) => updateCustomNode(index, { ref: e.target.value })}
                     placeholder="ref（任意: branch / tag / SHA）"
                   />
+                  <div className="environment-custom-node-clone-url">
+                    <span>Clone URL</span>
+                    <input
+                      aria-label={'custom node clone url ' + (index + 1)}
+                      value={githubCloneUrl(node.repository)}
+                      readOnly
+                      placeholder="-"
+                    />
+                  </div>
                   <button className="danger" onClick={() => removeCustomNode(index)}>
                     削除
                   </button>

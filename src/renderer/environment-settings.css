@@ -20,6 +20,24 @@
 .environment-section .actions input {
   min-width: 0;
 }
+
+.environment-custom-node-row {
+  grid-template-columns: minmax(260px, 1.3fr) minmax(180px, 0.8fr) minmax(300px, 1.4fr) auto;
+}
+.environment-custom-node-clone-url {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.environment-custom-node-clone-url span {
+  color: #9ba4b1;
+  font-size: 12px;
+}
+.environment-custom-node-clone-url input {
+  min-width: 0;
+  width: 100%;
+}
+
 .environment-actions {
   justify-content: flex-end;
   position: sticky;
