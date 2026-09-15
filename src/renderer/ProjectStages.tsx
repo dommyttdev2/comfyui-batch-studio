@@ -75,7 +75,7 @@ export function Settings({
             />
           </label>
           <label>
-            プロジェクトID
+            プロジェクトID (フォルダ名)
             <input value={brief.project.id} disabled />
           </label>
           <label>
