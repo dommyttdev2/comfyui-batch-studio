@@ -66,11 +66,7 @@ matchCode(
   /grokLoadingView:WebContentsView/,
   'Project windows must own a dedicated Grok loading placeholder view',
 );
-matchCode(
-  main,
-  /Grokを読み込み中…/,
-  'The Grok pane must explain that Grok is still loading',
-);
+matchCode(main, /Grokを読み込み中…/, 'The Grok pane must explain that Grok is still loading');
 matchCode(
   main,
   /state\.grokLoading=true;layoutProjectWindow\(state\)/,
