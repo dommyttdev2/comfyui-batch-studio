@@ -491,7 +491,7 @@ function CreateProject({
         <h2>新規プロジェクト</h2>
         <div className="formgrid">
           <label>
-            作成先
+            Project root
             <input value={parent} readOnly />
             <button
               onClick={async () => {
@@ -507,7 +507,7 @@ function CreateProject({
             <input value={b.project.title} onChange={(e) => setTitle(e.target.value)} />
           </label>
           <label>
-            プロジェクトID
+            プロジェクトID (フォルダ名)
             <input
               value={b.project.id}
               onChange={(e) => {
