@@ -1194,6 +1194,13 @@ export interface BatchStudioApi {
       state: MarketplaceImageEditorState,
       webpDataUrl?: string,
     ) => Promise<MarketplaceGenerationResult>;
+    renderPng: (
+      root: string,
+      sourceImagePath: string,
+      crop: MarketplaceCropRect,
+      width: number,
+      height: number,
+    ) => Promise<string>;
     openPicker: (root: string, currentImagePath: string) => Promise<MarketplacePickerSession>;
     pickerContext: () => Promise<MarketplacePickerContext>;
     previewPicker: (imagePath: string) => Promise<void>;
