@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Layer } from 'ag-psd';
 import type {
   ProjectSummary,
@@ -687,6 +687,134 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   );
 }
 
+function FontFamilyComboBox({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  const listId = useId();
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => setQuery(value), [value]);
+
+  const filteredOptions = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    if (!needle) return options;
+    return options
+      .filter((font) => font.toLocaleLowerCase().includes(needle))
+      .sort((a, b) => {
+        const aStarts = a.toLocaleLowerCase().startsWith(needle);
+        const bStarts = b.toLocaleLowerCase().startsWith(needle);
+        if (aStarts !== bStarts) return aStarts ? -1 : 1;
+        return a.localeCompare(b);
+      });
+  }, [options, query]);
+
+  useEffect(() => setActiveIndex(0), [query, options]);
+
+  const selectFont = (font: string) => {
+    setQuery(font);
+    onChange(font);
+    setOpen(false);
+  };
+  const commitExactMatchOrRestore = () => {
+    const normalized = query.trim().toLocaleLowerCase();
+    const exact = options.find((font) => font.toLocaleLowerCase() === normalized);
+    if (exact) {
+      setQuery(exact);
+      if (exact !== value) onChange(exact);
+    } else {
+      setQuery(value);
+    }
+    setOpen(false);
+  };
+
+  return (
+    <div
+      className="thumbnail-font-combobox"
+      onBlur={(event) => {
+        const next = event.relatedTarget as Node | null;
+        if (next && event.currentTarget.contains(next)) return;
+        commitExactMatchOrRestore();
+      }}
+    >
+      <div className="thumbnail-font-input-row">
+        <input
+          type="text"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={listId}
+          value={query}
+          style={{ fontFamily: value }}
+          onFocus={() => setOpen(true)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              setOpen(true);
+              setActiveIndex((index) =>
+                open ? Math.min(index + 1, Math.max(0, filteredOptions.length - 1)) : 0,
+              );
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              setOpen(true);
+              setActiveIndex((index) => Math.max(0, index - 1));
+            } else if (event.key === 'Enter' && open && filteredOptions[activeIndex]) {
+              event.preventDefault();
+              selectFont(filteredOptions[activeIndex]);
+            } else if (event.key === 'Escape') {
+              event.preventDefault();
+              setQuery(value);
+              setOpen(false);
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="thumbnail-font-toggle"
+          aria-label="フォント一覧を開く"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+        >
+          ▾
+        </button>
+      </div>
+      {open && (
+        <div id={listId} className="thumbnail-font-suggestions" role="listbox">
+          {filteredOptions.length ? (
+            filteredOptions.map((font, index) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={index === activeIndex}
+                key={font}
+                className={index === activeIndex ? 'active' : ''}
+                style={{ fontFamily: font }}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => selectFont(font)}
+              >
+                {font}
+              </button>
+            ))
+          ) : (
+            <div className="thumbnail-font-empty">一致するフォントはありません</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TextInspector({
   label,
   value,
@@ -712,16 +840,11 @@ function TextInspector({
       </label>
       <label>
         フォント
-        <select
+        <FontFamilyComboBox
           value={value.fontFamily}
-          onChange={(event) => set('fontFamily', event.target.value)}
-        >
-          {fontOptions.map((font) => (
-            <option key={font} value={font} style={{ fontFamily: font }}>
-              {font}
-            </option>
-          ))}
-        </select>
+          options={fontOptions}
+          onChange={(fontFamily) => set('fontFamily', fontFamily)}
+        />
       </label>
       <div className="thumbnail-number-grid">
         <label>

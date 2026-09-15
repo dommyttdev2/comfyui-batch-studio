@@ -100,6 +100,56 @@
   min-height: 39px;
   padding: 4px;
 }
+.thumbnail-font-combobox {
+  position: relative;
+}
+.thumbnail-font-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+}
+.thumbnail-font-input-row input {
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.thumbnail-font-toggle {
+  min-width: 38px;
+  padding: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  font-size: 14px;
+}
+.thumbnail-font-suggestions {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid #3a4350;
+  border-radius: 8px;
+  background: #11161d;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 38%);
+}
+.thumbnail-font-suggestions button {
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+}
+.thumbnail-font-suggestions button:hover,
+.thumbnail-font-suggestions button.active {
+  background: #253247;
+}
+.thumbnail-font-empty {
+  padding: 8px 9px;
+  color: #8993a2;
+  font-size: 12px;
+}
 .thumbnail-export select {
   margin-bottom: 2px;
 }
