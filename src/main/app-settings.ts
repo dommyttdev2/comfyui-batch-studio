@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import workflowCustomNodes from '../shared/workflow-custom-nodes.json' with { type: 'json' };
 import type {
   AppSettings,
   AppSettingsSaveInput,
@@ -106,12 +107,8 @@ type StoredAppSettings =
   | StoredAppSettingsV6
   | StoredAppSettingsV7;
 type NormalizedAppSettings = Required<AppSettings>;
-export const DEFAULT_REMOTE_CUSTOM_NODES: ReadonlyArray<RemoteCustomNodeRepository> = [
-  { repository: 'toshiki-takedomi/comfyui-batch-orchestrator' },
-  { repository: 'norqis/ComfyUI-Scene-Prompt-Tools' },
-];
 function defaultRemoteCustomNodes(): RemoteCustomNodeRepository[] {
-  return DEFAULT_REMOTE_CUSTOM_NODES.map((node) => ({ ...node }));
+  return normalizeRemoteCustomNodes(workflowCustomNodes.repositories);
 }
 const EMPTY: NormalizedAppSettings = {
   comfyUiInstallPath: '',
@@ -228,14 +225,13 @@ function normalizeRemoteCustomNodes(value: unknown): RemoteCustomNodeRepository[
 }
 function migrateRemoteCustomNodes(value: unknown): RemoteCustomNodeRepository[] {
   const existing = normalizeRemoteCustomNodes(value);
+  const defaults = defaultRemoteCustomNodes();
   const existingByRepository = new Map(
     existing.map((node) => [node.repository.toLowerCase(), node] as const),
   );
-  const defaultKeys = new Set(
-    DEFAULT_REMOTE_CUSTOM_NODES.map((node) => node.repository.toLowerCase()),
-  );
+  const defaultKeys = new Set(defaults.map((node) => node.repository.toLowerCase()));
   return [
-    ...DEFAULT_REMOTE_CUSTOM_NODES.map(
+    ...defaults.map(
       (node) => existingByRepository.get(node.repository.toLowerCase()) ?? { ...node },
     ),
     ...existing.filter((node) => !defaultKeys.has(node.repository.toLowerCase())),
