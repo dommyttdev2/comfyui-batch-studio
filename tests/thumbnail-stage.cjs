@@ -71,6 +71,37 @@ matchCode(
   /fonts\.includes\('Meiryo UI'\) \? 'Meiryo UI' : 'Times New Roman'/,
   'Meiryo UI must be the default font when it is installed',
 );
+matchCode(
+  stage,
+  /openImagePicker\(drag\.slot\)/,
+  'clicking a preview image area must open the image picker',
+);
+matchCode(
+  stage,
+  /Math\.hypot[\s\S]*moved[\s\S]*moveSlot/,
+  'preview dragging must remain distinct from click-to-pick',
+);
+matchCode(
+  stage,
+  /thumbnail-image-picker[\s\S]*listImages\(project\.rootPath\)/,
+  'image picker must list final artifact images',
+);
+matchCode(
+  stage,
+  /IntersectionObserver[\s\S]*readPreview\(item\.path\)/,
+  'image picker previews must load lazily',
+);
+matchCode(
+  main,
+  /THUMBNAIL_LIST_IMAGES[\s\S]*getFinalArtifactStatus\(root\)[\s\S]*listThumbnailImages/,
+  'thumbnail gallery must use the final artifact directory',
+);
+matchCode(service, /nativeImage[\s\S]*resize\(\{ width: 320/, 'gallery previews must be lightweight');
+matchCode(
+  preload,
+  /thumbnail:[\s\S]*listImages:[\s\S]*readPreview:[\s\S]*exportImage/,
+  'thumbnail gallery API must be exposed through preload',
+);
 matchCode(preload, /thumbnail:[\s\S]*exportImage/, 'thumbnail API must be exposed through preload');
 matchCode(main, /IPC\.THUMBNAIL_EXPORT/, 'main process must handle image export');
 matchCode(
