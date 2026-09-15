@@ -61,6 +61,32 @@ doesNotMatchCode(
 doesNotMatchCode(main, /let grokView:/, 'Grok views must be Project Window-local');
 doesNotMatchCode(main, /let activeGrokContext:/, 'Grok context must be Project Window-local');
 
+matchCode(
+  main,
+  /grokLoadingView:WebContentsView/,
+  'Project windows must own a dedicated Grok loading placeholder view',
+);
+matchCode(
+  main,
+  /Grokを読み込み中…/,
+  'The Grok pane must explain that Grok is still loading',
+);
+matchCode(
+  main,
+  /state\.grokLoading=true;layoutProjectWindow\(state\)/,
+  'Grok context loading must expose the placeholder before awaiting navigation',
+);
+matchCode(
+  main,
+  /state\.grokLoading\?grokBounds/,
+  'The loading placeholder must occupy the Grok pane while context navigation is pending',
+);
+matchCode(
+  app,
+  /setGrok\(true\).*?grok\.setContext\(project\.rootPath,context\).*?grok\.setVisible\(true\)/,
+  'Renderer must reserve the Grok pane before waiting for Grok context loading',
+);
+
 assert.ok(
   main.indexOf('executionCoordinator.startRemote') <
     main.indexOf('prepareRemoteExecution(root, run.runId)'),
