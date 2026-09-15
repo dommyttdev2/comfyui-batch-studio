@@ -1,10 +1,12 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { nativeImage } from 'electron';
 import path from 'node:path';
 import type {
   ThumbnailDocument,
   ThumbnailEditorState,
   ThumbnailExportResult,
+  ThumbnailImageItem,
   ThumbnailImageSource,
   ThumbnailPattern,
   ThumbnailSlotKey,
@@ -213,6 +215,33 @@ export async function saveThumbnailState(
   const normalized = normalizeThumbnailState(state);
   await writeJsonAtomic(statePath(root), normalized);
   return normalized;
+}
+
+export async function listThumbnailImages(directory: string): Promise<ThumbnailImageItem[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  return entries
+    .filter(
+      (entry) =>
+        entry.isFile() && IMAGE_TYPES[path.extname(entry.name).toLowerCase()] !== undefined,
+    )
+    .map((entry) => ({ path: path.join(directory, entry.name), name: entry.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+export async function readThumbnailPreview(
+  imagePath: string,
+): Promise<ThumbnailImageSource | null> {
+  const resolved = path.resolve(imagePath);
+  if (!IMAGE_TYPES[path.extname(resolved).toLowerCase()]) return null;
+  const image = nativeImage.createFromPath(resolved);
+  if (image.isEmpty()) return null;
+  const size = image.getSize();
+  const preview = size.width > 320 ? image.resize({ width: 320, quality: 'good' }) : image;
+  return {
+    path: resolved,
+    name: path.basename(resolved),
+    dataUrl: preview.toDataURL(),
+  };
 }
 
 export async function readThumbnailImage(imagePath: string): Promise<ThumbnailImageSource | null> {
