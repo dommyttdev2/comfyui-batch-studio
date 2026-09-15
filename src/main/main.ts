@@ -360,6 +360,9 @@ function createProjectWindow(
   });
   window.on('resize', () => layoutProjectWindow(state));
   window.on('closed', () => {
+    for (const picker of thumbnailPickerWindows.values()) {
+      if (picker.opener.id === localView.webContents.id) picker.window.close();
+    }
     localView.webContents.close();
     grokView.webContents.close();
     projectWindows.delete(windowId);
