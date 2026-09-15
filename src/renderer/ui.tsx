@@ -12,7 +12,8 @@ export type Stage =
   | '実行'
   | '最終成果物'
   | 'キャプション'
-  | 'サムネイル';
+  | 'サムネイル'
+  | '販売サイト用画像';
 export type Runner = <T>(fn: () => Promise<T>) => Promise<T | undefined>;
 export const stages: Stage[] = [
   '概要',
@@ -27,6 +28,7 @@ export const stages: Stage[] = [
   '最終成果物',
   'キャプション',
   'サムネイル',
+  '販売サイト用画像',
 ];
 const GROK_STAGE_CONTEXT: Partial<Record<Stage, GrokContextStage>> = {
   ストーリー: 'story',

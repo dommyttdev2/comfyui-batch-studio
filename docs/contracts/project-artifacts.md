@@ -38,6 +38,35 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 | `LoRA_{project-destination-folder}.json` | Workflow Compiler | Template, Manifest, models, plan, `project.id`, Project実フォルダ親名 | 最終ComfyUI UI Workflow |
 | `project_meta.json` | Batch Studio | System | Artifact status、version、Workflow build provenance 等 |
 
+### 3.1 Post-processing state / generated outputs
+
+後処理工程の編集状態・生成物はStory / Models / Prompt Plan等の意味Artifactとは分離する。
+
+販売サイト用画像:
+
+```text
+{project_root}/
+├─ marketplace/
+│  ├─ FANZA/
+│  │  ├─ package.<ext>
+│  │  └─ thumbnail.<ext>
+│  ├─ DLsite/
+│  │  ├─ package.<ext>
+│  │  └─ thumbnail.<ext>
+│  ├─ custom/
+│  │  └─ custom-output.<ext>
+│  └─ marketplace-images.zip
+└─ ._batch_studio/
+   └─ marketplace-images.json
+```
+
+- `marketplace-images.json` はsource image、mode、target別crop、出力形式、custom resize設定を保持するeditor stateであり、Grok Artifactではない。
+- source imageは `project_meta.json.settings.finalArtifactDirectory` で指定された最終成果物directory配下からのみ選択する。
+- `thumbnails/` の生成物を販売サイト用画像のsource候補にはしない。
+- FANZA / DLsiteの同寸法targetも別crop stateと別renderを持つ。
+- target size / service / filenameの定義は `src/shared/marketplace-image-targets.json` が機械可読正本である。
+- JPEG / PNG / WebPを出力でき、JPEG / WebPの品質設定は100固定とする。
+
 Legacy:
 
 | Artifact | Status | Role |

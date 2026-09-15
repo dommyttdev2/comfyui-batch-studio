@@ -589,14 +589,19 @@ export interface ThumbnailEditorState {
   documents: ThumbnailDocument[];
 }
 
-export interface ThumbnailImageItem {
+export interface FinalArtifactImageItem {
   path: string;
   name: string;
 }
 
-export interface ThumbnailImageSource extends ThumbnailImageItem {
+export interface FinalArtifactImageSource extends FinalArtifactImageItem {
+  width: number;
+  height: number;
   dataUrl: string;
 }
+
+export type ThumbnailImageItem = FinalArtifactImageItem;
+export type ThumbnailImageSource = FinalArtifactImageSource;
 
 export interface ThumbnailPickerSession {
   sessionId: string;
@@ -620,6 +625,66 @@ export interface ThumbnailTemplateSource {
 
 export interface ThumbnailExportResult {
   path: string;
+}
+
+export type MarketplaceOutputFormat = 'jpeg' | 'png' | 'webp';
+export type MarketplaceEditorMode = 'marketplace' | 'custom';
+
+export interface MarketplaceImageTarget {
+  id: string;
+  service: string;
+  imageType: string;
+  label: string;
+  width: number;
+  height: number;
+  fileName: string;
+}
+
+export interface MarketplaceCropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface MarketplaceTargetState {
+  crop: MarketplaceCropRect | null;
+}
+
+export interface MarketplaceCustomState {
+  width: number;
+  height: number;
+  lockAspect: boolean;
+  crop: MarketplaceCropRect | null;
+}
+
+export interface MarketplaceImageEditorState {
+  schemaVersion: 1;
+  sourceImagePath: string;
+  mode: MarketplaceEditorMode;
+  activeTargetId: string;
+  format: MarketplaceOutputFormat;
+  targets: Record<string, MarketplaceTargetState>;
+  custom: MarketplaceCustomState;
+}
+
+export interface MarketplaceGenerationResult {
+  outputDirectory: string;
+  outputPaths: string[];
+  zipPath: string | null;
+}
+
+export interface MarketplacePickerSession {
+  sessionId: string;
+}
+
+export interface MarketplacePickerContext extends MarketplacePickerSession {
+  root: string;
+  currentImagePath: string;
+}
+
+export interface MarketplacePickerSelection extends MarketplacePickerSession {
+  imagePath: string;
 }
 
 export interface FinalArtifactStatus {
@@ -1071,6 +1136,9 @@ export interface BatchStudioApi {
   finalArtifact: {
     status: (root: string) => Promise<FinalArtifactStatus>;
     selectDirectory: (root: string) => Promise<FinalArtifactStatus>;
+    listImages: (root: string) => Promise<FinalArtifactImageItem[]>;
+    readImage: (root: string, imagePath: string) => Promise<FinalArtifactImageSource | null>;
+    readPreview: (root: string, imagePath: string) => Promise<FinalArtifactImageSource | null>;
   };
   caption: {
     status: (root: string) => Promise<CaptionStatus>;
@@ -1104,6 +1172,45 @@ export interface BatchStudioApi {
       format: 'png' | 'jpeg',
       dataUrl: string,
     ) => Promise<ThumbnailExportResult>;
+  };
+  marketplace: {
+    targets: () => Promise<MarketplaceImageTarget[]>;
+    load: (root: string) => Promise<MarketplaceImageEditorState>;
+    save: (
+      root: string,
+      state: MarketplaceImageEditorState,
+    ) => Promise<MarketplaceImageEditorState>;
+    generate: (
+      root: string,
+      state: MarketplaceImageEditorState,
+      webpDataUrls?: Record<string, string>,
+      sourcePngDataUrl?: string,
+    ) => Promise<MarketplaceGenerationResult>;
+    generateZip: (
+      root: string,
+      format: MarketplaceOutputFormat,
+    ) => Promise<MarketplaceGenerationResult>;
+    exportCustom: (
+      root: string,
+      state: MarketplaceImageEditorState,
+      webpDataUrl?: string,
+      sourcePngDataUrl?: string,
+    ) => Promise<MarketplaceGenerationResult>;
+    renderPng: (
+      root: string,
+      sourceImagePath: string,
+      crop: MarketplaceCropRect,
+      width: number,
+      height: number,
+      sourcePngDataUrl?: string,
+    ) => Promise<string>;
+    openPicker: (root: string, currentImagePath: string) => Promise<MarketplacePickerSession>;
+    pickerContext: () => Promise<MarketplacePickerContext>;
+    previewPicker: (imagePath: string) => Promise<void>;
+    commitPicker: (imagePath: string) => Promise<void>;
+    onPickerPreview: (listener: (selection: MarketplacePickerSelection) => void) => () => void;
+    onPickerCommit: (listener: (selection: MarketplacePickerSelection) => void) => () => void;
+    onPickerCancel: (listener: (session: MarketplacePickerSession) => void) => () => void;
   };
   clipboard: { writeText: (text: string) => Promise<void> };
   r2: {

@@ -6,6 +6,7 @@ import { StoryStage, ModelsStage } from './GrokStages';
 import { PromptPlanStage } from './PromptPlanStage';
 import { CaptionStage } from './CaptionStage';
 import { FinalArtifactStage } from './FinalArtifactStage';
+import { MarketplaceImageStage } from './MarketplaceImageStage';
 import { ThumbnailStage } from './ThumbnailStage';
 import {
   WorkflowStage,
@@ -641,6 +642,8 @@ function StageView(props: {
       return <CaptionStage {...props} />;
     case 'サムネイル':
       return <ThumbnailStage {...props} />;
+    case '販売サイト用画像':
+      return <MarketplaceImageStage {...props} />;
   }
 }
 

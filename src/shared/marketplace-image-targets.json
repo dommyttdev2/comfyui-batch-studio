@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "id": "fanza.package",
+      "service": "FANZA",
+      "imageType": "package",
+      "label": "パッケージ",
+      "width": 560,
+      "height": 420,
+      "fileName": "package"
+    },
+    {
+      "id": "fanza.thumbnail",
+      "service": "FANZA",
+      "imageType": "thumbnail",
+      "label": "サムネイル",
+      "width": 100,
+      "height": 100,
+      "fileName": "thumbnail"
+    },
+    {
+      "id": "dlsite.package",
+      "service": "DLsite",
+      "imageType": "package",
+      "label": "パッケージ",
+      "width": 560,
+      "height": 420,
+      "fileName": "package"
+    },
+    {
+      "id": "dlsite.thumbnail",
+      "service": "DLsite",
+      "imageType": "thumbnail",
+      "label": "サムネイル",
+      "width": 300,
+      "height": 300,
+      "fileName": "thumbnail"
+    }
+  ]
+}

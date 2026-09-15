@@ -66,6 +66,9 @@ const I = {
   EXECUTION_RESTART_FROM_SCRATCH: 'execution:restart-from-scratch',
   FINAL_ARTIFACT_STATUS: 'final-artifact:status',
   FINAL_ARTIFACT_SELECT_DIRECTORY: 'final-artifact:select-directory',
+  FINAL_ARTIFACT_LIST_IMAGES: 'final-artifact:list-images',
+  FINAL_ARTIFACT_READ_IMAGE: 'final-artifact:read-image',
+  FINAL_ARTIFACT_READ_PREVIEW: 'final-artifact:read-preview',
   CAPTION_STATUS: 'caption:status',
   CAPTION_SELECT_SOURCE_DIRECTORY: 'caption:select-source-directory',
   CAPTION_IMPORT_GROK: 'caption:import-grok',
@@ -86,6 +89,20 @@ const I = {
   THUMBNAIL_PICKER_PREVIEWED: 'thumbnail-picker:previewed',
   THUMBNAIL_PICKER_COMMITTED: 'thumbnail-picker:committed',
   THUMBNAIL_PICKER_CANCELLED: 'thumbnail-picker:cancelled',
+  MARKETPLACE_TARGETS: 'marketplace:targets',
+  MARKETPLACE_LOAD: 'marketplace:load',
+  MARKETPLACE_SAVE: 'marketplace:save',
+  MARKETPLACE_GENERATE: 'marketplace:generate',
+  MARKETPLACE_GENERATE_ZIP: 'marketplace:generate-zip',
+  MARKETPLACE_EXPORT_CUSTOM: 'marketplace:export-custom',
+  MARKETPLACE_RENDER_PNG: 'marketplace:render-png',
+  MARKETPLACE_PICKER_OPEN: 'marketplace-picker:open',
+  MARKETPLACE_PICKER_CONTEXT: 'marketplace-picker:context',
+  MARKETPLACE_PICKER_PREVIEW: 'marketplace-picker:preview',
+  MARKETPLACE_PICKER_COMMIT: 'marketplace-picker:commit',
+  MARKETPLACE_PICKER_PREVIEWED: 'marketplace-picker:previewed',
+  MARKETPLACE_PICKER_COMMITTED: 'marketplace-picker:committed',
+  MARKETPLACE_PICKER_CANCELLED: 'marketplace-picker:cancelled',
   R2_SETTINGS: 'r2:settings',
   R2_ENVIRONMENT: 'r2:environment',
   R2_TEST: 'r2:test',
@@ -206,6 +223,9 @@ contextBridge.exposeInMainWorld('batchStudio', {
   finalArtifact: {
     status: (r) => ipcRenderer.invoke(I.FINAL_ARTIFACT_STATUS, r),
     selectDirectory: (r) => ipcRenderer.invoke(I.FINAL_ARTIFACT_SELECT_DIRECTORY, r),
+    listImages: (r) => ipcRenderer.invoke(I.FINAL_ARTIFACT_LIST_IMAGES, r),
+    readImage: (r, p) => ipcRenderer.invoke(I.FINAL_ARTIFACT_READ_IMAGE, r, p),
+    readPreview: (r, p) => ipcRenderer.invoke(I.FINAL_ARTIFACT_READ_PREVIEW, r, p),
   },
   caption: {
     status: (r) => ipcRenderer.invoke(I.CAPTION_STATUS, r),
@@ -242,6 +262,34 @@ contextBridge.exposeInMainWorld('batchStudio', {
       return () => ipcRenderer.removeListener(I.THUMBNAIL_PICKER_CANCELLED, handler);
     },
     exportImage: (r, i, f, d) => ipcRenderer.invoke(I.THUMBNAIL_EXPORT, r, i, f, d),
+  },
+  marketplace: {
+    targets: () => ipcRenderer.invoke(I.MARKETPLACE_TARGETS),
+    load: (r) => ipcRenderer.invoke(I.MARKETPLACE_LOAD, r),
+    save: (r, s) => ipcRenderer.invoke(I.MARKETPLACE_SAVE, r, s),
+    generate: (r, s, w, p) => ipcRenderer.invoke(I.MARKETPLACE_GENERATE, r, s, w, p),
+    generateZip: (r, f) => ipcRenderer.invoke(I.MARKETPLACE_GENERATE_ZIP, r, f),
+    exportCustom: (r, s, w, p) => ipcRenderer.invoke(I.MARKETPLACE_EXPORT_CUSTOM, r, s, w, p),
+    renderPng: (r, p, c, w, h, s) => ipcRenderer.invoke(I.MARKETPLACE_RENDER_PNG, r, p, c, w, h, s),
+    openPicker: (r, p) => ipcRenderer.invoke(I.MARKETPLACE_PICKER_OPEN, r, p),
+    pickerContext: () => ipcRenderer.invoke(I.MARKETPLACE_PICKER_CONTEXT),
+    previewPicker: (p) => ipcRenderer.invoke(I.MARKETPLACE_PICKER_PREVIEW, p),
+    commitPicker: (p) => ipcRenderer.invoke(I.MARKETPLACE_PICKER_COMMIT, p),
+    onPickerPreview: (listener) => {
+      const handler = (_event, selection) => listener(selection);
+      ipcRenderer.on(I.MARKETPLACE_PICKER_PREVIEWED, handler);
+      return () => ipcRenderer.removeListener(I.MARKETPLACE_PICKER_PREVIEWED, handler);
+    },
+    onPickerCommit: (listener) => {
+      const handler = (_event, selection) => listener(selection);
+      ipcRenderer.on(I.MARKETPLACE_PICKER_COMMITTED, handler);
+      return () => ipcRenderer.removeListener(I.MARKETPLACE_PICKER_COMMITTED, handler);
+    },
+    onPickerCancel: (listener) => {
+      const handler = (_event, session) => listener(session);
+      ipcRenderer.on(I.MARKETPLACE_PICKER_CANCELLED, handler);
+      return () => ipcRenderer.removeListener(I.MARKETPLACE_PICKER_CANCELLED, handler);
+    },
   },
   clipboard: { writeText: (t) => ipcRenderer.invoke(I.CLIPBOARD_WRITE_TEXT, t) },
   r2: {
