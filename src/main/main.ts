@@ -453,6 +453,7 @@ function openThumbnailPickerWindow(
       height: 860,
       minWidth: 760,
       minHeight: 560,
+      autoHideMenuBar: true,
       title: 'サムネイル画像を選択 - ComfyUI Batch Studio',
     }),
     view = new WebContentsView({
@@ -476,6 +477,8 @@ function openThumbnailPickerWindow(
     },
     contentsId = view.webContents.id;
   thumbnailPickerWindows.set(contentsId, state);
+  window.removeMenu();
+  window.setMenuBarVisibility(false);
   window.contentView.addChildView(view);
   const resize = () => {
     const { width, height } = window.getContentBounds();
