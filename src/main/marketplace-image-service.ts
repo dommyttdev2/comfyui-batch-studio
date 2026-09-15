@@ -199,11 +199,7 @@ function normalizedPngImage(dataUrl: string | undefined) {
   return image;
 }
 
-async function loadSource(
-  root: string,
-  sourceImagePath: string,
-  sourcePngDataUrl?: string,
-) {
+async function loadSource(root: string, sourceImagePath: string, sourcePngDataUrl?: string) {
   if (!sourceImagePath) throw new Error('入力画像を選択してください。');
   const resolved = await assertFinalArtifactImage(root, sourceImagePath);
   const info = await stat(resolved);
