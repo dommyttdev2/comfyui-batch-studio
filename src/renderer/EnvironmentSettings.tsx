@@ -338,7 +338,12 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
                   />
                   <div className="environment-custom-node-clone-url">
                     <span>Clone URL</span>
-                    <code>{githubCloneUrl(node.repository) || '-'}</code>
+                    <input
+                      aria-label={'custom node clone url ' + (index + 1)}
+                      value={githubCloneUrl(node.repository)}
+                      readOnly
+                      placeholder="-"
+                    />
                   </div>
                   <button className="danger" onClick={() => removeCustomNode(index)}>
                     削除
