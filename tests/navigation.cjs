@@ -9,6 +9,7 @@ const { execFileSync } = require('node:child_process');
 const repo = path.resolve(__dirname, '..');
 const uiSource = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8');
 const appSource = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8');
+const stylesSource = fs.readFileSync(path.join(repo, 'src', 'renderer', 'styles.css'), 'utf8');
 const executionSource = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'ExecutionStages.tsx'),
   'utf8',
@@ -32,6 +33,11 @@ matchCode(
   'Project navigation must place 実行 after 実行前チェック',
 );
 matchCode(appSource, /case'実行':return <ExecutionStage/, '実行 stage must render ExecutionStage');
+matchCode(
+  stylesSource,
+  /nav\{position:sticky;top:var\(--app-header-height\);align-self:start;height:calc\(100vh-var\(--app-header-height\)\);overflow-y:auto;/,
+  'Project stage navigation must stay sticky below the app header and scroll internally when needed',
+);
 matchCode(
   executionSource,
   /execution\.status\(project\.rootPath\)/,

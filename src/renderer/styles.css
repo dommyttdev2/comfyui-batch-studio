@@ -1,4 +1,5 @@
 :root {
+  --app-header-height: 94px;
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   color: #e8ebef;
   background: #101318;
@@ -46,7 +47,7 @@ button:disabled {
   position: sticky;
   top: 0;
   z-index: 10;
-  height: 94px;
+  height: var(--app-header-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -76,9 +77,14 @@ button:disabled {
 .body {
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr);
-  min-height: calc(100vh - 94px);
+  min-height: calc(100vh - var(--app-header-height));
 }
 nav {
+  position: sticky;
+  top: var(--app-header-height);
+  align-self: start;
+  height: calc(100vh - var(--app-header-height));
+  overflow-y: auto;
   padding: 18px 10px;
   border-right: 1px solid #282e37;
   background: #13171d;
