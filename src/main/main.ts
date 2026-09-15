@@ -552,29 +552,74 @@ async function handleProjectMenuAction(command: 'new' | 'open') {
   focusProjectWindow(state);
   state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'open', project);
 }
+function sendProjectMenuCommand(command: 'settings' | 'close') {
+  const state = lastFocusedProjectWindow();
+  if (!state || (command === 'close' && !state.projectRoot)) return;
+  focusProjectWindow(state);
+  state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, command);
+}
+async function openCurrentProjectFolderFromMenu() {
+  const state = lastFocusedProjectWindow();
+  if (!state?.projectRoot) return;
+  const err = await shell.openPath(state.projectRoot);
+  if (err)
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'フォルダを開けません',
+      message: err,
+    });
+}
 function installApplicationMenu() {
   const windowMenu: MenuItemConstructorOptions[] = [
     { label: 'R2 File Manager', click: () => openStandaloneToolWindow('r2') },
     { label: 'Civit Explorer', click: () => openStandaloneToolWindow('civit') },
     { label: 'Vast.ai', click: () => openStandaloneToolWindow('vastai') },
     { type: 'separator' },
-    { role: 'minimize' },
-    { role: 'close' },
+    { label: '最小化', role: 'minimize' },
+    { label: 'ウィンドウを閉じる', role: 'close' },
   ];
   const fileMenu: MenuItemConstructorOptions[] = [
-    { label: 'New Project...', click: () => void handleProjectMenuAction('new') },
-    { label: 'Open Project...', click: () => void handleProjectMenuAction('open') },
+    { label: '新規プロジェクト…', click: () => void handleProjectMenuAction('new') },
+    { label: 'プロジェクトを開く…', click: () => void handleProjectMenuAction('open') },
     { type: 'separator' },
-    { label: 'Close Window', role: 'close' },
-    { label: 'Quit', click: () => app.quit() },
+    {
+      label: '現在のフォルダを開く',
+      click: () => void openCurrentProjectFolderFromMenu(),
+    },
+    { label: '設定', click: () => sendProjectMenuCommand('settings') },
+    { label: 'プロジェクトを閉じる', click: () => sendProjectMenuCommand('close') },
+    { type: 'separator' },
+    { label: 'ウィンドウを閉じる', role: 'close' },
+    { label: '終了', click: () => app.quit() },
+  ];
+  const editMenu: MenuItemConstructorOptions[] = [
+    { label: '元に戻す', role: 'undo' },
+    { label: 'やり直す', role: 'redo' },
+    { type: 'separator' },
+    { label: '切り取り', role: 'cut' },
+    { label: 'コピー', role: 'copy' },
+    { label: '貼り付け', role: 'paste' },
+    { label: '削除', role: 'delete' },
+    { type: 'separator' },
+    { label: 'すべて選択', role: 'selectAll' },
+  ];
+  const viewMenu: MenuItemConstructorOptions[] = [
+    { label: '再読み込み', role: 'reload' },
+    { label: '強制再読み込み', role: 'forceReload' },
+    { type: 'separator' },
+    { label: '表示倍率をリセット', role: 'resetZoom' },
+    { label: '拡大', role: 'zoomIn' },
+    { label: '縮小', role: 'zoomOut' },
+    { type: 'separator' },
+    { label: '全画面表示', role: 'togglefullscreen' },
   ];
   const template: MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' } as MenuItemConstructorOptions] : []),
-    { label: 'File', submenu: fileMenu },
-    { role: 'editMenu' },
-    { role: 'viewMenu' },
-    { label: 'Window', submenu: windowMenu },
-    { role: 'help' },
+    { label: 'ファイル', submenu: fileMenu },
+    { label: '編集', submenu: editMenu },
+    { label: '表示', submenu: viewMenu },
+    { label: 'ウィンドウ', submenu: windowMenu },
+    { label: 'ヘルプ', submenu: [] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
