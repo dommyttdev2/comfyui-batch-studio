@@ -402,12 +402,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
 
   useEffect(() => {
     if (!displayActive || !canvasRef.current) return;
-    renderThumbnail(
-      canvasRef.current,
-      displayActive,
-      images,
-      templates[displayActive.pattern],
-    );
+    renderThumbnail(canvasRef.current, displayActive, images, templates[displayActive.pattern]);
   }, [displayActive, images, templates]);
 
   useEffect(() => {
@@ -488,11 +483,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   useEffect(() => {
     const removePreview = window.batchStudio.thumbnail.onPickerPreview((selection) => {
       const session = pickerSessionRef.current;
-      if (
-        !session ||
-        session.sessionId !== selection.sessionId ||
-        session.slot !== selection.slot
-      )
+      if (!session || session.sessionId !== selection.sessionId || session.slot !== selection.slot)
         return;
       pickerPreviewPathRef.current = selection.imagePath;
       void run(async () => {
@@ -510,11 +501,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
     });
     const removeCommit = window.batchStudio.thumbnail.onPickerCommit((selection) => {
       const session = pickerSessionRef.current;
-      if (
-        !session ||
-        session.sessionId !== selection.sessionId ||
-        session.slot !== selection.slot
-      )
+      if (!session || session.sessionId !== selection.sessionId || session.slot !== selection.slot)
         return;
       pickerPreviewPathRef.current = null;
       void run(async () => {
