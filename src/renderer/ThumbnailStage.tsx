@@ -699,11 +699,16 @@ function FontFamilyComboBox({
   const listId = useId();
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  useEffect(() => setQuery(value), [value]);
+  useEffect(() => {
+    setQuery(value);
+    setShowAll(true);
+  }, [value]);
 
   const filteredOptions = useMemo(() => {
+    if (showAll) return options;
     const needle = query.trim().toLocaleLowerCase();
     if (!needle) return options;
     return options
@@ -714,12 +719,13 @@ function FontFamilyComboBox({
         if (aStarts !== bStarts) return aStarts ? -1 : 1;
         return a.localeCompare(b);
       });
-  }, [options, query]);
+  }, [options, query, showAll]);
 
-  useEffect(() => setActiveIndex(0), [query, options]);
+  useEffect(() => setActiveIndex(0), [query, options, showAll]);
 
   const selectFont = (font: string) => {
     setQuery(font);
+    setShowAll(true);
     onChange(font);
     setOpen(false);
   };
@@ -732,6 +738,7 @@ function FontFamilyComboBox({
     } else {
       setQuery(value);
     }
+    setShowAll(true);
     setOpen(false);
   };
 
@@ -753,9 +760,13 @@ function FontFamilyComboBox({
           aria-controls={listId}
           value={query}
           style={{ fontFamily: value }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            setShowAll(true);
+            setOpen(true);
+          }}
           onChange={(event) => {
             setQuery(event.target.value);
+            setShowAll(false);
             setOpen(true);
           }}
           onKeyDown={(event) => {
@@ -775,6 +786,7 @@ function FontFamilyComboBox({
             } else if (event.key === 'Escape') {
               event.preventDefault();
               setQuery(value);
+              setShowAll(true);
               setOpen(false);
             }
           }}
@@ -784,7 +796,12 @@ function FontFamilyComboBox({
           className="thumbnail-font-toggle"
           aria-label="フォント一覧を開く"
           aria-expanded={open}
-          onClick={() => setOpen((current) => !current)}
+          onClick={() =>
+            setOpen((current) => {
+              if (!current) setShowAll(true);
+              return !current;
+            })
+          }
         >
           ▾
         </button>

@@ -53,10 +53,18 @@ matchCode(
   /thumbnail[\s\S]*\.fonts\(\)[\s\S]*FontFamilyComboBox/,
   'font selector must use the installed font list',
 );
+matchCode(stage, /role="combobox"/, 'font selector must expose a combobox input');
+matchCode(stage, /includes\(needle\)/, 'font selector must filter installed fonts by typed text');
+matchCode(stage, /role="listbox"/, 'font selector must expose a dropdown suggestion list');
 matchCode(
   stage,
-  /role="combobox"[\s\S]*includes\(needle\)[\s\S]*role="listbox"/,
-  'font selector must support typed suggestions and a dropdown list',
+  /setShowAll\(true\)[\s\S]*setShowAll\(false\)/,
+  'font dropdown must show all fonts while typed input switches to suggestions',
+);
+matchCode(
+  service,
+  /fonts\.includes\('Meiryo UI'\) \? 'Meiryo UI' : 'Times New Roman'/,
+  'Meiryo UI must be the default font when it is installed',
 );
 matchCode(preload, /thumbnail:[\s\S]*exportImage/, 'thumbnail API must be exposed through preload');
 matchCode(main, /IPC\.THUMBNAIL_EXPORT/, 'main process must handle image export');

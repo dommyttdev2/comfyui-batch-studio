@@ -83,18 +83,23 @@ function statePath(root: string) {
   return path.join(root, '._batch_studio', 'thumbnail-editor.json');
 }
 
-function defaultText(text: string, y: number, fontSize: number): ThumbnailTextState {
+function defaultText(
+  text: string,
+  y: number,
+  fontSize: number,
+  fontFamily: string,
+): ThumbnailTextState {
   return {
     text,
     x: 800,
     y,
     fontSize,
-    fontFamily: 'Times New Roman',
+    fontFamily,
     color: '#ffffff',
   };
 }
 
-function defaultDocument(id: number): ThumbnailDocument {
+function defaultDocument(id: number, fontFamily: string): ThumbnailDocument {
   return {
     id,
     pattern:
@@ -106,16 +111,20 @@ function defaultDocument(id: number): ThumbnailDocument {
             ? '4-images-right-split'
             : '5-images-both-split',
     slots: {},
-    title: defaultText(`Scene ${String(id).padStart(2, '0')}`, 985, 154),
-    subtitle: defaultText('Midnight Elegance', 1100, 50),
+    title: defaultText(`Scene ${String(id).padStart(2, '0')}`, 985, 154, fontFamily),
+    subtitle: defaultText('Midnight Elegance', 1100, 50, fontFamily),
   };
 }
 
-export function createDefaultThumbnailState(): ThumbnailEditorState {
+export function createDefaultThumbnailState(
+  defaultFontFamily = 'Times New Roman',
+): ThumbnailEditorState {
   return {
     schemaVersion: 1,
     activeDocumentId: 1,
-    documents: Array.from({ length: 6 }, (_, index) => defaultDocument(index + 1)),
+    documents: Array.from({ length: 6 }, (_, index) =>
+      defaultDocument(index + 1, defaultFontFamily),
+    ),
   };
 }
 
@@ -143,8 +152,11 @@ function cleanText(value: unknown, fallback: ThumbnailTextState): ThumbnailTextS
   };
 }
 
-export function normalizeThumbnailState(value: unknown): ThumbnailEditorState {
-  const defaults = createDefaultThumbnailState();
+export function normalizeThumbnailState(
+  value: unknown,
+  defaultFontFamily = 'Times New Roman',
+): ThumbnailEditorState {
+  const defaults = createDefaultThumbnailState(defaultFontFamily);
   const input = value && typeof value === 'object' ? (value as Partial<ThumbnailEditorState>) : {};
   const sourceDocuments = Array.isArray(input.documents) ? input.documents : [];
   const documents = defaults.documents.map((fallback) => {
@@ -186,7 +198,12 @@ export function normalizeThumbnailState(value: unknown): ThumbnailEditorState {
 }
 
 export async function loadThumbnailState(root: string): Promise<ThumbnailEditorState> {
-  return normalizeThumbnailState(await readJson<unknown>(statePath(root)));
+  const [stored, fonts] = await Promise.all([
+    readJson<unknown>(statePath(root)),
+    listThumbnailFonts(),
+  ]);
+  const defaultFontFamily = fonts.includes('Meiryo UI') ? 'Meiryo UI' : 'Times New Roman';
+  return normalizeThumbnailState(stored, defaultFontFamily);
 }
 
 export async function saveThumbnailState(
