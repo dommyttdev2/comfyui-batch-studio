@@ -30,8 +30,7 @@ const RIGHT_MID_X = Math.round(
 
 type Point = [number, number];
 type LoadedImages = Record<string, HTMLImageElement>;
-type TemplateLayer = { canvas: HTMLCanvasElement; x: number; y: number };
-type TemplateOverlay = { dividers: TemplateLayer; gradient: TemplateLayer };
+type TemplateOverlay = { psdName: string };
 
 const PATTERN_LABELS: Record<ThumbnailPattern, string> = {
   '3-images': '3枚',
@@ -212,34 +211,36 @@ export function renderThumbnail(
   context.fillRect(0, 0, WIDTH, HEIGHT);
   for (const slot of slotsFor(document.pattern)) drawSlot(context, document, slot, images);
 
-  if (template) {
-    context.drawImage(template.dividers.canvas, template.dividers.x, template.dividers.y);
-    context.drawImage(template.gradient.canvas, template.gradient.x, template.gradient.y);
-  } else {
-    context.strokeStyle = '#fff';
-    context.lineWidth = LINE_WIDTH;
-    context.lineCap = 'butt';
-    context.beginPath();
-    context.moveTo(LEFT_TOP_X, 0);
-    context.lineTo(LEFT_BOTTOM_X, HEIGHT);
-    context.moveTo(RIGHT_TOP_X, 0);
-    context.lineTo(RIGHT_BOTTOM_X, HEIGHT);
-    if (document.pattern === '4-images-left-split' || document.pattern === '5-images-both-split') {
-      context.moveTo(0, SIDE_SPLIT_OUTER_Y);
-      context.lineTo(LEFT_MID_X, SIDE_SPLIT_INNER_Y);
-    }
-    if (document.pattern === '4-images-right-split' || document.pattern === '5-images-both-split') {
-      context.moveTo(RIGHT_MID_X, SIDE_SPLIT_INNER_Y);
-      context.lineTo(WIDTH, SIDE_SPLIT_OUTER_Y);
-    }
-    context.stroke();
-
-    const overlay = context.createLinearGradient(0, HEIGHT * 0.67, 0, HEIGHT);
-    overlay.addColorStop(0, 'rgba(3,6,14,0)');
-    overlay.addColorStop(1, 'rgba(3,6,14,.86)');
-    context.fillStyle = overlay;
-    context.fillRect(0, HEIGHT * 0.67, WIDTH, HEIGHT * 0.33);
+  // The PSD is validated before use, while these two overlays are redrawn from
+  // its canonical values. Some PSD readers flatten transparent RGB layers onto
+  // opaque black, which would otherwise cover every image after parsing.
+  void template;
+  context.strokeStyle = '#fff';
+  context.lineWidth = LINE_WIDTH;
+  context.lineCap = 'butt';
+  context.beginPath();
+  context.moveTo(LEFT_TOP_X, 0);
+  context.lineTo(LEFT_BOTTOM_X, HEIGHT);
+  context.moveTo(RIGHT_TOP_X, 0);
+  context.lineTo(RIGHT_BOTTOM_X, HEIGHT);
+  if (document.pattern === '4-images-left-split' || document.pattern === '5-images-both-split') {
+    context.moveTo(0, SIDE_SPLIT_OUTER_Y);
+    context.lineTo(LEFT_MID_X, SIDE_SPLIT_INNER_Y);
   }
+  if (document.pattern === '4-images-right-split' || document.pattern === '5-images-both-split') {
+    context.moveTo(RIGHT_MID_X, SIDE_SPLIT_INNER_Y);
+    context.lineTo(WIDTH, SIDE_SPLIT_OUTER_Y);
+  }
+  context.stroke();
+
+  const gradientStart = Math.round(HEIGHT * 0.67);
+  const overlay = context.createLinearGradient(0, gradientStart, 0, HEIGHT);
+  for (const ratio of [0, 0.25, 0.5, 0.75, 1]) {
+    const alpha = (220 / 255) * ratio ** 1.35;
+    overlay.addColorStop(ratio, `rgba(3,6,14,${alpha})`);
+  }
+  context.fillStyle = overlay;
+  context.fillRect(0, gradientStart, WIDTH, HEIGHT - gradientStart);
 
   drawText(context, document.title, 7);
   drawText(context, document.subtitle, 3);
@@ -284,6 +285,7 @@ async function loadPsdOverlay(pattern: ThumbnailPattern): Promise<TemplateOverla
   const source = await window.batchStudio.thumbnail.readTemplate(pattern);
   const response = await fetch(source.dataUrl);
   const psd = readPsd(await response.arrayBuffer(), {
+    skipLayerImageData: true,
     skipCompositeImageData: true,
     skipThumbnail: true,
   });
@@ -291,12 +293,9 @@ async function loadPsdOverlay(pattern: ThumbnailPattern): Promise<TemplateOverla
     throw new Error(`${source.name} のキャンバスサイズが1600×1200ではありません。`);
   const divider = findLayer(psd.children, '02_DIVIDERS__WHITE_22PX');
   const gradient = findLayer(psd.children, '03_BOTTOM_GRADIENT__ABOVE_DIVIDERS');
-  if (!divider?.canvas || !gradient?.canvas)
+  if (!divider || !gradient)
     throw new Error(`${source.name} に必要な分割線・グラデーションレイヤーがありません。`);
-  return {
-    dividers: { canvas: divider.canvas, x: divider.left ?? 0, y: divider.top ?? 0 },
-    gradient: { canvas: gradient.canvas, x: gradient.left ?? 0, y: gradient.top ?? 0 },
-  };
+  return { psdName: source.name };
 }
 
 export function ThumbnailStage({ project, run }: { project: ProjectSummary; run: Runner }) {

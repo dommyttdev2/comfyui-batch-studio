@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { matchCode } = require('./source-match.cjs');
+const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const ui = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8');
@@ -22,8 +22,18 @@ matchCode(stage, /'4-images-right-split'/, 'right-split PSD layout must be avail
 matchCode(stage, /'5-images-both-split'/, 'five-image PSD layout must be available');
 matchCode(
   stage,
-  /context\.stroke\(\);[\s\S]*createLinearGradient/,
+  /context\.stroke\(\);[\s\S]*ratio \*\* 1\.35/,
   'gradient must render above white dividers',
+);
+matchCode(
+  stage,
+  /skipLayerImageData: true/,
+  'PSD raster layers must not decode as opaque black overlays',
+);
+doesNotMatchCode(
+  stage,
+  /drawImage\(template\.(?:dividers|gradient)/,
+  'opaque PSD overlay canvases must never cover the thumbnail preview',
 );
 matchCode(stage, /画像をドラッグして構図を調整/, 'preview must explain direct positioning');
 matchCode(
