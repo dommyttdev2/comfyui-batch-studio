@@ -44,6 +44,11 @@ matchCode(
 );
 matchCode(
   service,
+  /if \(copyrightedCharacter\) japanese\.push\('※二次創作です。公式とは無関係です。'\);\s*japanese\.push\('※AI生成作品です。'/,
+  'fan-work disclaimer must appear immediately before the AI-generated disclaimer',
+);
+matchCode(
+  service,
   /japanese\.push\('※AI生成作品です。'/,
   'AI-generated disclaimer must be owned by Batch Studio',
 );
@@ -61,6 +66,16 @@ matchCode(
   grok,
   /画像枚数、収録枚数、生成枚数は出力しません/,
   'Grok must not provide the final image count',
+);
+matchCode(
+  grok,
+  /最初の説明文は作品内容に沿った官能的な短いストーリーとし、200文字以内で簡潔にまとめてください/,
+  'Grok caption prompt must request a concise sensual opening story',
+);
+matchCode(
+  grok,
+  /description\.ja\[0\] \/ description\.en\[0\].*各200文字以内/,
+  'Grok caption shape must constrain the first localized description to 200 characters',
 );
 matchCode(grok, /定型注意書きは出力しません/, 'Grok must not own deterministic disclaimers');
 doesNotMatchCode(
