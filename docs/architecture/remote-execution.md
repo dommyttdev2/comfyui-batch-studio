@@ -781,7 +781,7 @@ AND Local download succeeds
 AND Local SHA-256 == Remote SHA-256
 ```
 
-`ComfyUI generation completed != Remote Run completed`をUIでも維持する。
+`ComfyUI generation completed != Remote Run completed`をUIでも維持する。Vast.ai Remote Runは、成果物回収・検証に加えて対象Instanceが`stopped`になったことを確認できた場合のみ最終的な成功状態を維持する。
 
 ---
 
@@ -1141,7 +1141,8 @@ Remote Executionとして現在実装済み:
 
 ```text
 Vast.ai Instance prepare / automatic start / readiness wait
-initial-state-preserving finalize
+successful Run completion always stops the selected Vast.ai Instance
+non-success terminal state preserves the previous initial-state restore policy
 SSH client / Host Key verification
 Remote Worker deploy + SHA-256 verification
 Remote ComfyUI install path validation

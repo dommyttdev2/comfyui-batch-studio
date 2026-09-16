@@ -860,6 +860,7 @@ async function finalizeRemoteInstance(root: string, runId: string) {
       r.error = e;
       r.errorHistory.push(e);
       r.lifecycle = 'FAILED';
+      r.completedAt = null;
       r.controls.scheduling = 'STOPPED';
     });
   }
