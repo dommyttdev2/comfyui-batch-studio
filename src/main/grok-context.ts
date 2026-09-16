@@ -246,6 +246,7 @@ caption_content.json は次の形だけにしてください。
 - JSONとしてparse可能な厳密な構文にしてください。コメント、末尾カンマ、擬似値は出力しません。
 - title と description は必須です。ja / en の両方を作成してください。
 - description は段落単位の文字列配列にしてください。
+- description.ja[0] / description.en[0] は、作品の導入として官能的な短いストーリーにしてください。各200文字以内で簡潔にまとめ、日本語と英語で意味を対応させてください。
 - contents は作品内容を短い一覧として示す価値がある場合だけ追加する任意fieldです。不要ならfield自体を出力しません。
 - 画像枚数、収録枚数、生成枚数は出力しません。最終成果物ディレクトリの実ファイル数をBatch Studioが挿入します。
 - 「二次創作です」「公式とは無関係です」「AI生成作品です」等の定型注意書きは出力しません。Batch Studioが付加します。
@@ -331,7 +332,7 @@ export async function buildGrokTask(
     return {
       stage,
       title: 'キャプション本文生成',
-      prompt: `${common}\n\n## Task\n確定済みの基本設定・Story・Prompt Planを基に、最終作品のcaption.txtへ使用するタイトルと説明文を日本語・英語で作成してください。作品内容を要約する短い一覧が有用な場合だけ contents も作成してください。実際の収録画像枚数は手作業で選定・モザイク処理された最終成果物ディレクトリをBatch Studioが数えるため、あなたは枚数を推測・記載しないでください。\n\n${captionShape}${extra ? `\n\n追加条件:\n${extra}` : ''}`,
+      prompt: `${common}\n\n## Task\n確定済みの基本設定・Story・Prompt Planを基に、最終作品のcaption.txtへ使用するタイトルと説明文を日本語・英語で作成してください。description の最初の説明文は作品内容に沿った官能的な短いストーリーとし、200文字以内で簡潔にまとめてください。作品内容を要約する短い一覧が有用な場合だけ contents も作成してください。実際の収録画像枚数は手作業で選定・モザイク処理された最終成果物ディレクトリをBatch Studioが数えるため、あなたは枚数を推測・記載しないでください。\n\n${captionShape}${extra ? `\n\n追加条件:\n${extra}` : ''}`,
       attachments: [
         await attachment('project_brief.json', brief, '作品・キャラクター・基本設定'),
         await attachment('story.md', story, '確定ストーリー'),
