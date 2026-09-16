@@ -196,12 +196,13 @@ export class RemoteInstanceLifecycleService {
     if (run.lifecycle === 'RUNNING' || run.lifecycle === 'PAUSED') return;
     if (!lifecycle || lifecycle.initialStatus == null || lifecycle.finalizedAt) return;
     const instanceId = Number(run.remote.instanceId),
-      phaseBefore = run.phase;
-    if (
-      lifecycle.restorePolicy !== 'restore-if-started' ||
-      !lifecycle.startedByBatchStudio ||
-      lifecycle.initialStatus !== 'stopped'
-    ) {
+      phaseBefore = run.phase,
+      stopForCompletedRun = run.lifecycle === 'COMPLETED',
+      restoreStartedInstance =
+        lifecycle.restorePolicy === 'restore-if-started' &&
+        lifecycle.startedByBatchStudio &&
+        lifecycle.initialStatus === 'stopped';
+    if (!stopForCompletedRun && !restoreStartedInstance) {
       await mutateExecutionRun(root, runId, (current) => {
         const state = current.remoteLifecycle ?? defaultLifecycle();
         state.restoredInitialState = true;
@@ -222,11 +223,11 @@ export class RemoteInstanceLifecycleService {
     await this.persistSnapshot(root, runId, current, 'CLOUD_INSTANCE_FINALIZING');
     if (current.status !== 'stopped') current = await this.client.stopInstance(instanceId);
     if (current.id !== instanceId || current.status !== 'stopped')
-      throw new Error(`Vast.ai Instance ${instanceId} could not be restored to stopped.`);
+      throw new Error(`Vast.ai Instance ${instanceId} could not be stopped during Run finalization.`);
     await mutateExecutionRun(root, runId, (state) => {
       const next = state.remoteLifecycle ?? defaultLifecycle();
       next.latest = snapshot(current);
-      next.restoredInitialState = true;
+      next.restoredInitialState = lifecycle.initialStatus === 'stopped';
       next.finalizedAt = new Date().toISOString();
       state.remoteLifecycle = next;
       state.phase = phaseBefore;
