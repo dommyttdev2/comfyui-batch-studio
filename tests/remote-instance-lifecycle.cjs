@@ -218,8 +218,26 @@ async function scenario(lifecycle, states) {
     });
     await service.finalize(root, runId);
     run = await execution.getExecutionRun(root, runId);
-    assert.equal(client.stops, 0, 'pre-existing running instance must be kept running');
+    assert.equal(client.stops, 1, 'completed remote run must stop a pre-existing running instance');
+    assert.equal(run.remoteLifecycle.restoredInitialState, false);
+    assert.equal(run.remoteLifecycle.latest.status, 'stopped');
+    assert.ok(run.remoteLifecycle.finalizedAt);
+    assert.equal(run.phase, 'COMPLETED');
+  }
+
+  {
+    const { root, client, service } = await scenario(lifecycle, [ready()]);
+    await service.prepare(root, runId);
+    await execution.mutateExecutionRun(root, runId, (r) => {
+      r.lifecycle = 'FAILED';
+      r.phase = 'EXECUTING';
+    });
+    await service.finalize(root, runId);
+    const run = await execution.getExecutionRun(root, runId);
+    assert.equal(client.stops, 0, 'failed run must preserve a pre-existing running instance');
     assert.equal(run.remoteLifecycle.restoredInitialState, true);
+    assert.equal(run.remoteLifecycle.latest.status, 'running');
+    assert.ok(run.remoteLifecycle.finalizedAt);
   }
 
   {
