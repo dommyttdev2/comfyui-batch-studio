@@ -223,7 +223,9 @@ export class RemoteInstanceLifecycleService {
     await this.persistSnapshot(root, runId, current, 'CLOUD_INSTANCE_FINALIZING');
     if (current.status !== 'stopped') current = await this.client.stopInstance(instanceId);
     if (current.id !== instanceId || current.status !== 'stopped')
-      throw new Error(`Vast.ai Instance ${instanceId} could not be stopped during Run finalization.`);
+      throw new Error(
+        `Vast.ai Instance ${instanceId} could not be stopped during Run finalization.`,
+      );
     await mutateExecutionRun(root, runId, (state) => {
       const next = state.remoteLifecycle ?? defaultLifecycle();
       next.latest = snapshot(current);
