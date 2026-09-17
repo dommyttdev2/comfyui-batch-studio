@@ -38,7 +38,8 @@ assert.ok(
   'The issue view must expose a warning bulk-copy action',
 );
 assert.ok(
-  uiSrc.includes('navigator.clipboard?.writeText') && uiSrc.includes("document.execCommand('copy')"),
+  uiSrc.includes('navigator.clipboard?.writeText') &&
+    uiSrc.includes("document.execCommand('copy')"),
   'Warning copy must support the Clipboard API with an Electron-compatible fallback',
 );
 assert.ok(
