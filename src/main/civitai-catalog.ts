@@ -8,10 +8,7 @@ import type {
   StrengthBaseline,
 } from '../shared/types.js';
 import { CivitaiClient, type CivitaiCollectionMeta } from './civitai-client.js';
-import {
-  CivitaiMetadataCache,
-  type CachedCheckpointEvidence,
-} from './civitai-cache.js';
+import { CivitaiMetadataCache, type CachedCheckpointEvidence } from './civitai-cache.js';
 import {
   getActiveCivitaiRequestState,
   resetActiveCivitaiRequestMetrics,
@@ -116,10 +113,7 @@ export function calculateStrengthBaseline(
 export function calculateObservedCheckpointReferences(
   items: unknown[],
 ): CachedCheckpointEvidence[] {
-  const byVersion = new Map<
-    number,
-    { imageCount: number; evidenceImageIds: Set<number> }
-  >();
+  const byVersion = new Map<number, { imageCount: number; evidenceImageIds: Set<number> }>();
   for (const image of items) {
     if (!image || typeof image !== 'object') continue;
     const row = image as Record<string, unknown>;
@@ -745,10 +739,7 @@ export class CivitaiCatalogService {
       this.snapshot = snapshot;
       this.cache.prune(
         modelIds,
-        [
-          ...rows.map((x) => Number(x.item.data.version.id)),
-          ...checkpointVersionIds,
-        ],
+        [...rows.map((x) => Number(x.item.data.version.id)), ...checkpointVersionIds],
         loraVersionIds,
         collectionIds,
       );
