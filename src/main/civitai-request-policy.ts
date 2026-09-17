@@ -30,7 +30,6 @@ export interface CivitaiRequestMetrics {
   responses5xx: number;
   networkErrors: number;
   currentIntervalMs: number;
-  collectionIntervalMs: number;
   requestsByEndpoint: Record<string, number>;
 }
 
@@ -149,7 +148,6 @@ export class CivitaiRequestPolicy {
       responses5xx: 0,
       networkErrors: 0,
       currentIntervalMs: this.requestIntervalMs,
-      collectionIntervalMs: this.collectionRequestIntervalMs,
       requestsByEndpoint: {},
     };
   }
