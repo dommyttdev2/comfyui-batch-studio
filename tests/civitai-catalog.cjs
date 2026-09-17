@@ -21,6 +21,7 @@ execFileSync(
   process.env.CIVITAI_MODEL_CACHE_TTL_SECONDS = '3600';
   process.env.CIVITAI_VERSION_CACHE_TTL_SECONDS = '3600';
   process.env.CIVITAI_BASELINE_CACHE_TTL_SECONDS = '3600';
+  process.env.CIVITAI_CHECKPOINT_EVIDENCE_CACHE_TTL_SECONDS = '3600';
   process.env.CIVITAI_THUMBNAIL_CACHE_TTL_SECONDS = '3600';
   const mod = await import(pathToFileURL(path.join(runtime, 'main', 'civitai-catalog.js')).href);
   const resource = (postId, weight, versionId = 42) => ({
@@ -45,6 +46,37 @@ execFileSync(
     mod.calculateStrengthBaseline(items.slice(0, 5), 42),
     null,
     'fewer than five distinct posts must omit baseline',
+  );
+
+  assert.deepEqual(
+    mod.calculateObservedCheckpointReferences([
+      {
+        id: 1001,
+        meta: {
+          civitaiResources: [
+            { type: 'checkpoint', modelVersionId: 777 },
+            { type: 'CHECKPOINT', modelVersionId: 777 },
+          ],
+        },
+      },
+      {
+        id: 1002,
+        meta: {
+          civitaiResources: [
+            { type: 'checkpoint', modelVersionId: 777 },
+            { type: 'checkpoint', modelVersionId: 888 },
+          ],
+        },
+      },
+      {
+        meta: { civitaiResources: [{ type: 'checkpoint', modelVersionId: 888 }] },
+      },
+    ]),
+    [
+      { modelVersionId: 777, imageCount: 2, evidenceImageIds: [1001, 1002] },
+      { modelVersionId: 888, imageCount: 2, evidenceImageIds: [1002] },
+    ],
+    'checkpoint evidence must count each checkpoint once per image and retain image ids',
   );
 
   const before = {
@@ -108,6 +140,22 @@ execFileSync(
     },
     2: { id: 2, name: 'Two', type: 'Checkpoint', modelVersions: [version(21, 'Two v1')] },
   };
+  const checkpointPayloads = {
+    777: {
+      id: 777,
+      modelId: 77,
+      name: 'illust V3',
+      baseModel: 'Illustrious',
+      model: { name: "Vixon's Milk Factory", type: 'Checkpoint' },
+    },
+    888: {
+      id: 888,
+      modelId: 88,
+      name: 'Other v1',
+      baseModel: 'Illustrious',
+      model: { name: 'Other Checkpoint', type: 'Checkpoint' },
+    },
+  };
   const collectionItem = (id) => ({
     type: 'model',
     data: {
@@ -116,10 +164,35 @@ execFileSync(
       version: id === 1 ? version(11, 'One v1') : version(21, 'Two v1'),
     },
   });
-  const baselineImages = [1, 2, 3, 4, 5].map((postId) => ({
-    postId,
-    meta: { civitaiResources: [{ type: 'lora', modelVersionId: 11, weight: 0.7 }] },
-  }));
+  const usageImages = {
+    11: [1, 2, 3, 4, 5].map((postId) => ({
+      id: 1100 + postId,
+      postId,
+      meta: {
+        civitaiResources: [
+          { type: 'checkpoint', modelVersionId: 777 },
+          { type: 'lora', modelVersionId: 11, weight: 0.7 },
+        ],
+      },
+    })),
+    12: [1, 2].map((postId) => ({
+      id: 1200 + postId,
+      postId: 100 + postId,
+      meta: {
+        civitaiResources: [
+          { type: 'checkpoint', modelVersionId: 888 },
+          { type: 'lora', modelVersionId: 12, weight: 0.8 },
+        ],
+      },
+    })),
+    13: [
+      {
+        id: 1301,
+        postId: 201,
+        meta: { civitaiResources: [{ type: 'lora', modelVersionId: 13, weight: 0.6 }] },
+      },
+    ],
+  };
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
     const url = new URL(
@@ -142,8 +215,16 @@ execFileSync(
       });
     const modelMatch = url.pathname.match(/^\/api\/v1\/models\/(\d+)$/);
     if (modelMatch) return json(modelPayloads[Number(modelMatch[1])]);
-    if (url.pathname === '/api/v1/images' && url.searchParams.get('modelVersionId') === '11')
-      return json({ items: baselineImages });
+    const versionMatch = url.pathname.match(/^\/api\/v1\/model-versions\/(\d+)$/);
+    if (versionMatch) {
+      const payload = checkpointPayloads[Number(versionMatch[1])];
+      if (payload) return json(payload);
+      return json({ error: 'not found' }, 404);
+    }
+    if (url.pathname === '/api/v1/images') {
+      const versionId = Number(url.searchParams.get('modelVersionId'));
+      if (usageImages[versionId]) return json({ items: usageImages[versionId] });
+    }
     throw new Error(`Unexpected Civitai test request: ${url}`);
   };
 
@@ -153,18 +234,64 @@ execFileSync(
     await first.startSync();
     await first.waitForSync();
     const firstStatus = first.status();
+    const firstCatalog = first.catalog();
     assert.equal(firstStatus.state, 'ready');
     assert.equal(firstStatus.changes.added, 2);
-    assert.equal(first.catalog().collections[0].items.length, 2);
+    assert.equal(firstCatalog.collections[0].items.length, 2);
     assert.equal(fs.existsSync(first.cachePath), true, 'metadata cache must be persisted');
     const firstImageCalls = calls.filter((x) => x.startsWith('/api/v1/images?'));
     assert.equal(
       firstImageCalls.length,
-      1,
-      'baseline lookup must only query the collection-selected LoRA version',
+      3,
+      'checkpoint evidence must inspect every candidate LoRA version exactly once',
     );
-    assert.match(firstImageCalls[0], /modelVersionId=11/);
+    for (const versionId of [11, 12, 13])
+      assert.ok(
+        firstImageCalls.some((x) => x.includes(`modelVersionId=${versionId}`)),
+        `LoRA version ${versionId} must be inspected`,
+      );
     assert.equal(calls.filter((x) => x.startsWith('/api/v1/models/')).length, 2);
+    assert.equal(
+      calls.filter((x) => x.startsWith('/api/v1/model-versions/')).length,
+      2,
+      'observed checkpoint identities must be resolved once each',
+    );
+
+    const lora = firstCatalog.collections[0].items.find((x) => x.modelId === 1);
+    assert.deepEqual(lora.observedCheckpoints, [
+      {
+        modelVersionId: 777,
+        modelId: 77,
+        modelName: "Vixon's Milk Factory",
+        versionName: 'illust V3',
+        baseModel: 'Illustrious',
+        modelUrl: 'https://civitai.com/models/77?modelVersionId=777',
+        imageCount: 5,
+        evidenceImageIds: [1101, 1102, 1103, 1104, 1105],
+      },
+    ]);
+    assert.deepEqual(
+      lora.versions.find((x) => x.versionId === 11).observedCheckpoints,
+      lora.observedCheckpoints,
+      'top-level selected LoRA evidence must mirror the selected version',
+    );
+    assert.deepEqual(lora.versions.find((x) => x.versionId === 12).observedCheckpoints, [
+      {
+        modelVersionId: 888,
+        modelId: 88,
+        modelName: 'Other Checkpoint',
+        versionName: 'Other v1',
+        baseModel: 'Illustrious',
+        modelUrl: 'https://civitai.com/models/88?modelVersionId=888',
+        imageCount: 2,
+        evidenceImageIds: [1201, 1202],
+      },
+    ]);
+    assert.deepEqual(
+      lora.versions.find((x) => x.versionId === 13).observedCheckpoints,
+      [],
+      'a version without checkpoint metadata must remain unknown instead of fabricating identity',
+    );
 
     currentModels = [1];
     calls = [];
@@ -204,11 +331,16 @@ execFileSync(
     assert.equal(
       calls.filter((x) => x.startsWith('/api/v1/images?')).length,
       0,
-      'fresh baseline metadata must be reused from cache',
+      'fresh LoRA usage metadata must be reused from cache',
+    );
+    assert.equal(
+      calls.filter((x) => x.startsWith('/api/v1/model-versions/')).length,
+      0,
+      'fresh checkpoint identity metadata must be reused from cache',
     );
     assert.ok(
-      secondStatus.metrics.cacheHits >= 3,
-      'model, baseline and thumbnail cache hits should be observable',
+      secondStatus.metrics.cacheHits >= 8,
+      'model, LoRA usage, checkpoint identity and thumbnail cache hits should be observable',
     );
     assert.equal(secondStatus.metrics.membershipItems, 1);
     assert.equal(secondStatus.metrics.collectionPages, 1);
