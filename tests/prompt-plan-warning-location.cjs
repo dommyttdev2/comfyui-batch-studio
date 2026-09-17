@@ -26,6 +26,23 @@ assert.ok(
   'Generic issue rendering must show validator-provided locations',
 );
 assert.ok(
+  uiSrc.includes("issues.filter((issue) => issue.severity === 'warning')"),
+  'Generic issue rendering must collect the visible warnings for bulk copy',
+);
+assert.ok(
+  uiSrc.includes("warnings.map(formatValidationIssue).join('\\n')"),
+  'Bulk copy must preserve the same one-warning-per-line text shown in the UI',
+);
+assert.ok(
+  uiSrc.includes('Warningを一括コピー'),
+  'The issue view must expose a warning bulk-copy action',
+);
+assert.ok(
+  uiSrc.includes('navigator.clipboard?.writeText') &&
+    uiSrc.includes("document.execCommand('copy')"),
+  'Warning copy must support the Clipboard API with an Electron-compatible fallback',
+);
+assert.ok(
   promptPlanSrc.includes('issuesView(validation)'),
   'Prompt Plan must use the same generic issue renderer as Grok import results',
 );
