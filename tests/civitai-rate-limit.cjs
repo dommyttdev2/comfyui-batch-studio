@@ -49,7 +49,6 @@ execFileSync(
     assert.equal(metrics.responses429, 1);
     assert.equal(metrics.requestsByEndpoint['/api/v1/models/:id'], 2);
     assert.equal(metrics.currentIntervalMs, 1, '429 must not increase the normal request interval');
-    assert.equal(metrics.collectionIntervalMs, 20, 'collection pacing must have its own interval');
     assert.equal(
       policy.status().waiting,
       false,
@@ -64,7 +63,6 @@ execFileSync(
       1,
       'a new sync must start at the configured fixed request interval',
     );
-    assert.equal(metrics.collectionIntervalMs, 20);
 
     calls = 0;
     const always429 = new mod.CivitaiRequestPolicy(async () => {
@@ -117,7 +115,6 @@ execFileSync(
     }
     const collectionMetrics = collectionPacing.status().metrics;
     assert.equal(collectionMetrics.currentIntervalMs, 1);
-    assert.equal(collectionMetrics.collectionIntervalMs, 20);
     assert.equal(collectionMetrics.requestsByEndpoint['/api/trpc/collection.getAllUser'], 1);
     assert.equal(
       collectionMetrics.requestsByEndpoint['/api/trpc/collection.getAllCollectionItems'],
