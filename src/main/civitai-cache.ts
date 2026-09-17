@@ -6,16 +6,30 @@ type CacheEntry<T> = { fetchedAt: number; value: T };
 type ThumbnailEntry = CacheEntry<string | null> & { imageId: number | null };
 type Lookup<T> = { hit: true; value: T } | { hit: false };
 
+export interface CachedCheckpointEvidence {
+  modelVersionId: number;
+  imageCount: number;
+  evidenceImageIds: number[];
+}
+
 interface StoredCache {
   schemaVersion: 1;
   models: Record<string, CacheEntry<unknown>>;
   versions: Record<string, CacheEntry<unknown>>;
   baselines: Record<string, CacheEntry<StrengthBaseline | null>>;
+  checkpointEvidence: Record<string, CacheEntry<CachedCheckpointEvidence[]>>;
   collectionThumbnails: Record<string, ThumbnailEntry>;
 }
 
 function emptyCache(): StoredCache {
-  return { schemaVersion: 1, models: {}, versions: {}, baselines: {}, collectionThumbnails: {} };
+  return {
+    schemaVersion: 1,
+    models: {},
+    versions: {},
+    baselines: {},
+    checkpointEvidence: {},
+    collectionThumbnails: {},
+  };
 }
 async function atomicJson(file: string, value: unknown) {
   await mkdir(path.dirname(file), { recursive: true });
@@ -25,8 +39,16 @@ async function atomicJson(file: string, value: unknown) {
 }
 async function readCache(file: string): Promise<StoredCache> {
   try {
-    const value = JSON.parse(await readFile(file, 'utf8')) as StoredCache;
-    return value?.schemaVersion === 1 ? { ...emptyCache(), ...value } : emptyCache();
+    const value = JSON.parse(await readFile(file, 'utf8')) as Partial<StoredCache>;
+    if (value?.schemaVersion !== 1) return emptyCache();
+    return {
+      schemaVersion: 1,
+      models: value.models ?? {},
+      versions: value.versions ?? {},
+      baselines: value.baselines ?? {},
+      checkpointEvidence: value.checkpointEvidence ?? {},
+      collectionThumbnails: value.collectionThumbnails ?? {},
+    };
   } catch {
     return emptyCache();
   }
@@ -65,6 +87,13 @@ export class CivitaiMetadataCache {
     this.value.baselines[String(versionId)] = { fetchedAt: Date.now(), value };
   }
 
+  checkpointEvidence(versionId: number, ttlMs: number) {
+    return fresh(this.value.checkpointEvidence[String(versionId)], ttlMs);
+  }
+  setCheckpointEvidence(versionId: number, value: CachedCheckpointEvidence[]) {
+    this.value.checkpointEvidence[String(versionId)] = { fetchedAt: Date.now(), value };
+  }
+
   thumbnail(collectionId: number, imageId: number | null, ttlMs: number): Lookup<string | null> {
     const entry = this.value.collectionThumbnails[String(collectionId)];
     if (!entry || entry.imageId !== imageId) return { hit: false };
@@ -95,6 +124,8 @@ export class CivitaiMetadataCache {
       if (!versions.has(key)) delete this.value.versions[key];
     for (const key of Object.keys(this.value.baselines))
       if (!baselines.has(key)) delete this.value.baselines[key];
+    for (const key of Object.keys(this.value.checkpointEvidence))
+      if (!baselines.has(key)) delete this.value.checkpointEvidence[key];
     for (const key of Object.keys(this.value.collectionThumbnails))
       if (!collections.has(key)) delete this.value.collectionThumbnails[key];
   }
