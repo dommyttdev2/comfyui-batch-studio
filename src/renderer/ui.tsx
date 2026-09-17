@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { GrokContextStage, ProjectSummary, ValidationIssue } from '../shared/types';
 
 export type Stage =
@@ -42,19 +43,74 @@ export function shouldShowGrok(stage: Stage) {
 export function grokContextStage(stage: Stage) {
   return GROK_STAGE_CONTEXT[stage] ?? null;
 }
-export function issuesView(issues: ValidationIssue[]) {
-  if (!issues.length) return <div className="ok">✓ 問題ありません</div>;
+function formatValidationIssue(i: ValidationIssue) {
+  const icon = i.severity === 'error' ? '✕' : i.severity === 'warning' ? '⚠' : 'ℹ';
+  return `${icon} ${i.location ? `[${i.location}] ` : ''}${i.message}`;
+}
+async function writeClipboardText(text: string) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+  } catch {
+    // Fall through to the DOM copy path. This is useful when clipboard access
+    // is restricted by the current Electron renderer context.
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  textarea.style.pointerEvents = 'none';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  if (!copied) throw new Error('Clipboard copy failed');
+}
+function WarningCopyButton({ warnings }: { warnings: ValidationIssue[] }) {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copyWarnings = async () => {
+    try {
+      await writeClipboardText(warnings.map(formatValidationIssue).join('\n'));
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
+    }
+    window.setTimeout(() => setCopyState('idle'), 1600);
+  };
+  return (
+    <button type="button" onClick={() => void copyWarnings()}>
+      {copyState === 'copied'
+        ? 'コピーしました'
+        : copyState === 'failed'
+          ? 'コピーに失敗しました'
+          : `Warningを一括コピー (${warnings.length})`}
+    </button>
+  );
+}
+function IssuesView({ issues }: { issues: ValidationIssue[] }) {
+  const warnings = issues.filter((issue) => issue.severity === 'warning');
   return (
     <div className="issues">
+      {warnings.length > 0 && (
+        <div className="actions">
+          <WarningCopyButton warnings={warnings} />
+        </div>
+      )}
       {issues.map((i, n) => (
         <div key={n} className={`issue ${i.severity}`}>
-          {i.severity === 'error' ? '✕' : i.severity === 'warning' ? '⚠' : 'ℹ'}{' '}
-          {i.location ? `[${i.location}] ` : ''}
-          {i.message}
+          {formatValidationIssue(i)}
         </div>
       ))}
     </div>
   );
+}
+export function issuesView(issues: ValidationIssue[]) {
+  if (!issues.length) return <div className="ok">✓ 問題ありません</div>;
+  return <IssuesView issues={issues} />;
 }
 export function badge(s: string) {
   return (
