@@ -88,6 +88,28 @@ const baseModels = {
     pathToFileURL(path.join(runtime, 'main', 'artifact-service.js')).href
   );
   const grok = await import(pathToFileURL(path.join(runtime, 'main', 'grok-context.js')).href);
+  const modelTask = await grok.buildGrokTask(root, 'models');
+  assert.match(
+    modelTask.prompt,
+    /基盤Checkpoint Version IDは 100/,
+    'LoRA selection must receive the exact user-selected checkpoint version id',
+  );
+  assert.match(
+    modelTask.prompt,
+    /observedCheckpoints[\s\S]*完全一致/,
+    'LoRA selection must prioritize exact observed checkpoint matches',
+  );
+  assert.match(
+    modelTask.prompt,
+    /学習元Checkpointを示す情報ではありません/,
+    'observed image usage must not be misrepresented as training provenance',
+  );
+  assert.match(
+    modelTask.prompt,
+    /observedCheckpoints が無い、または空のVersionはCheckpoint不明/,
+    'missing evidence must remain unknown rather than being treated as an incompatibility',
+  );
+
   const fallback = {
     requirement: 'specific hand pose',
     positiveTags: ['specific_hand_pose', 'detailed_hands'],

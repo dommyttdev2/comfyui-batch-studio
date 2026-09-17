@@ -90,6 +90,21 @@ Story上必要な表現ごとに、次の順序を必ず守って解決してく
    - Promptだけで十分に代替可能と判断した場合は promptFallbacks に記録し、その要件を missingRequirements へ入れません。これは解決済みとして扱います。
    - Prompt代替では再現性が不足すると判断した場合だけ missingRequirements に残します。
 5. 「見つからない」だけで直ちに missingRequirements にしてはいけません。必ず 2 → 3 → 4 の調査を完了してください。`;
+function loraCheckpointPriorityRules(base: any) {
+  const checkpointVersionId = Number(base?.checkpoint?.versionId);
+  if (!Number.isInteger(checkpointVersionId) || checkpointVersionId <= 0)
+    return `## 基盤Checkpoint一致の優先
+- models.json に checkpoint.versionId が無いため、observedCheckpoints による正確なCheckpoint一致優先は適用しません。
+- baseModel名だけから具体的なCheckpoint identityを推測してはいけません。`;
+  return `## 基盤Checkpoint一致の優先
+- models.json でユーザーが選択済みの基盤Checkpoint Version IDは ${checkpointVersionId} です。このidentityは変更しません。
+- model_catalog.json の LoRA / LoCon / DoRA 各Versionにある observedCheckpoints は、Civitai作例画像の meta.civitaiResources から実際に観測したCheckpoint利用実績です。LoRAの学習元Checkpointを示す情報ではありません。
+- Story要件を十分満たす候補同士を比較するとき、observedCheckpoints[].modelVersionId が ${checkpointVersionId} と完全一致するVersionを最優先してください。
+- observedCheckpoints が無い、または空のVersionはCheckpoint不明です。一致しないと断定せず、完全一致する適切な候補が無い場合の次点として検討してください。
+- observedCheckpoints が存在しても ${checkpointVersionId} が含まれないVersionは、同一Checkpointでの作例実績を確認できていない候補として優先度を下げます。ただし互換性が無い、または使用禁止とは断定しません。
+- Checkpoint一致は意味適合性を置き換えません。Story要件を満たさないLoRAを一致だけを理由に選んではいけません。
+- observedCheckpoints のModel / Version identityは推測・書き換えず、model_catalog.jsonに記録された値だけを根拠にしてください。`;
+}
 const lorasShape = `${artifactFileOutputRules('model_loras.json')}
 model_loras.json は次の形だけにしてください。
 {
@@ -315,7 +330,7 @@ export async function buildGrokTask(
     return {
       stage,
       title: stage === 'models' ? 'LoRA選定' : 'LoRA再選定',
-      prompt: `${common}\n\n## Task\n確定済み story.md と、ユーザーが選択済みの基盤モデルを記録した models.json を前提に、Story上必要なLoRAを選定してください。Checkpoint、Text Encoder、VAE、modelFamily はユーザーの責務であり、変更・再選定・代替提案をしません。trained words、採用理由、用途を考慮してください。\n\n${loraFallbackDecisionRules}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${lorasShape}${extra ? `\n\n再選定条件:\n${extra}` : ''}`,
+      prompt: `${common}\n\n## Task\n確定済み story.md と、ユーザーが選択済みの基盤モデルを記録した models.json を前提に、Story上必要なLoRAを選定してください。Checkpoint、Text Encoder、VAE、modelFamily はユーザーの責務であり、変更・再選定・代替提案をしません。trained words、採用理由、用途を考慮してください。\n\n${loraCheckpointPriorityRules(base)}\n\n${loraFallbackDecisionRules}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${lorasShape}${extra ? `\n\n再選定条件:\n${extra}` : ''}`,
       attachments: [
         await attachment('story.md', story, '確定ストーリー'),
         await attachment('models.json', basePath, 'ユーザー選択済み基盤モデル（変更禁止）'),

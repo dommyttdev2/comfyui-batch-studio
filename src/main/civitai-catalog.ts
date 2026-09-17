@@ -8,7 +8,7 @@ import type {
   StrengthBaseline,
 } from '../shared/types.js';
 import { CivitaiClient, type CivitaiCollectionMeta } from './civitai-client.js';
-import { CivitaiMetadataCache } from './civitai-cache.js';
+import { CivitaiMetadataCache, type CachedCheckpointEvidence } from './civitai-cache.js';
 import {
   getActiveCivitaiRequestState,
   resetActiveCivitaiRequestMetrics,
@@ -19,6 +19,7 @@ const MIN_DISTINCT_POSTS = 5;
 const MODEL_CACHE_TTL_DEFAULT = 30 * 60;
 const VERSION_CACHE_TTL_DEFAULT = 30 * 60;
 const BASELINE_CACHE_TTL_DEFAULT = 7 * 24 * 60 * 60;
+const CHECKPOINT_EVIDENCE_CACHE_TTL_DEFAULT = 7 * 24 * 60 * 60;
 const THUMBNAIL_CACHE_TTL_DEFAULT = 24 * 60 * 60;
 
 type LocalSyncMetrics = {
@@ -109,6 +110,48 @@ export function calculateStrengthBaseline(
   };
 }
 
+export function calculateObservedCheckpointReferences(
+  items: unknown[],
+): CachedCheckpointEvidence[] {
+  const byVersion = new Map<number, { imageCount: number; evidenceImageIds: Set<number> }>();
+  for (const image of items) {
+    if (!image || typeof image !== 'object') continue;
+    const row = image as Record<string, unknown>;
+    if (!row.meta || typeof row.meta !== 'object') continue;
+    const resources = (row.meta as Record<string, unknown>).civitaiResources;
+    if (!Array.isArray(resources)) continue;
+    const seenInImage = new Set<number>();
+    for (const resource of resources) {
+      if (!resource || typeof resource !== 'object') continue;
+      const r = resource as Record<string, unknown>;
+      if (String(r.type ?? '').toLowerCase() !== 'checkpoint') continue;
+      const modelVersionId = Number(r.modelVersionId);
+      if (
+        !Number.isInteger(modelVersionId) ||
+        modelVersionId <= 0 ||
+        seenInImage.has(modelVersionId)
+      )
+        continue;
+      seenInImage.add(modelVersionId);
+      const found = byVersion.get(modelVersionId) ?? {
+        imageCount: 0,
+        evidenceImageIds: new Set<number>(),
+      };
+      found.imageCount += 1;
+      const imageId = Number(row.id);
+      if (Number.isInteger(imageId) && imageId > 0) found.evidenceImageIds.add(imageId);
+      byVersion.set(modelVersionId, found);
+    }
+  }
+  return [...byVersion.entries()]
+    .map(([modelVersionId, value]) => ({
+      modelVersionId,
+      imageCount: value.imageCount,
+      evidenceImageIds: [...value.evidenceImageIds].sort((a, b) => a - b),
+    }))
+    .sort((a, b) => b.imageCount - a.imageCount || a.modelVersionId - b.modelVersionId);
+}
+
 function membershipMap(catalog: ModelCatalog | null) {
   const result = new Map<string, number>();
   for (const collection of catalog?.collections ?? [])
@@ -180,6 +223,7 @@ export class CivitaiCatalogService {
   private readonly modelCacheTtlMs: number;
   private readonly versionCacheTtlMs: number;
   private readonly baselineCacheTtlMs: number;
+  private readonly checkpointEvidenceCacheTtlMs: number;
   private readonly thumbnailCacheTtlMs: number;
   private snapshot: ModelCatalog | null = null;
   private syncPromise: Promise<void> | null = null;
@@ -210,6 +254,10 @@ export class CivitaiCatalogService {
     this.baselineCacheTtlMs = ttlMs(
       'CIVITAI_BASELINE_CACHE_TTL_SECONDS',
       BASELINE_CACHE_TTL_DEFAULT,
+    );
+    this.checkpointEvidenceCacheTtlMs = ttlMs(
+      'CIVITAI_CHECKPOINT_EVIDENCE_CACHE_TTL_SECONDS',
+      CHECKPOINT_EVIDENCE_CACHE_TTL_DEFAULT,
     );
     this.thumbnailCacheTtlMs = ttlMs(
       'CIVITAI_THUMBNAIL_CACHE_TTL_SECONDS',
@@ -331,13 +379,21 @@ export class CivitaiCatalogService {
     return value;
   }
 
-  private async baseline(versionId: number) {
-    const lookup = this.cache.baseline(versionId, this.baselineCacheTtlMs);
-    if (lookup.hit) {
-      this.localMetrics.cacheHits += 1;
-      return lookup.value;
-    }
-    this.localMetrics.cacheMisses += 1;
+  private async loraUsage(versionId: number) {
+    const baselineLookup = this.cache.baseline(versionId, this.baselineCacheTtlMs);
+    const checkpointLookup = this.cache.checkpointEvidence(
+      versionId,
+      this.checkpointEvidenceCacheTtlMs,
+    );
+    if (baselineLookup.hit) this.localMetrics.cacheHits += 1;
+    else this.localMetrics.cacheMisses += 1;
+    if (checkpointLookup.hit) this.localMetrics.cacheHits += 1;
+    else this.localMetrics.cacheMisses += 1;
+    if (baselineLookup.hit && checkpointLookup.hit)
+      return {
+        baseline: baselineLookup.value,
+        checkpointEvidence: checkpointLookup.value,
+      };
     try {
       const payload = await this.client.getImages({
         modelVersionId: versionId,
@@ -345,14 +401,17 @@ export class CivitaiCatalogService {
         sort: 'Newest',
         limit: 200,
       });
-      const value = calculateStrengthBaseline(
-        Array.isArray(payload?.items) ? payload.items : [],
-        versionId,
-      );
-      this.cache.setBaseline(versionId, value);
-      return value;
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      const baseline = calculateStrengthBaseline(items, versionId);
+      const checkpointEvidence = calculateObservedCheckpointReferences(items);
+      this.cache.setBaseline(versionId, baseline);
+      this.cache.setCheckpointEvidence(versionId, checkpointEvidence);
+      return { baseline, checkpointEvidence };
     } catch {
-      return null;
+      return {
+        baseline: baselineLookup.hit ? baselineLookup.value : null,
+        checkpointEvidence: checkpointLookup.hit ? checkpointLookup.value : [],
+      };
     }
   }
 
@@ -526,44 +585,110 @@ export class CivitaiCatalogService {
         });
       }
 
-      const baselineIds = [
+      const loraVersionIds = [
         ...new Set(
           [...byCollection.values()].flatMap((items) =>
             items
               .filter((item) =>
                 ['lora', 'locon', 'dora'].includes(String(item.modelType).toLowerCase()),
               )
-              .map((item) => Number(item.versionId)),
+              .flatMap((item) =>
+                (Array.isArray(item.versions) ? item.versions : [item])
+                  .map((version: any) => Number(version.versionId))
+                  .filter((id: number) => Number.isInteger(id) && id > 0),
+              ),
           ),
         ),
       ];
-      const baselines = new Map<number, StrengthBaseline | null>();
+      const usageByVersion = new Map<
+        number,
+        { baseline: StrengthBaseline | null; checkpointEvidence: CachedCheckpointEvidence[] }
+      >();
       this.progress(
-        'LoRA強度根拠確認中',
+        'LoRA利用実績確認中',
         0,
-        baselineIds.length || 1,
-        '選択中のLoRA Versionだけ強度根拠を確認しています',
+        loraVersionIds.length || 1,
+        'LoRA Versionの作例から強度と使用Checkpointを確認しています',
       );
-      let baselineCompleted = 0;
-      await mapLimit(baselineIds, 6, async (id) => {
-        baselines.set(id, await this.baseline(id));
-        baselineCompleted += 1;
+      let usageCompleted = 0;
+      await mapLimit(loraVersionIds, 4, async (id) => {
+        usageByVersion.set(id, await this.loraUsage(id));
+        usageCompleted += 1;
         this.progress(
-          'LoRA強度根拠確認中',
-          baselineCompleted,
-          baselineIds.length,
-          `LoRA強度根拠 ${baselineCompleted}/${baselineIds.length} を確認中`,
+          'LoRA利用実績確認中',
+          usageCompleted,
+          loraVersionIds.length,
+          `LoRA利用実績 ${usageCompleted}/${loraVersionIds.length} を確認中`,
         );
       });
+
+      const checkpointVersionIds = [
+        ...new Set(
+          [...usageByVersion.values()].flatMap((usage) =>
+            usage.checkpointEvidence.map((evidence) => evidence.modelVersionId),
+          ),
+        ),
+      ];
+      const checkpointDetails = new Map<number, any>();
+      this.progress(
+        'LoRA基盤Checkpoint解決中',
+        0,
+        checkpointVersionIds.length || 1,
+        '作例で確認したCheckpointのCivitai identityを解決しています',
+      );
+      let checkpointCompleted = 0;
+      await mapLimit(checkpointVersionIds, 4, async (id) => {
+        try {
+          checkpointDetails.set(id, await this.versionDetail(id));
+        } catch {
+          checkpointDetails.set(id, null);
+        }
+        checkpointCompleted += 1;
+        this.progress(
+          'LoRA基盤Checkpoint解決中',
+          checkpointCompleted,
+          checkpointVersionIds.length,
+          `Checkpoint ${checkpointCompleted}/${checkpointVersionIds.length} を解決中`,
+        );
+      });
+
+      const resolvedCheckpointEvidence = (versionId: number) => {
+        const usage = usageByVersion.get(versionId);
+        return (usage?.checkpointEvidence ?? []).map((evidence) => {
+          const detail = checkpointDetails.get(evidence.modelVersionId),
+            modelId = Number(detail?.modelId);
+          return {
+            modelVersionId: evidence.modelVersionId,
+            ...(Number.isInteger(modelId) && modelId > 0 ? { modelId } : {}),
+            ...(typeof detail?.model?.name === 'string' ? { modelName: detail.model.name } : {}),
+            ...(typeof detail?.name === 'string' ? { versionName: detail.name } : {}),
+            ...(typeof detail?.baseModel === 'string' ? { baseModel: detail.baseModel } : {}),
+            ...(Number.isInteger(modelId) && modelId > 0
+              ? {
+                  modelUrl: `https://civitai.com/models/${modelId}?modelVersionId=${evidence.modelVersionId}`,
+                }
+              : {}),
+            imageCount: evidence.imageCount,
+            evidenceImageIds: evidence.evidenceImageIds,
+          };
+        });
+      };
+
       for (const items of byCollection.values())
         for (const item of items) {
-          const baseline = baselines.get(Number(item.versionId));
-          if (!baseline) continue;
-          item.strengthBaseline = baseline;
+          if (!['lora', 'locon', 'dora'].includes(String(item.modelType).toLowerCase())) continue;
+          for (const version of item.versions ?? []) {
+            const versionId = Number(version.versionId),
+              usage = usageByVersion.get(versionId);
+            version.observedCheckpoints = resolvedCheckpointEvidence(versionId);
+            if (usage?.baseline) version.strengthBaseline = usage.baseline;
+          }
           const selected = item.versions.find(
-            (v: any) => Number(v.versionId) === Number(item.versionId),
+            (version: any) => Number(version.versionId) === Number(item.versionId),
           );
-          if (selected) selected.strengthBaseline = baseline;
+          if (!selected) continue;
+          item.observedCheckpoints = selected.observedCheckpoints ?? [];
+          if (selected.strengthBaseline) item.strengthBaseline = selected.strengthBaseline;
         }
 
       const metaById = new Map(collections.map((x) => [x.id, x]));
@@ -614,8 +739,8 @@ export class CivitaiCatalogService {
       this.snapshot = snapshot;
       this.cache.prune(
         modelIds,
-        rows.map((x) => Number(x.item.data.version.id)),
-        baselineIds,
+        [...rows.map((x) => Number(x.item.data.version.id)), ...checkpointVersionIds],
+        loraVersionIds,
         collectionIds,
       );
       try {
