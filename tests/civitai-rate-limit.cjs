@@ -18,6 +18,7 @@ execFileSync(
   process.env.CIVITAI_BASE_URL = 'https://civitai.test';
   process.env.CIVITAI_MATURE_BASE_URL = 'https://civitai.test';
   process.env.CIVITAI_REQUEST_INTERVAL_MS = '1';
+  process.env.CIVITAI_COLLECTION_REQUEST_INTERVAL_MS = '20';
   process.env.CIVITAI_MIN_RETRY_MS = '1';
   process.env.CIVITAI_MAX_RETRIES = '2';
   const mod = await import(
@@ -93,6 +94,32 @@ execFileSync(
     assert.equal(calls, 2);
     assert.equal(recover5xx.status().metrics.responses5xx, 1);
     assert.equal(recover5xx.status().metrics.retries, 1);
+
+    const collectionStarts = [];
+    const collectionPacing = new mod.CivitaiRequestPolicy(async (input) => {
+      collectionStarts.push({ url: String(input), at: Date.now() });
+      return new Response('{}', { status: 200 });
+    });
+    collectionPacing.install();
+    await Promise.all([
+      globalThis.fetch('https://civitai.test/api/trpc/collection.getAllUser?input=1'),
+      globalThis.fetch('https://civitai.test/api/trpc/collection.getAllCollectionItems?input=2'),
+      globalThis.fetch('https://civitai.test/api/trpc/collection.getAllCollectionItems?input=3'),
+    ]);
+    assert.equal(collectionStarts.length, 3);
+    for (let i = 1; i < collectionStarts.length; i++) {
+      assert.ok(
+        collectionStarts[i].at - collectionStarts[i - 1].at >= 15,
+        'collection tRPC requests must be paced by the collection-specific interval',
+      );
+    }
+    const collectionMetrics = collectionPacing.status().metrics;
+    assert.equal(collectionMetrics.currentIntervalMs, 1);
+    assert.equal(collectionMetrics.requestsByEndpoint['/api/trpc/collection.getAllUser'], 1);
+    assert.equal(
+      collectionMetrics.requestsByEndpoint['/api/trpc/collection.getAllCollectionItems'],
+      2,
+    );
 
     calls = 0;
     const aborting = new mod.CivitaiRequestPolicy(async (_input, init) => {

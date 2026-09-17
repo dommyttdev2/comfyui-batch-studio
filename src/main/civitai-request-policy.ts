@@ -95,12 +95,26 @@ function endpointKey(input: RequestInfo | URL) {
   }
 }
 
+function isCollectionTrpcRequest(input: RequestInfo | URL) {
+  try {
+    const raw = typeof input === 'string' || input instanceof URL ? String(input) : input.url;
+    const path = new URL(raw).pathname;
+    return (
+      path === '/api/trpc/collection.getAllUser' ||
+      path === '/api/trpc/collection.getAllCollectionItems'
+    );
+  } catch {
+    return false;
+  }
+}
+
 let activePolicy: CivitaiRequestPolicy | null = null;
 
 export class CivitaiRequestPolicy {
   private readonly originalFetch: typeof fetch;
   private readonly hosts: Set<string>;
   private readonly requestIntervalMs: number;
+  private readonly collectionRequestIntervalMs: number;
   private readonly minRetryMs: number;
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
@@ -116,6 +130,10 @@ export class CivitaiRequestPolicy {
     this.originalFetch = originalFetch;
     this.hosts = normalizedHosts();
     this.requestIntervalMs = Math.max(0, Number(process.env.CIVITAI_REQUEST_INTERVAL_MS ?? 350));
+    this.collectionRequestIntervalMs = Math.max(
+      this.requestIntervalMs,
+      Number(process.env.CIVITAI_COLLECTION_REQUEST_INTERVAL_MS ?? 1000),
+    );
     this.minRetryMs = Math.max(1, Number(process.env.CIVITAI_MIN_RETRY_MS ?? 1000));
     this.timeoutMs = Math.max(1000, Number(process.env.CIVITAI_TIMEOUT ?? 20) * 1000);
     this.maxRetries = Math.max(0, Math.floor(Number(process.env.CIVITAI_MAX_RETRIES ?? 5)));
@@ -168,7 +186,14 @@ export class CivitaiRequestPolicy {
     }
   }
 
-  private async waitForSlot(signal?: AbortSignal) {
+  private requestInterval(input: RequestInfo | URL) {
+    return isCollectionTrpcRequest(input)
+      ? this.collectionRequestIntervalMs
+      : this.requestIntervalMs;
+  }
+
+  private async waitForSlot(input: RequestInfo | URL, signal?: AbortSignal) {
+    const intervalMs = this.requestInterval(input);
     const task = this.gate.then(async () => {
       const now = Date.now(),
         wait = Math.max(
@@ -178,7 +203,7 @@ export class CivitaiRequestPolicy {
           this.transientUntil - now,
         );
       if (wait > 0) await sleep(wait, signal);
-      this.nextRequestAt = Date.now() + this.requestIntervalMs;
+      this.nextRequestAt = Date.now() + intervalMs;
     });
     this.gate = task.catch(() => {});
     await task;
@@ -213,7 +238,7 @@ export class CivitaiRequestPolicy {
     const retryable = this.retryableMethod(init);
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       if (init?.signal?.aborted) throw abortError(init.signal);
-      await this.waitForSlot(init?.signal ?? undefined);
+      await this.waitForSlot(input, init?.signal ?? undefined);
       const controller = new AbortController(),
         timer = setTimeout(
           () =>
