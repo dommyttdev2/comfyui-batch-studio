@@ -264,6 +264,7 @@ Grok は次を決める。
 - Leaf数と生成順。
 - Root / Branch LoRA の実適用 `strengthModel` / `strengthClip`。
 - Prompt fallback tagのStory上適切なscope/categoryへの配置。
+- LoRAごとのtrigger候補の要否と適用scope（Common / Branch / Leaf）。
 
 親scopeに存在するtagを子scopeへ再掲しない。
 
@@ -319,19 +320,20 @@ content
 
 Illustriousの通常tagはunderscore form、Animaはspace formとする。
 
-### 6.5 trainedWords ownership
+### 6.5 Trigger word selection
 
-Grok は `models.json` の Base Model / LoRA `trainedWords` を `prompt_plan.json` へ転記しない。
+`models.json.trainedWords` はGrokが選択するための候補一覧であり、全件をPrompt Planへ転記することを要求しない。
 
-Batch Studio Compilerが直接 `models.json` を読み、次へ注入する。
+新規Prompt Planには `"triggerWordsMode": "selected"` を設定する。
+GrokはCommon / Branch / Leafの `triggerWords` に `{ "modelRef": "...", "words": ["..."] }` を記録する。候補からの選択が不要なら空配列または省略とする。
 
-```text
-Base Model trainedWords -> Common compiled positive
-Root LoRA trainedWords  -> Common compiled positive
-Branch LoRA trainedWords -> Branch配下各Leaf compiled positive
-```
+- modelRefはそのscopeで実際に適用可能なBase Model / LoRAを参照する。
+- wordは選定モデルの `trainedWords` にある文字列と完全一致させる。通常Danbooru dialect制約の対象外。
+- 全画像に必要なものだけをCommonに置き、衣装・シーン固有のものはBranch / Leafで選ぶ。
+- LoRAを使用してもトリガーワードを選択しない判断を許容する。
+- CompilerはGrokが選んだ候補だけを展開し、未選択候補を自動追加しない。
 
-このためPrompt Planにtrigger wordの複製を持たない。
+既存 `triggerWordsMode` 未指定のSchema v2は、旧方式で作られたProjectの互換性のためだけに従来の自動注入でCompileする。
 
 ### 6.6 Batch Studio-owned Prompt policy
 
