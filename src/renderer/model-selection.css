@@ -52,6 +52,28 @@
 .base-model-empty {
   color: #fbbf24;
 }
+.model-civitai-link {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 7px;
+  color: #93c5fd;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.grok-lora-title {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.grok-lora-title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.grok-lora-title .model-civitai-link {
+  margin-top: 0;
+}
 .model-picker-backdrop {
   z-index: 40;
   padding: 20px;
