@@ -2421,6 +2421,97 @@ function register() {
     if (typeof text !== 'string') throw new Error('Clipboard text must be string');
     clipboard.writeText(text);
   });
+  ipcMain.handle(IPC.CODEX_SET_PROVIDER, (event, provider: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    if (event.sender.id !== state.localView.webContents.id)
+      throw new Error('Codex pane cannot change its parent window.');
+    if (provider !== 'grok' && provider !== 'codex') throw new Error('Invalid AI provider.');
+    state.paneProvider = provider;
+    layoutProjectWindow(state);
+    return paneState(state);
+  });
+  ipcMain.handle(IPC.CODEX_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    if (event.sender.id !== state.localView.webContents.id)
+      throw new Error('Only the project window can select an AI context.');
+    validRoot(root);
+    validGrokContextStage(stage);
+    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
+      throw new Error('This project is not active in the current window.');
+    state.codexContext = { root: path.resolve(root), stage };
+    stateCodexActiveThread.set(state.window.id, null);
+    state.codexView.webContents.send(IPC.CODEX_CONTEXT_CHANGED, state.codexContext);
+  });
+  ipcMain.handle(IPC.CODEX_CONTEXT, (event) => {
+    const state = projectWindowForSender(event.sender);
+    return state.codexContext;
+  });
+  ipcMain.handle(IPC.CODEX_STATUS, () => codexAccount());
+  ipcMain.handle(IPC.CODEX_SIGN_IN, async () => {
+    const { server } = codexService();
+    const response = await server.request<{ type: string; authUrl?: string }>(
+      'account/login/start',
+      { type: 'chatgpt', useHostedLoginSuccessPage: true, appBrand: 'chatgpt' },
+    );
+    if (response.type !== 'chatgpt' || !response.authUrl)
+      throw new Error('CodexのサインインURLを取得できません。');
+    const url = new URL(response.authUrl);
+    if (url.protocol !== 'https:' ||
+      !['chatgpt.com', 'auth.openai.com'].includes(url.hostname.toLowerCase()))
+      throw new Error('Codexが予期しないサインインURLを返しました。');
+    await shell.openExternal(url.toString());
+  });
+  ipcMain.handle(IPC.CODEX_SNAPSHOT, (event) =>
+    codexSnapshot(projectWindowForSender(event.sender)),
+  );
+  ipcMain.handle(IPC.CODEX_NEW_CHAT, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    const context = codexContextFor(state);
+    const { store } = codexService();
+    await store.clearActive(context.root, context.stage);
+    stateCodexActiveThread.set(state.window.id, null);
+    return codexSnapshot(state);
+  });
+  ipcMain.handle(IPC.CODEX_RESTORE_CHAT, async (event, id: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    const context = codexContextFor(state);
+    if (typeof id !== 'string' || !id) throw new Error('Invalid Codex thread ID.');
+    const { store } = codexService();
+    const saved = await store.get(context.root, context.stage);
+    if (!saved.threadIds.includes(id)) throw new Error('Chat is not part of this stage.');
+    await store.remember(context.root, context.stage, id);
+    stateCodexActiveThread.set(state.window.id, id);
+    return codexSnapshot(state);
+  });
+  ipcMain.handle(IPC.CODEX_SEND, (event, input: unknown) => {
+    if (typeof input !== 'string') throw new Error('Invalid Codex prompt.');
+    return codexSend(projectWindowForSender(event.sender), input);
+  });
+  ipcMain.handle(IPC.CODEX_SEND_TASK, (event, stage: unknown, extra: unknown) => {
+    const validStages = Object.values(codexTaskContexts).flat();
+    if (!validStages.includes(stage as GrokTask['stage'])) throw new Error('Invalid task stage.');
+    if (extra != null && (typeof extra !== 'string' || extra.length > 30_000))
+      throw new Error('Invalid additional instructions.');
+    return codexSendTask(
+      projectWindowForSender(event.sender),
+      stage as GrokTask['stage'],
+      typeof extra === 'string' ? extra : '',
+    );
+  });
+  ipcMain.handle(IPC.CODEX_SAVE_RESPONSE, async (event, response: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    const context = codexContextFor(state);
+    if (typeof response !== 'string' || response.length > 10_000_000)
+      throw new Error('Invalid Codex response.');
+    const selected = await dialog.showSaveDialog(state.window, {
+      title: 'Codexの回答をファイルとして保存',
+      defaultPath: path.join(app.getPath('downloads'), codexReturnFile[context.stage]),
+      filters: [{ name: '工程の成果物', extensions: [path.extname(codexReturnFile[context.stage]).slice(1)] }],
+    });
+    if (selected.canceled || !selected.filePath) return null;
+    await writeFile(selected.filePath, response, 'utf8');
+    return selected.filePath;
+  });
   ipcMain.handle(IPC.GROK_SET_VISIBLE, (event, v: unknown) => {
     const state = projectWindowForSender(event.sender);
     state.grokVisible = v === true;
