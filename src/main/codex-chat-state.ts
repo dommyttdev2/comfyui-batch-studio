@@ -50,27 +50,31 @@ export class CodexChatStateStore {
 
   async remember(projectPath: string, stage: GrokContextStage, threadId: string): Promise<void> {
     if (!threadId.trim()) throw new Error('Invalid Codex thread ID');
-    this.writeQueue = this.writeQueue.catch(() => {}).then(async () => {
-      const state = await this.read();
-      const key = rootKey(projectPath);
-      const chats = copyChats(state.projects[key]?.[stage]);
-      chats.threadIds = [threadId, ...chats.threadIds.filter((id) => id !== threadId)];
-      chats.activeThreadId = threadId;
-      state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: chats };
-      await writeJsonAtomic(this.filePath, state);
-    });
+    this.writeQueue = this.writeQueue
+      .catch(() => {})
+      .then(async () => {
+        const state = await this.read();
+        const key = rootKey(projectPath);
+        const chats = copyChats(state.projects[key]?.[stage]);
+        chats.threadIds = [threadId, ...chats.threadIds.filter((id) => id !== threadId)];
+        chats.activeThreadId = threadId;
+        state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: chats };
+        await writeJsonAtomic(this.filePath, state);
+      });
     await this.writeQueue;
   }
 
   async clearActive(projectPath: string, stage: GrokContextStage): Promise<void> {
-    this.writeQueue = this.writeQueue.catch(() => {}).then(async () => {
-      const state = await this.read();
-      const key = rootKey(projectPath);
-      const chats = copyChats(state.projects[key]?.[stage]);
-      chats.activeThreadId = null;
-      state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: chats };
-      await writeJsonAtomic(this.filePath, state);
-    });
+    this.writeQueue = this.writeQueue
+      .catch(() => {})
+      .then(async () => {
+        const state = await this.read();
+        const key = rootKey(projectPath);
+        const chats = copyChats(state.projects[key]?.[stage]);
+        chats.activeThreadId = null;
+        state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: chats };
+        await writeJsonAtomic(this.filePath, state);
+      });
     await this.writeQueue;
   }
 }
