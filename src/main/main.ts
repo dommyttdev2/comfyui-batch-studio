@@ -1157,6 +1157,169 @@ async function setGrokContext(state: ProjectWindowState, root: string, stage: Gr
     }
   }
 }
+function codexService() {
+  if (!codexAppServer || !codexChatState) throw new Error('Codexが初期化されていません。');
+  return { server: codexAppServer, store: codexChatState };
+}
+function codexContextFor(state: ProjectWindowState): CodexContext {
+  const context = state.codexContext;
+  if (!context || !state.projectRoot || projectRootKey(context.root) !== projectRootKey(state.projectRoot))
+    throw new Error('Codexを利用するプロジェクトと工程を選択してください。');
+  return context;
+}
+function forwardCodexNotification(notification: CodexNotification) {
+  const threadId = notification.params.threadId;
+  if (notification.method === 'turn/completed' && typeof threadId === 'string')
+    codexBusy.delete(threadId);
+  for (const state of projectWindows.values()) {
+    const context = state.codexContext;
+    if (!context) continue;
+    // Account notifications are global; turn notifications belong only to the active stage thread.
+    if (!notification.method.startsWith('account/')) {
+      if (typeof threadId !== 'string' || threadId !== stateCodexActiveThread.get(state.window.id))
+        continue;
+    }
+    state.codexView.webContents.send(IPC.CODEX_EVENT, notification);
+  }
+}
+const stateCodexActiveThread = new Map<number, string | null>();
+function messageText(item: Record<string, unknown>): string {
+  if (typeof item.text === 'string') return item.text;
+  if (!Array.isArray(item.content)) return '';
+  return item.content
+    .filter((content): content is { text: string } =>
+      typeof content === 'object' && content !== null &&
+      typeof (content as { text?: unknown }).text === 'string',
+    )
+    .map((content) => content.text)
+    .join('\n');
+}
+function codexMessages(result: unknown): CodexMessage[] {
+  const thread = (result as { thread?: { turns?: unknown[] } } | null)?.thread;
+  if (!Array.isArray(thread?.turns)) return [];
+  const messages: CodexMessage[] = [];
+  for (const turn of thread.turns) {
+    const items = (turn as { items?: unknown[] } | null)?.items;
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      const record = item as Record<string, unknown>;
+      const role = record.type === 'userMessage' ? 'user' :
+        record.type === 'agentMessage' ? 'assistant' : null;
+      const text = messageText(record);
+      if (role && text)
+        messages.push({ id: String(record.id ?? messages.length), role, text });
+    }
+  }
+  return messages;
+}
+async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> {
+  const context = codexContextFor(state);
+  const { server, store } = codexService();
+  const saved = await store.get(context.root, context.stage);
+  stateCodexActiveThread.set(state.window.id, saved.activeThreadId);
+  let messages: CodexMessage[] = [];
+  if (saved.activeThreadId) {
+    await server.request('thread/resume', {
+      threadId: saved.activeThreadId, cwd: context.root,
+      sandbox: 'read-only', approvalPolicy: 'never',
+    });
+    const read = await server.request<unknown>('thread/read', {
+      threadId: saved.activeThreadId, includeTurns: true,
+    });
+    messages = codexMessages(read);
+  }
+  return { ...context, ...saved, messages };
+}
+async function codexAccount(): Promise<CodexAccountStatus> {
+  const { server } = codexService();
+  const result = await server.request<{
+    account?: { type?: string; planType?: string } | null;
+  }>('account/read', {});
+  return {
+    authenticated: result.account?.type === 'chatgpt',
+    authMode: result.account?.type ?? null,
+    planType: result.account?.planType ?? null,
+  };
+}
+async function codexSend(state: ProjectWindowState, message: string): Promise<void> {
+  const context = codexContextFor(state);
+  const input = message.trim();
+  if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
+  const account = await codexAccount();
+  if (!account.authenticated)
+    throw new Error('ChatGPTアカウントでCodexにサインインしてください。APIキー認証では送信しません。');
+  const { server, store } = codexService();
+  const saved = await store.get(context.root, context.stage);
+  let threadId = saved.activeThreadId;
+  if (!threadId) {
+    const started = await server.request<{ thread: { id: string } }>('thread/start', {
+      cwd: context.root, approvalPolicy: 'never', sandbox: 'read-only',
+      serviceName: 'comfyui_batch_studio', ephemeral: false,
+    });
+    threadId = started.thread.id;
+    await store.remember(context.root, context.stage, threadId);
+  } else {
+    await server.request('thread/resume', {
+      threadId, cwd: context.root, approvalPolicy: 'never', sandbox: 'read-only',
+    });
+  }
+  if (codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
+  stateCodexActiveThread.set(state.window.id, threadId);
+  codexBusy.add(threadId);
+  try {
+    await server.request('turn/start', {
+      threadId, input: [{ type: 'text', text: input, text_elements: [] }],
+    });
+  } catch (error) {
+    codexBusy.delete(threadId);
+    throw error;
+  }
+}
+const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
+  story: ['story-initial', 'story-finalize', 'story-fix'],
+  models: ['models', 'models-fix'],
+  'prompt-plan': ['prompt-plan', 'prompt-plan-fix'],
+  caption: ['caption'],
+};
+const codexReturnFile: Record<GrokContextStage, string> = {
+  story: 'story.md',
+  models: 'model_loras.json',
+  'prompt-plan': 'prompt_plan.json',
+  caption: 'caption_content.json',
+};
+async function codexSendTask(
+  state: ProjectWindowState,
+  stage: GrokTask['stage'],
+  extra: string,
+): Promise<void> {
+  const context = codexContextFor(state);
+  if (!codexTaskContexts[context.stage].includes(stage))
+    throw new Error('選択した工程に対応しない依頼です。');
+  const task = await buildGrokTask(context.root, stage, extra);
+  // Grok's file-attachment output contract cannot be used in the App Server chat.
+  const prompt = task.prompt.replaceAll('Grok', 'Codex')
+    .replace(/## 出力契約[\s\S]*?(?=\n## [^\n]+|$)/g, '');
+  const files: string[] = [];
+  let combinedSize = prompt.length;
+  for (const attachment of task.attachments) {
+    if (!attachment.exists) continue;
+    const data = await readFile(attachment.path, 'utf8');
+    combinedSize += data.length;
+    if (combinedSize > 750_000)
+      throw new Error('参照ファイルが大きすぎるため送信できません。添付内容を整理してください。');
+    files.push('### ' + attachment.name + ' (' + attachment.purpose + ')\n' + data);
+  }
+  await codexSend(
+    state,
+    prompt + '\n\n## Codex向け出力契約\n' +
+      'ファイルを変更しないでください。回答の最後に ' + codexReturnFile[context.stage] +
+      ' の内容だけをMarkdownコードブロックなしで出力してください。' +
+      '添付ファイルとして生成する指示は適用しません。\n\n' +
+      (files.length ? '## 参照ファイル\n' + files.join('\n\n') : ''),
+  );
+}
+
 function validCivitaiUrl(value: unknown) {
   if (typeof value !== 'string') return false;
   try {
