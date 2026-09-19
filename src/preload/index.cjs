@@ -128,6 +128,7 @@ const I = {
   R2_DELETE_TEMPLATE: 'r2:delete-template',
   R2_METRICS: 'r2:metrics',
   CLIPBOARD_WRITE_TEXT: 'clipboard:write-text',
+  CODEX_GET_PROVIDER: 'codex:get-provider',
   CODEX_SET_PROVIDER: 'codex:set-provider',
   CODEX_SET_CONTEXT: 'codex:set-context',
   CODEX_CONTEXT: 'codex:context',
@@ -332,6 +333,7 @@ contextBridge.exposeInMainWorld('batchStudio', {
     metrics: () => ipcRenderer.invoke(I.R2_METRICS),
   },
   codex: {
+    getProvider: () => ipcRenderer.invoke(I.CODEX_GET_PROVIDER),
     setProvider: (p) => ipcRenderer.invoke(I.CODEX_SET_PROVIDER, p),
     setContext: (r, s) => ipcRenderer.invoke(I.CODEX_SET_CONTEXT, r, s),
     context: () => ipcRenderer.invoke(I.CODEX_CONTEXT),
