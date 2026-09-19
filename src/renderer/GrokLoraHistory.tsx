@@ -126,7 +126,20 @@ export function GrokLoraHistory({
                     )}
                   </div>
                   <div className="grok-lora-copy">
-                    <strong>{lora.fileName}</strong>
+                    <div className="grok-lora-title">
+                      <strong>{lora.fileName}</strong>
+                      <button
+                        className="model-civitai-link"
+                        aria-label={`${lora.modelName} のCivitaiページを開く`}
+                        onClick={() =>
+                          void window.batchStudio.catalog.openModel(
+                            `https://civitai.com/models/${lora.modelId}?modelVersionId=${lora.versionId}`,
+                          )
+                        }
+                      >
+                        Civitai ↗
+                      </button>
+                    </div>
                     <small>
                       {lora.modelName} · {lora.versionName}
                     </small>
