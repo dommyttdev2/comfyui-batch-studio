@@ -11,6 +11,7 @@ import {
 import type { MenuItemConstructorOptions, WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { IPC } from '../shared/ipc.js';
 import type {
@@ -25,6 +26,11 @@ import type {
   ProjectSettings,
   PromptPlanArtifact,
   GrokTask,
+  AssistantPaneProvider,
+  CodexContext,
+  CodexMessage,
+  CodexSnapshot,
+  CodexAccountStatus,
   ThumbnailSlotKey,
   R2ConnectionInput,
   ValidationIssue,
@@ -80,6 +86,8 @@ import { CivitaiRequestPolicy } from './civitai-request-policy.js';
 import { CivitaiConfigStore } from './civitai-config.js';
 import { UiStateStore } from './ui-state.js';
 import { GrokChatStateStore } from './grok-chat-state.js';
+import { CodexChatStateStore } from './codex-chat-state.js';
+import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { R2ConfigStore } from './r2-config.js';
 import { R2Manager } from './r2-manager.js';
 import { R2ObjectIndex } from './r2-object-index.js';
@@ -150,7 +158,7 @@ body{display:grid;place-items:center}
 </body>
 </html>`;
 type StandaloneWindowTool = 'r2' | 'civit' | 'vastai';
-type RendererWindowTool = StandaloneWindowTool | 'thumbnail-picker' | 'marketplace-picker';
+type RendererWindowTool = StandaloneWindowTool | 'thumbnail-picker' | 'marketplace-picker' | 'codex-pane';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
   window: BaseWindow;
@@ -184,6 +192,9 @@ type ProjectWindowState = {
   window: BaseWindow;
   localView: WebContentsView;
   grokView: WebContentsView;
+  codexView: WebContentsView;
+  paneProvider: AssistantPaneProvider;
+  codexContext: CodexContext | null;
   grokLoadingView: WebContentsView;
   projectRoot: string | null;
   restoreLastProject: boolean;
@@ -207,6 +218,9 @@ let lastFocusedProjectWindowId: number | null = null,
   civitaiConfig: CivitaiConfigStore | null = null,
   uiState: UiStateStore | null = null,
   grokChatState: GrokChatStateStore | null = null,
+  codexChatState: CodexChatStateStore | null = null,
+  codexAppServer: CodexAppServer | null = null,
+  codexBusy = new Set<string>(),
   r2Manager: R2Manager | null = null,
   r2ObjectIndex: R2ObjectIndex | null = null,
   appSettingsStore: AppSettingsStore | null = null,
@@ -232,21 +246,25 @@ function layoutProjectWindow(state: ProjectWindowState) {
     state.localView.setBounds({ x: 0, y: 0, width, height });
     state.grokView.setBounds({ x: width, y: 0, width: 0, height });
     state.grokLoadingView.setBounds({ x: width, y: 0, width: 0, height });
+    state.codexView.setBounds({ x: width, y: 0, width: 0, height });
     return;
   }
   const lw = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio))),
     grokBounds = { x: lw, y: 0, width: width - lw, height };
   state.localView.setBounds({ x: 0, y: 0, width: lw, height });
-  state.grokView.setBounds(grokBounds);
+  const hidden = { x: width, y: 0, width: 0, height };
+  state.grokView.setBounds(state.paneProvider === 'grok' ? grokBounds : hidden);
   state.grokLoadingView.setBounds(
-    state.grokLoading ? grokBounds : { x: width, y: 0, width: 0, height },
+    state.paneProvider === 'grok' && state.grokLoading ? grokBounds : hidden,
   );
+  state.codexView.setBounds(state.paneProvider === 'codex' ? grokBounds : hidden);
 }
 function projectWindowForSender(contents: WebContents) {
   for (const state of projectWindows.values())
     if (
       state.localView.webContents.id === contents.id ||
-      state.grokView.webContents.id === contents.id
+      state.grokView.webContents.id === contents.id ||
+      state.codexView.webContents.id === contents.id
     )
       return state;
   throw new Error('Project Window was not found for IPC sender.');
@@ -288,12 +306,17 @@ async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
   const dev = process.env.VITE_DEV_SERVER_URL;
   if (dev) {
     const url = new URL(dev);
-    if (tool) url.searchParams.set('tool', tool);
+    if (tool === 'codex-pane') url.searchParams.set('codex-pane', '1');
+    else if (tool) url.searchParams.set('tool', tool);
     await v.webContents.loadURL(url.toString());
   } else
     await v.webContents.loadFile(
       path.resolve(__dirname, '../../dist-renderer/index.html'),
-      tool ? { query: { tool } } : undefined,
+      tool === 'codex-pane'
+        ? { query: { 'codex-pane': '1' } }
+        : tool
+          ? { query: { tool } }
+          : undefined,
     );
 }
 function configureGrokContents(contents: WebContents, oauthFlow = false) {
@@ -380,6 +403,14 @@ function createProjectWindow(
         sandbox: true,
       },
     }),
+    codexView = new WebContentsView({
+      webPreferences: {
+        preload: path.resolve(__dirname, '../preload/index.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
     grokView = new WebContentsView({
       webPreferences: {
         partition: GROK_PARTITION,
@@ -399,6 +430,9 @@ function createProjectWindow(
       window,
       localView,
       grokView,
+      codexView,
+      paneProvider: 'grok',
+      codexContext: null,
       grokLoadingView,
       projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
       restoreLastProject: Boolean(options.restoreLastProject),
@@ -418,6 +452,7 @@ function createProjectWindow(
   window.contentView.addChildView(localView);
   window.contentView.addChildView(grokView);
   window.contentView.addChildView(grokLoadingView);
+  window.contentView.addChildView(codexView);
   void grokLoadingView.webContents
     .loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(GROK_LOADING_HTML)}`)
     .catch((error) => console.warn('Grok loading placeholder failed:', error));
@@ -439,6 +474,7 @@ function createProjectWindow(
     localView.webContents.close();
     grokView.webContents.close();
     grokLoadingView.webContents.close();
+    codexView.webContents.close();
     projectWindows.delete(windowId);
     if (lastFocusedProjectWindowId === windowId) lastFocusedProjectWindowId = null;
     void rememberMostRecentOpenProject(false);
@@ -449,6 +485,7 @@ function createProjectWindow(
       localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
     });
   void loadRenderer(localView);
+  void loadRenderer(codexView, 'codex-pane');
   void state.grokNavigationQueue
     .navigate(grokView.webContents, GROK_URL)
     .catch((error) => console.warn('Initial Grok navigation failed:', error));
@@ -1335,6 +1372,8 @@ function register() {
     const state = projectWindowForSender(event.sender);
     state.projectRoot = null;
     state.activeGrokContext = null;
+    state.codexContext = null;
+    state.codexView.webContents.send(IPC.CODEX_CONTEXT_CHANGED, null);
     state.grokVisible = false;
     layoutProjectWindow(state);
     await rememberMostRecentOpenProject();
@@ -2329,6 +2368,14 @@ async function initializeApplication() {
   civitaiCatalog = new CivitaiCatalogService(path.join(userData, 'civitai'));
   ensureCatalogRuntimePath();
   grokChatState = new GrokChatStateStore(userData);
+  codexChatState = new CodexChatStateStore(userData);
+  codexAppServer = new CodexAppServer();
+  codexAppServer.on('notification', forwardCodexNotification);
+  codexAppServer.on('disconnected', (message: string) => {
+    codexBusy.clear();
+    for (const state of projectWindows.values())
+      state.codexView.webContents.send(IPC.CODEX_EVENT, { method: 'disconnected', params: { message } });
+  });
   const r2Config = new R2ConfigStore(userData);
   r2Manager = new R2Manager(r2Config, userData);
   r2ObjectIndex = new R2ObjectIndex(r2Config, userData);
@@ -2348,6 +2395,7 @@ async function initializeApplication() {
   });
 }
 if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
+app.on('will-quit', () => codexAppServer?.stop());
 app.on('window-all-closed', () => {
   if (!executionCoordinator.hasActiveRuns() && process.platform !== 'darwin') app.quit();
 });
