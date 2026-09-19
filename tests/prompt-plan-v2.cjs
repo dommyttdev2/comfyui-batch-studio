@@ -120,7 +120,11 @@ const model = (ref, fileName, trainedWords, id) => ({
   const selectiveModels = structuredClone(models);
   selectiveModels.checkpoint.trainedWords = ['base_trigger', 'base_optional'];
   selectiveModels.loras[0].trainedWords = ['character_trigger', 'character_uniform'];
-  selectiveModels.loras[1].trainedWords = ['pose_trigger', 'pose_outfit', 'custom phrase, unmodified'];
+  selectiveModels.loras[1].trainedWords = [
+    'pose_trigger',
+    'pose_outfit',
+    'custom phrase, unmodified',
+  ];
   const selected = structuredClone(plan);
   selected.triggerWordsMode = 'selected';
   selected.common.triggerWords = [{ modelRef: 'lora.character', words: ['character_trigger'] }];
@@ -138,9 +142,13 @@ const model = (ref, fileName, trainedWords, id) => ({
   assert.ok(selectedCompiled.common.positiveTags.includes('character_trigger'));
   assert.ok(!selectedCompiled.common.positiveTags.includes('character_uniform'));
   assert.ok(!selectedCompiled.common.positiveTags.includes('base_trigger'));
-  assert.ok(selectedCompiled.branches[0].leaves[0].positiveTags.includes('custom phrase, unmodified'));
+  assert.ok(
+    selectedCompiled.branches[0].leaves[0].positiveTags.includes('custom phrase, unmodified'),
+  );
   assert.ok(!selectedCompiled.branches[0].leaves[0].positiveTags.includes('pose_trigger'));
-  assert.ok(!selectedCompiled.branches[0].leaves[1].positiveTags.includes('custom phrase, unmodified'));
+  assert.ok(
+    !selectedCompiled.branches[0].leaves[1].positiveTags.includes('custom phrase, unmodified'),
+  );
   const noTriggers = structuredClone(selected);
   noTriggers.common.triggerWords = [];
   noTriggers.branches[0].leaves[0].prompt.triggerWords = [];
@@ -149,16 +157,32 @@ const model = (ref, fileName, trainedWords, id) => ({
   assert.ok(!withoutTriggers.branches[0].leaves[0].positiveTags.includes('pose_trigger'));
   const unknownWord = structuredClone(selected);
   unknownWord.branches[0].leaves[0].prompt.triggerWords[0].words = ['unlisted_trigger'];
-  assert.ok(validatePromptPlan(unknownWord, selectiveModels).issues.some((issue) => issue.code === 'TRIGGER_WORD_UNKNOWN'));
+  assert.ok(
+    validatePromptPlan(unknownWord, selectiveModels).issues.some(
+      (issue) => issue.code === 'TRIGGER_WORD_UNKNOWN',
+    ),
+  );
   const unavailableModel = structuredClone(selected);
   unavailableModel.branches[0].leaves[0].prompt.triggerWords[0].modelRef = 'lora.not_selected';
-  assert.ok(validatePromptPlan(unavailableModel, selectiveModels).issues.some((issue) => issue.code === 'TRIGGER_MODEL_REF'));
+  assert.ok(
+    validatePromptPlan(unavailableModel, selectiveModels).issues.some(
+      (issue) => issue.code === 'TRIGGER_MODEL_REF',
+    ),
+  );
   const illegalCommonBranch = structuredClone(selected);
   illegalCommonBranch.common.triggerWords = [{ modelRef: 'lora.pose', words: ['pose_trigger'] }];
-  assert.ok(validatePromptPlan(illegalCommonBranch, selectiveModels).issues.some((issue) => issue.code === 'TRIGGER_MODEL_REF'));
+  assert.ok(
+    validatePromptPlan(illegalCommonBranch, selectiveModels).issues.some(
+      (issue) => issue.code === 'TRIGGER_MODEL_REF',
+    ),
+  );
   const noMode = structuredClone(selected);
   delete noMode.triggerWordsMode;
-  assert.ok(validatePromptPlan(noMode, selectiveModels).issues.some((issue) => issue.code === 'TRIGGER_MODE_REQUIRED'));
+  assert.ok(
+    validatePromptPlan(noMode, selectiveModels).issues.some(
+      (issue) => issue.code === 'TRIGGER_MODE_REQUIRED',
+    ),
+  );
 
   const conflict = structuredClone(plan);
   conflict.branches[0].leaves[0].prompt.positive.camera.framing = ['cowboy_shot', 'full_body'];
