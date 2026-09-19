@@ -107,9 +107,15 @@ matchCode(
     store.remember(projectA, 'codex'),
   ]);
   assert.equal(await afterRestart.get(projectA), 'codex', 'Last explicit choice must be retained');
-  assert.equal(await afterRestart.get(projectB), 'codex', 'Concurrent writes must not drop projects');
+  assert.equal(
+    await afterRestart.get(projectB),
+    'codex',
+    'Concurrent writes must not drop projects',
+  );
   await assert.rejects(() => store.remember(projectA, 'invalid'), /Invalid assistant provider/);
-  console.log('Assistant provider default, legacy migration, switching and persistence tests passed.');
+  console.log(
+    'Assistant provider default, legacy migration, switching and persistence tests passed.',
+  );
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;
