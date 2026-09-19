@@ -21,19 +21,6 @@ jobs:
           node-version: '22.12.0'
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Emit formatted assistant settings changes
-        run: |
-          npx biome format --write src/main/app-settings.ts src/main/assistant-provider-state.ts src/main/main.ts src/renderer/App.tsx tests/assistant-provider.cjs
-          node <<'NODE'
-          const fs = require('fs');
-          const files = ["src/main/app-settings.ts","src/main/assistant-provider-state.ts","src/main/main.ts","src/renderer/App.tsx","tests/assistant-provider.cjs"];
-          for (const p of files) {
-            const data = fs.readFileSync(p).toString('base64');
-            for (let i = 0; i < data.length; i += 4000) {
-              console.log('ASSISTANT_FORMATTED ' + p + ' ' + (i / 4000) + ' ' + data.slice(i, i + 4000));
-            }
-          }
-          NODE
       - name: Lint and format check
         run: npm run check
       - name: Typecheck
