@@ -89,6 +89,16 @@ matchCode(
   'initial selection copy must explain that repeated imports replace selection 1',
 );
 matchCode(historyUi, /lora\.fileName/, 'history must show each selected file name');
+matchCode(
+  historyUi,
+  /catalog\.openModel\(\s*`https:\/\/civitai\.com\/models\/\$\{lora\.modelId\}\?modelVersionId=\$\{lora\.versionId\}\`/,
+  'each selected and reselected LoRA must link to its exact Civitai model version',
+);
+matchCode(
+  stages,
+  /catalog\.openModel\(\s*`https:\/\/civitai\.com\/models\/\$\{value\.modelId\}\?modelVersionId=\$\{value\.versionId\}\`/,
+  'selected base model must link to its exact Civitai model version',
+);
 matchCode(historyUi, /thumbnailUrl/, 'history must resolve a Civitai thumbnail');
 matchCode(historyUi, /ローカル/, 'history must expose local presence');
 matchCode(historyUi, /\bR2\b/, 'history must expose R2 presence');
