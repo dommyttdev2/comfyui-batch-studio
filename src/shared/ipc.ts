@@ -127,6 +127,7 @@ export const IPC = {
   R2_DELETE_TEMPLATE: 'r2:delete-template',
   R2_METRICS: 'r2:metrics',
   CLIPBOARD_WRITE_TEXT: 'clipboard:write-text',
+  CODEX_GET_PROVIDER: 'codex:get-provider',
   CODEX_SET_PROVIDER: 'codex:set-provider',
   CODEX_SET_CONTEXT: 'codex:set-context',
   CODEX_CONTEXT: 'codex:context',
