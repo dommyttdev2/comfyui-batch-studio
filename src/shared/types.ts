@@ -58,6 +58,7 @@ export interface RemoteCustomNodeRepository {
 }
 export interface AppSettings {
   comfyUiInstallPath: string;
+  assistantProvider?: 'grok' | 'codex';
   remoteComfyUiInstallPath?: string;
   comfyUiApiEndpoint?: string;
   projectRoot?: string;
