@@ -32,7 +32,7 @@ export class CodexAppServer extends EventEmitter {
   private async startProcess(): Promise<void> {
     // On Windows npm installs codex.cmd, which requires cmd.exe rather than direct spawn.
     const isWindows = process.platform === 'win32';
-    const program = isWindows ? (process.env.ComSpec || 'cmd.exe') : 'codex';
+    const program = isWindows ? process.env.ComSpec || 'cmd.exe' : 'codex';
     const args = isWindows ? ['/d', '/s', '/c', 'codex app-server'] : ['app-server'];
     const child = spawn(program, args, { stdio: 'pipe', windowsHide: true, env: process.env });
     this.child = child;
@@ -50,7 +50,11 @@ export class CodexAppServer extends EventEmitter {
     );
     try {
       await this.requestRaw('initialize', {
-        clientInfo: { name: 'comfyui_batch_studio', title: 'ComfyUI Batch Studio', version: '1.0.0' },
+        clientInfo: {
+          name: 'comfyui_batch_studio',
+          title: 'ComfyUI Batch Studio',
+          version: '1.0.0',
+        },
       });
       this.write({ method: 'initialized', params: {} });
     } catch (error) {
