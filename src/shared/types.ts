@@ -1037,6 +1037,30 @@ export interface R2Metrics {
   payload?: unknown;
 }
 export type GrokContextStage = 'story' | 'models' | 'prompt-plan' | 'caption';
+export type AssistantPaneProvider = 'grok' | 'codex';
+export interface CodexMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+}
+export interface CodexContext {
+  root: string;
+  stage: GrokContextStage;
+}
+export interface CodexSnapshot extends CodexContext {
+  activeThreadId: string | null;
+  threadIds: string[];
+  messages: CodexMessage[];
+}
+export interface CodexEvent {
+  method: string;
+  params: Record<string, unknown>;
+}
+export interface CodexAccountStatus {
+  authenticated: boolean;
+  authMode: string | null;
+  planType: string | null;
+}
 export interface GrokPaneState {
   visible: boolean;
   ratio: number;
@@ -1273,6 +1297,21 @@ export interface BatchStudioApi {
     }) => Promise<R2BatchDownloadTemplate[]>;
     deleteTemplate: (id: string) => Promise<R2BatchDownloadTemplate[]>;
     metrics: () => Promise<R2Metrics>;
+  };
+  codex: {
+    setProvider: (provider: AssistantPaneProvider) => Promise<GrokPaneState>;
+    setContext: (root: string, stage: GrokContextStage) => Promise<void>;
+    context: () => Promise<CodexContext | null>;
+    onContext: (listener: (context: CodexContext | null) => void) => () => void;
+    status: () => Promise<CodexAccountStatus>;
+    signIn: () => Promise<void>;
+    snapshot: () => Promise<CodexSnapshot>;
+    newChat: () => Promise<CodexSnapshot>;
+    restoreChat: (threadId: string) => Promise<CodexSnapshot>;
+    send: (text: string) => Promise<void>;
+    sendTask: (stage: GrokTask['stage'], extra?: string) => Promise<void>;
+    onEvent: (listener: (event: CodexEvent) => void) => () => void;
+    saveResponse: (text: string) => Promise<string | null>;
   };
   grok: {
     setVisible: (visible: boolean) => Promise<GrokPaneState>;
