@@ -36,7 +36,7 @@ Batch Studio は次を所有する。
 
 - Model Family 別 quality preset。
 - Prompt category の compile order。
-- `models.json` からの Base Model / LoRA `trainedWords` 注入。
+- Grokが明示選択したtrigger wordの検証・scope展開（旧v2のみ互換の自動注入）。
 - exact duplicate 除去。
 - Prompt semantic validation。
 - Illustrious / Anima の tag dialect validation。
@@ -297,34 +297,38 @@ Model Family 共通の quality / anatomy preset は Batch Studio Prompt Policy �
 - Positive / Negative の同一 final Prompt に同一 tag を持たない。
 - Illustrious の通常 tag は underscore form。
 - Anima の通常 tag は space form。
-- `trainedWords` は Prompt Plan に保存しないため、この通常 tag validation の対象外。
+- 選択した `triggerWords[].words` は `models.json.trainedWords` 候補と原文一致させ、通常tag dialect検査の対象外。
 
-## 9. trainedWords ownership
+## 9. Trigger word selection
 
-Schema v1 では Grok が `models.json.trainedWords` を Prompt string へ転記していた。
+新規 Schema v2 Prompt Plan は root に `"triggerWordsMode": "selected"` を指定する。
+`models.json.trainedWords` は**候補一覧**であり、Compiler が自動追加する対象ではない。
 
-Schema v2 では転記しない。
+Grok は各Scopeの `triggerWords` に、実際に必要な候補だけを選択する。
 
-```text
-models.json
-   |
-   +--> Base Model trainedWords
-   +--> Root LoRA trainedWords
-   +--> Branch LoRA trainedWords
-   |
-   v
-Batch Studio Prompt Compiler
+```json
+{
+  "triggerWordsMode": "selected",
+  "common": {
+    "triggerWords": [{ "modelRef": "lora.character", "words": ["character_trigger"] }],
+    "positive": {},
+    "negative": {}
+  }
+}
 ```
 
-注入 rule:
+- `triggerWords` は各 `StructuredPrompt`（Common / Branch / Leaf）で任意。省略・空配列は選択なしを意味する。
+- Base Model / Root LoRA の候補は Common / Branch / Leaf で選択できる。Branch LoRA は当該 Branch / Leaf のみ。
+- Common には全Leafで不変の候補だけを置く。Root LoRAでも変化する衣装・構図の候補は Branch / Leaf へ置く。
+- `words` は参照先 `models.json` の `trainedWords` の**原文と完全一致**する必要がある。通常Danbooru tag dialect検査を適用しない。
+- 一つも選ばなくても有効。未選択候補に対するCompilerの補完は禁止。
+- Compilerは選択結果をscope順に連結し、exact duplicateだけを取り除く。
+- Validationは存在しないmodelRef、適用scope外のLoRA、候補にないwordを拒否する。
 
-- Base Model trainedWords -> Common compiled positive。
-- Root LoRA trainedWords -> Common compiled positive。
-- Branch LoRA trainedWords -> 当該 Branch の各 Leaf compiled positive。
-- trainedWords は文字列を変更・翻訳・正規化しない。
-- exact duplicate は最終 merge 時に1回へまとめる。
+### 9.1 Existing Schema v2 compatibility
 
-この rule により Grok による trigger word の typo / dialect変換 / 重複転記を防ぐ。
+`triggerWordsMode` が無い旧Schema v2は、既存Projectの再Compile結果を変えないため旧来の自動注入方式を維持する。新しいGrok生成は必ず `selected` を返す。
+旧Planから選択方式への切り替えは、ユーザーがPrompt Plan UIで明示的に行う。選択方式では登録済み全候補を引き継がず、必要なwordを改めて選ぶ。
 
 ## 10. Model Family Prompt Policy
 
@@ -336,7 +340,7 @@ Current compile order:
 
 ```text
 quality preset
-base/root trainedWords
+selected common trigger words
 subject
 identity
 appearance
@@ -425,13 +429,13 @@ Schema v2 の最終文字列は Compiler が決定論的に生成する。
 ```text
 common structured prompt
  + quality policy
- + Base/Root trainedWords
+ + selected common trigger words
       ↓
 ScenePrompter common positive / negative
 
 branch structured prompt
  + leaf structured prompt
- + Branch trainedWords
+ + selected branch/leaf trigger words
       ↓
 SceneMatrix positive_base / negative_base
 ```
