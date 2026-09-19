@@ -87,6 +87,7 @@ import { CivitaiConfigStore } from './civitai-config.js';
 import { UiStateStore } from './ui-state.js';
 import { GrokChatStateStore } from './grok-chat-state.js';
 import { CodexChatStateStore } from './codex-chat-state.js';
+import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { R2ConfigStore } from './r2-config.js';
 import { R2Manager } from './r2-manager.js';
@@ -223,6 +224,7 @@ let lastFocusedProjectWindowId: number | null = null,
   uiState: UiStateStore | null = null,
   grokChatState: GrokChatStateStore | null = null,
   codexChatState: CodexChatStateStore | null = null,
+  assistantProviderState: AssistantProviderStore | null = null,
   codexAppServer: CodexAppServer | null = null,
   codexBusy = new Set<string>(),
   r2Manager: R2Manager | null = null,
@@ -2449,11 +2451,44 @@ function register() {
     if (typeof text !== 'string') throw new Error('Clipboard text must be string');
     clipboard.writeText(text);
   });
-  ipcMain.handle(IPC.CODEX_SET_PROVIDER, (event, provider: unknown) => {
+  ipcMain.handle(IPC.CODEX_GET_PROVIDER, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    if (event.sender.id !== state.localView.webContents.id)
+      throw new Error('Only the project window may select the assistant.');
+    if (!state.projectRoot || !assistantProviderState)
+      throw new Error('No active project.');
+    const root = state.projectRoot;
+    const defaultProvider = (await settingsStore().values()).assistantProvider;
+    const provider = await assistantProviderState.resolve(root, defaultProvider, async () => {
+      const stages: GrokContextStage[] = ['story', 'models', 'prompt-plan', 'caption'];
+      // Existing projects created before this preference was introduced may
+      // already have a history in one provider. Preserve that provider.
+      const grokHistory = grokChatState
+        ? (await Promise.all(stages.map((stage) => grokChatState!.get(root, stage))))
+            .some(Boolean)
+        : false;
+      const codexHistory = codexChatState
+        ? (await Promise.all(stages.map((stage) => codexChatState!.get(root, stage))))
+            .some((chats) => chats.threadIds.length > 0)
+        : false;
+      if (grokHistory && !codexHistory) return 'grok';
+      if (codexHistory && !grokHistory) return 'codex';
+      return null;
+    });
+    if (state.projectRoot !== root) throw new Error('Project changed during agent restore.');
+    state.paneProvider = provider;
+    layoutProjectWindow(state);
+    return provider;
+  });
+  ipcMain.handle(IPC.CODEX_SET_PROVIDER, async (event, provider: unknown) => {
     const state = projectWindowForSender(event.sender);
     if (event.sender.id !== state.localView.webContents.id)
       throw new Error('Codex pane cannot change its parent window.');
     if (provider !== 'grok' && provider !== 'codex') throw new Error('Invalid AI provider.');
+    if (!state.projectRoot || !assistantProviderState) throw new Error('No active project.');
+    const root = state.projectRoot;
+    await assistantProviderState.remember(root, provider);
+    if (state.projectRoot !== root) throw new Error('Project changed during agent switch.');
     state.paneProvider = provider;
     layoutProjectWindow(state);
     return paneState(state);
@@ -2658,6 +2693,7 @@ async function initializeApplication() {
   ensureCatalogRuntimePath();
   grokChatState = new GrokChatStateStore(userData);
   codexChatState = new CodexChatStateStore(userData);
+  assistantProviderState = new AssistantProviderStore(userData);
   codexAppServer = new CodexAppServer();
   codexAppServer.on('notification', forwardCodexNotification);
   codexAppServer.on('disconnected', (message: string) => {
