@@ -8,7 +8,10 @@ import type {
 } from '../shared/types';
 import './codex-pane.css';
 
-const stageTasks: Record<CodexContext['stage'], Array<{ value: GrokTask['stage']; label: string }>> = {
+const stageTasks: Record<
+  CodexContext['stage'],
+  Array<{ value: GrokTask['stage']; label: string }>
+> = {
   story: [
     { value: 'story-initial', label: 'ストーリーを検討' },
     { value: 'story-finalize', label: 'story.mdを作成' },
@@ -112,7 +115,8 @@ export function CodexPane() {
           });
       }
     });
-    void window.batchStudio.codex.context()
+    void window.batchStudio.codex
+      .context()
       .then((next) => switchContext(next))
       .catch((err) => setError(errorText(err)));
     return () => {
@@ -130,10 +134,7 @@ export function CodexPane() {
     setError('');
     setBusy(true);
     setStream('');
-    setMessages((before) => [
-      ...before,
-      { id: 'pending-' + Date.now(), role: 'user', text },
-    ]);
+    setMessages((before) => [...before, { id: 'pending-' + Date.now(), role: 'user', text }]);
     try {
       await request();
       if (key === currentContext.current) {
@@ -190,8 +191,11 @@ export function CodexPane() {
                 : '未ログイン'}
           </small>
           {!account?.authenticated && (
-            <button onClick={() => void window.batchStudio.codex.signIn()
-              .catch((err) => setError(errorText(err)))}>
+            <button
+              onClick={() =>
+                void window.batchStudio.codex.signIn().catch((err) => setError(errorText(err)))
+              }
+            >
               ChatGPTでログイン
             </button>
           )}
@@ -218,7 +222,11 @@ export function CodexPane() {
           </button>
         </section>
       )}
-      {error && <div className="codex-error" role="alert">{error}</div>}
+      {error && (
+        <div className="codex-error" role="alert">
+          {error}
+        </div>
+      )}
       <div className="codex-messages" ref={scrollRef} role="log" aria-live="polite">
         {loading && <p>会話履歴を復元しています…</p>}
         {!context && <p>企画工程を開くと、対応するチャットを表示します。</p>}
@@ -242,19 +250,27 @@ export function CodexPane() {
       {context && (
         <section className="codex-compose">
           <div className="codex-task">
-            <select value={task} onChange={(event) =>
-              setTask(event.target.value as GrokTask['stage'])} disabled={loading || busy}>
+            <select
+              value={task}
+              onChange={(event) => setTask(event.target.value as GrokTask['stage'])}
+              disabled={loading || busy}
+            >
               {stageTasks[context.stage].map((choice) => (
-                <option key={choice.value} value={choice.value}>{choice.label}</option>
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
               ))}
             </select>
             <button
               disabled={loading || busy || !account?.authenticated}
-              onClick={() => void send(
-                () => window.batchStudio.codex.sendTask(task, extra),
-                '工程の依頼: ' + stageTasks[context.stage].find((value) => value.value === task)?.label +
-                  (extra ? '\n' + extra : ''),
-              )}
+              onClick={() =>
+                void send(
+                  () => window.batchStudio.codex.sendTask(task, extra),
+                  '工程の依頼: ' +
+                    stageTasks[context.stage].find((value) => value.value === task)?.label +
+                    (extra ? '\n' + extra : ''),
+                )
+              }
             >
               工程用の依頼を送信
             </button>
@@ -283,13 +299,18 @@ export function CodexPane() {
             </button>
             <button
               disabled={!output || busy}
-              onClick={() => void window.batchStudio.codex.saveResponse(output)
-                .catch((err) => setError(errorText(err)))}
+              onClick={() =>
+                void window.batchStudio.codex
+                  .saveResponse(output)
+                  .catch((err) => setError(errorText(err)))
+              }
             >
               回答をファイル保存して取り込む
             </button>
           </div>
-          <small>保存したファイルは左側の工程画面で検証し、下書きへ取り込んでください。確定済みファイルはCodexから変更できません。</small>
+          <small>
+            保存したファイルは左側の工程画面で検証し、下書きへ取り込んでください。確定済みファイルはCodexから変更できません。
+          </small>
         </section>
       )}
     </main>
