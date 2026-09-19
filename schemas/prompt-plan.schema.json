@@ -267,6 +267,12 @@
         },
         "negative": {
           "$ref": "#/$defs/negativeGroups"
+        },
+        "triggerWords": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/triggerWordSelection"
+          }
         }
       }
     },
@@ -354,6 +360,26 @@
           "items": {
             "$ref": "#/$defs/branchV2"
           }
+        },
+        "triggerWordsMode": {
+          "const": "selected"
+        }
+      }
+    },
+    "triggerWordSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modelRef",
+        "words"
+      ],
+      "properties": {
+        "modelRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "words": {
+          "$ref": "#/$defs/tagArray"
         }
       }
     }
