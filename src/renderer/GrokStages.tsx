@@ -410,6 +410,17 @@ function baseModelView(
             {value.versionName} · {value.fileName}
           </small>
           <small>Base Model: {baseModel ?? '—'}</small>
+          <button
+            className="model-civitai-link"
+            aria-label={`${value.modelName} のCivitaiページを開く`}
+            onClick={() =>
+              void window.batchStudio.catalog.openModel(
+                `https://civitai.com/models/${value.modelId}?modelVersionId=${value.versionId}`,
+              )
+            }
+          >
+            Civitai ↗
+          </button>
         </div>
       ) : (
         <div className="base-model-empty">未選択</div>
