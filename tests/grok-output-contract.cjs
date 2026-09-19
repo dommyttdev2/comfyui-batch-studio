@@ -123,13 +123,18 @@ matchCode(
 );
 matchCode(
   src,
-  /trainedWords を prompt_plan.json へ転記してはいけません/,
-  'Prompt Plan must not copy trainedWords into semantic prompt data',
+  /triggerWordsMode は必ず "selected"/,
+  'New Prompt Plans must opt into explicit trigger selection',
 );
 matchCode(
   src,
-  /Batch Studio Compiler[\s\S]*自動注入/,
-  'Batch Studio must own trainedWords injection',
+  /候補を全件選択したり、最低1語選択したりする義務はありません/,
+  'Grok may choose no trigger words',
+);
+matchCode(
+  src,
+  /どのscopeでも選択しなかった候補は最終Promptに加えません/,
+  'Unselected trigger candidates must never be injected',
 );
 matchCode(
   src,

@@ -137,6 +137,10 @@ function baseModelTriggers(models: ModelsArtifact) {
   );
 }
 
+function selectedTriggers(prompt?: StructuredPrompt) {
+  return prompt?.triggerWords?.flatMap((selection) => selection.words) ?? [];
+}
+
 function without(tags: string[], inherited: Set<string>) {
   return tags.filter((tag) => !inherited.has(tag));
 }
@@ -193,8 +197,9 @@ export function compilePromptPlanPrompts(
   const common = flattenPrompt(v2.common);
   const commonPositiveTags = uniqueTags([
     ...policy.positivePrefix,
-    ...baseModelTriggers(models),
-    ...loraTriggers(v2.rootLoras, models),
+    ...(v2.triggerWordsMode === 'selected'
+      ? selectedTriggers(v2.common)
+      : [...baseModelTriggers(models), ...loraTriggers(v2.rootLoras, models)]),
     ...common.positive,
   ]);
   const commonNegativeTags = uniqueTags([...policy.negativePrefix, ...common.negative]);
@@ -210,13 +215,21 @@ export function compilePromptPlanPrompts(
     },
     branches: v2.branches.map((branch) => {
       const branchPrompt = flattenPrompt(branch.prompt);
-      const branchTriggers = loraTriggers(branch.loras, models);
+      const branchTriggers =
+        v2.triggerWordsMode === 'selected'
+          ? selectedTriggers(branch.prompt)
+          : loraTriggers(branch.loras, models);
       return {
         id: branch.id,
         leaves: branch.leaves.map((leaf) => {
           const leafPrompt = flattenPrompt(leaf.prompt);
           const positiveTags = without(
-            uniqueTags([...branchTriggers, ...branchPrompt.positive, ...leafPrompt.positive]),
+            uniqueTags([
+              ...branchTriggers,
+              ...(v2.triggerWordsMode === 'selected' ? selectedTriggers(leaf.prompt) : []),
+              ...branchPrompt.positive,
+              ...leafPrompt.positive,
+            ]),
             inheritedPositive,
           );
           const negativeTags = without(

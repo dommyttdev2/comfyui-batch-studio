@@ -281,9 +281,15 @@ export interface NegativePromptGroups {
   artifacts?: string[];
   content?: string[];
 }
+export interface TriggerWordSelection {
+  modelRef: string;
+  words: string[];
+}
 export interface StructuredPrompt {
   positive: PositivePromptGroups;
   negative: NegativePromptGroups;
+  /** Explicit trigger selections for this prompt scope; no implicit injection in selected mode. */
+  triggerWords?: TriggerWordSelection[];
 }
 export interface PromptLeafV2 {
   id: string;
@@ -299,6 +305,8 @@ export interface PromptBranchV2 {
 }
 export interface PromptPlanArtifactV2 {
   schemaVersion: 2;
+  /** Missing on legacy v2 plans, which retain their original automatic-trigger behavior. */
+  triggerWordsMode?: 'selected';
   common: StructuredPrompt;
   rootLoras: LoraUsage[];
   branches: PromptBranchV2[];

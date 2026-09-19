@@ -317,11 +317,27 @@ function StructuredPromptEditor({
   value,
   editable,
   onChange,
+  triggerCandidates,
 }: {
   value: StructuredPrompt;
   editable: boolean;
   onChange: (value: StructuredPrompt) => void;
+  triggerCandidates?: Array<{ ref: string; label: string; words: string[] }>;
 }) {
+  const toggleTrigger = (modelRef: string, word: string, checked: boolean) => {
+    const next = structuredClone(value);
+    const selections = next.triggerWords ?? [];
+    const existing = selections.find((selection) => selection.modelRef === modelRef);
+    const words = existing?.words ?? [];
+    const updated = checked
+      ? [...new Set([...words, word])]
+      : words.filter((item) => item !== word);
+    next.triggerWords = [
+      ...selections.filter((selection) => selection.modelRef !== modelRef),
+      ...(updated.length ? [{ modelRef, words: updated }] : []),
+    ];
+    onChange(next);
+  };
   const updatePositive = (key: Exclude<keyof PositivePromptGroups, 'camera'>, tags: string[]) => {
     const next = structuredClone(value);
     if (tags.length) next.positive[key] = tags;
@@ -345,6 +361,38 @@ function StructuredPromptEditor({
   };
   return (
     <div className="structured-prompt-editor">
+      {triggerCandidates && (
+        <>
+          <h4>トリガーワード（このscopeでのみ選択）</h4>
+          {triggerCandidates.map((candidate) => (
+            <fieldset key={candidate.ref} className="lora-detail-card">
+              <legend>
+                {candidate.label} — {candidate.ref}
+              </legend>
+              {candidate.words.length ? (
+                candidate.words.map((word) => (
+                  <label key={word} style={{ display: 'block' }}>
+                    <input
+                      type="checkbox"
+                      disabled={!editable}
+                      checked={Boolean(
+                        value.triggerWords
+                          ?.find((selection) => selection.modelRef === candidate.ref)
+                          ?.words.includes(word),
+                      )}
+                      onChange={(event) => toggleTrigger(candidate.ref, word, event.target.checked)}
+                    />{' '}
+                    {word}
+                  </label>
+                ))
+              ) : (
+                <small>登録済みトリガーワードなし</small>
+              )}
+            </fieldset>
+          ))}
+          {!triggerCandidates.length && <p>適用可能なトリガーワード候補はありません。</p>}
+        </>
+      )}
       <h4>Positive</h4>
       <div className="prompt-group-grid">
         {positiveGroupKeys.map((key) => (
@@ -421,6 +469,25 @@ function PlanInspector({
     () => (models ? compilePromptPlanPrompts(plan, models) : null),
     [models, plan],
   );
+  const triggerCandidates = (branchIndex?: number) => {
+    if (!models || plan.schemaVersion !== 2 || plan.triggerWordsMode !== 'selected')
+      return undefined;
+    const base = models.modelFamily === 'anima' ? models.diffusionModel : models.checkpoint;
+    const refs = new Set([
+      ...(base?.ref ? [base.ref] : []),
+      ...plan.rootLoras.map((usage) => usage.modelRef),
+      ...(branchIndex === undefined
+        ? []
+        : plan.branches[branchIndex].loras.map((usage) => usage.modelRef)),
+    ]);
+    return [...(base ? [base] : []), ...models.loras.filter((model) => refs.has(model.ref))]
+      .filter((model) => refs.has(model.ref))
+      .map((model) => ({
+        ref: model.ref,
+        label: model.modelName,
+        words: [...new Set(model.trainedWords ?? [])],
+      }));
+  };
   function mutate(fn: (p: any) => void) {
     if (!editable) return;
     const n = structuredClone(plan);
@@ -575,8 +642,26 @@ function PlanInspector({
             <h3>共通プロンプト</h3>
           </div>
         </div>
+        {plan.triggerWordsMode !== 'selected' && (
+          <div className="issue warning">
+            この旧Prompt
+            Planでは登録済みトリガーワードを自動付与します。選択方式へ切り替えると自動付与を停止します。
+            {editable && (
+              <button
+                onClick={() =>
+                  mutate((p) => {
+                    if (p.schemaVersion === 2) p.triggerWordsMode = 'selected';
+                  })
+                }
+              >
+                トリガーワードを個別選択する
+              </button>
+            )}
+          </div>
+        )}
         <StructuredPromptEditor
           value={plan.common}
+          triggerCandidates={triggerCandidates()}
           editable={editable}
           onChange={(value) =>
             mutate((p) => {
@@ -656,6 +741,7 @@ function PlanInspector({
           <>
             <h3>Branch共通Prompt</h3>
             <StructuredPromptEditor
+              triggerCandidates={triggerCandidates(selected.branch)}
               value={
                 branch.prompt ?? {
                   positive: {},
@@ -778,6 +864,7 @@ function PlanInspector({
         ) : (
           <>
             <StructuredPromptEditor
+              triggerCandidates={triggerCandidates(selected.branch)}
               value={leaf.prompt}
               editable={editable}
               onChange={(value) =>

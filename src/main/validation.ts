@@ -811,7 +811,7 @@ function validateStructuredPrompt(
     });
     return;
   }
-  extraKeys(value, ['positive', 'negative'], path, issues);
+  extraKeys(value, ['positive', 'negative', 'triggerWords'], path, issues);
   required(value, ['positive', 'negative'], path, issues);
   if (object(value.positive)) {
     extraKeys(value.positive, [...positivePromptKeys], `${path}.positive`, issues);
@@ -874,6 +874,9 @@ function flattenPositive(value: any) {
       for (const cameraKey of cameraPromptKeys) result.push(...values(camera[cameraKey]));
     } else result.push(...values(value.positive[key]));
   }
+  if (Array.isArray(value?.triggerWords))
+    for (const selection of value.triggerWords)
+      if (object(selection)) result.push(...values(selection.words));
   return result;
 }
 
@@ -987,13 +990,117 @@ function annotatePromptPlanLeafLocations(issues: ValidationIssue[], branches: un
   }
 }
 
+function validateSelectedTriggers(
+  prompt: any,
+  path: string,
+  availableRefs: Set<string>,
+  models: ModelsArtifact | null,
+  issues: ValidationIssue[],
+) {
+  if (!object(prompt) || !('triggerWords' in prompt)) return;
+  const selections = prompt.triggerWords;
+  if (!Array.isArray(selections)) {
+    issues.push({
+      severity: 'error',
+      code: 'TRIGGER_SELECTIONS',
+      message: 'triggerWordsは配列が必要です。',
+      path: `${path}.triggerWords`,
+    });
+    return;
+  }
+  const candidates = new Map<string, string[]>();
+  if (models) {
+    const base = models.modelFamily === 'anima' ? models.diffusionModel : models.checkpoint;
+    if (base) candidates.set(base.ref, base.trainedWords ?? []);
+    for (const lora of models.loras) candidates.set(lora.ref, lora.trainedWords ?? []);
+  }
+  const seenRefs = new Set<string>();
+  selections.forEach((selection: unknown, index: number) => {
+    const at = `${path}.triggerWords.${index}`;
+    if (!object(selection)) {
+      issues.push({
+        severity: 'error',
+        code: 'TRIGGER_SELECTION',
+        message: '各triggerWords要素はobjectが必要です。',
+        path: at,
+      });
+      return;
+    }
+    extraKeys(selection, ['modelRef', 'words'], at, issues);
+    required(selection, ['modelRef', 'words'], at, issues);
+    const ref = selection.modelRef;
+    if (typeof ref !== 'string' || !ref.trim() || (models && !availableRefs.has(ref)))
+      issues.push({
+        severity: 'error',
+        code: 'TRIGGER_MODEL_REF',
+        message: `このscopeでは使用できないmodelRefです: ${String(ref ?? '')}`,
+        path: `${at}.modelRef`,
+      });
+    if (typeof ref === 'string' && seenRefs.has(ref))
+      issues.push({
+        severity: 'error',
+        code: 'TRIGGER_DUPLICATE_MODEL',
+        message: `同じmodelRefの選択が重複しています: ${ref}`,
+        path: at,
+      });
+    if (typeof ref === 'string') seenRefs.add(ref);
+    if (!Array.isArray(selection.words)) {
+      issues.push({
+        severity: 'error',
+        code: 'TRIGGER_WORDS',
+        message: 'wordsは文字列配列が必要です。',
+        path: `${at}.words`,
+      });
+      return;
+    }
+    const seenWords = new Set<string>();
+    selection.words.forEach((word: unknown, wordIndex: number) => {
+      const wp = `${at}.words.${wordIndex}`;
+      if (typeof word !== 'string' || !word || word !== word.trim() || /[\r\n]/.test(word))
+        issues.push({
+          severity: 'error',
+          code: 'TRIGGER_WORD_FORMAT',
+          message: 'トリガーワードは前後空白・改行のない非空文字列が必要です。',
+          path: wp,
+        });
+      if (typeof word === 'string' && seenWords.has(word))
+        issues.push({
+          severity: 'error',
+          code: 'TRIGGER_WORD_DUPLICATE',
+          message: `同じトリガーワードが重複しています: ${word}`,
+          path: wp,
+        });
+      if (typeof word === 'string') seenWords.add(word);
+      if (
+        models &&
+        typeof ref === 'string' &&
+        typeof word === 'string' &&
+        !(candidates.get(ref) ?? []).includes(word)
+      )
+        issues.push({
+          severity: 'error',
+          code: 'TRIGGER_WORD_UNKNOWN',
+          message: `models.jsonのtrainedWordsに存在しない候補です: ${word}`,
+          path: wp,
+        });
+    });
+  });
+}
+
 function validatePromptPlanV2(
   p: PromptPlanArtifact,
   models: ModelsArtifact | null,
 ): ValidationResult {
   const i: ValidationIssue[] = [];
   const plan = p as any;
-  extraKeys(plan, ['schemaVersion', 'common', 'rootLoras', 'branches'], '', i);
+  extraKeys(plan, ['schemaVersion', 'triggerWordsMode', 'common', 'rootLoras', 'branches'], '', i);
+  if ('triggerWordsMode' in plan && plan.triggerWordsMode !== 'selected')
+    i.push({
+      severity: 'error',
+      code: 'TRIGGER_MODE',
+      message: 'triggerWordsModeはselectedのみ指定できます。',
+      path: 'triggerWordsMode',
+    });
   required(plan, ['schemaVersion', 'common', 'rootLoras', 'branches'], '', i);
   const family = models?.modelFamily;
   validateStructuredPrompt(plan.common, 'common', family, i);
@@ -1014,6 +1121,23 @@ function validatePromptPlanV2(
   const modelRefs = new Set<string>(models ? models.loras.map((x) => x.ref) : []);
   const rootLoras = Array.isArray(plan.rootLoras) ? plan.rootLoras : [];
   const branches = Array.isArray(plan.branches) ? plan.branches : [];
+  const base = models?.modelFamily === 'anima' ? models.diffusionModel : models?.checkpoint;
+  const rootRefs = new Set<string>([
+    ...(base?.ref ? [base.ref] : []),
+    ...rootLoras.filter(object).map((u: any) => String(u.modelRef ?? '')),
+  ]);
+  const checkTriggers = (prompt: any, at: string, allowed: Set<string>) => {
+    if (plan.triggerWordsMode === 'selected')
+      validateSelectedTriggers(prompt, at, allowed, models, i);
+    else if (object(prompt) && 'triggerWords' in prompt)
+      i.push({
+        severity: 'error',
+        code: 'TRIGGER_MODE_REQUIRED',
+        message: 'triggerWordsを指定する場合はrootにtriggerWordsMode: selectedが必要です。',
+        path: `${at}.triggerWords`,
+      });
+  };
+  checkTriggers(plan.common, 'common', rootRefs);
   rootLoras.forEach((u: unknown, n: number) =>
     validateUsage(u, `rootLoras.${n}`, modelRefs, models, i),
   );
@@ -1053,8 +1177,16 @@ function validatePromptPlanV2(
       b.loras.forEach((u: unknown, n: number) =>
         validateUsage(u, `${bp}.loras.${n}`, modelRefs, models, i),
       );
-    if ('prompt' in b && b.prompt != null)
+    const allowedRefs = new Set<string>([
+      ...rootRefs,
+      ...(Array.isArray(b.loras)
+        ? b.loras.filter(object).map((u: any) => String(u.modelRef ?? ''))
+        : []),
+    ]);
+    if ('prompt' in b && b.prompt != null) {
       validateStructuredPrompt(b.prompt, `${bp}.prompt`, family, i);
+      checkTriggers(b.prompt, `${bp}.prompt`, allowedRefs);
+    }
     const leaves = Array.isArray(b.leaves) ? b.leaves : [];
     if (!leaves.length)
       i.push({
@@ -1087,6 +1219,7 @@ function validatePromptPlanV2(
           path: `${lp}.name`,
         });
       validateStructuredPrompt(l.prompt, `${lp}.prompt`, family, i);
+      checkTriggers(l.prompt, `${lp}.prompt`, allowedRefs);
       validateEffectivePrompt(plan.common, b.prompt, l.prompt, lp, i);
     }
   }

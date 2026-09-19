@@ -141,7 +141,9 @@ const planShape = `${artifactFileOutputRules('prompt_plan.json')}
 prompt_plan.json は Schema v2 の構造化Promptとして出力してください。
 {
   "schemaVersion": 2,
+  "triggerWordsMode": "selected",
   "common": {
+    "triggerWords": [],
     "positive": {
       "subject": [],
       "identity": [],
@@ -161,6 +163,7 @@ prompt_plan.json は Schema v2 の構造化Promptとして出力してくださ�
         { "modelRef": "lora.xxx", "strengthModel": 0.0, "strengthClip": 0.0 }
       ],
       "prompt": {
+        "triggerWords": [],
         "positive": {
           "outfit": [],
           "environment": []
@@ -172,6 +175,7 @@ prompt_plan.json は Schema v2 の構造化Promptとして出力してくださ�
           "id": "s1-01-c1",
           "name": "S1-01_C1_example",
           "prompt": {
+            "triggerWords": [],
             "positive": {
               "expression": ["smile"],
               "pose": ["standing"],
@@ -222,10 +226,16 @@ anatomy, identity, appearance, subject, outfit, action, camera, environment, art
 - 通常タグはDanbooru canonical tagを使用してください。
 - Illustriousではunderscore形式、Animaではspace形式を使用します。
 
-## trainedWords
-- models.json の checkpoint / diffusion model / LoRA trainedWords を prompt_plan.json へ転記してはいけません。
-- trainedWordsはBatch Studio Compilerがmodels.jsonから直接読み、Base Model / Root LoRA / Branch LoRAの適用scopeへ自動注入します。
-- trainedWordsを通常Danbooruタグへ変換、翻訳、正規化しません。
+## トリガーワード選定
+- triggerWordsMode は必ず "selected" にしてください。これによりCompilerは models.json の trainedWords を自動注入しません。
+- models.json の checkpoint / diffusion model / LoRA trainedWords は利用可能な候補です。全件転記せず、Storyと各シーンの衣装・ポーズ・構図・キャラクター同一性に必要なワードだけを選んでください。
+- common / branch.prompt / leaf.prompt の triggerWords は {"modelRef":"models.json内のref","words":["そのモデルのtrainedWordsから選んだ原文"]} の配列です。modelRef ごとにまとめ、使わない場合は空配列またはfield省略とします。
+- commonで選ぶのは全画像に本当に必要なワードだけです。root LoRAのワードであっても、特定シーンだけに必要な場合はbranch.promptかleaf.promptで選んでください。
+- commonでは基盤モデルおよびrootLoras、branch.promptとleaf.promptでは基盤モデル・rootLoras・当該branch.lorasからのみ選択できます。
+- LoRAを使用してもワードが不要ならwordsを空にするか、選択自体を省略してください。候補を全件選択したり、最低1語選択したりする義務はありません。
+- どのscopeでも選択しなかった候補は最終Promptに加えません。Compilerによる補完もありません。
+- 選択する語はmodels.jsonのtrainedWordsと完全一致させ、変換・翻訳・正規化しません。通常Danbooruタグのカテゴリへ混入させず、triggerWordsに分離してください。
+- ある語が親scopeで既に選択されているなら子scopeでは重複選択しません。
 
 ## LoRA
 - modelRef は models.json に存在する LoRA ref だけを使ってください。
@@ -242,7 +252,7 @@ anatomy, identity, appearance, subject, outfit, action, camera, environment, art
 - Branch / Leaf id は ^[a-z][a-z0-9._-]{0,63}$ に従い、各々project全体で一意にしてください。
 - 配列順が生成順です。order field は追加しません。
 - 1 Leaf = 1 image です。目標画像枚数に近づくようLeaf数を設計してください。ただし意味上必要なら目標と完全一致しなくても構いません。
-- common / rootLoras / branches / branch.prompt / leaves / leaf.prompt の意味情報だけを出力し、Workflow内部fieldや未知fieldを追加しません。
+- common / rootLoras / branches / branch.prompt / leaves / leaf.prompt と triggerWordsMode / triggerWords の意味情報だけを出力し、Workflow内部fieldや未知fieldを追加しません。
 - JSONとしてparse可能な厳密な構文にしてください。コメント、末尾カンマ、擬似値は出力しません。`;
 const captionShape = `${artifactFileOutputRules('caption_content.json')}
 caption_content.json は次の形だけにしてください。
@@ -365,7 +375,7 @@ export async function buildGrokTask(
   return {
     stage,
     title: stage === 'prompt-plan' ? 'プロンプト設計' : 'プロンプト設計修正',
-    prompt: `${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan Schema v2 を作成してください。最終Prompt文字列を直接作らず、common / branch / leaf のscopeと意味categoryへDanbooruタグを構造化してください。models.json の trainedWords はPrompt Planへ転記せず、Batch Studio Compilerが自動注入します。${Number.isInteger(target) ? `\n計画上の目標画像枚数は ${target} 枚です。` : ''}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${planShape}${extra ? `\n\n修正条件:\n${extra}` : ''}`,
+    prompt: `${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan Schema v2 を作成してください。最終Prompt文字列を直接作らず、common / branch / leaf のscopeと意味categoryへDanbooruタグを構造化してください。models.json の trainedWords からシーンごとに必要な候補だけを triggerWords に選択してください。Compilerによるトリガーワードの自動注入は行いません。${Number.isInteger(target) ? `\n計画上の目標画像枚数は ${target} 枚です。` : ''}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${planShape}${extra ? `\n\n修正条件:\n${extra}` : ''}`,
     attachments: [
       await attachment('project_brief.json', brief, '画像枚数などの計画条件'),
       await attachment('story.md', story, '確定ストーリー'),
