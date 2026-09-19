@@ -7,10 +7,17 @@ const { execFileSync } = require('node:child_process');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-chat-state-'));
-execFileSync(process.execPath, [
-  path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc'),
-  '-p', path.join(repo, 'tsconfig.electron.json'), '--outDir', runtime,
-], { cwd: repo, stdio: 'inherit' });
+execFileSync(
+  process.execPath,
+  [
+    path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc'),
+    '-p',
+    path.join(repo, 'tsconfig.electron.json'),
+    '--outDir',
+    runtime,
+  ],
+  { cwd: repo, stdio: 'inherit' },
+);
 
 (async () => {
   const { CodexChatStateStore } = await import(
