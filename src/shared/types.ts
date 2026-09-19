@@ -1300,6 +1300,7 @@ export interface BatchStudioApi {
     metrics: () => Promise<R2Metrics>;
   };
   codex: {
+    getProvider: () => Promise<AssistantPaneProvider>;
     setProvider: (provider: AssistantPaneProvider) => Promise<GrokPaneState>;
     setContext: (root: string, stage: GrokContextStage) => Promise<void>;
     context: () => Promise<CodexContext | null>;
