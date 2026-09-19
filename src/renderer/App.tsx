@@ -186,7 +186,8 @@ function App() {
     const root = project?.rootPath ?? null;
     setPaneProviderRoot(null);
     if (root) {
-      void window.batchStudio.codex.getProvider()
+      void window.batchStudio.codex
+        .getProvider()
         .then((provider) => {
           if (cancelled) return;
           setPaneProvider(provider);
@@ -282,9 +283,7 @@ function App() {
               aria-label="AIアシスタント"
               value={paneProvider}
               disabled={paneProviderRoot !== project.rootPath || switchingProvider}
-              onChange={(event) =>
-                void changeProvider(event.target.value as AssistantPaneProvider)
-              }
+              onChange={(event) => void changeProvider(event.target.value as AssistantPaneProvider)}
             >
               <option value="grok">Grok</option>
               <option value="codex">Codex</option>
