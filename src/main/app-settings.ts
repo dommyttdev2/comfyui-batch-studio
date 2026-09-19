@@ -440,10 +440,11 @@ export class AppSettingsStore {
       normalizeRootDirectory('Project root', input?.projectRoot),
       normalizeRootDirectory('成果物配置 root', input?.artifactRoot),
     ]);
-    if (input?.assistantProvider !== 'grok' && input?.assistantProvider !== 'codex')
+    const assistantProvider = input?.assistantProvider ?? (await this.read()).assistantProvider;
+    if (assistantProvider !== 'grok' && assistantProvider !== 'codex')
       throw new Error('使用するチャットエージェントはGrokまたはCodexを選択してください。');
     const value: NormalizedAppSettings = {
-      assistantProvider: input.assistantProvider,
+      assistantProvider,
       comfyUiInstallPath,
       remoteComfyUiInstallPath: normalizeRemoteComfyUiDirectory(input?.remoteComfyUiInstallPath),
       comfyUiApiEndpoint: endpoint(input?.comfyUiApiEndpoint),
