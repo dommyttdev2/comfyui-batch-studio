@@ -2455,8 +2455,7 @@ function register() {
     const state = projectWindowForSender(event.sender);
     if (event.sender.id !== state.localView.webContents.id)
       throw new Error('Only the project window may select the assistant.');
-    if (!state.projectRoot || !assistantProviderState)
-      throw new Error('No active project.');
+    if (!state.projectRoot || !assistantProviderState) throw new Error('No active project.');
     const root = state.projectRoot;
     const defaultProvider = (await settingsStore().values()).assistantProvider;
     const provider = await assistantProviderState.resolve(root, defaultProvider, async () => {
@@ -2464,12 +2463,12 @@ function register() {
       // Existing projects created before this preference was introduced may
       // already have a history in one provider. Preserve that provider.
       const grokHistory = grokChatState
-        ? (await Promise.all(stages.map((stage) => grokChatState!.get(root, stage))))
-            .some(Boolean)
+        ? (await Promise.all(stages.map((stage) => grokChatState!.get(root, stage)))).some(Boolean)
         : false;
       const codexHistory = codexChatState
-        ? (await Promise.all(stages.map((stage) => codexChatState!.get(root, stage))))
-            .some((chats) => chats.threadIds.length > 0)
+        ? (await Promise.all(stages.map((stage) => codexChatState!.get(root, stage)))).some(
+            (chats) => chats.threadIds.length > 0,
+          )
         : false;
       if (grokHistory && !codexHistory) return 'grok';
       if (codexHistory && !grokHistory) return 'codex';
