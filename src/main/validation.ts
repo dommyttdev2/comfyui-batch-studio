@@ -1031,8 +1031,8 @@ function validateSelectedTriggers(
     const seenWords = new Set<string>();
     selection.words.forEach((word: unknown, wordIndex: number) => {
       const wp = `${at}.words.${wordIndex}`;
-      if (typeof word !== 'string' || !word || word !== word.trim() || /[,\r\n]/.test(word))
-        issues.push({ severity: 'error', code: 'TRIGGER_WORD_FORMAT', message: 'トリガーワードは前後空白・カンマ・改行のない非空文字列が必要です。', path: wp });
+      if (typeof word !== 'string' || !word || word !== word.trim() || /[\r\n]/.test(word))
+        issues.push({ severity: 'error', code: 'TRIGGER_WORD_FORMAT', message: 'トリガーワードは前後空白・改行のない非空文字列が必要です。', path: wp });
       if (typeof word === 'string' && seenWords.has(word))
         issues.push({ severity: 'error', code: 'TRIGGER_WORD_DUPLICATE', message: `同じトリガーワードが重複しています: ${word}`, path: wp });
       if (typeof word === 'string') seenWords.add(word);
