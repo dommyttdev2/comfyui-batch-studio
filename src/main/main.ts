@@ -158,7 +158,11 @@ body{display:grid;place-items:center}
 </body>
 </html>`;
 type StandaloneWindowTool = 'r2' | 'civit' | 'vastai';
-type RendererWindowTool = StandaloneWindowTool | 'thumbnail-picker' | 'marketplace-picker' | 'codex-pane';
+type RendererWindowTool =
+  | StandaloneWindowTool
+  | 'thumbnail-picker'
+  | 'marketplace-picker'
+  | 'codex-pane';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
   window: BaseWindow;
@@ -1163,7 +1167,11 @@ function codexService() {
 }
 function codexContextFor(state: ProjectWindowState): CodexContext {
   const context = state.codexContext;
-  if (!context || !state.projectRoot || projectRootKey(context.root) !== projectRootKey(state.projectRoot))
+  if (
+    !context ||
+    !state.projectRoot ||
+    projectRootKey(context.root) !== projectRootKey(state.projectRoot)
+  )
     throw new Error('Codexを利用するプロジェクトと工程を選択してください。');
   return context;
 }
@@ -1187,9 +1195,11 @@ function messageText(item: Record<string, unknown>): string {
   if (typeof item.text === 'string') return item.text;
   if (!Array.isArray(item.content)) return '';
   return item.content
-    .filter((content): content is { text: string } =>
-      typeof content === 'object' && content !== null &&
-      typeof (content as { text?: unknown }).text === 'string',
+    .filter(
+      (content): content is { text: string } =>
+        typeof content === 'object' &&
+        content !== null &&
+        typeof (content as { text?: unknown }).text === 'string',
     )
     .map((content) => content.text)
     .join('\n');
@@ -1204,11 +1214,14 @@ function codexMessages(result: unknown): CodexMessage[] {
     for (const item of items) {
       if (!item || typeof item !== 'object') continue;
       const record = item as Record<string, unknown>;
-      const role = record.type === 'userMessage' ? 'user' :
-        record.type === 'agentMessage' ? 'assistant' : null;
+      const role =
+        record.type === 'userMessage'
+          ? 'user'
+          : record.type === 'agentMessage'
+            ? 'assistant'
+            : null;
       const text = messageText(record);
-      if (role && text)
-        messages.push({ id: String(record.id ?? messages.length), role, text });
+      if (role && text) messages.push({ id: String(record.id ?? messages.length), role, text });
     }
   }
   return messages;
@@ -1221,11 +1234,14 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
   let messages: CodexMessage[] = [];
   if (saved.activeThreadId) {
     await server.request('thread/resume', {
-      threadId: saved.activeThreadId, cwd: context.root,
-      sandbox: 'read-only', approvalPolicy: 'never',
+      threadId: saved.activeThreadId,
+      cwd: context.root,
+      sandbox: 'read-only',
+      approvalPolicy: 'never',
     });
     const read = await server.request<unknown>('thread/read', {
-      threadId: saved.activeThreadId, includeTurns: true,
+      threadId: saved.activeThreadId,
+      includeTurns: true,
     });
     messages = codexMessages(read);
   }
@@ -1248,20 +1264,28 @@ async function codexSend(state: ProjectWindowState, message: string): Promise<vo
   if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
   const account = await codexAccount();
   if (!account.authenticated)
-    throw new Error('ChatGPTアカウントでCodexにサインインしてください。APIキー認証では送信しません。');
+    throw new Error(
+      'ChatGPTアカウントでCodexにサインインしてください。APIキー認証では送信しません。',
+    );
   const { server, store } = codexService();
   const saved = await store.get(context.root, context.stage);
   let threadId = saved.activeThreadId;
   if (!threadId) {
     const started = await server.request<{ thread: { id: string } }>('thread/start', {
-      cwd: context.root, approvalPolicy: 'never', sandbox: 'read-only',
-      serviceName: 'comfyui_batch_studio', ephemeral: false,
+      cwd: context.root,
+      approvalPolicy: 'never',
+      sandbox: 'read-only',
+      serviceName: 'comfyui_batch_studio',
+      ephemeral: false,
     });
     threadId = started.thread.id;
     await store.remember(context.root, context.stage, threadId);
   } else {
     await server.request('thread/resume', {
-      threadId, cwd: context.root, approvalPolicy: 'never', sandbox: 'read-only',
+      threadId,
+      cwd: context.root,
+      approvalPolicy: 'never',
+      sandbox: 'read-only',
     });
   }
   if (codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
@@ -1269,7 +1293,8 @@ async function codexSend(state: ProjectWindowState, message: string): Promise<vo
   codexBusy.add(threadId);
   try {
     await server.request('turn/start', {
-      threadId, input: [{ type: 'text', text: input, text_elements: [] }],
+      threadId,
+      input: [{ type: 'text', text: input, text_elements: [] }],
     });
   } catch (error) {
     codexBusy.delete(threadId);
@@ -1298,7 +1323,8 @@ async function codexSendTask(
     throw new Error('選択した工程に対応しない依頼です。');
   const task = await buildGrokTask(context.root, stage, extra);
   // Grok's file-attachment output contract cannot be used in the App Server chat.
-  const prompt = task.prompt.replaceAll('Grok', 'Codex')
+  const prompt = task.prompt
+    .replaceAll('Grok', 'Codex')
     .replace(/## 出力契約[\s\S]*?(?=\n## [^\n]+|$)/g, '');
   const files: string[] = [];
   let combinedSize = prompt.length;
@@ -1312,8 +1338,10 @@ async function codexSendTask(
   }
   await codexSend(
     state,
-    prompt + '\n\n## Codex向け出力契約\n' +
-      'ファイルを変更しないでください。回答の最後に ' + codexReturnFile[context.stage] +
+    prompt +
+      '\n\n## Codex向け出力契約\n' +
+      'ファイルを変更しないでください。回答の最後に ' +
+      codexReturnFile[context.stage] +
       ' の内容だけをMarkdownコードブロックなしで出力してください。' +
       '添付ファイルとして生成する指示は適用しません。\n\n' +
       (files.length ? '## 参照ファイル\n' + files.join('\n\n') : ''),
@@ -2456,8 +2484,10 @@ function register() {
     if (response.type !== 'chatgpt' || !response.authUrl)
       throw new Error('CodexのサインインURLを取得できません。');
     const url = new URL(response.authUrl);
-    if (url.protocol !== 'https:' ||
-      !['chatgpt.com', 'auth.openai.com'].includes(url.hostname.toLowerCase()))
+    if (
+      url.protocol !== 'https:' ||
+      !['chatgpt.com', 'auth.openai.com'].includes(url.hostname.toLowerCase())
+    )
       throw new Error('Codexが予期しないサインインURLを返しました。');
     await shell.openExternal(url.toString());
   });
@@ -2506,7 +2536,12 @@ function register() {
     const selected = await dialog.showSaveDialog(state.window, {
       title: 'Codexの回答をファイルとして保存',
       defaultPath: path.join(app.getPath('downloads'), codexReturnFile[context.stage]),
-      filters: [{ name: '工程の成果物', extensions: [path.extname(codexReturnFile[context.stage]).slice(1)] }],
+      filters: [
+        {
+          name: '工程の成果物',
+          extensions: [path.extname(codexReturnFile[context.stage]).slice(1)],
+        },
+      ],
     });
     if (selected.canceled || !selected.filePath) return null;
     await writeFile(selected.filePath, response, 'utf8');
@@ -2628,7 +2663,10 @@ async function initializeApplication() {
   codexAppServer.on('disconnected', (message: string) => {
     codexBusy.clear();
     for (const state of projectWindows.values())
-      state.codexView.webContents.send(IPC.CODEX_EVENT, { method: 'disconnected', params: { message } });
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: 'disconnected',
+        params: { message },
+      });
   });
   const r2Config = new R2ConfigStore(userData);
   r2Manager = new R2Manager(r2Config, userData);
