@@ -43,11 +43,13 @@ export class AssistantProviderStore {
 
   async remember(projectRoot: string, provider: AssistantPaneProvider): Promise<void> {
     if (!isAssistantProvider(provider)) throw new Error('Invalid assistant provider');
-    this.writeQueue = this.writeQueue.catch(() => {}).then(async () => {
-      const state = await this.read();
-      state.projects[projectKey(projectRoot)] = provider;
-      await writeJsonAtomic(this.filePath, state);
-    });
+    this.writeQueue = this.writeQueue
+      .catch(() => {})
+      .then(async () => {
+        const state = await this.read();
+        state.projects[projectKey(projectRoot)] = provider;
+        await writeJsonAtomic(this.filePath, state);
+      });
     await this.writeQueue;
   }
 
@@ -63,14 +65,16 @@ export class AssistantProviderStore {
     if (saved) return saved;
     const legacy = await legacyProvider();
     const candidate = legacy ?? defaultProvider;
-    this.writeQueue = this.writeQueue.catch(() => {}).then(async () => {
-      const state = await this.read();
-      const key = projectKey(projectRoot);
-      if (!isAssistantProvider(state.projects[key])) {
-        state.projects[key] = candidate;
-        await writeJsonAtomic(this.filePath, state);
-      }
-    });
+    this.writeQueue = this.writeQueue
+      .catch(() => {})
+      .then(async () => {
+        const state = await this.read();
+        const key = projectKey(projectRoot);
+        if (!isAssistantProvider(state.projects[key])) {
+          state.projects[key] = candidate;
+          await writeJsonAtomic(this.filePath, state);
+        }
+      });
     await this.writeQueue;
     return (await this.get(projectRoot)) ?? candidate;
   }
