@@ -24,7 +24,16 @@ jobs:
       - name: Emit formatted Codex changes
         run: |
           npx biome format --write src/main/codex-app-server.ts src/main/codex-chat-state.ts src/main/main.ts src/renderer/App.tsx src/renderer/CodexPane.tsx src/renderer/codex-pane.css tests/codex-chat-state.cjs
-          node -e 'const fs=require('fs'); for(const p of [\'src/main/codex-app-server.ts\',\'src/main/codex-chat-state.ts\',\'src/main/main.ts\',\'src/renderer/App.tsx\',\'src/renderer/CodexPane.tsx\',\'src/renderer/codex-pane.css\',\'tests/codex-chat-state.cjs\']) {const t=fs.readFileSync(p).toString('base64'); for(let i=0;i<t.length;i+=4000) console.log('CODEX_FORMATTED '+p+' '+(i/4000)+' '+t.slice(i,i+4000));}'
+          node <<'NODE'
+          const fs = require('fs');
+          const files = ['src/main/codex-app-server.ts','src/main/codex-chat-state.ts','src/main/main.ts','src/renderer/App.tsx','src/renderer/CodexPane.tsx','src/renderer/codex-pane.css','tests/codex-chat-state.cjs'];
+          for (const p of files) {
+            const text = fs.readFileSync(p).toString('base64');
+            for (let i = 0; i < text.length; i += 4000) {
+              console.log('CODEX_FORMATTED ' + p + ' ' + (i / 4000) + ' ' + text.slice(i, i + 4000));
+            }
+          }
+          NODE
       - name: Lint and format check
         run: npm run check
       - name: Typecheck
