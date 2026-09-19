@@ -28,6 +28,7 @@ function githubCloneUrl(repository: string) {
 
 const EMPTY_SETTINGS: FormState = {
   comfyUiInstallPath: '',
+  assistantProvider: 'grok',
   remoteComfyUiInstallPath: '',
   comfyUiApiEndpoint: 'http://127.0.0.1:8188',
   projectRoot: '',
@@ -54,6 +55,7 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
         setStatus(appSettings);
         setSettings({
           comfyUiInstallPath: appSettings.comfyUiInstallPath,
+          assistantProvider: appSettings.assistantProvider,
           remoteComfyUiInstallPath: appSettings.remoteComfyUiInstallPath,
           comfyUiApiEndpoint: appSettings.comfyUiApiEndpoint,
           projectRoot: appSettings.projectRoot,
@@ -117,6 +119,34 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
           ComfyUI Batch
           Studio自体のローカル環境・互換パス設定です。R2、Civitai、クラウドインスタンスの資格情報はホームの「サービス連携」から設定します。
         </p>
+        <section className="environment-section">
+          <div className="panelhead">
+            <div>
+              <h3>チャットエージェント</h3>
+              <p>
+                新しいプロジェクトの初期値です。過去に開いたプロジェクトでは、
+                そのプロジェクトで最後に使用したエージェントが優先されます。
+              </p>
+            </div>
+          </div>
+          <div className="formgrid">
+            <label>
+              使用するチャットエージェント
+              <select
+                value={settings.assistantProvider}
+                onChange={(event) =>
+                  setSettings((previous) => ({
+                    ...previous,
+                    assistantProvider: event.target.value as 'grok' | 'codex',
+                  }))
+                }
+              >
+                <option value="grok">Grok</option>
+                <option value="codex">Codex</option>
+              </select>
+            </label>
+          </div>
+        </section>
         <section className="environment-section">
           <div className="panelhead">
             <div>
