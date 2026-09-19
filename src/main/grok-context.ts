@@ -143,9 +143,7 @@ prompt_plan.json は Schema v2 の構造化Promptとして出力してくださ�
   "schemaVersion": 2,
   "triggerWordsMode": "selected",
   "common": {
-    "triggerWords": [
-      { "modelRef": "lora.character", "words": ["正確な候補ワード"] }
-    ],
+    "triggerWords": [],
     "positive": {
       "subject": [],
       "identity": [],
