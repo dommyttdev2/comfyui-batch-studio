@@ -186,9 +186,10 @@ function App() {
         context = grokContextStage(stage);
       if (visible && context && project) {
         setGrok(true);
-        const contextLoad = paneProvider === 'codex'
-          ? window.batchStudio.codex.setContext(project.rootPath, context)
-          : window.batchStudio.grok.setContext(project.rootPath, context);
+        const contextLoad =
+          paneProvider === 'codex'
+            ? window.batchStudio.codex.setContext(project.rootPath, context)
+            : window.batchStudio.grok.setContext(project.rootPath, context);
         const providerChange = window.batchStudio.codex.setProvider(paneProvider);
         const visibility = window.batchStudio.grok.setVisible(true);
         const [s] = await Promise.all([visibility, contextLoad, providerChange]);
@@ -239,8 +240,7 @@ function App() {
             <select
               aria-label="AIアシスタント"
               value={paneProvider}
-              onChange={(event) =>
-                setPaneProvider(event.target.value as AssistantPaneProvider)}
+              onChange={(event) => setPaneProvider(event.target.value as AssistantPaneProvider)}
             >
               <option value="grok">Grok</option>
               <option value="codex">Codex</option>
@@ -361,7 +361,11 @@ function App() {
     </main>
   );
 }
-function PaneDivider({ ratio, onRatio, provider }: {
+function PaneDivider({
+  ratio,
+  onRatio,
+  provider,
+}: {
   ratio: number;
   onRatio: (ratio: number) => void;
   provider: AssistantPaneProvider;
