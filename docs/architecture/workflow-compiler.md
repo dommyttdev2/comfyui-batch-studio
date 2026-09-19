@@ -477,36 +477,26 @@ Node の `pos` と複製対象 Group の bounding へ同じ offset を適用す�
 
 ### 12.0 Prompt compilation boundary
 
-Prompt Plan Schema v2では、Grokが最終positive/negative文字列を作らない。
-
-Compilerは `models.json` と構造化Promptから次を決定論的に構築する。
+Prompt Plan Schema v2で `triggerWordsMode: "selected"` を指定した場合、最終Promptは次の入力だけで決定論的に構築する。
 
 ```text
 Common compiled positive
   = Model Family quality preset
-  + Base Model trainedWords
-  + Root LoRA trainedWords
+  + common.triggerWords の選定済みwords
   + common positive categories
 
-Common compiled negative
-  = Model Family negative preset
-  + common negative categories
-
 Leaf positive_base
-  = Branch LoRA trainedWords
+  = branch.prompt.triggerWords の選定済みwords
+  + leaf.prompt.triggerWords の選定済みwords
   + branch.prompt positive categories
   + leaf.prompt positive categories
-  - Commonとexact duplicateするtag
-
-Leaf negative_base
-  = branch.prompt negative categories
-  + leaf.prompt negative categories
-  - Commonとexact duplicateするtag
+  - Commonとのexact duplicate
 ```
 
-Category順、quality preset、trainedWords注入、exact dedupeはBatch Studio Prompt Policyが所有する。`trainedWords`は`models.json`の文字列を変更せず使用する。
+`models.json.trainedWords` は候補の検証に使用し、Compilerは未選択候補を自動追加しない。
+選択なしは有効であり、Root / Branch LoRAが適用されてもトリガーワードの追加を強制しない。
 
-Schema v1では互換性のため従来の`common.positive/negative`と`leaf.positive/negative`をそのまま使用し、Schema v2 policyを後付けしない。
+`triggerWordsMode` が無い既存Schema v2は、再生成結果を保持するため旧自動注入方式を使用する。Schema v1も旧来のpositive / negative文字列をそのまま利用する。
 
 ### 12.1 Branch LoRA Stack
 
