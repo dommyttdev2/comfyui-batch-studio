@@ -323,7 +323,8 @@ function normalize(raw: StoredAppSettings | null): NormalizedAppSettings {
     return {
       ...EMPTY,
       ...raw,
-      assistantProvider: raw.schemaVersion === 8 && raw.assistantProvider === 'codex' ? 'codex' : 'grok',
+      assistantProvider:
+        raw.schemaVersion === 8 && raw.assistantProvider === 'codex' ? 'codex' : 'grok',
       comfyUiInstallPath: text(raw.comfyUiInstallPath),
       remoteComfyUiInstallPath: text(raw.remoteComfyUiInstallPath),
       comfyUiApiEndpoint: endpoint(raw.comfyUiApiEndpoint),
