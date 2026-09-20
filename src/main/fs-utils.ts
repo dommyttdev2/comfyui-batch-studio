@@ -50,7 +50,10 @@ async function removeTemp(p: string, io: AtomicWriteIo) {
 function protectedJsonPath(file: string) {
   const basename = path.basename(file).toLowerCase();
   if (basename === 'project_meta.json') return true;
-  return path.basename(path.dirname(file)).toLowerCase() === 'execution_runs' && basename.endsWith('.json');
+  return (
+    path.basename(path.dirname(file)).toLowerCase() === 'execution_runs' &&
+    basename.endsWith('.json')
+  );
 }
 
 export class PersistedJsonError extends Error {
