@@ -781,6 +781,7 @@ export class R2Manager {
   async beginUpload(bucket: string, prefix: string, filePath: string, overwrite = false) {
     if (!(await exists(filePath))) throw new Error('アップロード元ファイルが見つかりません。');
     const st = await stat(filePath),
+      sourceFingerprint = await fingerprintUploadSource(filePath, partSize(st.size)),
       name = path.basename(filePath),
       key = `${prefix.replace(/^\/+|\/+$/g, '')}${prefix ? '/' : ''}${name}`;
     if (Buffer.byteLength(key) > 1024)
@@ -815,6 +816,8 @@ export class R2Manager {
       filePath,
       fileName: name,
       size: st.size,
+      sourceFingerprint,
+      hashProgressBytes: st.size,
       contentType: 'application/octet-stream',
       uploadId,
       partSize: partSize(st.size),
@@ -863,6 +866,16 @@ export class R2Manager {
       if (job.kind === 'move') throw new Error('移動ジョブは再開操作できません。');
       if (job.status === 'complete' || job.status === 'cancelled') return job;
       if (!(await exists(job.filePath))) throw new Error('元ファイルが見つかりません。');
+      if (!job.sourceFingerprint) {
+        if (Object.keys(job.completedParts).length)
+          throw sourceChanged('旧形式のジョブには完了済みPartの内容ハッシュがないため再開できません');
+        job.sourceFingerprint = await fingerprintUploadSource(job.filePath, job.partSize);
+        job.hashProgressBytes = job.size;
+        await this.saveUpload(job);
+      } else {
+        await assertSourceFingerprint(job.filePath, job.sourceFingerprint, job.partSize);
+        job.hashProgressBytes = job.size;
+      }
       if (control.cancelled || control.paused) return job;
       job.status = 'uploading';
       job.error = '';
@@ -903,7 +916,13 @@ export class R2Manager {
             Key: job.key,
             UploadId: job.uploadId ?? undefined,
             PartNumber: number,
-            Body: createReadStream(job.filePath, { start, end }),
+            Body: await verifiedUploadPart(
+              job.filePath,
+              start,
+              length,
+              job.sourceFingerprint,
+              number,
+            ),
             ContentLength: length,
           }),
         );
@@ -987,6 +1006,13 @@ export class R2Manager {
         return;
       }
       if (failure) throw failure;
+      await assertSourceFingerprint(job.filePath, job.sourceFingerprint, job.partSize);
+      if (control.cancelled) return;
+      if (control.paused) {
+        job.status = 'paused';
+        await this.saveUpload(job);
+        return;
+      }
       // Claim the completion phase synchronously with the final cancellation
       // check. Cancel waits for this request and never aborts a completed upload.
       control.completing = true;
@@ -1013,6 +1039,22 @@ export class R2Manager {
       job.error = e instanceof Error ? e.message : String(e);
       job.completedAt = new Date().toISOString();
       await this.saveUpload(job);
+      if (job.error.startsWith(SOURCE_CHANGED) && job.uploadId) {
+        try {
+          await (await this.clientFor()).send(
+            new AbortMultipartUploadCommand({
+              Bucket: job.bucket,
+              Key: job.key,
+              UploadId: job.uploadId,
+            }),
+          );
+          job.uploadId = null;
+          job.completedParts = {};
+          await this.saveUpload(job);
+        } catch {
+          // Retain the upload ID so Cancel can retry cleanup if R2 is unavailable.
+        }
+      }
     }
   }
   async pauseUpload(id: string) {
