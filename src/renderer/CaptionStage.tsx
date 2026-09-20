@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { AssistantPaneProvider, CaptionStatus, ImportResult, ProjectSummary } from '../shared/types';
+import type {
+  AssistantPaneProvider,
+  CaptionStatus,
+  ImportResult,
+  ProjectSummary,
+} from '../shared/types';
 import { GrokBridge } from './GrokStages';
 import type { Runner } from './ui';
 import { issuesView } from './ui';
