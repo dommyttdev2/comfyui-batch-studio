@@ -1048,11 +1048,30 @@ export interface CodexContext {
   root: string;
   stage: GrokContextStage;
 }
+export type CodexTurnPhase =
+  | 'idle'
+  | 'sending'
+  | 'processing'
+  | 'streaming'
+  | 'completed'
+  | 'failed'
+  | 'interrupted'
+  | 'unknown';
+export interface CodexTurnStatus {
+  phase: CodexTurnPhase;
+  startedAt: number | null;
+  updatedAt: number | null;
+  finishedAt: number | null;
+  error: string | null;
+}
 export interface CodexThreadState {
   activeThreadId: string | null;
   threadIds: string[];
 }
-export interface CodexSnapshot extends CodexContext, CodexThreadState {
+export interface CodexSendResult extends CodexThreadState {
+  status: CodexTurnStatus;
+}
+export interface CodexSnapshot extends CodexContext, CodexSendResult {
   messages: CodexMessage[];
   busy: boolean;
   historyUnavailable?: boolean;
@@ -1314,8 +1333,8 @@ export interface BatchStudioApi {
     snapshot: () => Promise<CodexSnapshot>;
     newChat: () => Promise<CodexSnapshot>;
     restoreChat: (threadId: string) => Promise<CodexSnapshot>;
-    send: (text: string) => Promise<CodexThreadState>;
-    sendTask: (stage: GrokTask['stage'], extra?: string) => Promise<CodexThreadState>;
+    send: (text: string) => Promise<CodexSendResult>;
+    sendTask: (stage: GrokTask['stage'], extra?: string) => Promise<CodexSendResult>;
     onEvent: (listener: (event: CodexEvent) => void) => () => void;
     saveResponse: (text: string) => Promise<string | null>;
   };
