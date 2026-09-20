@@ -441,7 +441,10 @@ async function scenario(lifecycle, states) {
     assert.match(architecture, /REMOTE_INSTANCE_FINALIZE_FAILED/);
     assert.match(requirements, /REQ-EXEC-015[^\n]*開始前からrunningだったか否かを問わず必ず停止/);
     assert.match(decisions, /DEC-026: Completed Vast\.ai Run must stop its Instance/);
-    assert.match(runtimeDoc, /成功したRun: mandatory stopped confirmation|successful Run: mandatory stopped confirmation/);
+    assert.match(
+      runtimeDoc,
+      /成功したRun: mandatory stopped confirmation|successful Run: mandatory stopped confirmation/,
+    );
     assert.match(readme, /開始前から稼働していたものを含めVast\.ai Instanceを停止/);
   }
 
