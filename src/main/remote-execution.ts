@@ -779,13 +779,7 @@ export class RemoteExecutionService {
     });
     return finalPath;
   }
-  private async cleanup(
-    root: string,
-    runId: string,
-    bucket: string,
-    key: string,
-    force = false,
-  ) {
+  private async cleanup(root: string, runId: string, bucket: string, key: string, force = false) {
     const run = await getExecutionRun(root, runId);
     if (!run) throw new Error('Execution Run was not found.');
     const previouslyCleaned = Boolean(latestEvidence(run, 'CLEANUP_COMPLETED', 'remote-artifacts'));
