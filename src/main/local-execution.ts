@@ -357,6 +357,7 @@ export class LocalExecutionService {
         )
           throw new Error('Run identity changed while resolving a submitted prompt.');
         current.current.promptId = recoveredId;
+        if (!current.submission) throw new Error('Submission intent vanished during recovery.');
         current.submission.status = 'acknowledged';
         current.submission.promptId = recoveredId;
         if (!current.promptIds.includes(recoveredId)) current.promptIds.push(recoveredId);
