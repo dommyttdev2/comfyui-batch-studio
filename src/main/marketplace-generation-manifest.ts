@@ -43,7 +43,9 @@ export async function sha256File(file: string) {
   return hash.digest('hex');
 }
 
-export async function fingerprintMarketplaceSource(file: string): Promise<MarketplaceSourceFingerprint> {
+export async function fingerprintMarketplaceSource(
+  file: string,
+): Promise<MarketplaceSourceFingerprint> {
   const resolved = path.resolve(file);
   const before = await stat(resolved);
   if (!before.isFile()) throw new Error('入力画像が見つかりません。');
@@ -55,9 +57,7 @@ export async function fingerprintMarketplaceSource(file: string): Promise<Market
 }
 
 function relevantCrop(crop: MarketplaceCropRect | null) {
-  return crop
-    ? { x: crop.x, y: crop.y, width: crop.width, height: crop.height }
-    : null;
+  return crop ? { x: crop.x, y: crop.y, width: crop.width, height: crop.height } : null;
 }
 
 export function marketplaceInputSignature(
