@@ -215,7 +215,6 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
   );
   doesNotMatchCode(executionSource, /scp/i, 'artifact recovery must not use SCP');
 
-
   // Exercise the actual service recovery flow with durable Run evidence and a
   // deterministic R2/Remote mock. No live cloud resources are required.
   const { RemoteExecutionService } = await load('remote-execution.js');
@@ -333,7 +332,10 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
   // Previous cleanup removed R2 and Remote packages; intact local ZIP must
   // complete with zero network operations.
   await service.collectArtifacts(recoveryRoot, recoveredRunId);
-  assert.equal((await execution.getExecutionRun(recoveryRoot, recoveredRunId)).lifecycle, 'COMPLETED');
+  assert.equal(
+    (await execution.getExecutionRun(recoveryRoot, recoveredRunId)).lifecycle,
+    'COMPLETED',
+  );
   assert.deepEqual(operations, { downloads: 0, deletes: 0, remoteCleanups: 0, uploads: 0 });
 
   // A corrupt ZIP must be replaced from surviving R2 bytes, even when old
@@ -356,7 +358,14 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
   assert.equal(operations.downloads, 1);
   assert.equal(fs.readFileSync(recoveredZip, 'utf8'), 'damaged again');
   await assert.rejects(
-    () => service.cleanup(recoveryRoot, recoveredRunId, 'test-bucket', 'another-run/artifacts.zip', true),
+    () =>
+      service.cleanup(
+        recoveryRoot,
+        recoveredRunId,
+        'test-bucket',
+        'another-run/artifacts.zip',
+        true,
+      ),
     (error) => error.code === 'REMOTE_ARTIFACT_CLEANUP_SCOPE_INVALID',
   );
 
