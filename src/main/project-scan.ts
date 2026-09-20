@@ -11,6 +11,7 @@ import type {
 import { exists, readJson, readText } from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
 import { readArtifact } from './artifact-service.js';
+import { hashCanonicalJson } from './workflow-api.js';
 import { hashWorkflowTemplate } from './workflow-template-integrity.js';
 import { resolveWorkflowTemplatePaths } from './workflow-template-paths.js';
 const defs: Array<[ArtifactKey, string, string]> = [
@@ -67,6 +68,8 @@ async function workflowInputsChanged(root: string, meta: any) {
   const build = meta?.workflowBuild as any;
   if (!build) return true;
   const models = await readJson<any>(path.join(root, 'models.json'));
+  if (!models || !build.modelsSha256 || build.modelsSha256 !== hashCanonicalJson(models))
+    return true;
   const family = models?.modelFamily === 'anima' ? 'anima' : 'illustrious';
   const { templatePath, manifestPath } = resolveWorkflowTemplatePaths(meta?.settings, family);
   if (!(await exists(templatePath)) || !(await exists(manifestPath))) return true;
@@ -152,6 +155,7 @@ export async function scanProject(root: string): Promise<ProjectSummary> {
     const wt = await mtime(path.join(root, workflow));
     if (
       planT > wt ||
+      modelsT > wt ||
       artifacts.some(
         (a) => ['story', 'models', 'promptPlan'].includes(a.key) && a.state === 'stale',
       ) ||
