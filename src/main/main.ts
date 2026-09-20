@@ -2720,9 +2720,9 @@ function register() {
       );
     },
   );
-  ipcMain.handle(IPC.MARKETPLACE_GENERATE_ZIP, (_e, root: unknown, format: unknown) => {
+  ipcMain.handle(IPC.MARKETPLACE_GENERATE_ZIP, (_e, root: unknown, format: unknown, state: unknown) => {
     validRoot(root);
-    return generateMarketplaceZip(root, format);
+    return generateMarketplaceZip(root, format, state);
   });
   ipcMain.handle(
     IPC.MARKETPLACE_EXPORT_CUSTOM,
