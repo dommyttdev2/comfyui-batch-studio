@@ -218,7 +218,14 @@ async function captureSnapshot(
     target,
     remote,
     preflight: clone(preflight),
-    workflow: { uiPath, apiPath, uiSha256, apiSha256, workflowIdentity, modelsSha256: expectedModelsSha },
+    workflow: {
+      uiPath,
+      apiPath,
+      uiSha256,
+      apiSha256,
+      workflowIdentity,
+      modelsSha256: expectedModelsSha,
+    },
     plan: planSnapshot,
     runIdentity,
   };
