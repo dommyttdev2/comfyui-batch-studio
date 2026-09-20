@@ -34,6 +34,18 @@ matchCode(
 );
 matchCode(
   service,
+  /build\.renderInputSha256 !== expectedInputHash/,
+  'caption render inputs include the fan-work flag',
+);
+matchCode(
+  service,
+  /build\.outputSha256 !== sha256\(actualCaption \?\? ''\)/,
+  'caption external modifications must be detected',
+);
+matchCode(service, /!captionExists/, 'a missing previously built caption must be stale');
+
+matchCode(
+  service,
   /path\.join\(root, 'caption\.txt'\)/,
   'caption.txt must be generated as the project artifact',
 );
