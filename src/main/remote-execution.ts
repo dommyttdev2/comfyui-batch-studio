@@ -220,11 +220,25 @@ export class RemoteExecutionService {
       .catch(async (error) => {
         const current = await getExecutionRun(root, runId);
         if (current?.lifecycle === 'DISCARDED') return;
+        let possiblyAccepted = false;
+        if (current?.phase === 'EXECUTING' && current.lifecycle === 'RUNNING') {
+          try {
+            const observed = asResponse(
+              (await this.remote.reconcile(root, runId)).response,
+            ).state;
+            possiblyAccepted =
+              observed?.current?.submission?.status === 'sending' ||
+              observed?.current?.submission?.status === 'acknowledged';
+          } catch {
+            // A failed status probe cannot prove the remote POST was never sent.
+            possiblyAccepted = true;
+          }
+        }
         await mutateExecutionRun(root, runId, (run) => {
           if (run.lifecycle === 'DISCARDED') return;
           const code =
             error instanceof ArtifactPipelineError ? error.code : 'REMOTE_EXECUTION_FAILED';
-          const uncertain = code === 'REMOTE_PROMPT_ACK_UNCERTAIN';
+          const uncertain = code === 'REMOTE_PROMPT_ACK_UNCERTAIN' || possiblyAccepted;
           const failure = {
             code: uncertain ? 'EXECUTION_RECOVERY_UNCERTAIN' : code,
             message: safeError(error),
@@ -301,6 +315,25 @@ export class RemoteExecutionService {
     if (!state || state.runId !== runId)
       throw new Error('Remote Worker does not have state for the persisted Run.');
     while (state.status === 'running' || state.status === 'interrupting') {
+      if (
+        response.sequenceRunning !== true &&
+        state.current?.submission?.status === 'sending'
+      ) {
+        const resolved = asResponse(
+          (await this.remote.requestWorker(root, runId, 'reconcile_submission')).response,
+        ) as WorkerSequenceResponse & { found?: boolean };
+        if (!resolved.found || !resolved.state?.current?.promptId)
+          throw new Error('Accepted Prompt has no matching Queue/History submission ID.');
+        state = resolved.state;
+        await this.syncState(root, runId, state);
+        await mutateExecutionRun(root, runId, (run) => {
+          run.current.promptId = state!.current!.promptId ?? null;
+          run.lifecycle = 'PAUSED';
+          run.controls.scheduling = 'STOPPED';
+          run.error = null;
+        });
+        return;
+      }
       if (response.sequenceRunning !== true)
         throw new Error(
           'Persisted Worker is not holding the sequence lock; an in-flight Prompt cannot be ruled out.',
