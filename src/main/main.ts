@@ -91,7 +91,7 @@ import { CivitaiRequestPolicy } from './civitai-request-policy.js';
 import { CivitaiConfigStore } from './civitai-config.js';
 import { UiStateStore } from './ui-state.js';
 import { GrokChatStateStore } from './grok-chat-state.js';
-import { CodexChatStateStore, type CodexStageChats } from './codex-chat-state.js';
+import { CodexChatStateStore } from './codex-chat-state.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { CodexTurnMonitor } from './codex-turn-monitor.js';
@@ -1316,6 +1316,97 @@ async function codexAccount(): Promise<CodexAccountStatus> {
     authMode: result.account?.type ?? null,
     planType: result.account?.planType ?? null,
   };
+}
+async function codexAvailableModels(): Promise<CodexModelOption[]> {
+  const { server } = codexService();
+  const models: CodexModelOption[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 10; page++) {
+    const response: {
+      data?: Array<{
+        id?: unknown;
+        model?: unknown;
+        displayName?: unknown;
+        hidden?: unknown;
+        isDefault?: unknown;
+        defaultReasoningEffort?: unknown;
+        supportedReasoningEfforts?: Array<{
+          reasoningEffort?: unknown;
+          description?: unknown;
+        }>;
+      }>;
+      nextCursor?: string | null;
+    } = await server.request('model/list', { limit: 100, includeHidden: false, cursor });
+    if (!Array.isArray(response.data)) throw new Error('Codexからモデル一覧を取得できません。');
+    for (const item of response.data) {
+      const id = typeof item.model === 'string' && item.model ? item.model
+        : typeof item.id === 'string' ? item.id : '';
+      const efforts = Array.isArray(item.supportedReasoningEfforts)
+        ? item.supportedReasoningEfforts
+            .filter((effort) => typeof effort.reasoningEffort === 'string' && effort.reasoningEffort)
+            .map((effort) => ({
+              reasoningEffort: effort.reasoningEffort as string,
+              description: typeof effort.description === 'string' ? effort.description : '',
+            }))
+        : [];
+      if (!id || item.hidden === true || efforts.length === 0 || models.some((model) => model.id === id))
+        continue;
+      const defaultEffort =
+        typeof item.defaultReasoningEffort === 'string' &&
+        efforts.some((effort) => effort.reasoningEffort === item.defaultReasoningEffort)
+          ? item.defaultReasoningEffort
+          : efforts[0].reasoningEffort;
+      models.push({
+        id,
+        displayName: typeof item.displayName === 'string' ? item.displayName : id,
+        isDefault: item.isDefault === true,
+        defaultReasoningEffort: defaultEffort,
+        supportedReasoningEfforts: efforts,
+      });
+    }
+    if (!response.nextCursor) break;
+    if (response.nextCursor === cursor) throw new Error('Codexのモデル一覧のページ送りに失敗しました。');
+    cursor = response.nextCursor;
+    if (page === 9) throw new Error('Codexのモデル一覧が多すぎます。');
+  }
+  if (!models.length) throw new Error('Codexで使用できるモデルが見つかりません。');
+  return models;
+}
+async function codexModelSettings(context: CodexContext): Promise<CodexModelSettings> {
+  if (!codexModelSelections) throw new Error('Codexモデル設定が初期化されていません。');
+  const [models, saved] = await Promise.all([
+    codexAvailableModels(),
+    codexModelSelections.get(context.root, context.stage),
+  ]);
+  const requested = models.find((model) => model.id === saved?.model);
+  const model = requested ?? models.find((entry) => entry.isDefault) ?? models[0];
+  const effort =
+    requested && model.supportedReasoningEfforts.some((item) => item.reasoningEffort === saved?.effort)
+      ? saved!.effort
+      : model.defaultReasoningEffort;
+  return { models, selection: { model: model.id, effort } };
+}
+async function codexChooseModel(
+  state: ProjectWindowState,
+  selection: unknown,
+): Promise<CodexModelSelection> {
+  const context = codexContextFor(state);
+  if (
+    !selection || typeof selection !== 'object' ||
+    typeof (selection as CodexModelSelection).model !== 'string' ||
+    typeof (selection as CodexModelSelection).effort !== 'string'
+  ) throw new Error('Codexモデルと推論強度を選択してください。');
+  const requested = selection as CodexModelSelection;
+  const saved = await codexService().store.get(context.root, context.stage);
+  if (saved.activeThreadId && codexBusy.has(saved.activeThreadId))
+    throw new Error('回答生成中はモデルと推論強度を変更できません。');
+  const models = await codexAvailableModels();
+  const model = models.find((item) => item.id === requested.model);
+  if (!model || !model.supportedReasoningEfforts.some((item) => item.reasoningEffort === requested.effort))
+    throw new Error('このモデルと推論強度の組み合わせはCodexで利用できません。');
+  if (!codexModelSelections) throw new Error('Codexモデル設定が初期化されていません。');
+  await codexModelSelections.remember(context.root, context.stage, requested);
+  return requested;
 }
 async function codexSend(state: ProjectWindowState, message: string): Promise<CodexSendResult> {
   const context = codexContextFor(state);
@@ -2598,6 +2689,12 @@ function register() {
   });
   ipcMain.handle(IPC.CODEX_SNAPSHOT, (event) =>
     codexSnapshot(projectWindowForSender(event.sender)),
+  );
+  ipcMain.handle(IPC.CODEX_MODELS, (event) =>
+    codexModelSettings(codexContextFor(projectWindowForSender(event.sender))),
+  );
+  ipcMain.handle(IPC.CODEX_SELECT_MODEL, (event, selection: unknown) =>
+    codexChooseModel(projectWindowForSender(event.sender), selection),
   );
   ipcMain.handle(IPC.CODEX_NEW_CHAT, async (event) => {
     const state = projectWindowForSender(event.sender);
