@@ -180,7 +180,11 @@ export async function saveMarketplaceImageState(root: string, value: unknown) {
     const lastRevision = current?.saveRevision ?? 0;
     if (normalized.saveRevision !== undefined && normalized.saveRevision < lastRevision)
       return normalizeMarketplaceImageState(current);
-    if (normalized.saveRevision !== undefined && normalized.saveRevision === lastRevision && current) {
+    if (
+      normalized.saveRevision !== undefined &&
+      normalized.saveRevision === lastRevision &&
+      current
+    ) {
       const proposed = { ...normalized, saveRevision: lastRevision };
       if (JSON.stringify(proposed) !== JSON.stringify(current))
         throw new Error('EDITOR_SAVE_CONFLICT: Marketplace state was modified by another editor.');
