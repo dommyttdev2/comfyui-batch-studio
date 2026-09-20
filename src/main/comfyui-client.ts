@@ -76,9 +76,7 @@ export class ComfyUiClient {
       body: JSON.stringify({
         prompt: graph,
         client_id: clientId,
-        ...(submissionId
-          ? { extra_data: { batch_studio_submission_id: submissionId } }
-          : {}),
+        ...(submissionId ? { extra_data: { batch_studio_submission_id: submissionId } } : {}),
       }),
     });
     const data = await readJson(response, 'ComfyUI prompt submission failed');
@@ -113,7 +111,9 @@ export class ComfyUiClient {
         ids.add(String(key));
     }
     if (ids.size > 1)
-      throw new Error('Multiple ComfyUI prompts share a submission ID; automatic recovery is unsafe.');
+      throw new Error(
+        'Multiple ComfyUI prompts share a submission ID; automatic recovery is unsafe.',
+      );
     return [...ids][0] ?? null;
   }
   async history(promptId: string) {
