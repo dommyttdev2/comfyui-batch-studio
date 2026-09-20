@@ -95,6 +95,7 @@ import { CivitaiConfigStore } from './civitai-config.js';
 import { UiStateStore } from './ui-state.js';
 import { GrokChatStateStore } from './grok-chat-state.js';
 import { CodexChatStateStore } from './codex-chat-state.js';
+import { codexTaskFileForTurn, latestCompletedArtifactTurn } from './codex-artifact-turn.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { CodexTurnMonitor } from './codex-turn-monitor.js';
@@ -1396,20 +1397,6 @@ function messageText(item: Record<string, unknown>): string {
     .map((content) => content.text)
     .join('\n');
 }
-function codexTaskFileForTurn(turn: unknown): string | null {
-  const items = (turn as { items?: unknown[] } | null)?.items;
-  if (!Array.isArray(items)) return null;
-  const message = items.find((item) => (item as { type?: string } | null)?.type === 'userMessage');
-  if (!message || typeof message !== 'object') return null;
-  const text = messageText(message as Record<string, unknown>);
-  if (!text.includes('## Codex向け出力契約')) return null;
-  // The story discussion task also mentions story.md, but does not produce a file.
-  // Only classify turns with an explicit artifact output instruction.
-  const match = text.match(
-    /回答の最後に\s*(story\.md|model_loras\.json|prompt_plan\.json|caption_content\.json)/,
-  );
-  return match?.[0] ?? null;
-}
 function codexMessages(result: unknown): CodexMessage[] {
   const thread = (result as { thread?: { turns?: unknown[] } } | null)?.thread;
   if (!Array.isArray(thread?.turns)) return [];
@@ -1435,7 +1422,7 @@ function codexMessages(result: unknown): CodexMessage[] {
           text: artifactFile
             ? role === 'user'
               ? `工程用の依頼を送信（${artifactFile}）`
-              : `${artifactFile} は成果物ファイルとして処理されます。JSON本文は表示しません。`
+              : `${artifactFile} の取り込み結果は下に表示します。JSON本文は表示しません。`
             : text,
         });
     }
@@ -3213,11 +3200,11 @@ function register() {
     const read = await codexService().server.request<{
       thread?: { turns?: Array<{ id?: unknown; status?: string; items?: unknown[] }> };
     }>('thread/read', { threadId, includeTurns: true });
-    const turn = read.thread?.turns?.at(-1);
-    const expected = turn ? codexTaskFileForTurn(turn) : null;
-    const fileName =
-      turn && expectedArtifact(context.stage === 'story' ? 'story-finalize' : context.stage);
-    if (!turn || turn.status !== 'completed' || !fileName || expected !== fileName)
+    const fileName = expectedArtifact(context.stage === 'story' ? 'story-finalize' : context.stage);
+    const turn = fileName
+      ? latestCompletedArtifactTurn(read.thread?.turns ?? [], fileName)
+      : null;
+    if (!turn)
       throw new Error('この工程の完了済みArtifact依頼が見つかりません。');
     const reply = [...(turn.items ?? [])]
       .reverse()
