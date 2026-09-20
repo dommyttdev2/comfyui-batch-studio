@@ -1,3 +1,4 @@
+import { withProjectMutationLock } from './project-transaction.js';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type {
@@ -342,6 +343,9 @@ function validateCompiledWorkflow(
 }
 
 export async function compileWorkflow(root: string): Promise<CompileResult> {
+  return withProjectMutationLock(root, () => compileWorkflowUnlocked(root));
+}
+async function compileWorkflowUnlocked(root: string): Promise<CompileResult> {
   const issues: ValidationIssue[] = [];
   const models = await readJson<ModelsArtifact>(path.join(root, 'models.json'));
   const plan = await readJson<PromptPlanArtifact>(path.join(root, 'prompt_plan.json'));
