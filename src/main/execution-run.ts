@@ -265,6 +265,13 @@ function resumePhase(
     !kinds.has('CLEANUP_COMPLETED')
   )
     return { phase: 'REMOTE_CLEANUP', lifecycle: 'RUNNING' };
+  if (
+    run.executionTarget === 'remote' &&
+    kinds.has('LOCAL_FILE_VERIFIED') &&
+    kinds.has('CLEANUP_COMPLETED') &&
+    (!run.remoteLifecycle?.finalizedAt || run.remoteLifecycle.latest?.status !== 'stopped')
+  )
+    return { phase: 'CLOUD_INSTANCE_FINALIZING', lifecycle: 'RUNNING' };
   if (kinds.has('LOCAL_FILE_VERIFIED')) return { phase: 'COMPLETED', lifecycle: 'COMPLETED' };
   if (run.executionTarget === 'remote' && kinds.has('R2_OBJECT_VERIFIED'))
     return { phase: 'LOCAL_DOWNLOADING', lifecycle: 'RUNNING' };
