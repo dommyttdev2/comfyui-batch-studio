@@ -106,12 +106,13 @@ def download_model(model_root,req):
  parsed=urllib.parse.urlparse(url)
  if parsed.scheme not in ("http","https") or not parsed.netloc: raise WorkerError("MODEL_DOWNLOAD_URL_INVALID")
  existing=inspect_model(model_root,{**req,"computeSha256":True})
- if existing.get("valid"): return {**existing,"reused":True}
- if os.path.lexists(target):
-  if os.path.isdir(target) and not os.path.islink(target): raise WorkerError("MODEL_DESTINATION_IS_DIRECTORY")
-  os.unlink(target)
+ if existing.get("valid") and not req.get("forceDownload"): return {**existing,"reused":True}
+ if os.path.lexists(target) and os.path.isdir(target) and not os.path.islink(target): raise WorkerError("MODEL_DESTINATION_IS_DIRECTORY")
  parent=os.path.dirname(target); os.makedirs(parent,exist_ok=True)
  target=model_path(model_root,req.get("path")); part=target+".part"; control=part+".aria2"
+ if req.get("forceDownload"):
+  for leftover in (part,control):
+   if os.path.lexists(leftover) and os.path.isfile(leftover):os.unlink(leftover)
  if os.path.lexists(part) and os.path.isdir(part): raise WorkerError("MODEL_PART_IS_DIRECTORY")
  args=["aria2c","--input-file=-","--allow-overwrite=true","--auto-file-renaming=false","--continue=true","--file-allocation=none","--max-connection-per-server=8","--split=8","--min-split-size=16M","--summary-interval=0","--console-log-level=warn","--dir="+parent,"--out="+os.path.basename(part)]
  result=run_cmd(args,input_text=url+"\\n",error_code="MODEL_DOWNLOAD_NETWORK",allow_failure=True)
