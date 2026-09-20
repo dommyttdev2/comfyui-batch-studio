@@ -1,5 +1,6 @@
-import { randomInt } from 'node:crypto';
-import { readdir, stat } from 'node:fs/promises';
+import { createHash, randomInt } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { ExecutionError, ExecutionRun } from '../shared/types.js';
 import {
@@ -7,16 +8,97 @@ import {
   markGenerationCompleted,
   markGenerationStarted,
 } from '../shared/execution-progress.js';
-import { exists, readJson } from './fs-utils.js';
+import { readJson } from './fs-utils.js';
 import type { ApiGraph, ApiGraphNode } from './workflow-api.js';
 import { ComfyUiClient } from './comfyui-client.js';
 import { ScenePromptRunClient } from './scene-prompt-client.js';
-import { getExecutionRun, mutateExecutionRun, recordExecutionEvidence } from './execution-run.js';
+import {
+  getExecutionRun,
+  mutateExecutionRun,
+  recordExecutionEvidence,
+  validatedExecutionEvidence,
+} from './execution-run.js';
 
 type LocalExecutionSettings = { endpoint: string; installPath: string };
 type SettingsProvider = () => Promise<LocalExecutionSettings>;
 type BranchBinding = { branchId: string; leafIds: string[]; expandNodeId: string };
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+const LOCAL_FILE_SCOPE = 'local-generated-file';
+function localRunOutputRelative(run: ExecutionRun) {
+  if (!/^[A-Za-z0-9_-]+$/.test(run.projectId) || !/^[0-9a-f-]{36}$/i.test(run.runId))
+    throw new Error('Invalid project or Run ID for isolated Local output.');
+  return path.posix.join('BatchStudio', run.projectId, run.runId);
+}
+function localRunOutputRoot(installPath: string, run: ExecutionRun) {
+  return path.join(installPath, 'output', ...localRunOutputRelative(run).split('/'));
+}
+function within(root: string, target: string) {
+  const relative = path.relative(root, target);
+  return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+async function sha256File(file: string) {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(file)) hash.update(chunk);
+  return hash.digest('hex');
+}
+function isolateBranchSavePaths(graph: ApiGraph, run: ExecutionRun, branchId: string) {
+  const saveNodes = Object.entries(graph).filter(([, node]) => node.class_type === 'SceneSaveImage');
+  if (!saveNodes.length) throw new Error(`Branch ${branchId} has no SceneSaveImage output.`);
+  // Alter only the submitted API graph. The Compiler snapshot and the user's
+  // legacy output folders remain untouched.
+  for (const [, node] of saveNodes)
+    node.inputs.path = path.posix.join(localRunOutputRelative(run), encodeURIComponent(branchId));
+  return saveNodes.map(([id]) => id);
+}
+async function recordPromptOutputs(
+  root: string,
+  run: ExecutionRun,
+  installPath: string,
+  promptId: string,
+  history: any,
+  saveNodeIds: string[],
+) {
+  const outputBase = path.join(installPath, 'output'),
+    runRoot = localRunOutputRoot(installPath, run),
+    entry = history?.[promptId],
+    recorded = new Set<string>();
+  const images = saveNodeIds.flatMap((id) => entry?.outputs?.[id]?.images ?? []);
+  if (!images.length) throw new Error(`ComfyUI prompt ${promptId} returned no SceneSaveImage files.`);
+  for (const image of images) {
+    if (
+      image?.type !== 'output' ||
+      typeof image.filename !== 'string' ||
+      path.basename(image.filename) !== image.filename ||
+      typeof image.subfolder !== 'string' ||
+      !IMAGE_EXTENSIONS.has(path.extname(image.filename).toLowerCase())
+    )
+      throw new Error(`ComfyUI prompt ${promptId} returned an invalid image reference.`);
+    const file = path.resolve(outputBase, image.subfolder, image.filename);
+    if (!within(runRoot, file))
+      throw new Error(`ComfyUI prompt ${promptId} reported an image outside its Run output.`);
+    const actualRoot = await realpath(runRoot),
+      actualFile = await realpath(file);
+    if (!within(actualRoot, actualFile))
+      throw new Error(`ComfyUI prompt ${promptId} reported a symlink outside its Run output.`);
+    const relativePath = path.relative(runRoot, file);
+    if (recorded.has(relativePath)) continue;
+    recorded.add(relativePath);
+    const metadata = await stat(actualFile);
+    if (!metadata.isFile() || metadata.size < 1)
+      throw new Error(`Generated image is missing or empty: ${relativePath}.`);
+    await recordExecutionEvidence(root, run.runId, {
+      kind: 'CUSTOM',
+      scope: LOCAL_FILE_SCOPE,
+      data: {
+        promptId,
+        relativePath,
+        size: metadata.size,
+        sha256: await sha256File(actualFile),
+      },
+    });
+  }
+  return recorded.size;
+}
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -152,31 +234,41 @@ async function markInterrupted(root: string, runId: string) {
     clearCurrentGenerationTiming(run);
   });
 }
-async function countRecentImages(root: string, sinceMs: number): Promise<number> {
-  if (!(await exists(root))) return 0;
-  let count = 0;
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const full = path.join(root, entry.name);
-    if (entry.isDirectory()) count += await countRecentImages(full, sinceMs);
-    else if (entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
-      try {
-        if ((await stat(full)).mtimeMs >= sinceMs) count++;
-      } catch {}
-    }
-  }
-  return count;
-}
 export async function verifyLocalOutputs(installPath: string, run: ExecutionRun) {
   if (!installPath)
     throw new Error('Local ComfyUI install path is required to verify generated outputs.');
-  const outputRoot = path.join(installPath, 'output', 'BatchStudio', run.projectId),
-    since = Date.parse(run.startedAt) - 5000;
-  const count = await countRecentImages(outputRoot, since);
-  if (count < run.progress.overall.total)
+  const outputRoot = localRunOutputRoot(installPath, run);
+  const evidence = validatedExecutionEvidence(run).valid.filter(
+    (item) => item.kind === 'CUSTOM' && item.scope === LOCAL_FILE_SCOPE,
+  );
+  const unique = new Map<string, (typeof evidence)[number]>();
+  for (const item of evidence) {
+    const relativePath = item.data.relativePath;
+    if (typeof relativePath !== 'string' || !relativePath) continue;
+    unique.set(relativePath, item);
+  }
+  if (unique.size < run.progress.overall.total)
     throw new Error(
-      `Generated output verification failed: expected ${run.progress.overall.total} images, found ${count} under ${outputRoot}.`,
+      `Generated output verification failed: expected ${run.progress.overall.total} Run-owned images, found ${unique.size} verified prompt output references.`,
     );
-  return { outputRoot, count };
+  const realRoot = await realpath(outputRoot);
+  for (const [relativePath, item] of unique) {
+    const file = path.resolve(outputRoot, relativePath);
+    if (!within(outputRoot, file))
+      throw new Error('Local output evidence contains an invalid file path.');
+    const realFile = await realpath(file);
+    if (!within(realRoot, realFile))
+      throw new Error('Local output evidence points outside its Run output.');
+    const metadata = await stat(realFile);
+    if (
+      !metadata.isFile() ||
+      metadata.size < 1 ||
+      metadata.size !== Number(item.data.size) ||
+      (await sha256File(realFile)) !== item.data.sha256
+    )
+      throw new Error(`Generated output verification failed: missing or modified image ${relativePath}.`);
+  }
+  return { outputRoot, count: unique.size };
 }
 
 export class LocalExecutionService {
@@ -251,6 +343,7 @@ export class LocalExecutionService {
       }
       const branchGraph = sliceSceneBranchGraph(graph, binding.expandNodeId),
         continuousId = `${run.runId}:${binding.branchId}`;
+      const saveNodeIds = isolateBranchSavePaths(branchGraph, run, binding.branchId);
       applyExpandState(branchGraph, binding.expandNodeId, continuousId, branchProgress.completed);
       const wrapper = { output: branchGraph },
         prepared = await scene.prepare(wrapper, binding.expandNodeId, workflow, run.runId);
@@ -290,12 +383,14 @@ export class LocalExecutionService {
             await scene.claim(prepared.run_handle, lastPromptId);
             runHandleClaimed = true;
           }
-          let terminal: 'success' | 'error' = 'error';
+          let terminal: 'success' | 'error' = 'error',
+            terminalHistory: any = null;
           for (;;) {
             const history = await comfy.history(lastPromptId),
               state = comfy.historyState(history, lastPromptId);
             if (state !== 'pending') {
               terminal = state;
+              terminalHistory = history;
               break;
             }
             await sleep(750);
@@ -309,6 +404,14 @@ export class LocalExecutionService {
             }
             throw new Error(`ComfyUI prompt ${lastPromptId} failed.`);
           }
+          await recordPromptOutputs(
+            root,
+            run,
+            settings.installPath,
+            lastPromptId,
+            terminalHistory,
+            saveNodeIds,
+          );
           await mutateExecutionRun(root, runId, (r) => {
             const bp = r.progress.branches.find((x) => x.branchId === binding.branchId);
             if (bp) bp.completed = Math.min(bp.total, bp.completed + 1);
