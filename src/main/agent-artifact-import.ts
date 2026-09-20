@@ -77,7 +77,9 @@ export async function importAutoArtifact(
   const queueKey = path.resolve(root);
   const previous = queues.get(queueKey) ?? Promise.resolve();
   let release = () => {};
-  const next = new Promise<void>((resolve) => { release = resolve; });
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   queues.set(queueKey, next);
   await previous.catch(() => {});
   try {
@@ -91,15 +93,20 @@ export async function importAutoArtifact(
       return duplicate;
     }
     notify?.({ ...base, phase: 'validating' });
-    const result = stage === 'caption'
-      ? await importCaptionGrok(root, raw, { automatic: true, provider })
-      : await importGrok(
-          root,
-          stage.startsWith('story-') ? 'story' : stage.startsWith('models') ? 'models' : 'promptPlan',
-          raw,
-          stage as Exclude<Stage, 'story-initial' | 'caption'>,
-          { automatic: true, provider },
-        );
+    const result =
+      stage === 'caption'
+        ? await importCaptionGrok(root, raw, { automatic: true, provider })
+        : await importGrok(
+            root,
+            stage.startsWith('story-')
+              ? 'story'
+              : stage.startsWith('models')
+                ? 'models'
+                : 'promptPlan',
+            raw,
+            stage as Exclude<Stage, 'story-initial' | 'caption'>,
+            { automatic: true, provider },
+          );
     if (!result.validation.valid) {
       const invalid: AutoArtifactEvent = {
         ...base,
@@ -114,9 +121,14 @@ export async function importAutoArtifact(
     // Store the actual expected artifact (model_loras.json, not merged models.json).
     const artifactDir = path.join(internalDir(root), 'agent-artifacts', provider, stage, key);
     const filePath = path.join(artifactDir, fileName);
-    const content = stage === 'story-finalize' || stage === 'story-fix'
-      ? result.extracted
-      : raw.trim().replace(/^\x60\x60\x60(?:json)?\s*\n/i, '').replace(/\n\x60\x60\x60\s*$/, '').trim();
+    const content =
+      stage === 'story-finalize' || stage === 'story-fix'
+        ? result.extracted
+        : raw
+            .trim()
+            .replace(/^\x60\x60\x60(?:json)?\s*\n/i, '')
+            .replace(/\n\x60\x60\x60\s*$/, '')
+            .trim();
     await writeTextAtomic(filePath, content + '\n');
     const imported: AutoArtifactEvent = {
       ...base,
@@ -127,8 +139,7 @@ export async function importAutoArtifact(
     ledger.records[key] = imported;
     // Prevent unbounded growth; preserve the most recent 300 successful imports.
     const entries = Object.entries(ledger.records);
-    if (entries.length > 300)
-      ledger.records = Object.fromEntries(entries.slice(-300));
+    if (entries.length > 300) ledger.records = Object.fromEntries(entries.slice(-300));
     await writeJsonAtomic(ledgerPath(root), ledger);
     notify?.(imported);
     return imported;
