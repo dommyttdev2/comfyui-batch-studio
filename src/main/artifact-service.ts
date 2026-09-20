@@ -1,4 +1,3 @@
-import { initializeProjectMeta } from './project-meta.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -30,6 +29,7 @@ import {
 } from './validation.js';
 import { loadCatalog, validateModelsAgainstCatalog } from './model-catalog.js';
 import { modelGenerationInputsChanged, resetModelDownstream } from './model-downstream-reset.js';
+import { initializeProjectMeta } from './project-meta.js';
 const FILES: Partial<Record<ArtifactKey, string>> = {
   projectBrief: 'project_brief.json',
   story: 'story.md',
