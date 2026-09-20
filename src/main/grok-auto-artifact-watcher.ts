@@ -34,15 +34,20 @@ export class GrokAutoArtifactWatcher {
     private readonly contents: WebContents,
     private readonly notify: (event: AutoArtifactEvent) => void,
   ) {
-    this.timer = setInterval(() => { void this.sample(); }, 1500);
+    this.timer = setInterval(() => {
+      void this.sample();
+    }, 1500);
     this.timer.unref();
     this.handleDownload = (_event, item, source) => {
       const expected = this.expected;
       if (
-        !expected || expected.processing || source.id !== this.contents.id ||
+        !expected ||
+        expected.processing ||
+        source.id !== this.contents.id ||
         item.getFilename() !== expected.fileName ||
         !isSafeGrokArtifactLink(item.getURL(), expected.fileName)
-      ) return;
+      )
+        return;
       expected.processing = true;
       const folder = path.join(expected.root, '._batch_studio', 'auto-downloads', randomUUID());
       mkdirSync(folder, { recursive: true });
@@ -57,9 +62,12 @@ export class GrokAutoArtifactWatcher {
               throw new Error('成果物が10MBを超えています。');
             const raw = await readFile(target, 'utf8');
             const result = await importAutoArtifact(
-              expected.root, 'grok', expected.stage,
+              expected.root,
+              'grok',
+              expected.stage,
               (expected.conversation ?? this.contents.getURL()) + '/download/' + hash(raw),
-              raw, this.notify,
+              raw,
+              this.notify,
             );
             if (result.phase === 'imported' || result.phase === 'duplicate') {
               if (this.expected === expected) this.expected = null;
@@ -76,14 +84,13 @@ export class GrokAutoArtifactWatcher {
     this.contents.session.on('will-download', this.handleDownload);
   }
 
-  private emit(
-    expected: Expectation,
-    phase: AutoArtifactEvent['phase'],
-    message?: string,
-  ) {
+  private emit(expected: Expectation, phase: AutoArtifactEvent['phase'], message?: string) {
     this.notify({
-      provider: 'grok', root: expected.root, stage: expected.stage,
-      fileName: expected.fileName, phase,
+      provider: 'grok',
+      root: expected.root,
+      stage: expected.stage,
+      fileName: expected.fileName,
+      phase,
       sourceId: expected.conversation ?? 'conversation-pending',
       message,
     });
@@ -93,8 +100,14 @@ export class GrokAutoArtifactWatcher {
     const fileName = expectedArtifact(stage);
     if (!fileName || this.disposed) return null;
     const expected: Expectation = {
-      root, stage, fileName, conversation: null,
-      baseline: new Set(), stable: new Map(), attempted: new Set(), processing: false,
+      root,
+      stage,
+      fileName,
+      conversation: null,
+      baseline: new Set(),
+      stable: new Map(),
+      attempted: new Set(),
+      processing: false,
     };
     try {
       const previous = await observeGrokArtifact(this.contents, fileName);
@@ -106,8 +119,12 @@ export class GrokAutoArtifactWatcher {
     }
     this.expected = expected;
     const waiting: AutoArtifactEvent = {
-      provider: 'grok', root, stage, fileName,
-      phase: 'waiting', sourceId: expected.conversation ?? 'conversation-pending',
+      provider: 'grok',
+      root,
+      stage,
+      fileName,
+      phase: 'waiting',
+      sourceId: expected.conversation ?? 'conversation-pending',
       message: `${fileName} の生成を待っています。`,
     };
     this.notify(waiting);
@@ -138,7 +155,9 @@ export class GrokAutoArtifactWatcher {
         if (!isSafeGrokArtifactLink(candidate.url, expected.fileName)) continue;
         expected.attempted.add(fingerprint);
         // Click only a link whose exact href and filename were already verified.
-        void this.contents.executeJavaScript(`(() => {
+        void this.contents
+          .executeJavaScript(
+            `(() => {
           const href = ${JSON.stringify(candidate.url)};
           const fileName = ${JSON.stringify(expected.fileName)};
           const anchor = [...document.querySelectorAll('a[href]')].find((item) =>
@@ -146,7 +165,10 @@ export class GrokAutoArtifactWatcher {
             ((item.getAttribute('download') || item.getAttribute('aria-label') ||
               item.textContent || '').includes(fileName)));
           if (anchor) anchor.click();
-        })()`, true).catch(() => {});
+        })()`,
+            true,
+          )
+          .catch(() => {});
         continue;
       }
       const raw = candidate.text.trim();
@@ -154,8 +176,13 @@ export class GrokAutoArtifactWatcher {
       if (expected.fileName.endsWith('.json')) {
         try {
           const parsed = JSON.parse(raw);
-          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
-              parsed.schemaVersion == null) continue;
+          if (
+            !parsed ||
+            typeof parsed !== 'object' ||
+            Array.isArray(parsed) ||
+            parsed.schemaVersion == null
+          )
+            continue;
         } catch {
           // Ignore a partial JSON stream; never import until JSON is complete.
           continue;
@@ -168,11 +195,18 @@ export class GrokAutoArtifactWatcher {
       expected.processing = true;
       try {
         const result = await importAutoArtifact(
-          expected.root, 'grok', expected.stage,
-          expected.conversation + '/code/' + fingerprint, raw, this.notify,
+          expected.root,
+          'grok',
+          expected.stage,
+          expected.conversation + '/code/' + fingerprint,
+          raw,
+          this.notify,
         );
-        if ((result.phase === 'imported' || result.phase === 'duplicate') &&
-            this.expected === expected) this.expected = null;
+        if (
+          (result.phase === 'imported' || result.phase === 'duplicate') &&
+          this.expected === expected
+        )
+          this.expected = null;
       } finally {
         expected.processing = false;
       }
