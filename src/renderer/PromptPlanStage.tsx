@@ -36,30 +36,35 @@ function isRenderablePromptPlan(value: unknown): value is PromptPlanArtifact {
     typeof plan.common !== 'object' ||
     !Array.isArray(plan.rootLoras) ||
     !Array.isArray(plan.branches)
-  ) return false;
-  return plan.branches.every((item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
-    const branch = item as Record<string, unknown>;
-    if (
-      typeof branch.id !== 'string' ||
-      typeof branch.label !== 'string' ||
-      !Array.isArray(branch.loras) ||
-      !Array.isArray(branch.leaves)
-    ) return false;
-    if (plan.schemaVersion === 2 && branch.prompt != null && !isStructuredPrompt(branch.prompt))
-      return false;
-    return branch.leaves.every((leaf) => {
-      if (!leaf || typeof leaf !== 'object' || Array.isArray(leaf)) return false;
-      const entry = leaf as Record<string, unknown>;
-      return (
-        typeof entry.id === 'string' &&
-        typeof entry.name === 'string' &&
-        (plan.schemaVersion === 1
-          ? typeof entry.positive === 'string' && typeof entry.negative === 'string'
-          : isStructuredPrompt(entry.prompt))
-      );
-    });
-  }) && (plan.schemaVersion === 1 || isStructuredPrompt(plan.common));
+  )
+    return false;
+  return (
+    plan.branches.every((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+      const branch = item as Record<string, unknown>;
+      if (
+        typeof branch.id !== 'string' ||
+        typeof branch.label !== 'string' ||
+        !Array.isArray(branch.loras) ||
+        !Array.isArray(branch.leaves)
+      )
+        return false;
+      if (plan.schemaVersion === 2 && branch.prompt != null && !isStructuredPrompt(branch.prompt))
+        return false;
+      return branch.leaves.every((leaf) => {
+        if (!leaf || typeof leaf !== 'object' || Array.isArray(leaf)) return false;
+        const entry = leaf as Record<string, unknown>;
+        return (
+          typeof entry.id === 'string' &&
+          typeof entry.name === 'string' &&
+          (plan.schemaVersion === 1
+            ? typeof entry.positive === 'string' && typeof entry.negative === 'string'
+            : isStructuredPrompt(entry.prompt))
+        );
+      });
+    }) &&
+    (plan.schemaVersion === 1 || isStructuredPrompt(plan.common))
+  );
 }
 
 function isStructuredPrompt(value: unknown): boolean {
@@ -105,9 +110,14 @@ export function PromptPlanStage({
       try {
         const parsed: unknown = JSON.parse(source.content);
         if (isRenderablePromptPlan(parsed)) setPlan(parsed);
-        else setLoadError('Prompt Planの必須項目が不足しているか、型が不正です。検証エラーを確認し、JSONを修正して再取り込みしてください。');
+        else
+          setLoadError(
+            'Prompt Planの必須項目が不足しているか、型が不正です。検証エラーを確認し、JSONを修正して再取り込みしてください。',
+          );
       } catch {
-        setLoadError('Prompt PlanをJSONとして解析できません。ファイルを修正して再取り込みしてください。');
+        setLoadError(
+          'Prompt PlanをJSONとして解析できません。ファイルを修正して再取り込みしてください。',
+        );
       }
     }
     const m = await window.batchStudio.artifact.read(project.rootPath, 'models', 'confirmed');
@@ -178,7 +188,9 @@ export function PromptPlanStage({
                     if (d.content) {
                       const parsed: unknown = JSON.parse(d.content);
                       if (!isRenderablePromptPlan(parsed))
-                        throw new Error('Prompt Planの構造が不正です。JSONを修正して再取り込みしてください。');
+                        throw new Error(
+                          'Prompt Planの構造が不正です。JSONを修正して再取り込みしてください。',
+                        );
                       setPlan(parsed);
                       setValidation(d.validation.issues);
                       setEditing(true);
@@ -217,9 +229,17 @@ export function PromptPlanStage({
           </div>
         </div>
         {issuesView(validation)}
-        {loadError && <div className="issue error" role="alert">{loadError}</div>}
+        {loadError && (
+          <div className="issue error" role="alert">
+            {loadError}
+          </div>
+        )}
         {!plan ? (
-          <p>{loadError ? '不正な下書きは保持されています。修正済みJSONを再取り込みしてください。' : 'Prompt Planはまだありません。Grokの結果を取り込んでください。'}</p>
+          <p>
+            {loadError
+              ? '不正な下書きは保持されています。修正済みJSONを再取り込みしてください。'
+              : 'Prompt Planはまだありません。Grokの結果を取り込んでください。'}
+          </p>
         ) : (
           <div className="flow">
             <button className="node common" onClick={() => setSelected({ type: 'common' })}>
