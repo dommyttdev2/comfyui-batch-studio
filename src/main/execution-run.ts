@@ -262,7 +262,9 @@ function requireRunOwnedSnapshot(run: ExecutionRun) {
     immutable.planPath !== expected.planPath ||
     immutable.modelsPath !== expected.modelsPath
   )
-    throw new Error('EXECUTION_SNAPSHOT_PATH_INVALID: Run snapshot must belong to its original Run ID.');
+    throw new Error(
+      'EXECUTION_SNAPSHOT_PATH_INVALID: Run snapshot must belong to its original Run ID.',
+    );
 }
 
 // Every graph consumer verifies the Run's recorded hashes before executing.
@@ -274,7 +276,9 @@ export async function readExecutionWorkflow(root: string, run: ExecutionRun) {
   const ui = await readJson<unknown>(path.join(root, workflow.uiPath));
   const api = await readJson<unknown>(path.join(root, workflow.apiPath));
   if (!ui || !api)
-    throw new Error('EXECUTION_SNAPSHOT_MISSING: saved Run workflow is absent; project files cannot replace it.');
+    throw new Error(
+      'EXECUTION_SNAPSHOT_MISSING: saved Run workflow is absent; project files cannot replace it.',
+    );
   const uiSha256 = hashCanonicalJson(ui),
     apiSha256 = hashCanonicalJson(api);
   if (
@@ -292,7 +296,9 @@ export async function readExecutionWorkflow(root: string, run: ExecutionRun) {
       hashCanonicalJson(plan) !== run.snapshot.plan.sha256 ||
       hashWorkflowModelInputs(models as ModelsArtifact) !== workflow.modelsSha256
     )
-      throw new Error('EXECUTION_SNAPSHOT_HASH_MISMATCH: saved Run Prompt Plan or model identity is absent or modified.');
+      throw new Error(
+        'EXECUTION_SNAPSHOT_HASH_MISMATCH: saved Run Prompt Plan or model identity is absent or modified.',
+      );
   }
   return { ui, api: api as ApiGraph };
 }
@@ -321,7 +327,9 @@ async function persistRunSnapshot(
     hashCanonicalJson(plan) !== snapshot.plan.sha256 ||
     hashWorkflowModelInputs(models as ModelsArtifact) !== snapshot.workflow.modelsSha256
   )
-    throw new Error('EXECUTION_SNAPSHOT_SOURCE_CHANGED: Workflow, Prompt Plan or models changed while the Run was being created.');
+    throw new Error(
+      'EXECUTION_SNAPSHOT_SOURCE_CHANGED: Workflow, Prompt Plan or models changed while the Run was being created.',
+    );
   const dir = path.join(root, RUNS_DIR, runId, 'snapshot');
   try {
     await writeJsonAtomic(path.join(root, paths.uiPath), ui);
@@ -450,7 +458,9 @@ export async function startExecutionRun(
     const postCopy = await captureSnapshot(root, preflight);
     if (!sameSnapshot(snapshot, postCopy)) {
       await rm(path.join(root, RUNS_DIR, runId), { recursive: true, force: true });
-      throw new Error('EXECUTION_SNAPSHOT_SOURCE_CHANGED: Project workflow changed during Run creation.');
+      throw new Error(
+        'EXECUTION_SNAPSHOT_SOURCE_CHANGED: Project workflow changed during Run creation.',
+      );
     }
     const branches = stable.plan.branches.map((branch) => ({
       branchId: branch.branchId,
