@@ -64,13 +64,15 @@ function evidenceForModel(
   destination: string,
 ) {
   return (
-    [...evidence].reverse().find(
-      (item) =>
-        item.kind === 'MODEL_VERIFIED' &&
-        item.scope === ref &&
-        String(item.data.objectKey ?? '') === objectKey &&
-        String(item.data.destination ?? '') === destination,
-    ) ?? null
+    [...evidence]
+      .reverse()
+      .find(
+        (item) =>
+          item.kind === 'MODEL_VERIFIED' &&
+          item.scope === ref &&
+          String(item.data.objectKey ?? '') === objectKey &&
+          String(item.data.destination ?? '') === destination,
+      ) ?? null
   );
 }
 function samePrimitive(a: unknown, b: unknown) {
@@ -261,8 +263,7 @@ export class RemoteModelStager {
         Boolean(item.meta.etag) &&
         item.meta.etag === existingEvidence.data.objectEtag &&
         Number(existingEvidence.data.size) === item.meta.size;
-      const expectedSha =
-        item.meta.sha256 ?? (sourceEvidenceTrusted ? evidenceSha : null);
+      const expectedSha = item.meta.sha256 ?? (sourceEvidenceTrusted ? evidenceSha : null);
       const mustDownloadFromSource = !expectedSha;
 
       await this.setModelProgress(root, runId, item.ref, {
@@ -356,9 +357,13 @@ export class RemoteModelStager {
       if (!sha256 || !/^[0-9a-f]{64}$/.test(sha256))
         throw new Error(`MODEL_HASH_MISSING: ${item.fileName} was not verified after staging.`);
       if (expectedSha && sha256 !== expectedSha.toLowerCase())
-        throw new Error(`MODEL_HASH_MISMATCH: ${item.fileName} differs from the verified R2 source.`);
+        throw new Error(
+          `MODEL_HASH_MISMATCH: ${item.fileName} differs from the verified R2 source.`,
+        );
       if (mustDownloadFromSource && staged.reused)
-        throw new Error(`MODEL_SOURCE_VERIFICATION_FAILED: ${item.fileName} was not freshly downloaded.`);
+        throw new Error(
+          `MODEL_SOURCE_VERIFICATION_FAILED: ${item.fileName} was not freshly downloaded.`,
+        );
       const latestObject = await this.r2.objectMetadata(bucket, item.objectKey);
       if (
         latestObject.size !== item.meta.size ||
