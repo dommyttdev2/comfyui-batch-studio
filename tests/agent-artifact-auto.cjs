@@ -34,6 +34,73 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
 (async () => {
   const { importAutoArtifact, latestAutoArtifact, expectedArtifact, artifactFileContent } =
     await import(pathToFileURL(path.join(runtime, 'main', 'agent-artifact-import.js')).href);
+  const { codexTaskFileForTurn, latestCompletedArtifactTurn } = await import(
+    pathToFileURL(path.join(runtime, 'main', 'codex-artifact-turn.js')).href
+  );
+  const taskTurn = (fileName) => ({
+    status: 'completed',
+    items: [
+      {
+        type: 'userMessage',
+        content: [
+          {
+            text: `## Codex向け出力契約\\n回答の最後に ${fileName} の完成した内容だけを出力してください。`,
+          },
+        ],
+      },
+      { type: 'agentMessage', text: '{"schemaVersion":1}' },
+    ],
+  });
+  for (const fileName of [
+    'story.md',
+    'model_loras.json',
+    'prompt_plan.json',
+    'caption_content.json',
+  ]) {
+    assert.equal(codexTaskFileForTurn(taskTurn(fileName)), fileName);
+  }
+  assert.equal(
+    codexTaskFileForTurn({
+      items: [
+        {
+          type: 'userMessage',
+          text: '## Codex向け出力契約\\nこれは対話用の検討依頼です。story.mdについて議論します。',
+        },
+      ],
+    }),
+    null,
+  );
+  assert.equal(
+    codexTaskFileForTurn({
+      items: [{ type: 'userMessage', text: 'caption_content.json を作ってください。' }],
+    }),
+    null,
+  );
+  assert.equal(
+    codexTaskFileForTurn({
+      items: [
+        { type: 'userMessage', text: '通常の依頼' },
+        { type: 'agentMessage', text: '回答の最後に caption_content.json' },
+      ],
+    }),
+    null,
+  );
+  const captionTurn = taskTurn('caption_content.json');
+  const otherTurn = taskTurn('prompt_plan.json');
+  assert.equal(
+    latestCompletedArtifactTurn(
+      [
+        captionTurn,
+        otherTurn,
+        { ...taskTurn('caption_content.json'), status: 'failed' },
+        { status: 'completed', items: [] },
+      ],
+      'caption_content.json',
+    ),
+    captionTurn,
+    'Retry must locate the latest completed task for the current stage even after later chat turns.',
+  );
+
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-auto-artifact-project-'));
   const draft = path.join(root, '._batch_studio', 'drafts', 'story.md');
   assert.equal(expectedArtifact('story-initial'), null);
