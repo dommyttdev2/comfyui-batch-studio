@@ -2365,6 +2365,26 @@ function register() {
     await reconcilePersistedExecutionRuns(root);
     return getCurrentExecutionRun(root);
   });
+  ipcMain.handle(IPC.EXECUTION_RECONCILE, async (_e, root: unknown, runId: unknown) => {
+    validRoot(root);
+    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
+    await reconcilePersistedExecutionRuns(root);
+    const previous = await getExecutionRun(root, runId);
+    if (!previous || previous.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN')
+      throw new Error('Only a previously uncertain Run can be rechecked.');
+    const ref = { projectRoot: path.resolve(root), runId };
+    if (executionCoordinator.hasActive(ref)) return previous;
+    await mutateExecutionRun(root, runId, (current) => {
+      if (current.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN') return;
+      current.lifecycle = 'RUNNING';
+      current.error = null;
+      current.controls.scheduling = 'ACTIVE';
+    });
+    await reconcilePersistedExecutionRuns(root);
+    const latest = await getExecutionRun(root, runId);
+    if (!latest) throw new Error('Execution Run disappeared while reconciling.');
+    return latest;
+  });
   ipcMain.handle(IPC.EXECUTION_GET, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
