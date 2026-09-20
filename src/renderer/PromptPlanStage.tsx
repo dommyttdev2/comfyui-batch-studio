@@ -167,10 +167,10 @@ export function PromptPlanStage({
           title="Prompt Planの修正依頼"
           run={run}
           onImport={importPlan}
-        onAutoImported={async () => {
-          await load();
-          setEditing(true);
-        }}
+          onAutoImported={async () => {
+            await load();
+            setEditing(true);
+          }}
         />
       )}
       <section className="panel treepanel">
