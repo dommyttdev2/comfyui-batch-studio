@@ -490,6 +490,81 @@ function startServer(install, options = {}) {
       mock.server.close();
     }
   }
+  {
+    // Simulate a Main Process crash after /prompt was accepted and the prompt ID
+    // persisted, while ComfyUI continues generating on the old process.
+    const { root, install, run, ready } = await makeProject(
+        execution,
+        hashCanonicalJson,
+        'restart-local-project',
+      ),
+      mock = await startServer(install, { holdFirst: true });
+    try {
+      const graph = graphFor(run.projectId);
+      graph[3].inputs.path = `BatchStudio/${run.projectId}/${run.runId}/branch-a`;
+      const submitted = await fetch(mock.endpoint + '/prompt', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: graph, client_id: run.runId }),
+      }).then((response) => response.json());
+      await execution.mutateExecutionRun(root, run.runId, (current) => {
+        current.phase = 'EXECUTING';
+        current.current = {
+          branchId: 'branch-a',
+          leafId: 'a1',
+          promptId: submitted.prompt_id,
+        };
+      });
+      const reopened = new LocalExecutionService(async () => ({
+        endpoint: mock.endpoint,
+        installPath: install,
+      }));
+      const recovery = reopened.recover(root, run.runId);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.equal(mock.calls.prompts.length, 1, 'recovery must only observe the old queued prompt');
+      mock.releaseFirst();
+      await recovery;
+      const paused = await execution.getExecutionRun(root, run.runId);
+      assert.equal(paused.lifecycle, 'PAUSED');
+      assert.equal(paused.progress.overall.completed, 1);
+      assert.equal(paused.current.promptId, null);
+      assert.equal(mock.calls.prompts.length, 1, 'no POST /prompt during recovery');
+      const resumed = await execution.resumeExecutionRun(root, run.runId, async () => ready);
+      assert.equal(resumed.lifecycle, 'RUNNING');
+      await reopened.start(root, run.runId);
+      const done = await execution.getExecutionRun(root, run.runId);
+      assert.equal(done.lifecycle, 'COMPLETED');
+      assert.equal(done.progress.overall.completed, 3);
+      assert.equal(mock.calls.prompts.length, 3, 'remaining leaves only should be submitted');
+    } finally {
+      mock.server.close();
+    }
+  }
+  {
+    const { root, install, run } = await makeProject(
+        execution,
+        hashCanonicalJson,
+        'missing-id-project',
+      ),
+      mock = await startServer(install);
+    try {
+      await execution.mutateExecutionRun(root, run.runId, (current) => {
+        current.phase = 'EXECUTING';
+        current.current = { branchId: 'branch-a', leafId: 'a1', promptId: null };
+      });
+      const reopened = new LocalExecutionService(async () => ({
+        endpoint: mock.endpoint,
+        installPath: install,
+      }));
+      await reopened.recover(root, run.runId);
+      const failed = await execution.getExecutionRun(root, run.runId);
+      assert.equal(failed.lifecycle, 'FAILED');
+      assert.equal(failed.error.code, 'EXECUTION_RECOVERY_UNCERTAIN');
+      assert.equal(mock.calls.prompts.length, 0, 'an unrecorded accepted prompt must never be replayed');
+    } finally {
+      mock.server.close();
+    }
+  }
   console.log('Local ComfyUI execution tests passed.');
 })().catch((error) => {
   console.error(error);
