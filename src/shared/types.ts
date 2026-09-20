@@ -1285,6 +1285,7 @@ export interface BatchStudioApi {
     generateZip: (
       root: string,
       format: MarketplaceOutputFormat,
+      state?: MarketplaceImageEditorState,
     ) => Promise<MarketplaceGenerationResult>;
     exportCustom: (
       root: string,
