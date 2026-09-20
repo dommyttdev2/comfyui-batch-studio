@@ -370,7 +370,12 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
       error: '',
       createdAt: new Date().toISOString(),
     });
-    const jobs = [makeJob('same-size'), makeJob('during-transfer'), makeJob('inode'), makeJob('shrink')];
+    const jobs = [
+      makeJob('same-size'),
+      makeJob('during-transfer'),
+      makeJob('inode'),
+      makeJob('shrink'),
+    ];
     fs.writeFileSync(source, Buffer.alloc(20, 0x41));
     fs.writeFileSync(statePath, JSON.stringify({ schemaVersion: 1, jobs }));
     const manager = new R2Manager({}, sourceRoot);
