@@ -19,7 +19,8 @@ export async function observeGrokArtifact(
   contents: WebContents,
   fileName: string,
 ): Promise<GrokArtifactObservation> {
-  const result = await contents.executeJavaScript(`(() => {
+  const result = (await contents.executeJavaScript(
+    `(() => {
     const filename = ${JSON.stringify(fileName)};
     const key = '__batchStudioArtifactObserverV1';
     if (!window[key]) {
@@ -44,7 +45,9 @@ export async function observeGrokArtifact(
         candidates.push({ kind: 'link', text: '', url: anchor.href || '', name: name.trim().slice(0, 256) });
     }
     return { conversation: location.href, revision: window[key].state.revision, candidates: candidates.slice(-16) };
-  })()`, true) as {
+  })()`,
+    true,
+  )) as {
     conversation?: unknown;
     revision?: unknown;
     candidates?: unknown;
@@ -78,8 +81,10 @@ export function isSafeGrokArtifactLink(value: string, fileName: string): boolean
       const inner = new URL(url.pathname);
       return inner.protocol === 'https:' && inner.hostname === 'grok.com';
     }
-    return url.protocol === 'https:' &&
-      (url.hostname === 'grok.com' || url.hostname.endsWith('.grok.com'));
+    return (
+      url.protocol === 'https:' &&
+      (url.hostname === 'grok.com' || url.hostname.endsWith('.grok.com'))
+    );
   } catch {
     return false;
   }
