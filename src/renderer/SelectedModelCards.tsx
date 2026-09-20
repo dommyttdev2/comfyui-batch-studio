@@ -45,22 +45,19 @@ function SelectionCard({
     setError('');
   }, [selection.versionId, selection.fileId, selection.modelId]);
 
-  const item: CatalogItem | null = catalogItemForSelection(
-    catalog,
-    selection,
-    role,
-    family,
-  );
+  const item: CatalogItem | null = catalogItemForSelection(catalog, selection, role, family);
   const matches = item ? candidateVersions(item, role, family) : [];
   const match = matches.find((candidate) => candidate.version.versionId === pending.versionId);
   const file = match?.files.find((candidate) => candidate.id === pending.fileId);
-  const changed =
-    pending.versionId !== selection.versionId || pending.fileId !== selection.fileId;
+  const changed = pending.versionId !== selection.versionId || pending.fileId !== selection.fileId;
   const image = match?.version.thumbnailUrl ?? item?.thumbnailUrl;
-  const trained = match?.version.trainedWords ??
-    (match?.version.versionId === item?.versionId ? item?.trainedWords : undefined) ?? [];
+  const trained =
+    match?.version.trainedWords ??
+    (match?.version.versionId === item?.versionId ? item?.trainedWords : undefined) ??
+    [];
   const modelUrl = `https://civitai.com/models/${selection.modelId}?modelVersionId=${match?.version.versionId ?? selection.versionId}`;
-  const baseline = match?.version.strengthBaseline ??
+  const baseline =
+    match?.version.strengthBaseline ??
     (match?.version.versionId === item?.versionId ? item?.strengthBaseline : undefined);
 
   const save = async () => {
@@ -87,7 +84,9 @@ function SelectionCard({
   return (
     <article className="civit-model-card selected-model-card">
       <div className="civit-model-image">
-        {image ? <img src={image} alt="" loading="lazy" /> : (
+        {image ? (
+          <img src={image} alt="" loading="lazy" />
+        ) : (
           <div className="civit-model-placeholder">MODEL</div>
         )}
         <span>{label}</span>
@@ -112,14 +111,18 @@ function SelectionCard({
                 disabled={saving}
                 onChange={(event) => {
                   const versionId = Number(event.target.value);
-                  const next = matches.find((candidate) => candidate.version.versionId === versionId);
+                  const next = matches.find(
+                    (candidate) => candidate.version.versionId === versionId,
+                  );
                   if (!next) return;
                   const preferredFile =
                     versionId === selection.versionId
                       ? next.files.find((candidate) => candidate.id === selection.fileId)
                       : undefined;
-                  const nextFile = preferredFile ??
-                    next.files.find((candidate) => candidate.primary) ?? next.files[0];
+                  const nextFile =
+                    preferredFile ??
+                    next.files.find((candidate) => candidate.primary) ??
+                    next.files[0];
                   setPending({ versionId, fileId: nextFile.id });
                   setError('');
                 }}
@@ -161,9 +164,13 @@ function SelectionCard({
               <span>TRIGGER WORDS</span>
               {trained.length ? (
                 <div className="civit-chips words">
-                  {trained.map((word) => <code key={word}>{word}</code>)}
+                  {trained.map((word) => (
+                    <code key={word}>{word}</code>
+                  ))}
                 </div>
-              ) : <small>—</small>}
+              ) : (
+                <small>—</small>
+              )}
             </div>
             <div className="civit-card-footer">
               <span>Version ID {match?.version.versionId ?? '—'}</span>
@@ -204,11 +211,15 @@ export function SelectedModelCards({
 }) {
   const base = models.modelFamily === 'anima' ? models.diffusionModel : models.checkpoint;
   const entries: SelectionEntry[] = [
-    ...(base ? [{
-      selection: base,
-      role: 'checkpoint' as const,
-      label: models.modelFamily === 'anima' ? 'Diffusion Model' : 'Checkpoint',
-    }] : []),
+    ...(base
+      ? [
+          {
+            selection: base,
+            role: 'checkpoint' as const,
+            label: models.modelFamily === 'anima' ? 'Diffusion Model' : 'Checkpoint',
+          },
+        ]
+      : []),
     ...models.loras.map((selection) => ({
       selection,
       role: 'lora' as const,
