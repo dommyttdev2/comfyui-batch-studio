@@ -1,6 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { AutoArtifactEvent, AutoArtifactProvider, GrokTask, ValidationIssue } from '../shared/types.js';
+import type { AutoArtifactEvent, AutoArtifactProvider, GrokTask } from '../shared/types.js';
 import { importGrok, internalDir } from './artifact-service.js';
 import { importCaptionGrok } from './caption-service.js';
 import { readJson, writeJsonAtomic, writeTextAtomic } from './fs-utils.js';
@@ -78,7 +78,7 @@ export async function importAutoArtifact(
   const previous = queues.get(queueKey) ?? Promise.resolve();
   let release = () => {};
   const next = new Promise<void>((resolve) => { release = resolve; });
-  queues.set(queueKey, previous.catch(() => {}).then(() => next));
+  queues.set(queueKey, next);
   await previous.catch(() => {});
   try {
     const hash = digest(raw);
@@ -97,7 +97,7 @@ export async function importAutoArtifact(
           root,
           stage.startsWith('story-') ? 'story' : stage.startsWith('models') ? 'models' : 'promptPlan',
           raw,
-          stage,
+          stage as Exclude<Stage, 'story-initial' | 'caption'>,
           { automatic: true, provider },
         );
     if (!result.validation.valid) {
@@ -114,7 +114,10 @@ export async function importAutoArtifact(
     // Store the actual expected artifact (model_loras.json, not merged models.json).
     const artifactDir = path.join(internalDir(root), 'agent-artifacts', provider, stage, key);
     const filePath = path.join(artifactDir, fileName);
-    await writeTextAtomic(filePath, raw.trim() + '\n');
+    const content = stage === 'story-finalize' || stage === 'story-fix'
+      ? result.extracted
+      : raw.trim().replace(/^\x60\x60\x60(?:json)?\s*\n/i, '').replace(/\n\x60\x60\x60\s*$/, '').trim();
+    await writeTextAtomic(filePath, content + '\n');
     const imported: AutoArtifactEvent = {
       ...base,
       phase: 'imported',
