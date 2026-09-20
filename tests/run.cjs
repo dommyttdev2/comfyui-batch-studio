@@ -520,7 +520,9 @@ function plan() {
   );
 
   {
-    const txn = await load('project-transaction.js').catch(() => load('main/project-transaction.js'));
+    const txn = await load('project-transaction.js').catch(() =>
+      load('main/project-transaction.js'),
+    );
     const journalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-transaction-open-'));
     writeJson(path.join(journalRoot, 'project_meta.json'), {
       schemaVersion: 1,
