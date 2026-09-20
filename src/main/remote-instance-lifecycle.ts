@@ -193,14 +193,20 @@ export class RemoteInstanceLifecycleService {
     )
       return;
     const lifecycle = run.remoteLifecycle;
-    if (run.lifecycle === 'RUNNING' || run.lifecycle === 'PAUSED') return;
+    if (
+      run.lifecycle === 'PAUSED' ||
+      (run.lifecycle === 'RUNNING' && run.phase !== 'CLOUD_INSTANCE_FINALIZING')
+    )
+      return;
     if (!lifecycle || lifecycle.initialStatus == null || lifecycle.finalizedAt) return;
     const instanceId = Number(run.remote.instanceId),
       phaseBefore = run.phase,
       // A finalize failure occurs after generation/retrieval completed. Retrying
       // this failure must stop the same instance, not restore its initial state.
       stopForCompletedRun =
-        run.lifecycle === 'COMPLETED' || run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED',
+        run.lifecycle === 'COMPLETED' ||
+        run.phase === 'CLOUD_INSTANCE_FINALIZING' ||
+        run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED',
       restoreStartedInstance =
         lifecycle.restorePolicy === 'restore-if-started' &&
         lifecycle.startedByBatchStudio &&
