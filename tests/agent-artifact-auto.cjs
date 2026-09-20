@@ -42,17 +42,31 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
     items: [
       {
         type: 'userMessage',
-        content: [{ text: `## Codex向け出力契約\\n回答の最後に ${fileName} の完成した内容だけを出力してください。` }],
+        content: [
+          {
+            text: `## Codex向け出力契約\\n回答の最後に ${fileName} の完成した内容だけを出力してください。`,
+          },
+        ],
       },
       { type: 'agentMessage', text: '{"schemaVersion":1}' },
     ],
   });
-  for (const fileName of ['story.md', 'model_loras.json', 'prompt_plan.json', 'caption_content.json']) {
+  for (const fileName of [
+    'story.md',
+    'model_loras.json',
+    'prompt_plan.json',
+    'caption_content.json',
+  ]) {
     assert.equal(codexTaskFileForTurn(taskTurn(fileName)), fileName);
   }
   assert.equal(
     codexTaskFileForTurn({
-      items: [{ type: 'userMessage', text: '## Codex向け出力契約\\nこれは対話用の検討依頼です。story.mdについて議論します。' }],
+      items: [
+        {
+          type: 'userMessage',
+          text: '## Codex向け出力契約\\nこれは対話用の検討依頼です。story.mdについて議論します。',
+        },
+      ],
     }),
     null,
   );
@@ -64,7 +78,10 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
   );
   assert.equal(
     codexTaskFileForTurn({
-      items: [{ type: 'userMessage', text: '通常の依頼' }, { type: 'agentMessage', text: '回答の最後に caption_content.json' }],
+      items: [
+        { type: 'userMessage', text: '通常の依頼' },
+        { type: 'agentMessage', text: '回答の最後に caption_content.json' },
+      ],
     }),
     null,
   );
@@ -72,7 +89,12 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
   const otherTurn = taskTurn('prompt_plan.json');
   assert.equal(
     latestCompletedArtifactTurn(
-      [captionTurn, otherTurn, { ...taskTurn('caption_content.json'), status: 'failed' }, { status: 'completed', items: [] }],
+      [
+        captionTurn,
+        otherTurn,
+        { ...taskTurn('caption_content.json'), status: 'failed' },
+        { status: 'completed', items: [] },
+      ],
       'caption_content.json',
     ),
     captionTurn,
