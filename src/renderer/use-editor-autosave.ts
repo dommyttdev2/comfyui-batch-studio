@@ -41,14 +41,18 @@ export function useEditorAutosave<T extends Editable>(
       setSaveStatus('saving');
       setSaveError('');
       try {
-        const result = (kind === 'thumbnail'
-          ? await window.batchStudio.thumbnail.save(target, payload as ThumbnailEditorState)
-          : await window.batchStudio.marketplace.save(
-              target,
-              payload as MarketplaceImageEditorState,
-            )) as T;
+        const result = (
+          kind === 'thumbnail'
+            ? await window.batchStudio.thumbnail.save(target, payload as ThumbnailEditorState)
+            : await window.batchStudio.marketplace.save(
+                target,
+                payload as MarketplaceImageEditorState,
+              )
+        ) as T;
         if (result.saveRevision !== revision)
-          throw new Error('EDITOR_SAVE_STALE: より新しい編集状態が保存済みです。再読み込みしてから編集してください。');
+          throw new Error(
+            'EDITOR_SAVE_STALE: より新しい編集状態が保存済みです。再読み込みしてから編集してください。',
+          );
         if (issuedRevision.current === revision) {
           setSaveStatus('saved');
           setSaveError('');
