@@ -1048,10 +1048,14 @@ export interface CodexContext {
   root: string;
   stage: GrokContextStage;
 }
-export interface CodexSnapshot extends CodexContext {
+export interface CodexThreadState {
   activeThreadId: string | null;
   threadIds: string[];
+}
+export interface CodexSnapshot extends CodexContext, CodexThreadState {
   messages: CodexMessage[];
+  busy: boolean;
+  historyUnavailable?: boolean;
 }
 export interface CodexEvent {
   method: string;
@@ -1310,8 +1314,8 @@ export interface BatchStudioApi {
     snapshot: () => Promise<CodexSnapshot>;
     newChat: () => Promise<CodexSnapshot>;
     restoreChat: (threadId: string) => Promise<CodexSnapshot>;
-    send: (text: string) => Promise<void>;
-    sendTask: (stage: GrokTask['stage'], extra?: string) => Promise<void>;
+    send: (text: string) => Promise<CodexThreadState>;
+    sendTask: (stage: GrokTask['stage'], extra?: string) => Promise<CodexThreadState>;
     onEvent: (listener: (event: CodexEvent) => void) => () => void;
     saveResponse: (text: string) => Promise<string | null>;
   };

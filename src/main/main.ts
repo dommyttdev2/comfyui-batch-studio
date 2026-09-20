@@ -86,7 +86,7 @@ import { CivitaiRequestPolicy } from './civitai-request-policy.js';
 import { CivitaiConfigStore } from './civitai-config.js';
 import { UiStateStore } from './ui-state.js';
 import { GrokChatStateStore } from './grok-chat-state.js';
-import { CodexChatStateStore } from './codex-chat-state.js';
+import { CodexChatStateStore, type CodexStageChats } from './codex-chat-state.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { R2ConfigStore } from './r2-config.js';
@@ -1233,22 +1233,35 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
   const { server, store } = codexService();
   const saved = await store.get(context.root, context.stage);
   stateCodexActiveThread.set(state.window.id, saved.activeThreadId);
-  let messages: CodexMessage[] = [];
-  if (saved.activeThreadId) {
-    await server.request('thread/resume', {
-      threadId: saved.activeThreadId,
-      cwd: context.root,
-      sandbox: 'read-only',
-      approvalPolicy: 'never',
-    });
-    const read = await server.request<unknown>('thread/read', {
-      threadId: saved.activeThreadId,
-      includeTurns: true,
-    });
-    messages = codexMessages(read);
+  if (!saved.activeThreadId) return { ...context, ...saved, messages: [], busy: false };
+
+  // A thread/start ID exists before its first rollout is persisted. Reading or
+  // resuming it while the first turn is running fails with "no rollout found".
+  const busy = codexBusy.has(saved.activeThreadId);
+  if (busy) return { ...context, ...saved, messages: [], busy: true };
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      // Reading history must never resume a thread; resume belongs to send only.
+      const read = await server.request<unknown>('thread/read', {
+        threadId: saved.activeThreadId,
+        includeTurns: true,
+      });
+      return { ...context, ...saved, messages: codexMessages(read), busy: false };
+    } catch (error) {
+      if (!(error instanceof Error) || !/no rollout found for thread id/i.test(error.message))
+        throw error;
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+      // Do not delete a possibly recoverable conversation ID. The user can
+      // retry restoration or explicitly start a new chat.
+      return { ...context, ...saved, messages: [], busy: false, historyUnavailable: true };
+    }
   }
-  return { ...context, ...saved, messages };
+  throw new Error('Unexpected Codex snapshot state.');
 }
+
 async function codexAccount(): Promise<CodexAccountStatus> {
   const { server } = codexService();
   const result = await server.request<{
@@ -1260,7 +1273,7 @@ async function codexAccount(): Promise<CodexAccountStatus> {
     planType: result.account?.planType ?? null,
   };
 }
-async function codexSend(state: ProjectWindowState, message: string): Promise<void> {
+async function codexSend(state: ProjectWindowState, message: string): Promise<CodexStageChats> {
   const context = codexContextFor(state);
   const input = message.trim();
   if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
@@ -1272,6 +1285,7 @@ async function codexSend(state: ProjectWindowState, message: string): Promise<vo
   const { server, store } = codexService();
   const saved = await store.get(context.root, context.stage);
   let threadId = saved.activeThreadId;
+  if (threadId && codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
   if (!threadId) {
     const started = await server.request<{ thread: { id: string } }>('thread/start', {
       cwd: context.root,
@@ -1302,6 +1316,8 @@ async function codexSend(state: ProjectWindowState, message: string): Promise<vo
     codexBusy.delete(threadId);
     throw error;
   }
+  // Return only IDs here: do not read/resume a newly started, unpersisted rollout.
+  return store.get(context.root, context.stage);
 }
 const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
   story: ['story-initial', 'story-finalize', 'story-fix'],
@@ -1319,7 +1335,7 @@ async function codexSendTask(
   state: ProjectWindowState,
   stage: GrokTask['stage'],
   extra: string,
-): Promise<void> {
+): Promise<CodexStageChats> {
   const context = codexContextFor(state);
   if (!codexTaskContexts[context.stage].includes(stage))
     throw new Error('選択した工程に対応しない依頼です。');
@@ -1338,7 +1354,7 @@ async function codexSendTask(
       throw new Error('参照ファイルが大きすぎるため送信できません。添付内容を整理してください。');
     files.push('### ' + attachment.name + ' (' + attachment.purpose + ')\n' + data);
   }
-  await codexSend(
+  return codexSend(
     state,
     prompt +
       '\n\n## Codex向け出力契約\n' +

@@ -4,6 +4,7 @@ import type {
   CodexContext,
   CodexMessage,
   CodexSnapshot,
+  CodexThreadState,
   GrokTask,
 } from '../shared/types';
 import './codex-pane.css';
@@ -57,9 +58,15 @@ export function CodexPane() {
   }, []);
   const refresh = useCallback(async (key: string) => {
     const value = await window.batchStudio.codex.snapshot();
-    if (currentContext.current !== key) return;
+    if (currentContext.current !== key) return value;
     setSnapshot(value);
     setMessages(value.messages);
+    setBusy(value.busy);
+    if (value.historyUnavailable)
+      setError(
+        'この会話の保存済み履歴を取得できません。履歴を再読み込みするか、「新しいチャット」を選択してください。以前の会話IDは保持されています。',
+      );
+    return value;
   }, []);
   const switchContext = useCallback(
     async (next: CodexContext | null) => {
@@ -107,8 +114,8 @@ export function CodexPane() {
         setBusy(false);
         const key = currentContext.current;
         void refresh(key)
-          .then(() => {
-            if (currentContext.current === key) setStream('');
+          .then((value) => {
+            if (currentContext.current === key && !value.historyUnavailable) setStream('');
           })
           .catch((err) => {
             if (currentContext.current === key) setError(errorText(err));
@@ -129,20 +136,20 @@ export function CodexPane() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, stream]);
 
-  const send = async (request: () => Promise<void>, text: string) => {
+  const send = async (request: () => Promise<CodexThreadState>, text: string) => {
     const key = currentContext.current;
     setError('');
     setBusy(true);
     setStream('');
     setMessages((before) => [...before, { id: 'pending-' + Date.now(), role: 'user', text }]);
     try {
-      await request();
+      const threads = await request();
       if (key === currentContext.current) {
         setInput('');
         setExtra('');
-        // A fresh thread gets its ID only after the first turn starts.
-        const current = await window.batchStudio.codex.snapshot();
-        if (key === currentContext.current) setSnapshot(current);
+        // A newly started thread has an ID immediately, but no persisted rollout
+        // until its turn finishes. Update history selection without reading it.
+        setSnapshot((previous) => (previous ? { ...previous, ...threads } : previous));
       }
     } catch (err) {
       if (key === currentContext.current) {
@@ -225,6 +232,17 @@ export function CodexPane() {
       {error && (
         <div className="codex-error" role="alert">
           {error}
+          {snapshot?.historyUnavailable && (
+            <button
+              disabled={loading || busy}
+              onClick={() => {
+                setError('');
+                void refresh(currentContext.current).catch((err) => setError(errorText(err)));
+              }}
+            >
+              履歴を再読み込み
+            </button>
+          )}
         </div>
       )}
       <div className="codex-messages" ref={scrollRef} role="log" aria-live="polite">
