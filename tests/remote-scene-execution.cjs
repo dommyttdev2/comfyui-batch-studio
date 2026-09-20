@@ -254,6 +254,126 @@ function startMock() {
       'stop scheduling must not submit the next prompt',
     );
 
+    // Stopping is durable: only an explicit resume may clear the persisted stop flags.
+    const pausedState = JSON.parse(fs.readFileSync(path.join(stopDir, 'state.json'), 'utf8'));
+    assert.equal(pausedState.status, 'paused');
+    assert.equal(
+      JSON.parse(fs.readFileSync(path.join(stopDir, 'control.json'), 'utf8')).stopRequested,
+      true,
+    );
+    result = await callWorker(workerPath, stopDir, {
+      ...payload(mock.endpoint, 'stop-run'),
+      resume: true,
+    });
+    assert.equal(result.code, 0, result.stderr);
+    response = result.lines.at(-1).result;
+    assert.equal(response.state.status, 'completed');
+    assert.deepEqual(
+      mock.calls.prompts.slice(stopBefore).map((x) => x.index),
+      [0, 1],
+      'explicit Resume must execute all remaining leaves after Stop Scheduling',
+    );
+    assert.equal(
+      JSON.parse(fs.readFileSync(path.join(stopDir, 'control.json'), 'utf8')).stopRequested,
+      false,
+    );
+
+    const partialDir = path.join(runtime, 'partial');
+    fs.mkdirSync(partialDir);
+    fs.writeFileSync(
+      path.join(partialDir, 'state.json'),
+      JSON.stringify({
+        ...pausedState,
+        runId: 'partial-run',
+        workerPid: 0,
+        status: 'paused',
+        current: { branchId: 'branch-a', leafId: null, index: 1, promptId: null },
+        completed: { 'branch-a': 1 },
+        overallCompleted: 1,
+        promptIds: ['already-completed'],
+        branchRuns: {},
+        error: null,
+      }),
+    );
+    fs.writeFileSync(
+      path.join(partialDir, 'control.json'),
+      JSON.stringify({ stopRequested: true, interruptRequested: true }),
+    );
+    const partialBefore = mock.calls.prompts.length;
+    result = await callWorker(workerPath, partialDir, {
+      ...payload(mock.endpoint, 'partial-run'),
+      resume: true,
+    });
+    assert.equal(result.code, 0, result.stderr);
+    response = result.lines.at(-1).result;
+    assert.equal(response.state.status, 'completed');
+    assert.equal(response.state.overallCompleted, 2);
+    assert.deepEqual(
+      mock.calls.prompts.slice(partialBefore).map((x) => x.index),
+      [1],
+      'previously completed leaves must never be submitted again',
+    );
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(partialDir, 'control.json'), 'utf8')), {
+      stopRequested: false,
+      interruptRequested: false,
+    });
+
+    for (const priorStatus of ['interrupted', 'failed']) {
+      const recoveredDir = path.join(runtime, 'recover-' + priorStatus);
+      fs.mkdirSync(recoveredDir);
+      fs.writeFileSync(
+        path.join(recoveredDir, 'state.json'),
+        JSON.stringify({
+          ...pausedState,
+          runId: 'recover-' + priorStatus,
+          workerPid: 0,
+          status: priorStatus,
+          current: { branchId: 'branch-a', leafId: 'a2', index: 1, promptId: null },
+          completed: { 'branch-a': 1 },
+          overallCompleted: 1,
+          promptIds: ['completed-first'],
+          branchRuns: {},
+          error:
+            priorStatus === 'failed'
+              ? { code: 'REMOTE_PROMPT_FAILED', message: 'Previous prompt was terminal error.' }
+              : null,
+        }),
+      );
+      const recoveredBefore = mock.calls.prompts.length;
+      result = await callWorker(workerPath, recoveredDir, {
+        ...payload(mock.endpoint, 'recover-' + priorStatus),
+        resume: true,
+      });
+      assert.equal(result.code, 0, result.stderr);
+      response = result.lines.at(-1).result;
+      assert.equal(response.state.status, 'completed');
+      assert.deepEqual(
+        mock.calls.prompts.slice(recoveredBefore).map((x) => x.index),
+        [1],
+      );
+    }
+
+    const unsafeDir = path.join(runtime, 'unsafe-failure');
+    fs.mkdirSync(unsafeDir);
+    fs.writeFileSync(
+      path.join(unsafeDir, 'state.json'),
+      JSON.stringify({
+        ...pausedState,
+        runId: 'unsafe-failure',
+        workerPid: 0,
+        status: 'failed',
+        error: { code: 'REMOTE_SCENE_PLAN_MISMATCH', message: 'Plan changed' },
+      }),
+    );
+    const unsafeBefore = mock.calls.prompts.length;
+    result = await callWorker(workerPath, unsafeDir, {
+      ...payload(mock.endpoint, 'unsafe-failure'),
+      resume: true,
+    });
+    assert.equal(result.code, 2);
+    assert.equal(result.lines.at(-1).error.code, 'REMOTE_RESUME_UNSAFE');
+    assert.equal(mock.calls.prompts.length, unsafeBefore);
+
     const interruptDir = path.join(runtime, 'interrupt');
     fs.mkdirSync(interruptDir);
     fs.writeFileSync(
