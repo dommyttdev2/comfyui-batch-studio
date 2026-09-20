@@ -20,7 +20,9 @@ execFileSync(
 );
 const deferred = () => {
   let resolve;
-  const promise = new Promise((done) => { resolve = done; });
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 };
 
@@ -52,12 +54,10 @@ const deferred = () => {
 
   const pendingCancel = deferred();
   const cancelPreview = gate.preview('first');
-  const cancelledRead = fakeRead(
-    pendingCancel,
-    'first',
-    cancelPreview,
-    { path: 'cancelled', crop: 4 },
-  );
+  const cancelledRead = fakeRead(pendingCancel, 'first', cancelPreview, {
+    path: 'cancelled',
+    crop: 4,
+  });
   const cancelToken = gate.cancel('first');
   assert.notEqual(cancelToken, null);
   preview = baseline;
@@ -69,12 +69,10 @@ const deferred = () => {
   gate.begin('second');
   const pendingCommit = deferred();
   const oldPreview = gate.preview('second');
-  const committedRead = fakeRead(
-    pendingCommit,
-    'second',
-    oldPreview,
-    { path: 'old-preview', crop: 5 },
-  );
+  const committedRead = fakeRead(pendingCommit, 'second', oldPreview, {
+    path: 'old-preview',
+    crop: 5,
+  });
   const committed = gate.commit('second');
   assert.notEqual(committed, null);
   persisted = { path: 'committed', crop: 6 };
@@ -94,16 +92,23 @@ const deferred = () => {
   preview = { path: 'fourth', crop: 7 };
   pendingRestore.resolve();
   await restore;
-  assert.deepEqual(preview, { path: 'fourth', crop: 7 }, 'late restore cannot override a new session');
+  assert.deepEqual(
+    preview,
+    { path: 'fourth', crop: 7 },
+    'late restore cannot override a new session',
+  );
   assert.equal(gate.preview('third'), null);
   assert.notEqual(gate.preview('fourth'), null);
 
-  const source = fs.readFileSync(
-    path.join(repo, 'src/renderer/MarketplaceImageStage.tsx'),
-    'utf8',
+  const source = fs.readFileSync(path.join(repo, 'src/renderer/MarketplaceImageStage.tsx'), 'utf8');
+  assert.match(
+    source,
+    /const nextSource = await window\.batchStudio\.finalArtifact\.readImage[\s\S]*if \(!isCurrent\(\)\) return null/,
   );
-  assert.match(source, /const nextSource = await window\.batchStudio\.finalArtifact\.readImage[\s\S]*if \(!isCurrent\(\)\) return null/);
-  assert.match(source, /const nextImage = await loadBrowserImage\(nextSource\);\s*if \(!isCurrent\(\)\) return null/);
+  assert.match(
+    source,
+    /const nextImage = await loadBrowserImage\(nextSource\);\s*if \(!isCurrent\(\)\) return null/,
+  );
   assert.match(source, /pickerGenerationRef\.current\.cancel\(session\.sessionId\)/);
   assert.match(source, /pickerGenerationRef\.current\.commit\(selection\.sessionId\)/);
   assert.match(source, /pickerGenerationRef\.current\.isPreviewCurrent/);
