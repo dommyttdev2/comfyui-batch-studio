@@ -109,9 +109,11 @@ class FakeClient {
     this.reads = 0;
     this.starts = 0;
     this.stops = 0;
+    this.stopped = false;
   }
   async getInstance(id) {
     assert.equal(id, 7);
+    if (this.stopped) return instance('stopped');
     const value = this.states[Math.min(this.reads++, this.states.length - 1)];
     if (value instanceof Error) throw value;
     return structuredClone(value);
@@ -123,6 +125,7 @@ class FakeClient {
   async stopInstance(id) {
     assert.equal(id, 7);
     this.stops++;
+    this.stopped = true;
     return instance('stopped');
   }
 }
