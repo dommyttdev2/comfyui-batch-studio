@@ -922,6 +922,16 @@ export interface ExecutionRunSnapshot {
   plan: { sha256: string; branches: Array<{ branchId: string; leafIds: string[] }> };
   runIdentity: string;
 }
+export interface PromptSubmissionIntent {
+  attemptId: string;
+  branchId: string;
+  leafId: string;
+  index: number;
+  graphSha256: string;
+  status: 'prepared' | 'sending' | 'acknowledged' | 'completed';
+  promptId: string | null;
+}
+
 export interface ExecutionRun {
   schemaVersion: 1;
   runId: string;
@@ -945,6 +955,7 @@ export interface ExecutionRun {
     generationTiming?: ExecutionGenerationTiming;
   };
   promptIds: string[];
+  submission?: PromptSubmissionIntent | null;
   evidence: ExecutionEvidence[];
   error: ExecutionError | null;
   errorHistory: ExecutionError[];
