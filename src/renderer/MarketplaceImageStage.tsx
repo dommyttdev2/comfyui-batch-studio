@@ -7,6 +7,7 @@ import type {
   MarketplaceImageTarget,
   ProjectSummary,
 } from '../shared/types';
+import { MarketplacePickerGeneration } from '../shared/marketplace-picker-generation';
 import type { Runner } from './ui';
 import './marketplace-image-stage.css';
 
@@ -134,6 +135,17 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   const dragRef = useRef<DragState | null>(null);
   const pickerSessionRef = useRef<string | null>(null);
   const pickerBeforeStateRef = useRef<MarketplaceImageEditorState | null>(null);
+  const pickerBeforeMediaRef = useRef<{
+    source: FinalArtifactImageSource | null;
+    image: HTMLImageElement | null;
+  } | null>(null);
+  const pickerReadyPreviewRef = useRef<{
+    path: string;
+    state: MarketplaceImageEditorState;
+  } | null>(null);
+  const pickerGenerationRef = useRef(new MarketplacePickerGeneration());
+  const pickerOpeningRef = useRef(false);
+  const pickerCommitPendingRef = useRef(false);
 
   const activeTarget = useMemo(
     () => targets.find((target) => target.id === state?.activeTargetId) ?? targets[0] ?? null,
@@ -169,13 +181,16 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     baseState: MarketplaceImageEditorState,
     targetDefinitions: MarketplaceImageTarget[],
     preserveExisting: boolean,
-  ) => {
+    isCurrent: () => boolean = () => true,
+  ): Promise<MarketplaceImageEditorState | null> => {
     const nextSource = await window.batchStudio.finalArtifact.readImage(
       project.rootPath,
       imagePath,
     );
+    if (!isCurrent()) return null;
     if (!nextSource) throw new Error('選択した画像を読み込めませんでした。');
     const nextImage = await loadBrowserImage(nextSource);
+    if (!isCurrent()) return null;
     const sizedSource = browserSizedSource(nextSource, nextImage);
     const nextTargets: MarketplaceImageEditorState['targets'] = {};
     for (const target of targetDefinitions) {
@@ -200,6 +215,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       targets: nextTargets,
       custom: { ...baseState.custom, crop: customCrop },
     };
+    if (!isCurrent()) return null;
     setSource(sizedSource);
     setImage(nextImage);
     setState(nextState);
@@ -208,13 +224,15 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
 
   useEffect(() => {
     let cancelled = false;
+    const loadToken = pickerGenerationRef.current.invalidate();
+    const isCurrent = () => !cancelled && pickerGenerationRef.current.isCurrent(loadToken);
     void run(async () => {
       const [nextTargets, nextState, nextFinalArtifact] = await Promise.all([
         window.batchStudio.marketplace.targets(),
         window.batchStudio.marketplace.load(project.rootPath),
         window.batchStudio.finalArtifact.status(project.rootPath),
       ]);
-      if (cancelled) return;
+      if (!isCurrent()) return;
       setTargets(nextTargets);
       setFinalArtifact(nextFinalArtifact);
       setState(nextState);
@@ -224,9 +242,9 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
           project.rootPath,
           nextState.sourceImagePath,
         );
-        if (!nextSource || cancelled) return;
+        if (!nextSource || !isCurrent()) return;
         const nextImage = await loadBrowserImage(nextSource);
-        if (cancelled) return;
+        if (!isCurrent()) return;
         const sizedSource = browserSizedSource(nextSource, nextImage);
         const normalizedTargets: MarketplaceImageEditorState['targets'] = {};
         for (const target of nextTargets)
@@ -254,7 +272,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
           },
         });
       } catch {
-        if (!cancelled) {
+        if (isCurrent()) {
           setSource(null);
           setImage(null);
           setState({ ...nextState, sourceImagePath: '' });
@@ -263,12 +281,16 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     });
     return () => {
       cancelled = true;
+      pickerGenerationRef.current.invalidate();
     };
   }, [project.rootPath]);
 
   useEffect(() => {
-    if (!state || pickerSessionRef.current) return;
+    if (!state || pickerSessionRef.current || pickerOpeningRef.current || pickerCommitPendingRef.current)
+      return;
     const timer = window.setTimeout(() => {
+      if (pickerSessionRef.current || pickerOpeningRef.current || pickerCommitPendingRef.current)
+        return;
       void window.batchStudio.marketplace.save(project.rootPath, state).catch(() => {});
     }, 250);
     return () => window.clearTimeout(timer);
@@ -276,38 +298,72 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
 
   useEffect(() => {
     const removePreview = window.batchStudio.marketplace.onPickerPreview((selection) => {
-      if (pickerSessionRef.current !== selection.sessionId || !state) return;
+      const token = pickerGenerationRef.current.preview(selection.sessionId);
+      const base = pickerBeforeStateRef.current ?? state;
+      if (token === null || !base) return;
+      pickerReadyPreviewRef.current = null;
+      const isCurrent = () =>
+        pickerGenerationRef.current.isPreviewCurrent(selection.sessionId, token);
       void run(async () => {
-        await applySource(selection.imagePath, state, targets, false);
+        const nextState = await applySource(selection.imagePath, base, targets, false, isCurrent);
+        if (!nextState || !isCurrent()) return;
+        pickerReadyPreviewRef.current = { path: selection.imagePath, state: nextState };
         setNotice('画像を仮適用しています。同じ画像をもう一度選択すると確定します。');
       });
     });
     const removeCommit = window.batchStudio.marketplace.onPickerCommit((selection) => {
-      if (pickerSessionRef.current !== selection.sessionId) return;
-      void run(async () => {
-        let nextState = state;
-        if (!nextState || nextState.sourceImagePath !== selection.imagePath) {
-          const base = nextState ?? (await window.batchStudio.marketplace.load(project.rootPath));
-          nextState = await applySource(selection.imagePath, base, targets, false);
-        }
-        pickerSessionRef.current = null;
-        pickerBeforeStateRef.current = null;
-        await window.batchStudio.marketplace.save(project.rootPath, nextState);
-        setNotice(
-          '入力画像を確定しました。4種類のクロップは新しい画像に合わせてリセットしました。',
-        );
-      });
-    });
-    const removeCancel = window.batchStudio.marketplace.onPickerCancel((session) => {
-      if (pickerSessionRef.current !== session.sessionId) return;
+      const token = pickerGenerationRef.current.commit(selection.sessionId);
+      if (token === null) return;
+      const ready = pickerReadyPreviewRef.current;
       const before = pickerBeforeStateRef.current;
       pickerSessionRef.current = null;
       pickerBeforeStateRef.current = null;
+      pickerBeforeMediaRef.current = null;
+      pickerReadyPreviewRef.current = null;
+      pickerCommitPendingRef.current = true;
+      const isCurrent = () => pickerGenerationRef.current.isCurrent(token);
+      void run(async () => {
+        try {
+          const base =
+            before ?? state ?? (await window.batchStudio.marketplace.load(project.rootPath));
+          if (!isCurrent()) return;
+          const nextState =
+            ready?.path === selection.imagePath
+              ? state?.sourceImagePath === selection.imagePath
+                ? state
+                : ready.state
+              : await applySource(selection.imagePath, base, targets, false, isCurrent);
+          if (!nextState || !isCurrent()) return;
+          await window.batchStudio.marketplace.save(project.rootPath, nextState);
+          if (!isCurrent()) return;
+          setNotice(
+            '入力画像を確定しました。4種類のクロップは新しい画像に合わせてリセットしました。',
+          );
+        } finally {
+          pickerCommitPendingRef.current = false;
+        }
+      });
+    });
+    const removeCancel = window.batchStudio.marketplace.onPickerCancel((session) => {
+      const token = pickerGenerationRef.current.cancel(session.sessionId);
+      if (token === null) return;
+      const before = pickerBeforeStateRef.current;
+      const beforeMedia = pickerBeforeMediaRef.current;
+      pickerSessionRef.current = null;
+      pickerBeforeStateRef.current = null;
+      pickerBeforeMediaRef.current = null;
+      pickerReadyPreviewRef.current = null;
       if (!before) return;
       setState(before);
+      if (beforeMedia?.source && beforeMedia.image) {
+        setSource(beforeMedia.source);
+        setImage(beforeMedia.image);
+        setNotice('画像選択をキャンセルし、元の画像へ戻しました。');
+        return;
+      }
+      setSource(null);
+      setImage(null);
       if (!before.sourceImagePath) {
-        setSource(null);
-        setImage(null);
         setNotice('画像選択をキャンセルしました。');
         return;
       }
@@ -316,8 +372,9 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
           project.rootPath,
           before.sourceImagePath,
         );
-        if (!restored) return;
+        if (!restored || !pickerGenerationRef.current.isCurrent(token)) return;
         const restoredImage = await loadBrowserImage(restored);
+        if (!pickerGenerationRef.current.isCurrent(token)) return;
         setSource(browserSizedSource(restored, restoredImage));
         setImage(restoredImage);
         setNotice('画像選択をキャンセルし、元の画像へ戻しました。');
@@ -454,14 +511,25 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       : 1;
 
   const openPicker = () => {
-    if (!state) return;
+    if (!state || pickerOpeningRef.current || pickerSessionRef.current || pickerCommitPendingRef.current)
+      return;
+    const openingToken = pickerGenerationRef.current.invalidate();
+    pickerOpeningRef.current = true;
     pickerBeforeStateRef.current = state;
+    pickerBeforeMediaRef.current = { source, image };
+    pickerReadyPreviewRef.current = null;
     void run(async () => {
-      const session = await window.batchStudio.marketplace.openPicker(
-        project.rootPath,
-        state.sourceImagePath,
-      );
-      pickerSessionRef.current = session.sessionId;
+      try {
+        const session = await window.batchStudio.marketplace.openPicker(
+          project.rootPath,
+          state.sourceImagePath,
+        );
+        if (!pickerGenerationRef.current.isCurrent(openingToken)) return;
+        pickerSessionRef.current = session.sessionId;
+        pickerGenerationRef.current.begin(session.sessionId);
+      } finally {
+        pickerOpeningRef.current = false;
+      }
     });
   };
 
