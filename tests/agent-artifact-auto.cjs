@@ -24,7 +24,7 @@ const pane = source('src/renderer/CodexPane.tsx');
 assert.match(main, /codexPendingArtifacts\.has\(threadId\)[\s\S]*item\/agentMessage\/delta/);
 assert.match(main, /codexTaskFileForTurn\(turn\)/);
 assert.match(main, /collectCodexArtifact\(threadId, pending, notification\.params\)/);
-assert.match(pane, /codex\.retryArtifact\(\)/);
+assert.match(pane, /retryArtifact\(\)/);
 assert.match(
   source('src/main/grok-auto-artifact-watcher.ts'),
   /MutationObserver|observeGrokArtifact/,
