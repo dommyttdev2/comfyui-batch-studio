@@ -537,7 +537,8 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   const generateZip = () =>
     void run(async () => {
       if (!state) return;
-      if (pickerSessionRef.current) throw new Error('画像選択を確定してからZIPを生成してください。');
+      if (pickerSessionRef.current)
+        throw new Error('画像選択を確定してからZIPを生成してください。');
       const result = await window.batchStudio.marketplace.generateZip(
         project.rootPath,
         state.format,
