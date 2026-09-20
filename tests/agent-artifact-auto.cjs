@@ -32,7 +32,7 @@ assert.match(
 assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
 
 (async () => {
-  const { importAutoArtifact, latestAutoArtifact, expectedArtifact } = await import(
+  const { importAutoArtifact, latestAutoArtifact, expectedArtifact, artifactFileContent } = await import(
     pathToFileURL(path.join(runtime, 'main', 'agent-artifact-import.js')).href
   );
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-auto-artifact-project-'));
@@ -40,6 +40,15 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
   assert.equal(expectedArtifact('story-initial'), null);
   assert.equal(expectedArtifact('models'), 'model_loras.json');
   assert.equal(expectedArtifact('caption'), 'caption_content.json');
+  assert.deepEqual(
+    JSON.parse(artifactFileContent(
+      'models',
+      '```json\n{"schemaVersion":1,"loras":[]}\n```',
+      JSON.stringify({ schemaVersion: 3, checkpoint: { id: 1 }, loras: [] }),
+    )),
+    { schemaVersion: 1, loras: [] },
+    'The downloadable LoRA selection must not include merged user base models',
+  );
 
   const raw = '# Story\n\nA complete story.';
   const first = await importAutoArtifact(root, 'codex', 'story-finalize', 'thread-1/turn-1', raw);
