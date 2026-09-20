@@ -4,6 +4,7 @@ import path from 'node:path';
 import type {
   ExecutionEvidence,
   ExecutionEvidenceKind,
+  ModelsArtifact,
   ExecutionPhase,
   ExecutionRun,
   ExecutionRunLifecycle,
@@ -13,7 +14,11 @@ import type {
 } from '../shared/types.js';
 import { exists, readJson, writeJsonAtomic } from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
-import { hashCanonicalJson, validateApiGraphStructure } from './workflow-api.js';
+import {
+  hashCanonicalJson,
+  hashWorkflowModelInputs,
+  validateApiGraphStructure,
+} from './workflow-api.js';
 
 const RUNS_DIR = 'execution_runs';
 const CURRENT_FILE = 'current.json';
@@ -183,7 +188,7 @@ async function captureSnapshot(
   )
     throw new Error('Execution cannot start/resume: Workflow/API graph is stale.');
   const models = await readJson<unknown>(path.join(root, 'models.json'));
-  if (!models || !expectedModelsSha || hashCanonicalJson(models) !== expectedModelsSha)
+  if (!models || !expectedModelsSha || hashWorkflowModelInputs(models as ModelsArtifact) !== expectedModelsSha)
     throw new Error('Execution cannot start/resume: WORKFLOW_MODEL_STALE (models.json changed).');
   const brief = await readJson<any>(path.join(root, 'project_brief.json'));
   if (!brief?.project?.id) throw new Error('Execution cannot start: project.id is missing.');
