@@ -34,7 +34,12 @@ function localRunOutputRoot(installPath: string, run: ExecutionRun) {
 }
 function within(root: string, target: string) {
   const relative = path.relative(root, target);
-  return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  return (
+    relative !== '' &&
+    relative !== '..' &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
 }
 async function sha256File(file: string) {
   const hash = createHash('sha256');
@@ -42,7 +47,9 @@ async function sha256File(file: string) {
   return hash.digest('hex');
 }
 function isolateBranchSavePaths(graph: ApiGraph, run: ExecutionRun, branchId: string) {
-  const saveNodes = Object.entries(graph).filter(([, node]) => node.class_type === 'SceneSaveImage');
+  const saveNodes = Object.entries(graph).filter(
+    ([, node]) => node.class_type === 'SceneSaveImage',
+  );
   if (!saveNodes.length) throw new Error(`Branch ${branchId} has no SceneSaveImage output.`);
   // Alter only the submitted API graph. The Compiler snapshot and the user's
   // legacy output folders remain untouched.
@@ -63,7 +70,8 @@ async function recordPromptOutputs(
     entry = history?.[promptId],
     recorded = new Set<string>();
   const images = saveNodeIds.flatMap((id) => entry?.outputs?.[id]?.images ?? []);
-  if (!images.length) throw new Error(`ComfyUI prompt ${promptId} returned no SceneSaveImage files.`);
+  if (!images.length)
+    throw new Error(`ComfyUI prompt ${promptId} returned no SceneSaveImage files.`);
   for (const image of images) {
     if (
       image?.type !== 'output' ||
@@ -266,7 +274,9 @@ export async function verifyLocalOutputs(installPath: string, run: ExecutionRun)
       metadata.size !== Number(item.data.size) ||
       (await sha256File(realFile)) !== item.data.sha256
     )
-      throw new Error(`Generated output verification failed: missing or modified image ${relativePath}.`);
+      throw new Error(
+        `Generated output verification failed: missing or modified image ${relativePath}.`,
+      );
   }
   return { outputRoot, count: unique.size };
 }
