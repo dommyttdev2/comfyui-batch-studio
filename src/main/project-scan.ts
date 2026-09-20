@@ -10,6 +10,7 @@ import type {
 } from '../shared/types.js';
 import { exists, readJson, readText } from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
+import { withProjectMutationLock } from './project-transaction.js';
 import { readArtifact } from './artifact-service.js';
 import { hashWorkflowModelInputs } from './workflow-api.js';
 import { hashWorkflowTemplate } from './workflow-template-integrity.js';
@@ -91,6 +92,9 @@ async function workflowInputsChanged(root: string, meta: any) {
   return false;
 }
 export async function scanProject(root: string): Promise<ProjectSummary> {
+  return withProjectMutationLock(root, () => scanProjectUnlocked(root));
+}
+async function scanProjectUnlocked(root: string): Promise<ProjectSummary> {
   const entries = await readdir(root, { withFileTypes: true });
   const names = new Set(entries.filter((e) => e.isFile()).map((e) => e.name));
   const brief = await readJson<{ schemaVersion?: number } & ProjectBriefInput>(

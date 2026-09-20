@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { ModelsArtifact } from '../shared/types.js';
 import { exists, readJson, writeJsonAtomic } from './fs-utils.js';
 import { updateProjectMeta } from './project-meta.js';
+import { projectTransactionCheckpoint, withProjectTransaction } from './project-transaction.js';
 
 export type ManualResetScope =
   | 'story'
@@ -112,6 +113,7 @@ async function archiveIfExists(ctx: ResetContext, source: string, relative: stri
   const destination = path.join(ctx.archiveRoot, relative);
   await mkdir(path.dirname(destination), { recursive: true });
   await rename(source, destination);
+  await projectTransactionCheckpoint('archived:' + relative);
   return true;
 }
 async function archivePromptPlan(ctx: ResetContext) {
@@ -150,6 +152,7 @@ async function archiveWorkflow(ctx: ResetContext) {
         delete latest.workflowBuild;
       return latest;
     });
+    await projectTransactionCheckpoint('workflowBuild:cleared');
   }
 }
 async function archiveModelState(
@@ -240,7 +243,15 @@ async function resetPromptAndWorkflow(ctx: ResetContext) {
 
 export async function resetModelDownstream(
   root: string,
-  { clearModelFixHistory = true }: { clearModelFixHistory?: boolean } = {},
+  options: { clearModelFixHistory?: boolean } = {},
+) {
+  return withProjectTransaction(root, 'reset-model-downstream', () =>
+    resetModelDownstreamUnlocked(root, options),
+  );
+}
+async function resetModelDownstreamUnlocked(
+  root: string,
+  { clearModelFixHistory = true }: { clearModelFixHistory?: boolean },
 ) {
   const ctx = context(root);
   await archivePromptPlan(ctx);
@@ -255,6 +266,11 @@ export async function resetModelDownstream(
 }
 
 export async function manualResetFrom(root: string, scope: ManualResetScope) {
+  return withProjectTransaction(root, 'manual-reset:' + scope, () =>
+    manualResetUnlocked(root, scope),
+  );
+}
+async function manualResetUnlocked(root: string, scope: ManualResetScope) {
   const ctx = context(root);
   if (scope === 'workflow') {
     await archiveWorkflow(ctx);
@@ -274,6 +290,7 @@ export async function manualResetFrom(root: string, scope: ManualResetScope) {
     await archiveModelState(ctx, { initialHistory: false, fixHistory: true, fallbacks: true });
     const restored: any = { ...cleanBase(current), loras: initial.loras };
     await writeJsonAtomic(path.join(ctx.root, 'models.json'), restored);
+    await projectTransactionCheckpoint('models:restored');
     const initialFallbacks = Array.isArray(initial.promptFallbacks)
       ? initial.promptFallbacks.map(normalizedFallback)
       : [];
@@ -293,6 +310,7 @@ export async function manualResetFrom(root: string, scope: ManualResetScope) {
     const base = cleanBase(current);
     await archiveModelState(ctx, { initialHistory: true, fixHistory: true, fallbacks: true });
     await writeJsonAtomic(path.join(ctx.root, 'models.json'), base);
+    await projectTransactionCheckpoint('models:base-restored');
     await resetPromptAndWorkflow(ctx);
     return { archiveRoot: ctx.archiveRoot, scope };
   }

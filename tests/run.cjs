@@ -519,6 +519,53 @@ function plan() {
     'formal models validator must reject missingRequirements',
   );
 
+  {
+    const txn = await load('project-transaction.js').catch(() =>
+      load('main/project-transaction.js'),
+    );
+    const journalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-transaction-open-'));
+    writeJson(path.join(journalRoot, 'project_meta.json'), {
+      schemaVersion: 1,
+      settings: { executionTarget: 'local' },
+    });
+    writeJson(path.join(journalRoot, 'project_brief.json'), {
+      schemaVersion: 1,
+      project: { id: 'transaction-open', name: 'transaction-open' },
+    });
+    fs.writeFileSync(path.join(journalRoot, 'story.md'), 'original story');
+    txn.setProjectTransactionCheckpointForTests((step) => {
+      if (step === 'story:changed')
+        throw new txn.SimulatedProjectCrashForTest('simulated abrupt process termination');
+    });
+    try {
+      await assert.rejects(
+        () =>
+          txn.withProjectTransaction(journalRoot, 'test-crash-open', async () => {
+            fs.writeFileSync(path.join(journalRoot, 'story.md'), 'partial story');
+            await txn.projectTransactionCheckpoint('story:changed');
+          }),
+        /simulated abrupt process termination/,
+      );
+    } finally {
+      txn.setProjectTransactionCheckpointForTests(null);
+    }
+    assert.equal(fs.readFileSync(path.join(journalRoot, 'story.md'), 'utf8'), 'partial story');
+    assert.equal(
+      fs.existsSync(path.join(journalRoot, '._batch_studio', 'project-transaction.json')),
+      true,
+    );
+    await scan.scanProject(journalRoot);
+    assert.equal(
+      fs.readFileSync(path.join(journalRoot, 'story.md'), 'utf8'),
+      'original story',
+      'project open/scan must recover the original generation before displaying artifacts',
+    );
+    assert.equal(
+      fs.existsSync(path.join(journalRoot, '._batch_studio', 'project-transaction.json')),
+      false,
+    );
+  }
+
   console.log('All Batch Studio tests passed.');
 })().catch((error) => {
   console.error(error);

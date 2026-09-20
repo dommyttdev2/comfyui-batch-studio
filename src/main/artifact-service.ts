@@ -30,6 +30,7 @@ import {
 import { loadCatalog, validateModelsAgainstCatalog } from './model-catalog.js';
 import { modelGenerationInputsChanged, resetModelDownstream } from './model-downstream-reset.js';
 import { initializeProjectMeta } from './project-meta.js';
+import { projectTransactionCheckpoint, withProjectTransaction } from './project-transaction.js';
 const FILES: Partial<Record<ArtifactKey, string>> = {
   projectBrief: 'project_brief.json',
   story: 'story.md',
@@ -535,6 +536,11 @@ export async function importGrok(
   return { extracted: saved.content ?? extracted, validation, summary, missingRequirements: miss };
 }
 export async function confirmArtifact(root: string, key: 'story' | 'models' | 'promptPlan') {
+  return key === 'models'
+    ? withProjectTransaction(root, 'confirm-models', () => confirmArtifactUnlocked(root, key))
+    : confirmArtifactUnlocked(root, key);
+}
+async function confirmArtifactUnlocked(root: string, key: 'story' | 'models' | 'promptPlan') {
   const d = await readArtifact(root, key, 'draft');
   if (!d.exists || !d.content) throw new Error('確定する下書きがありません。');
   if (!d.validation.valid) throw new Error('検証エラーがあるため確定できません。');
@@ -557,12 +563,14 @@ export async function confirmArtifact(root: string, key: 'story' | 'models' | 'p
       (!previousModels ||
         modelGenerationInputsChanged(previousModels, previousFallbacks, nextModels, fallbacks));
     await writeJsonAtomic(target, nextModels);
+    await projectTransactionCheckpoint('models:confirmed');
     if (fallbacks.length)
       await writeJsonAtomic(promptFallbacksPath(root), {
         schemaVersion: 2,
         promptFallbacks: fallbacks,
       });
     else await removeIfExists(promptFallbacksPath(root));
+    await projectTransactionCheckpoint('models:fallbacks-updated');
     if (downstreamReset)
       await resetModelDownstream(root, { clearModelFixHistory: source?.stage !== 'models-fix' });
   } else await writeTextAtomic(target, d.content);
