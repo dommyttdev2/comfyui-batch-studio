@@ -43,9 +43,13 @@ assert.match(pane, /phaseLabel\[turnStatus\.phase\]/);
   const id = 'thread-one';
   assert.equal(monitor.get(id), null);
   assert.equal(monitor.sending(id).phase, 'sending');
-  assert.equal(monitor.notification(id, { method: 'turn/started', params: {} }).phase, 'processing');
   assert.equal(
-    monitor.notification(id, { method: 'item/agentMessage/delta', params: { delta: 'Hello' } }).phase,
+    monitor.notification(id, { method: 'turn/started', params: {} }).phase,
+    'processing',
+  );
+  assert.equal(
+    monitor.notification(id, { method: 'item/agentMessage/delta', params: { delta: 'Hello' } })
+      .phase,
     'streaming',
   );
   const completed = monitor.notification(id, {
