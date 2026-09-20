@@ -64,7 +64,7 @@ function evidenceForModel(
   destination: string,
 ) {
   return (
-    evidence.find(
+    [...evidence].reverse().find(
       (item) =>
         item.kind === 'MODEL_VERIFIED' &&
         item.scope === ref &&
@@ -158,7 +158,8 @@ export class RemoteModelStager {
       existing &&
       samePrimitive(existing.data.size, size) &&
       samePrimitive(existing.data.sha256, sha256) &&
-      samePrimitive(existing.data.objectEtag, meta.etag)
+      samePrimitive(existing.data.objectEtag, meta.etag) &&
+      existing.data.sourceVerified === true
     )
       return;
     await recordExecutionEvidence(root, runId, {
@@ -173,6 +174,7 @@ export class RemoteModelStager {
         sha256,
         reused,
         objectEtag: meta.etag || null,
+        sourceVerified: true,
       },
     });
   }
@@ -252,7 +254,16 @@ export class RemoteModelStager {
           : null;
       if (item.meta.sha256 && evidenceSha && item.meta.sha256 !== evidenceSha)
         throw new Error(`R2_MODEL_CHANGED_DURING_RUN: ${item.fileName} SHA-256 changed.`);
-      const expectedSha = item.meta.sha256 ?? evidenceSha;
+      // Historic evidence without a verified source binding may only have hashed the
+      // pre-existing Remote file. Do not treat that self-reported hash as R2 identity.
+      const sourceEvidenceTrusted =
+        existingEvidence?.data.sourceVerified === true &&
+        Boolean(item.meta.etag) &&
+        item.meta.etag === existingEvidence.data.objectEtag &&
+        Number(existingEvidence.data.size) === item.meta.size;
+      const expectedSha =
+        item.meta.sha256 ?? (sourceEvidenceTrusted ? evidenceSha : null);
+      const mustDownloadFromSource = !expectedSha;
 
       await this.setModelProgress(root, runId, item.ref, {
         state: 'checking',
@@ -271,8 +282,13 @@ export class RemoteModelStager {
           })
         ).response,
       );
-      if (inspected.valid) {
-        const sha256 = typeof inspected.sha256 === 'string' ? inspected.sha256 : null;
+      if (
+        inspected.valid &&
+        expectedSha &&
+        typeof inspected.sha256 === 'string' &&
+        inspected.sha256.toLowerCase() === expectedSha.toLowerCase()
+      ) {
+        const sha256 = inspected.sha256.toLowerCase();
         await this.setModelProgress(root, runId, item.ref, {
           state: existingEvidence ? 'skipped' : 'ready',
           transferredBytes: item.meta.size,
@@ -311,6 +327,7 @@ export class RemoteModelStager {
             url: download.url,
             expectedSize: item.meta.size,
             expectedSha256: expectedSha,
+            forceDownload: mustDownloadFromSource,
           });
           staged = workerResult(response.response);
           const progressEvents = response.events.filter(
@@ -335,7 +352,20 @@ export class RemoteModelStager {
         await this.setModelProgress(root, runId, item.ref, { state: 'failed', error: message });
         throw new Error(`REMOTE_MODEL_STAGING_FAILED: ${item.fileName}: ${message}`);
       }
-      const sha256 = typeof staged.sha256 === 'string' ? staged.sha256 : null;
+      const sha256 = typeof staged.sha256 === 'string' ? staged.sha256.toLowerCase() : null;
+      if (!sha256 || !/^[0-9a-f]{64}$/.test(sha256))
+        throw new Error(`MODEL_HASH_MISSING: ${item.fileName} was not verified after staging.`);
+      if (expectedSha && sha256 !== expectedSha.toLowerCase())
+        throw new Error(`MODEL_HASH_MISMATCH: ${item.fileName} differs from the verified R2 source.`);
+      if (mustDownloadFromSource && staged.reused)
+        throw new Error(`MODEL_SOURCE_VERIFICATION_FAILED: ${item.fileName} was not freshly downloaded.`);
+      const latestObject = await this.r2.objectMetadata(bucket, item.objectKey);
+      if (
+        latestObject.size !== item.meta.size ||
+        latestObject.etag !== item.meta.etag ||
+        (latestObject.sha256 && latestObject.sha256.toLowerCase() !== sha256)
+      )
+        throw new Error(`R2_MODEL_CHANGED_DURING_RUN: ${item.fileName} changed during download.`);
       await this.setModelProgress(root, runId, item.ref, {
         state: 'ready',
         transferredBytes: item.meta.size,
