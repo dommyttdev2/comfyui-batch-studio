@@ -266,7 +266,9 @@ async function resetModelDownstreamUnlocked(
 }
 
 export async function manualResetFrom(root: string, scope: ManualResetScope) {
-  return withProjectTransaction(root, 'manual-reset:' + scope, () => manualResetUnlocked(root, scope));
+  return withProjectTransaction(root, 'manual-reset:' + scope, () =>
+    manualResetUnlocked(root, scope),
+  );
 }
 async function manualResetUnlocked(root: string, scope: ManualResetScope) {
   const ctx = context(root);
