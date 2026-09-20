@@ -221,7 +221,11 @@ for (const rule of [
   /validatePromptPlan\(planToFix, modelData\)/,
   /現在のPrompt Plan（修正対象）/,
 ])
-  matchCode(src, rule, 'Shared Grok/Codex Prompt Plan contract must cover recurring validation errors');
+  matchCode(
+    src,
+    rule,
+    'Shared Grok/Codex Prompt Plan contract must cover recurring validation errors',
+  );
 const mainSrc = fs.readFileSync(path.resolve(__dirname, '../src/main/main.ts'), 'utf8');
 matchCode(
   mainSrc,
