@@ -430,7 +430,7 @@ vastai:<instanceId>
 
 - Remote environment update / custom_nodes syncが共有環境を変更する。
 - ComfyUI queue / interruptが共有される。
-- Run Aのfinalize時にinitial-state restoreでInstanceをstopすると、Run Bを停止させる可能性がある。
+- Run Aの正常完了時は開始前からrunningでもInstanceを必ずstopする。非成功終了時にもinitial-state restoreでstopする場合があり、Run Bを巻き込まないため同一Instance排他が必要。
 
 ### 13.3 Lock ownership
 
@@ -537,7 +537,7 @@ Application processが明示的に終了した後もRunを継続する要件は�
 - Standalone Window project opening: use the last-focused Project Window as the current target. A Standalone Window is never converted into a Project Window. If no Project Window exists, current-window opening is unavailable and only new-window opening is allowed.
 - Local resource lock: acquire before Local ComfyUI connection / queue side effects. Resume reacquires the same endpoint lock before work restarts.
 - Remote resource lock: acquire before any Vast.ai start request, bootstrap, staging, generation, or other shared-instance side effect. Resume reacquires the same instance lock before work restarts.
-- Lock release: Project / Window close never releases an Execution lock. Local release occurs after terminal output verification/cleanup. Remote release occurs only after artifact cleanup and Instance finalization / initial-state restoration are complete.
+- Lock release: Project / Window close never releases an Execution lock. Local release occurs after terminal output verification/cleanup. Remote release occurs after artifact cleanup and Instance finalization (successful Run: mandatory stopped confirmation; non-success terminal Run: conditional initial-state restoration) are complete. PAUSED/RUNNINGでは終了扱いでInstanceを停止しない。Finalization失敗（REMOTE_INSTANCE_FINALIZE_FAILED）時は停止確認のみ再試行する（REQ-EXEC-015 / DEC-026 / #122）。
 
 ## 17. Acceptance criteria
 
