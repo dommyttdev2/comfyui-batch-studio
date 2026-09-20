@@ -61,20 +61,26 @@ export function Settings({
           throw new Error('rootがobjectではありません。');
         const p = parsed as Record<string, unknown>;
         if (
-          !p.project || typeof p.project !== 'object' ||
+          !p.project ||
+          typeof p.project !== 'object' ||
           typeof (p.project as Record<string, unknown>).id !== 'string' ||
           typeof (p.project as Record<string, unknown>).title !== 'string' ||
-          !p.subject || typeof p.subject !== 'object' ||
+          !p.subject ||
+          typeof p.subject !== 'object' ||
           typeof (p.subject as Record<string, unknown>).characterName !== 'string' ||
           typeof (p.subject as Record<string, unknown>).series !== 'string' ||
-          !p.generation || typeof p.generation !== 'object' ||
+          !p.generation ||
+          typeof p.generation !== 'object' ||
           typeof (p.generation as Record<string, unknown>).target_image_count !== 'number' ||
           !['audience', 'request', 'exclusions'].every((key) => typeof p[key] === 'string')
-        ) throw new Error('表示に必要な必須項目が不足しています。');
+        )
+          throw new Error('表示に必要な必須項目が不足しています。');
         delete p.schemaVersion;
         setBrief(p as unknown as ProjectBriefInput);
       } catch (error) {
-        setLoadError(`基本設定を読み込めません: ${error instanceof Error ? error.message : String(error)}`);
+        setLoadError(
+          `基本設定を読み込めません: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     });
   }, [project.rootPath]);
@@ -87,7 +93,11 @@ export function Settings({
   return (
     <section className="panel">
       <h3>基本設定</h3>
-      {loadError && <div className="issue error" role="alert">{loadError}</div>}
+      {loadError && (
+        <div className="issue error" role="alert">
+          {loadError}
+        </div>
+      )}
       {validation.length > 0 && issuesView(validation)}
       {brief && (
         <div className="formgrid">
