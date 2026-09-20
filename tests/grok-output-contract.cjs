@@ -209,4 +209,33 @@ doesNotMatchCode(
   /最終成果物は指定された code block 1個だけ/,
   'final artifacts must no longer be requested inline as code blocks',
 );
+for (const rule of [
+  /全Branchで id、非空のlabel、loras配列、leaves配列/,
+  /使用LoRAが無いBranchも必ず"loras": \[\]/,
+  /全Leafで id、非空のname、prompt/,
+  /Common→Branch→Leafを合成した最終画像/,
+  /各画像で構図・視線が変わるなら/,
+  /Negativeに許されるキー/,
+  /ファイル出力前の全件チェック/,
+  /const fixContext =/,
+  /validatePromptPlan\(planToFix, modelData\)/,
+  /現在のPrompt Plan（修正対象）/,
+])
+  matchCode(src, rule, 'Shared Grok/Codex Prompt Plan contract must cover recurring validation errors');
+const mainSrc = fs.readFileSync(path.resolve(__dirname, '../src/main/main.ts'), 'utf8');
+matchCode(
+  mainSrc,
+  /const task = await buildGrokTask\(context\.root, stage, extra\)/,
+  'Codex and Grok must use the same task builder',
+);
+matchCode(
+  mainSrc,
+  /\.replace\(artifactFileOutputRules\(codexReturnFile\[context\.stage\]\), ''\)/,
+  'Codex may remove only the exact file output instructions, not the JSON schema example',
+);
+doesNotMatchCode(
+  mainSrc,
+  /replace\(\/## 出力契約/,
+  'Codex must not strip arbitrary content up to the next heading',
+);
 console.log('Grok output contract tests passed.');
