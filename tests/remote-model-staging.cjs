@@ -266,10 +266,7 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
     // A multipart ETag is an object version marker, not a model SHA-256.
     const unverifiedProject = path.join(runtime, 'unverified-source');
     fs.mkdirSync(unverifiedProject, { recursive: true });
-    fs.copyFileSync(
-      path.join(project, 'models.json'),
-      path.join(unverifiedProject, 'models.json'),
-    );
+    fs.copyFileSync(path.join(project, 'models.json'), path.join(unverifiedProject, 'models.json'));
     fs.copyFileSync(
       path.join(project, 'project_meta.json'),
       path.join(unverifiedProject, 'project_meta.json'),
@@ -281,10 +278,7 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
       progress: { ...run.progress, models: [] },
       snapshot: { ...run.snapshot, runIdentity: 'unverified-source-run' },
     };
-    writeJson(
-      path.join(unverifiedProject, 'execution_runs', runId + '.json'),
-      unverifiedRun,
-    );
+    writeJson(path.join(unverifiedProject, 'execution_runs', runId + '.json'), unverifiedRun);
     const mismatchedSha = sha(Buffer.alloc(payload.length, 42));
     assert.notEqual(mismatchedSha, expectedSha);
     let sourceMetadata = { ...metadata, sha256: null, etag: 'multipart-etag-4' };
@@ -343,9 +337,16 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
       fs.readFileSync(path.join(unverifiedProject, 'execution_runs', runId + '.json'), 'utf8'),
     );
     assert.equal(sourceRun.progress.models[0].sha256, expectedSha);
-    assert.equal(sourceRun.evidence.find((e) => e.kind === 'MODEL_VERIFIED').data.sourceVerified, true);
+    assert.equal(
+      sourceRun.evidence.find((e) => e.kind === 'MODEL_VERIFIED').data.sourceVerified,
+      true,
+    );
     await sourceStager.stage(unverifiedProject, runId);
-    assert.equal(sourceStageCalls, 1, 'matching source-bound evidence may reuse verified Remote model');
+    assert.equal(
+      sourceStageCalls,
+      1,
+      'matching source-bound evidence may reuse verified Remote model',
+    );
     assert.ok(sourceInspectCalls >= 2);
     sourceMetadata = { ...sourceMetadata, etag: 'changed-multipart-etag-5' };
     await assert.rejects(
