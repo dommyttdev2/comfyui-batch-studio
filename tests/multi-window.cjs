@@ -83,9 +83,9 @@ matchCode(
   'Renderer must reserve the Grok pane before waiting for Grok context loading',
 );
 
-assert.ok(
-  main.indexOf('executionCoordinator.startRemote') <
-    main.indexOf('prepareRemoteExecution(root, run.runId)'),
+matchCode(
+  main,
+  /executionCoordinator\.startRemote\(ref,provider,instanceId,\(\)=>prepareRemoteExecution\(root,run\.runId\)\)/,
   'Remote resource lock must be acquired by the coordinator before remote preparation starts',
 );
 
