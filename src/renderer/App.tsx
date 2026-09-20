@@ -79,6 +79,17 @@ function App() {
     [stageReloadRevision, setStageReloadRevision] = useState(0);
   const refresh = async () =>
     project && setProject(await window.batchStudio.project.scan(project.rootPath));
+  useEffect(() => {
+    if (!project) return;
+    const root = project.rootPath;
+    return window.batchStudio.autoArtifact.onEvent((event) => {
+      if (event.root !== root || event.phase !== 'imported') return;
+      void window.batchStudio.project
+        .scan(root)
+        .then((next) => setProject((previous) => (previous?.rootPath === root ? next : previous)))
+        .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
+    });
+  }, [project?.rootPath]);
   const run: Runner = async (fn) => {
     setError('');
     try {
@@ -359,6 +370,7 @@ function App() {
                 <StageView
                   project={project}
                   stage={stage}
+                  provider={paneProvider}
                   refresh={refresh}
                   setProject={setProject}
                   run={run}
@@ -688,6 +700,7 @@ function CreateProject({
 function StageView(props: {
   project: ProjectSummary;
   stage: Stage;
+  provider: AssistantPaneProvider;
   refresh: () => Promise<unknown>;
   setProject: (p: ProjectSummary) => void;
   run: Runner;
