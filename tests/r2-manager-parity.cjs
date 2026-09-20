@@ -8,6 +8,13 @@ const { execFileSync } = require('node:child_process');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-r2-parity-'));
+// Compiled test modules live outside the repository. Make dependencies available
+// from that location so the imported R2Manager can resolve the AWS SDK.
+fs.symlinkSync(
+  path.join(repo, 'node_modules'),
+  path.join(runtime, 'node_modules'),
+  process.platform === 'win32' ? 'junction' : 'dir',
+);
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(
   process.execPath,
@@ -163,6 +170,48 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
     /syncQueues/,
     'index syncs from multiple manager instances must be serialized',
   );
+
+  const { R2Manager } = await load('main/r2-manager.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'r2-batch-templates-'));
+  try {
+    const first = new R2Manager({}, root);
+    const second = new R2Manager({}, root);
+    const objects = [{ key: 'models/a.bin', name: 'a.bin', size: 10 }];
+    await Promise.all(
+      Array.from({ length: 25 }, (_, n) =>
+        (n % 2 ? first : second).saveTemplate({
+          name: 'batch-' + n,
+          bucket: 'models',
+          objects,
+        }),
+      ),
+    );
+    const saved = await first.templates();
+    assert.equal(saved.length, 25, 'concurrent batch template saves must retain every entry');
+    assert.equal(new Set(saved.map((item) => item.id)).size, 25);
+    const victim = saved.find((item) => item.name === 'batch-0');
+    await Promise.all([
+      second.deleteTemplate(victim.id),
+      first.saveTemplate({ name: 'added-during-delete', bucket: 'models', objects }),
+    ]);
+    const after = await second.templates();
+    assert.equal(after.length, 25);
+    assert.equal(
+      after.some((item) => item.id === victim.id),
+      false,
+    );
+    assert.equal(
+      after.some((item) => item.name === 'added-during-delete'),
+      true,
+    );
+    assert.deepEqual(
+      after,
+      JSON.parse(fs.readFileSync(path.join(root, 'r2', 'batch-download-templates.json'), 'utf8'))
+        .templates,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 
   console.log('R2 File Manager parity tests passed.');
 })().catch((error) => {

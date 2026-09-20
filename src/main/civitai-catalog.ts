@@ -1,5 +1,7 @@
 import path from 'node:path';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { withTemplateStoreLock, writeJsonAtomic } from './fs-utils.js';
 import type {
   CatalogSelectionTemplate,
   CatalogSelectionTemplateInput,
@@ -174,12 +176,6 @@ export function calculateMembershipChanges(previous: ModelCatalog | null, curren
   return { added, updated, removed };
 }
 
-async function atomicJson(file: string, value: unknown) {
-  await mkdir(path.dirname(file), { recursive: true });
-  const temp = path.join(path.dirname(file), `.${path.basename(file)}.tmp`);
-  await writeFile(temp, JSON.stringify(value, null, 2) + '\n', 'utf8');
-  await rename(temp, file);
-}
 async function readJson<T>(file: string): Promise<T | null> {
   try {
     return JSON.parse(await readFile(file, 'utf8')) as T;
@@ -735,7 +731,7 @@ export class CivitaiCatalogService {
         collections: enriched,
       };
       const changes = calculateMembershipChanges(previous, snapshot);
-      await atomicJson(this.catalogPath, snapshot);
+      await writeJsonAtomic(this.catalogPath, snapshot);
       this.snapshot = snapshot;
       this.cache.prune(
         modelIds,
@@ -782,25 +778,29 @@ export class CivitaiCatalogService {
   async saveTemplate(input: CatalogSelectionTemplateInput) {
     const name = input.name.trim();
     if (!name) throw new Error('テンプレート名を入力してください。');
-    const templates = await this.templates(),
-      now = new Date().toISOString(),
-      existing = input.id ? templates.find((x) => x.id === input.id) : null;
-    const value: CatalogSelectionTemplate = {
-      id: existing?.id ?? `template-${Date.now().toString(36)}`,
-      name: name.slice(0, 60),
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-      selection: input.selection,
-    };
-    const next = [...templates.filter((x) => x.id !== value.id), value].sort((a, b) =>
-      a.name.localeCompare(b.name, 'ja'),
-    );
-    await atomicJson(this.templatesPath, next);
-    return next;
+    return withTemplateStoreLock(this.templatesPath, async () => {
+      const templates = await this.templates(),
+        now = new Date().toISOString(),
+        existing = input.id ? templates.find((x) => x.id === input.id) : null;
+      const value: CatalogSelectionTemplate = {
+        id: existing?.id ?? `template-${randomUUID()}`,
+        name: name.slice(0, 60),
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+        selection: input.selection,
+      };
+      const next = [...templates.filter((x) => x.id !== value.id), value].sort((a, b) =>
+        a.name.localeCompare(b.name, 'ja'),
+      );
+      await writeJsonAtomic(this.templatesPath, next);
+      return next;
+    });
   }
   async deleteTemplate(id: string) {
-    const next = (await this.templates()).filter((x) => x.id !== id);
-    await atomicJson(this.templatesPath, next);
-    return next;
+    return withTemplateStoreLock(this.templatesPath, async () => {
+      const next = (await this.templates()).filter((x) => x.id !== id);
+      await writeJsonAtomic(this.templatesPath, next);
+      return next;
+    });
   }
 }
