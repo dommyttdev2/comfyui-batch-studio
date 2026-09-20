@@ -46,6 +46,7 @@ export function CaptionStage({ project, run }: { project: ProjectSummary; run: R
         title="1. Grokでタイトル・説明文を生成"
         run={run}
         onImport={importCaption}
+        onAutoImported={async () => setStatus(await window.batchStudio.caption.status(project.rootPath))}
       />
 
       <section className="panel">
