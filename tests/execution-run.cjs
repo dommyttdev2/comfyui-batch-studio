@@ -318,6 +318,30 @@ const writeJson = (file, value) => {
   await execution.mutateExecutionRun(root, second.runId, (run) => {
     run.lifecycle = 'FAILED';
   });
+  const cleanupPendingStop = await execution.resumeExecutionRun(root, second.runId, async () => ready);
+  assert.equal(cleanupPendingStop.lifecycle, 'RUNNING');
+  assert.equal(cleanupPendingStop.phase, 'CLOUD_INSTANCE_FINALIZING');
+  await execution.mutateExecutionRun(root, second.runId, (run) => {
+    run.lifecycle = 'FAILED';
+    run.remoteLifecycle = {
+      ...run.remoteLifecycle,
+      finalizedAt: new Date().toISOString(),
+      latest: {
+        provider: 'vastai',
+        instanceId: 456,
+        status: 'stopped',
+        rawStatus: 'stopped',
+        intendedStatus: 'stopped',
+        curState: 'stopped',
+        nextState: null,
+        statusMessage: null,
+        sshHost: null,
+        sshPort: null,
+        comfyUiPort: null,
+        resolvedAt: new Date().toISOString(),
+      },
+    };
+  });
   const cleanupComplete = await execution.resumeExecutionRun(root, second.runId, async () => ready);
   assert.equal(cleanupComplete.lifecycle, 'COMPLETED');
   assert.equal(cleanupComplete.phase, 'COMPLETED');
