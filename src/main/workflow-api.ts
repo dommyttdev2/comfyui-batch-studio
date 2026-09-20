@@ -6,6 +6,13 @@ import type {
   WorkflowManifest,
 } from '../shared/types.js';
 
+// Catalog refresh timestamps and generation numbers are not Workflow inputs.
+export function hashWorkflowModelInputs(models: ModelsArtifact): string {
+  const inputs: Partial<ModelsArtifact> = { ...models };
+  delete inputs.catalog;
+  return hashCanonicalJson(inputs);
+}
+
 export type ApiGraphNode = {
   class_type: string;
   inputs: Record<string, unknown>;
