@@ -574,6 +574,10 @@ export async function resumeExecutionRun(
     if (!run) throw new Error(`Execution Run ${runId} was not found.`);
     if (!resumableLifecycle(run.lifecycle))
       throw new Error(`Execution Run ${runId} is not resumable from ${run.lifecycle}.`);
+    if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
+      throw new Error(
+        'Execution Run recovery is uncertain. Resolve the old ComfyUI Prompt/Remote Worker before resuming; automatic re-submission is disabled.',
+      );
     const placeholder: PreflightResult = {
       state: 'READY',
       plannedImages: run.snapshot.preflight.plannedImages,
