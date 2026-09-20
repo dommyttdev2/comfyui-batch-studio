@@ -344,6 +344,132 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
     }
   }
 
+  {
+    const {
+      UploadPartCommand,
+      CompleteMultipartUploadCommand,
+      AbortMultipartUploadCommand,
+    } = require('@aws-sdk/client-s3');
+    const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'r2-source-integrity-'));
+    const source = path.join(sourceRoot, 'source.bin'),
+      statePath = path.join(sourceRoot, 'r2', 'uploads.json');
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    const makeJob = (id) => ({
+      id,
+      bucket: 'models',
+      key: id + '.bin',
+      filePath: source,
+      fileName: 'source.bin',
+      size: 20,
+      contentType: 'application/octet-stream',
+      uploadId: 'upload-' + id,
+      partSize: 5,
+      completedParts: {},
+      status: 'paused',
+      transferredBytes: 0,
+      error: '',
+      createdAt: new Date().toISOString(),
+    });
+    const jobs = [makeJob('same-size'), makeJob('during-transfer'), makeJob('inode'), makeJob('shrink')];
+    fs.writeFileSync(source, Buffer.alloc(20, 0x41));
+    fs.writeFileSync(statePath, JSON.stringify({ schemaVersion: 1, jobs }));
+    const manager = new R2Manager({}, sourceRoot);
+    manager.syncIndex = () => {};
+    const calls = { parts: [], completes: [], aborts: [] },
+      held = [],
+      delayFor = new Set(['same-size', 'during-transfer', 'inode', 'shrink']);
+    manager.clientFor = async () => ({
+      send(command) {
+        if (command instanceof UploadPartCommand) {
+          const id = String(command.input.UploadId).slice('upload-'.length);
+          calls.parts.push({
+            id,
+            part: command.input.PartNumber,
+            bytes: Buffer.from(command.input.Body),
+          });
+          if (delayFor.has(id))
+            return new Promise((resolve) => {
+              held.push({ id, part: command.input.PartNumber, resolve });
+            });
+          return Promise.resolve({ ETag: 'etag-' + command.input.PartNumber });
+        }
+        if (command instanceof CompleteMultipartUploadCommand) {
+          calls.completes.push(String(command.input.UploadId).slice('upload-'.length));
+          return Promise.resolve({});
+        }
+        if (command instanceof AbortMultipartUploadCommand) {
+          calls.aborts.push(String(command.input.UploadId).slice('upload-'.length));
+          return Promise.resolve({});
+        }
+        throw new Error('unexpected S3 command ' + command.constructor.name);
+      },
+    });
+    const poll = async (condition) => {
+      const deadline = Date.now() + 5000;
+      while (!(await condition())) {
+        if (Date.now() >= deadline) throw new Error('source integrity mock timed out');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    };
+    const state = async (id) => (await manager.uploads()).find((job) => job.id === id);
+    const beginHeld = async (id) => {
+      await manager.resumeUpload(id);
+      await poll(() => held.filter((item) => item.id === id).length === 3);
+    };
+    const releaseHeld = (id) => {
+      delayFor.delete(id);
+      for (const item of held.filter((item) => item.id === id))
+        item.resolve({ ETag: 'etag-' + item.part });
+    };
+    try {
+      await beginHeld('same-size');
+      const paused = manager.pauseUpload('same-size');
+      releaseHeld('same-size');
+      assert.equal((await paused).status, 'paused');
+      const firstParts = calls.parts.filter((part) => part.id === 'same-size').length;
+      fs.writeFileSync(source, Buffer.alloc(20, 0x42));
+      await assert.rejects(() => manager.resumeUpload('same-size'), /R2_UPLOAD_SOURCE_CHANGED/);
+      assert.equal(calls.parts.filter((part) => part.id === 'same-size').length, firstParts);
+      assert.equal(calls.completes.includes('same-size'), false);
+
+      fs.writeFileSync(source, Buffer.alloc(20, 0x41));
+      // The following jobs snapshot their own stable source before the mutation.
+      await beginHeld('during-transfer');
+      fs.writeFileSync(source, Buffer.alloc(20, 0x43));
+      releaseHeld('during-transfer');
+      await poll(async () => (await state('during-transfer')).status === 'failed');
+      assert.equal(calls.completes.includes('during-transfer'), false);
+      assert.equal(calls.aborts.includes('during-transfer'), true);
+      assert.match((await state('during-transfer')).error, /R2_UPLOAD_SOURCE_CHANGED/);
+
+      fs.writeFileSync(source, Buffer.alloc(20, 0x41));
+      await beginHeld('inode');
+      const inodePaused = manager.pauseUpload('inode');
+      releaseHeld('inode');
+      await inodePaused;
+      const replacement = path.join(sourceRoot, 'replacement.bin');
+      fs.writeFileSync(replacement, Buffer.alloc(20, 0x41));
+      fs.renameSync(replacement, source);
+      await assert.rejects(() => manager.resumeUpload('inode'), /R2_UPLOAD_SOURCE_CHANGED/);
+      assert.equal(calls.completes.includes('inode'), false);
+
+      await beginHeld('shrink');
+      fs.truncateSync(source, 11);
+      releaseHeld('shrink');
+      await poll(async () => (await state('shrink')).status === 'failed');
+      assert.equal(calls.completes.includes('shrink'), false);
+      assert.equal(calls.aborts.includes('shrink'), true);
+      assert.ok(
+        calls.parts
+          .filter((part) => part.id === 'shrink')
+          .every((part) => part.bytes.equals(Buffer.alloc(5, 0x41))),
+        'S3 must receive only verified original Part bytes, never mixed source generations',
+      );
+    } finally {
+      fs.rmSync(sourceRoot, { recursive: true, force: true });
+    }
+  }
+
   console.log('R2 File Manager parity tests passed.');
 })().catch((error) => {
   console.error(error);
