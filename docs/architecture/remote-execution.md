@@ -692,6 +692,8 @@ Remote outputs
 
 ZIP内には `manifest.json` を含めない。ZIP entryはユーザー向け成果物構造に正規化し、Remote ComfyUI側の内部階層を露出させない。
 
+成果物件数の照合・manifest作成・ZIP格納対象は、Run固有output prefix配下の画像ファイル（`.png` / `.jpg` / `.jpeg` / `.webp`、拡張子は大文字小文字を区別しない）に統一する。Scene Prompt Tools等の状態管理用 `.state` / `.lock` を含む非画像ファイルは対象外とし、packaging時には削除しない。Resumeも同じ画像ファイル基準で件数を再検証する。
+
 ```text
 {yyyymmdd_hhmmss}.zip
 ├─ b01/
