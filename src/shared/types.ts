@@ -1064,6 +1064,21 @@ export interface CodexTurnStatus {
   finishedAt: number | null;
   error: string | null;
 }
+export interface CodexModelSelection {
+  model: string;
+  effort: string;
+}
+export interface CodexModelOption {
+  id: string;
+  displayName: string;
+  isDefault: boolean;
+  defaultReasoningEffort: string;
+  supportedReasoningEfforts: Array<{ reasoningEffort: string; description: string }>;
+}
+export interface CodexModelSettings {
+  models: CodexModelOption[];
+  selection: CodexModelSelection;
+}
 export interface CodexThreadState {
   activeThreadId: string | null;
   threadIds: string[];
@@ -1331,6 +1346,8 @@ export interface BatchStudioApi {
     status: () => Promise<CodexAccountStatus>;
     signIn: () => Promise<void>;
     snapshot: () => Promise<CodexSnapshot>;
+    models: () => Promise<CodexModelSettings>;
+    selectModel: (selection: CodexModelSelection) => Promise<CodexModelSelection>;
     newChat: () => Promise<CodexSnapshot>;
     restoreChat: (threadId: string) => Promise<CodexSnapshot>;
     send: (text: string) => Promise<CodexSendResult>;
