@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream, createWriteStream, type Stats } from 'node:fs';
+import { open, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import {
@@ -30,6 +30,7 @@ import type {
   R2PutUrlInfo,
   R2SearchResult,
   R2UploadJob,
+  R2UploadSourceFingerprint,
 } from '../shared/types.js';
 import {
   MAX_BATCH_TEMPLATES_PER_BUCKET,
@@ -53,6 +54,116 @@ export const R2_SINGLE_PUT_LIMIT = FIVE_GIB - 5 * MIB;
 const UPLOAD_CONCURRENCY = 3,
   UPLOAD_RETRIES = 3;
 const BUCKET = /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/;
+const SOURCE_CHANGED = 'R2_UPLOAD_SOURCE_CHANGED';
+function sourceStat(st: Stats) {
+  return {
+    size: st.size,
+    mtimeMs: st.mtimeMs,
+    ctimeMs: st.ctimeMs,
+    dev: st.dev,
+    ino: st.ino,
+  };
+}
+function sameSourceStat(
+  baseline: Pick<R2UploadSourceFingerprint, 'size' | 'mtimeMs' | 'ctimeMs' | 'dev' | 'ino'>,
+  current: ReturnType<typeof sourceStat>,
+) {
+  return (
+    baseline.size === current.size &&
+    baseline.mtimeMs === current.mtimeMs &&
+    baseline.ctimeMs === current.ctimeMs &&
+    baseline.dev === current.dev &&
+    baseline.ino === current.ino
+  );
+}
+function sourceChanged(reason: string): Error {
+  return new Error(
+    `${SOURCE_CHANGED}: ${reason}。既存Partを再利用せず、新しいアップロードを開始してください。`,
+  );
+}
+async function fingerprintUploadSource(
+  filePath: string,
+  uploadPartSize: number,
+): Promise<R2UploadSourceFingerprint> {
+  const before = sourceStat(await stat(filePath));
+  const overall = createHash('sha256'),
+    partSha256: string[] = [];
+  let partHash = createHash('sha256'),
+    inPart = 0,
+    bytes = 0;
+  // One MiB per chunk, regardless of multi-GiB source file size.
+  for await (const raw of createReadStream(filePath, { highWaterMark: MIB })) {
+    const chunk = raw as Buffer;
+    overall.update(chunk);
+    for (let offset = 0; offset < chunk.length; ) {
+      const take = Math.min(uploadPartSize - inPart, chunk.length - offset);
+      partHash.update(chunk.subarray(offset, offset + take));
+      inPart += take;
+      offset += take;
+      if (inPart === uploadPartSize) {
+        partSha256.push(partHash.digest('hex'));
+        partHash = createHash('sha256');
+        inPart = 0;
+      }
+    }
+    bytes += chunk.length;
+  }
+  if (inPart > 0 || bytes === 0) partSha256.push(partHash.digest('hex'));
+  if (bytes !== before.size || !sameSourceStat(before, sourceStat(await stat(filePath))))
+    throw sourceChanged('ハッシュ計算中に元ファイルのサイズまたは識別情報が変わりました');
+  return { ...before, sha256: overall.digest('hex'), partSha256 };
+}
+async function assertSourceFingerprint(
+  filePath: string,
+  expected: R2UploadSourceFingerprint,
+  uploadPartSize: number,
+) {
+  const current = await fingerprintUploadSource(filePath, uploadPartSize);
+  if (
+    !sameSourceStat(expected, current) ||
+    current.sha256 !== expected.sha256 ||
+    current.partSha256.length !== expected.partSha256.length ||
+    current.partSha256.some((digest, i) => digest !== expected.partSha256[i])
+  )
+    throw sourceChanged('元ファイルの内容・サイズ・更新時刻・ファイルIDが変わりました');
+}
+// The bytes supplied to S3 are verified in memory before the HTTP request;
+// a source changing while an UploadPart request is in flight cannot change
+// that already verified part, even on platforms where file locks are advisory.
+async function verifiedUploadPart(
+  filePath: string,
+  start: number,
+  length: number,
+  baseline: R2UploadSourceFingerprint,
+  partNumber: number,
+): Promise<Buffer> {
+  const before = sourceStat(await stat(filePath));
+  if (!sameSourceStat(baseline, before))
+    throw sourceChanged('Part読み込み前に元ファイルが変更されました');
+  const handle = await open(filePath, 'r');
+  try {
+    const opened = sourceStat(await handle.stat());
+    if (!sameSourceStat(baseline, opened)) throw sourceChanged('元ファイルのIDが変わりました');
+    const bytes = Buffer.allocUnsafe(length);
+    let read = 0;
+    while (read < length) {
+      const result = await handle.read(bytes, read, length - read, start + read);
+      if (!result.bytesRead) throw sourceChanged('Part読み込み中に元ファイルが縮小しました');
+      read += result.bytesRead;
+    }
+    const actual = createHash('sha256').update(bytes).digest('hex');
+    if (actual !== baseline.partSha256[partNumber - 1])
+      throw sourceChanged('Partの内容ハッシュが開始時と一致しません');
+    if (
+      !sameSourceStat(baseline, sourceStat(await handle.stat())) ||
+      !sameSourceStat(baseline, sourceStat(await stat(filePath)))
+    )
+      throw sourceChanged('Part読み込み中に元ファイルが変更されました');
+    return bytes;
+  } finally {
+    await handle.close();
+  }
+}
 function partSize(size: number) {
   const required = Math.max(DEFAULT_PART, Math.ceil(Math.max(size, 1) / MAX_PARTS));
   return Math.ceil(required / MIB) * MIB;
@@ -673,6 +784,7 @@ export class R2Manager {
   async beginUpload(bucket: string, prefix: string, filePath: string, overwrite = false) {
     if (!(await exists(filePath))) throw new Error('アップロード元ファイルが見つかりません。');
     const st = await stat(filePath),
+      sourceFingerprint = await fingerprintUploadSource(filePath, partSize(st.size)),
       name = path.basename(filePath),
       key = `${prefix.replace(/^\/+|\/+$/g, '')}${prefix ? '/' : ''}${name}`;
     if (Buffer.byteLength(key) > 1024)
@@ -707,6 +819,8 @@ export class R2Manager {
       filePath,
       fileName: name,
       size: st.size,
+      sourceFingerprint,
+      hashProgressBytes: st.size,
       contentType: 'application/octet-stream',
       uploadId,
       partSize: partSize(st.size),
@@ -755,6 +869,18 @@ export class R2Manager {
       if (job.kind === 'move') throw new Error('移動ジョブは再開操作できません。');
       if (job.status === 'complete' || job.status === 'cancelled') return job;
       if (!(await exists(job.filePath))) throw new Error('元ファイルが見つかりません。');
+      if (!job.sourceFingerprint) {
+        if (Object.keys(job.completedParts).length)
+          throw sourceChanged(
+            '旧形式のジョブには完了済みPartの内容ハッシュがないため再開できません',
+          );
+        job.sourceFingerprint = await fingerprintUploadSource(job.filePath, job.partSize);
+        job.hashProgressBytes = job.size;
+        await this.saveUpload(job);
+      } else {
+        await assertSourceFingerprint(job.filePath, job.sourceFingerprint, job.partSize);
+        job.hashProgressBytes = job.size;
+      }
       if (control.cancelled || control.paused) return job;
       job.status = 'uploading';
       job.error = '';
@@ -795,7 +921,13 @@ export class R2Manager {
             Key: job.key,
             UploadId: job.uploadId ?? undefined,
             PartNumber: number,
-            Body: createReadStream(job.filePath, { start, end }),
+            Body: await verifiedUploadPart(
+              job.filePath,
+              start,
+              length,
+              job.sourceFingerprint,
+              number,
+            ),
             ContentLength: length,
           }),
         );
@@ -879,6 +1011,13 @@ export class R2Manager {
         return;
       }
       if (failure) throw failure;
+      await assertSourceFingerprint(job.filePath, job.sourceFingerprint, job.partSize);
+      if (control.cancelled) return;
+      if (control.paused) {
+        job.status = 'paused';
+        await this.saveUpload(job);
+        return;
+      }
       // Claim the completion phase synchronously with the final cancellation
       // check. Cancel waits for this request and never aborts a completed upload.
       control.completing = true;
@@ -905,6 +1044,22 @@ export class R2Manager {
       job.error = e instanceof Error ? e.message : String(e);
       job.completedAt = new Date().toISOString();
       await this.saveUpload(job);
+      if (job.error.startsWith(SOURCE_CHANGED) && job.uploadId) {
+        try {
+          await (await this.clientFor()).send(
+            new AbortMultipartUploadCommand({
+              Bucket: job.bucket,
+              Key: job.key,
+              UploadId: job.uploadId,
+            }),
+          );
+          job.uploadId = null;
+          job.completedParts = {};
+          await this.saveUpload(job);
+        } catch {
+          // Retain the upload ID so Cancel can retry cleanup if R2 is unavailable.
+        }
+      }
     }
   }
   async pauseUpload(id: string) {
