@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, type Stats } from 'node:fs';
 import { open, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -55,7 +55,7 @@ const UPLOAD_CONCURRENCY = 3,
   UPLOAD_RETRIES = 3;
 const BUCKET = /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/;
 const SOURCE_CHANGED = 'R2_UPLOAD_SOURCE_CHANGED';
-function sourceStat(st: Awaited<ReturnType<typeof stat>>) {
+function sourceStat(st: Stats) {
   return {
     size: st.size,
     mtimeMs: st.mtimeMs,
