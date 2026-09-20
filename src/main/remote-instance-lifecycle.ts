@@ -193,11 +193,20 @@ export class RemoteInstanceLifecycleService {
     )
       return;
     const lifecycle = run.remoteLifecycle;
-    if (run.lifecycle === 'RUNNING' || run.lifecycle === 'PAUSED') return;
+    if (
+      run.lifecycle === 'PAUSED' ||
+      (run.lifecycle === 'RUNNING' && run.phase !== 'CLOUD_INSTANCE_FINALIZING')
+    )
+      return;
     if (!lifecycle || lifecycle.initialStatus == null || lifecycle.finalizedAt) return;
     const instanceId = Number(run.remote.instanceId),
       phaseBefore = run.phase,
-      stopForCompletedRun = run.lifecycle === 'COMPLETED',
+      // A finalize failure occurs after generation/retrieval completed. Retrying
+      // this failure must stop the same instance, not restore its initial state.
+      stopForCompletedRun =
+        run.lifecycle === 'COMPLETED' ||
+        run.phase === 'CLOUD_INSTANCE_FINALIZING' ||
+        run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED',
       restoreStartedInstance =
         lifecycle.restorePolicy === 'restore-if-started' &&
         lifecycle.startedByBatchStudio &&
@@ -221,11 +230,28 @@ export class RemoteInstanceLifecycleService {
         `Vast.ai returned Instance ${current.id} while ${instanceId} was requested. Silent fallback is not allowed.`,
       );
     await this.persistSnapshot(root, runId, current, 'CLOUD_INSTANCE_FINALIZING');
-    if (current.status !== 'stopped') current = await this.client.stopInstance(instanceId);
-    if (current.id !== instanceId || current.status !== 'stopped')
-      throw new Error(
-        `Vast.ai Instance ${instanceId} could not be stopped during Run finalization.`,
-      );
+    if (current.status !== 'stopped') await this.client.stopInstance(instanceId);
+    // A successful stop API response only acknowledges the request; confirm the
+    // provider has actually transitioned to stopped before recording finalization.
+    const deadline = Date.now() + this.timeoutMs;
+    for (;;) {
+      current = await this.client.getInstance(instanceId);
+      if (current.id !== instanceId)
+        throw new Error(
+          `Vast.ai returned Instance ${current.id} while ${instanceId} was requested. Silent fallback is not allowed.`,
+        );
+      await this.persistSnapshot(root, runId, current, 'CLOUD_INSTANCE_FINALIZING');
+      if (current.status === 'stopped') break;
+      if (current.status === 'scheduling' || unavailable(current))
+        throw new Error(
+          `Vast.ai Instance ${instanceId} is ${current.status} during finalization; stopping is not confirmed.`,
+        );
+      if (Date.now() >= deadline)
+        throw new Error(
+          `Vast.ai Instance ${instanceId} did not confirm stopped before the finalization deadline.`,
+        );
+      await this.sleepImpl(this.pollMs);
+    }
     await mutateExecutionRun(root, runId, (state) => {
       const next = state.remoteLifecycle ?? defaultLifecycle();
       next.latest = snapshot(current);

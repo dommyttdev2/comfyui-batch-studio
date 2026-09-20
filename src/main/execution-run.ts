@@ -265,6 +265,13 @@ function resumePhase(
     !kinds.has('CLEANUP_COMPLETED')
   )
     return { phase: 'REMOTE_CLEANUP', lifecycle: 'RUNNING' };
+  if (
+    run.executionTarget === 'remote' &&
+    kinds.has('LOCAL_FILE_VERIFIED') &&
+    kinds.has('CLEANUP_COMPLETED') &&
+    (!run.remoteLifecycle?.finalizedAt || run.remoteLifecycle.latest?.status !== 'stopped')
+  )
+    return { phase: 'CLOUD_INSTANCE_FINALIZING', lifecycle: 'RUNNING' };
   if (kinds.has('LOCAL_FILE_VERIFIED')) return { phase: 'COMPLETED', lifecycle: 'COMPLETED' };
   if (run.executionTarget === 'remote' && kinds.has('R2_OBJECT_VERIFIED'))
     return { phase: 'LOCAL_DOWNLOADING', lifecycle: 'RUNNING' };
@@ -488,6 +495,50 @@ export async function requestForceInterrupt(root: string, runId: string): Promis
       run.controls.interrupt = 'FORCE_REQUESTED';
       run.controls.forceInterruptRequestedAt = new Date().toISOString();
     }
+  });
+}
+
+export async function resumeExecutionRunFinalization(
+  root: string,
+  runId: string,
+): Promise<ExecutionRun> {
+  return withProjectLock(root, async () => {
+    const run = await getExecutionRun(root, runId);
+    if (!run) throw new Error(`Execution Run ${runId} was not found.`);
+    if (
+      run.lifecycle !== 'FAILED' ||
+      run.executionTarget !== 'remote' ||
+      run.remote?.provider !== 'vastai' ||
+      run.error?.code !== 'REMOTE_INSTANCE_FINALIZE_FAILED' ||
+      run.remoteLifecycle?.finalizedAt
+    )
+      throw new Error('This Execution Run has no pending Vast.ai stop finalization to retry.');
+    const verified = validatedExecutionEvidence(run);
+    const kinds = new Set(verified.valid.map((item) => item.kind));
+    if (!kinds.has('LOCAL_FILE_VERIFIED') || !kinds.has('CLEANUP_COMPLETED'))
+      throw new Error(
+        'Cannot retry only finalization before artifacts were delivered and cleaned.',
+      );
+    const now = new Date().toISOString();
+    const next: ExecutionRun = {
+      ...run,
+      lifecycle: 'RUNNING',
+      phase: 'CLOUD_INSTANCE_FINALIZING',
+      controls: { ...run.controls, scheduling: 'STOPPED' },
+      error: null,
+      completedAt: null,
+      resume: {
+        attempts: run.resume.attempts + 1,
+        lastAttemptAt: now,
+        lastValidatedEvidenceIds: verified.valid.map((item) => item.id),
+        lastIgnoredEvidenceIds: verified.invalid,
+        lastDecisionPhase: 'CLOUD_INSTANCE_FINALIZING',
+      },
+      updatedAt: now,
+    };
+    await writeRun(root, next);
+    await writeCurrent(root, runId);
+    return next;
   });
 }
 

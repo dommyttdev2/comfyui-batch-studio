@@ -74,6 +74,7 @@ import {
   requestForceInterrupt,
   requestStopScheduling,
   resumeExecutionRun,
+  resumeExecutionRunFinalization,
   startExecutionRun,
 } from './execution-run.js';
 import { LocalExecutionService } from './local-execution.js';
@@ -2332,7 +2333,76 @@ function register() {
   ipcMain.handle(IPC.EXECUTION_RESUME, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    const run = await resumeExecutionRun(root, runId, () => executionPreflight(root));
+    const previous = await getExecutionRun(root, runId);
+    if (!previous) throw new Error(`Execution Run ${runId} was not found.`);
+    const retryingStop =
+      previous.executionTarget === 'remote' &&
+      previous.lifecycle === 'FAILED' &&
+      previous.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED';
+    // A finalize-only retry needs neither a changed Workflow nor a live SSH /
+    // ComfyUI connection. It must never regenerate or redownload the Run.
+    const run = retryingStop
+      ? await resumeExecutionRunFinalization(root, runId)
+      : await resumeExecutionRun(root, runId, () => executionPreflight(root));
+    if (run.lifecycle === 'RUNNING' && run.phase === 'CLOUD_INSTANCE_FINALIZING') {
+      const instanceId = Number(run.remote?.instanceId);
+      if (run.remote?.provider !== 'vastai' || !Number.isInteger(instanceId) || instanceId < 1)
+        throw new Error('Finalization retry has no valid Vast.ai Instance.');
+      const conflicting = (await listExecutionRuns(root)).find(
+        (other) =>
+          other.runId !== runId &&
+          other.executionTarget === 'remote' &&
+          other.remote?.provider === 'vastai' &&
+          Number(other.remote.instanceId) === instanceId &&
+          ['RUNNING', 'PAUSED', 'INTERRUPTED'].includes(other.lifecycle),
+      );
+      const restoreRetryableFailure = async (reason: unknown) => {
+        await mutateExecutionRun(root, runId, (current) => {
+          current.lifecycle = 'FAILED';
+          current.phase = 'CLOUD_INSTANCE_FINALIZING';
+          current.error = previous.error ?? {
+            code: 'REMOTE_INSTANCE_FINALIZE_FAILED',
+            message: safeExecutionError(reason),
+            phase: 'CLOUD_INSTANCE_FINALIZING',
+            at: new Date().toISOString(),
+            retryable: true,
+          };
+          current.controls.scheduling = 'STOPPED';
+        });
+      };
+      if (conflicting) {
+        const error = new Error(
+          `Cannot stop Vast.ai Instance ${instanceId}: Run ${conflicting.runId} is still active.`,
+        );
+        await restoreRetryableFailure(error);
+        throw error;
+      }
+      const ref = { projectRoot: path.resolve(root), runId };
+      let task: Promise<void>;
+      try {
+        task = executionCoordinator.startRemote(ref, 'vastai', instanceId, async () => {
+          await finalizeRemoteInstance(root, runId);
+          const finalized = await getExecutionRun(root, runId);
+          if (
+            finalized?.lifecycle === 'RUNNING' &&
+            finalized.remoteLifecycle?.finalizedAt &&
+            finalized.remoteLifecycle.latest?.status === 'stopped'
+          )
+            await mutateExecutionRun(root, runId, (current) => {
+              current.lifecycle = 'COMPLETED';
+              current.phase = 'COMPLETED';
+              current.error = null;
+              current.completedAt = new Date().toISOString();
+              current.controls.scheduling = 'STOPPED';
+            });
+        });
+      } catch (error) {
+        await restoreRetryableFailure(error);
+        throw error;
+      }
+      void task.finally(maybeQuitAfterExecution).catch(() => {});
+      return run;
+    }
     if (run.lifecycle === 'RUNNING') await startExecutionRuntime(root, run);
     return run;
   });

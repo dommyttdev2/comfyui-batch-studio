@@ -109,9 +109,11 @@ class FakeClient {
     this.reads = 0;
     this.starts = 0;
     this.stops = 0;
+    this.stopped = false;
   }
   async getInstance(id) {
     assert.equal(id, 7);
+    if (this.stopped) return instance('stopped');
     const value = this.states[Math.min(this.reads++, this.states.length - 1)];
     if (value instanceof Error) throw value;
     return structuredClone(value);
@@ -123,6 +125,7 @@ class FakeClient {
   async stopInstance(id) {
     assert.equal(id, 7);
     this.stops++;
+    this.stopped = true;
     return instance('stopped');
   }
 }
@@ -324,6 +327,102 @@ async function scenario(lifecycle, states) {
       2,
       'running without SSH endpoint must continue polling until endpoint is ready',
     );
+  }
+
+  {
+    // A provider stop acknowledgement is not evidence that the instance stopped.
+    const { root, client, service } = await scenario(lifecycle, [
+      ready(),
+      ready(),
+      instance('scheduling'),
+    ]);
+    await service.prepare(root, runId);
+    await execution.mutateExecutionRun(root, runId, (r) => {
+      r.lifecycle = 'COMPLETED';
+      r.phase = 'COMPLETED';
+    });
+    client.stopInstance = async () => {
+      client.stops++;
+      return instance('stopped');
+    };
+    await assert.rejects(() => service.finalize(root, runId), /stopping is not confirmed/);
+    const run = await execution.getExecutionRun(root, runId);
+    assert.equal(run.remoteLifecycle.finalizedAt, null);
+    assert.equal(run.remoteLifecycle.latest.status, 'scheduling');
+  }
+
+  {
+    // Once generation/transfer/cleanup have completed, retrying a failed stop
+    // must not run Preflight or generation, even after reloading the Run from disk.
+    const { root, client, service } = await scenario(lifecycle, [ready()]);
+    await service.prepare(root, runId);
+    await execution.recordExecutionEvidence(root, runId, {
+      kind: 'LOCAL_FILE_VERIFIED',
+      scope: 'remote-package',
+      data: { size: 1 },
+    });
+    await execution.recordExecutionEvidence(root, runId, {
+      kind: 'CLEANUP_COMPLETED',
+      scope: 'remote-artifacts',
+      data: { remote: true, r2: true },
+    });
+    await execution.mutateExecutionRun(root, runId, (r) => {
+      r.lifecycle = 'COMPLETED';
+      r.phase = 'COMPLETED';
+    });
+    const originalStop = client.stopInstance.bind(client);
+    client.stopInstance = async () => {
+      client.stops++;
+      throw new Error('Vast provider temporarily unavailable');
+    };
+    await assert.rejects(() => service.finalize(root, runId), /temporarily unavailable/);
+    await execution.mutateExecutionRun(root, runId, (r) => {
+      r.lifecycle = 'FAILED';
+      r.phase = 'CLOUD_INSTANCE_FINALIZING';
+      r.error = {
+        code: 'REMOTE_INSTANCE_FINALIZE_FAILED',
+        message: 'Vast provider temporarily unavailable',
+        phase: 'CLOUD_INSTANCE_FINALIZING',
+        at: new Date().toISOString(),
+        retryable: true,
+      };
+    });
+    const resumed = await execution.resumeExecutionRunFinalization(root, runId);
+    assert.equal(resumed.lifecycle, 'RUNNING');
+    assert.equal(resumed.phase, 'CLOUD_INSTANCE_FINALIZING');
+    assert.equal(resumed.resume.attempts, 1);
+    assert.equal(client.starts, 0, 'finalize retry must not restart the instance');
+    client.stopInstance = originalStop;
+    await service.finalize(root, runId);
+    const after = await execution.getExecutionRun(root, runId);
+    assert.equal(after.remoteLifecycle.latest.status, 'stopped');
+    assert.ok(after.remoteLifecycle.finalizedAt);
+    assert.equal(client.stops, 2, 'only the instance stop must be repeated');
+    await assert.rejects(
+      () => execution.resumeExecutionRunFinalization(root, runId),
+      /no pending Vast.ai stop finalization/,
+    );
+  }
+
+  {
+    // A successful stop response followed by a failed verification must remain retryable.
+    const { root, client, service } = await scenario(lifecycle, [
+      ready(),
+      ready(),
+      new Error('Vast status API timed out'),
+    ]);
+    await service.prepare(root, runId);
+    await execution.mutateExecutionRun(root, runId, (r) => {
+      r.lifecycle = 'COMPLETED';
+      r.phase = 'COMPLETED';
+    });
+    client.stopInstance = async () => {
+      client.stops++;
+      return instance('stopped');
+    };
+    await assert.rejects(() => service.finalize(root, runId), /status API timed out/);
+    const after = await execution.getExecutionRun(root, runId);
+    assert.equal(after.remoteLifecycle.finalizedAt, null);
   }
 
   console.log('Remote Vast instance lifecycle tests passed.');
