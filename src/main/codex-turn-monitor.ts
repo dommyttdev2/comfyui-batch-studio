@@ -1,6 +1,12 @@
 import type { CodexTurnStatus } from '../shared/types.js';
 
-const idle = (): CodexTurnStatus => ({ phase: 'idle', startedAt: null, updatedAt: null, finishedAt: null, error: null });
+const idle = (): CodexTurnStatus => ({
+  phase: 'idle',
+  startedAt: null,
+  updatedAt: null,
+  finishedAt: null,
+  error: null,
+});
 
 type TurnNotification = {
   method: string;
@@ -13,28 +19,27 @@ function resultStatus(value: unknown): 'completed' | 'failed' | 'interrupted' | 
 }
 
 function turnResult(params: Record<string, unknown>) {
-  const turn = params.turn && typeof params.turn === 'object'
-    ? (params.turn as Record<string, unknown>)
-    : null;
+  const turn =
+    params.turn && typeof params.turn === 'object'
+      ? (params.turn as Record<string, unknown>)
+      : null;
   const status = resultStatus(turn?.status);
-  const error = turn?.error && typeof turn.error === 'object'
-    ? (turn.error as Record<string, unknown>)
-    : null;
+  const error =
+    turn?.error && typeof turn.error === 'object' ? (turn.error as Record<string, unknown>) : null;
   return {
     status,
-    error: status === 'failed' && typeof error?.message === 'string'
-      ? error.message.slice(0, 1000)
-      : null,
+    error:
+      status === 'failed' && typeof error?.message === 'string'
+        ? error.message.slice(0, 1000)
+        : null,
   };
 }
 
 export function statusFromThreadRead(result: unknown): CodexTurnStatus {
-  const thread = result && typeof result === 'object'
-    ? (result as Record<string, unknown>).thread
-    : null;
-  const turns = thread && typeof thread === 'object'
-    ? (thread as Record<string, unknown>).turns
-    : null;
+  const thread =
+    result && typeof result === 'object' ? (result as Record<string, unknown>).thread : null;
+  const turns =
+    thread && typeof thread === 'object' ? (thread as Record<string, unknown>).turns : null;
   if (!Array.isArray(turns) || turns.length === 0) return idle();
   const last = turns[turns.length - 1] as Record<string, unknown> | null;
   const status = resultStatus(last?.status);
@@ -42,17 +47,17 @@ export function statusFromThreadRead(result: unknown): CodexTurnStatus {
   // is not proof that it is still running; likewise, messages alone do not
   // prove that a turn completed successfully.
   if (status === 'unknown') return { ...idle(), phase: 'unknown' };
-  const error = last?.error && typeof last.error === 'object'
-    ? (last.error as Record<string, unknown>)
-    : null;
+  const error =
+    last?.error && typeof last.error === 'object' ? (last.error as Record<string, unknown>) : null;
   return {
     phase: status,
     startedAt: null,
     updatedAt: null,
     finishedAt: null,
-    error: status === 'failed' && typeof error?.message === 'string'
-      ? error.message.slice(0, 1000)
-      : null,
+    error:
+      status === 'failed' && typeof error?.message === 'string'
+        ? error.message.slice(0, 1000)
+        : null,
   };
 }
 
@@ -81,7 +86,12 @@ export class CodexTurnMonitor {
 
   started(threadId: string): CodexTurnStatus {
     const previous = this.get(threadId);
-    if (previous && (previous.phase === 'completed' || previous.phase === 'failed' || previous.phase === 'interrupted'))
+    if (
+      previous &&
+      (previous.phase === 'completed' ||
+        previous.phase === 'failed' ||
+        previous.phase === 'interrupted')
+    )
       return previous;
     const now = Date.now();
     const next: CodexTurnStatus = {
