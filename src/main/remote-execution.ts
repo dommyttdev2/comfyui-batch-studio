@@ -224,24 +224,29 @@ export class RemoteExecutionService {
           if (run.lifecycle === 'DISCARDED') return;
           const code =
             error instanceof ArtifactPipelineError ? error.code : 'REMOTE_EXECUTION_FAILED';
+          const uncertain = code === 'REMOTE_PROMPT_ACK_UNCERTAIN';
           const failure = {
-            code,
+            code: uncertain ? 'EXECUTION_RECOVERY_UNCERTAIN' : code,
             message: safeError(error),
             phase: run.phase,
             at: new Date().toISOString(),
-            retryable: true,
+            retryable: !uncertain,
           };
           run.error = failure;
           run.errorHistory.push(failure);
           run.lifecycle = 'FAILED';
           run.controls.scheduling = 'STOPPED';
-          clearCurrentGenerationTiming(run);
+          if (!uncertain) clearCurrentGenerationTiming(run);
         });
       })
       .finally(async () => {
         const discarding = this.discardingRuns.has(runId);
         try {
-          if (!discarding) await this.onSettled?.(root, runId);
+          const latest = await getExecutionRun(root, runId);
+          // Unknown acknowledgments might still have a live ComfyUI prompt.
+          // Do not shut down its Vast.ai instance based on an unverified POST.
+          if (!discarding && latest?.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN')
+            await this.onSettled?.(root, runId);
         } finally {
           if (!discarding) this.remote.disconnect(root, runId);
           this.workers.delete(runId);
@@ -310,6 +315,27 @@ export class RemoteExecutionService {
         throw new Error('Remote Worker state vanished while restoring monitoring.');
     }
     await this.syncState(root, runId, state);
+    if (
+      state.status === 'failed' &&
+      state.error?.code === 'REMOTE_PROMPT_ACK_UNCERTAIN'
+    ) {
+      const resolved = asResponse(
+        (await this.remote.requestWorker(root, runId, 'reconcile_submission')).response,
+      ) as WorkerSequenceResponse & { found?: boolean };
+      if (!resolved.found || !resolved.state?.current?.promptId)
+        throw new Error(
+          'POST /prompt may have succeeded, but no matching submission ID exists in Queue/History. No new prompt was sent.',
+        );
+      state = resolved.state;
+      await this.syncState(root, runId, state);
+      await mutateExecutionRun(root, runId, (run) => {
+        run.current.promptId = state!.current!.promptId ?? null;
+        run.lifecycle = 'PAUSED';
+        run.controls.scheduling = 'STOPPED';
+        run.error = null;
+      });
+      return;
+    }
     if (state.status === 'paused' || state.status === 'interrupted') {
       await mutateExecutionRun(root, runId, (run) => {
         run.lifecycle = state!.status === 'paused' ? 'PAUSED' : 'INTERRUPTED';
