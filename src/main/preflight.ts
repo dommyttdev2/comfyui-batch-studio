@@ -79,6 +79,13 @@ export async function runPreflight(
   const build = project.meta?.workflowBuild as any;
   const apiRelativePath = build?.apiOutputPath ?? build?.outputs?.api?.path;
   const apiIssues: ValidationIssue[] = [];
+  if (models && (!build?.modelsSha256 || build.modelsSha256 !== hashCanonicalJson(models)))
+    apiIssues.push({
+      severity: 'error',
+      code: 'WORKFLOW_MODEL_STALE',
+      message: 'models.jsonの内容がWorkflow生成時と異なります。モデルを確認してWorkflowを再生成してください。',
+      path: 'models.json',
+    });
   if (!apiRelativePath)
     apiIssues.push({
       severity: 'error',
