@@ -342,6 +342,7 @@ export class RemoteExecutionService {
             projectId: run.projectId,
             outputPrefix,
             comfyEndpoint: 'http://127.0.0.1:8188',
+            resume: (run.resume?.attempts ?? 0) > 0,
             workflow,
             branches,
           },
