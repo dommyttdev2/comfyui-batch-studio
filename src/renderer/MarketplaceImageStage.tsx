@@ -153,11 +153,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     'marketplace',
     state,
     loadedStateRef.current,
-    Boolean(
-      pickerSessionRef.current ||
-        pickerOpeningRef.current ||
-        pickerCommitPendingRef.current
-    ),
+    Boolean(pickerSessionRef.current || pickerOpeningRef.current || pickerCommitPendingRef.current),
     250,
   );
 
