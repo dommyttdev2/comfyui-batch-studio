@@ -74,19 +74,26 @@ export function GrokBridge({
   onReset?: (scope: ResetScope) => Promise<void>;
 }) {
   const [task, setTask] = useState<GrokTask | null>(null),
-    [autoArtifact, setAutoArtifact] = useState<import('../shared/types').AutoArtifactEvent | null>(null),
+    [autoArtifact, setAutoArtifact] = useState<import('../shared/types').AutoArtifactEvent | null>(
+      null,
+    ),
     [raw, setRaw] = useState(''),
     [result, setResult] = useState<ImportResult | null>(null),
     [extra, setExtra] = useState(''),
     [selectedFile, setSelectedFile] = useState<File | null>(null),
     [fileIssue, setFileIssue] = useState(''),
     [dragging, setDragging] = useState(false);
-  useEffect(() => window.batchStudio.autoArtifact.onEvent((event) => {
-    if (event.provider !== 'grok' || event.root !== project.rootPath || event.stage !== stage) return;
-    setAutoArtifact(event);
-    if (event.phase === 'imported')
-      void onAutoImported?.().catch((error) => setFileIssue(String(error)));
-  }), [project.rootPath, stage, onAutoImported]);
+  useEffect(
+    () =>
+      window.batchStudio.autoArtifact.onEvent((event) => {
+        if (event.provider !== 'grok' || event.root !== project.rootPath || event.stage !== stage)
+          return;
+        setAutoArtifact(event);
+        if (event.phase === 'imported')
+          void onAutoImported?.().catch((error) => setFileIssue(String(error)));
+      }),
+    [project.rootPath, stage, onAutoImported],
+  );
   const fileInput = useRef<HTMLInputElement | null>(null),
     isFix = stage.endsWith('-fix'),
     returnFile = GROK_RETURN_FILES[stage];
@@ -144,10 +151,17 @@ export function GrokBridge({
           依頼内容を生成
         </button>
         {task && (
-          <button onClick={() => run(async () => {
-            window.batchStudio.clipboard.writeText(task.prompt);
-            if (receive) setAutoArtifact(await window.batchStudio.autoArtifact.armGrok(project.rootPath, stage));
-          })}>
+          <button
+            onClick={() =>
+              run(async () => {
+                window.batchStudio.clipboard.writeText(task.prompt);
+                if (receive)
+                  setAutoArtifact(
+                    await window.batchStudio.autoArtifact.armGrok(project.rootPath, stage),
+                  );
+              })
+            }
+          >
             コピー・自動取り込み待機
           </button>
         )}
@@ -174,17 +188,35 @@ export function GrokBridge({
       )}
       {receive && returnFile ? (
         <>
-          {autoArtifact && <div className="result" role="status" aria-live="polite">
-            <strong>{autoArtifact.fileName}:</strong>{' '}
-            {autoArtifact.phase === 'waiting' ? 'Grokの成果物を待っています…' :
-             autoArtifact.phase === 'detected' ? '成果物を検出しました' :
-             autoArtifact.phase === 'validating' ? '検証中…' :
-             autoArtifact.phase === 'imported' ? '検証済み・下書きへ自動取り込み完了（未確定）' :
-             autoArtifact.phase === 'duplicate' ? '取り込み済みです' :
-             autoArtifact.message ?? '取り込みできませんでした。手動添付も利用できます。'}
-            {autoArtifact.filePath && <button onClick={() => window.batchStudio.file.showInFolder(autoArtifact.filePath!)}>成果物ファイルの場所を開く</button>}
-            {autoArtifact.issues?.map((issue, index) => <div key={index} className="issue error">{issue.message}</div>)}
-          </div>}
+          {autoArtifact && (
+            <div className="result" role="status" aria-live="polite">
+              <strong>{autoArtifact.fileName}:</strong>{' '}
+              {autoArtifact.phase === 'waiting'
+                ? 'Grokの成果物を待っています…'
+                : autoArtifact.phase === 'detected'
+                  ? '成果物を検出しました'
+                  : autoArtifact.phase === 'validating'
+                    ? '検証中…'
+                    : autoArtifact.phase === 'imported'
+                      ? '検証済み・下書きへ自動取り込み完了（未確定）'
+                      : autoArtifact.phase === 'duplicate'
+                        ? '取り込み済みです'
+                        : (autoArtifact.message ??
+                          '取り込みできませんでした。手動添付も利用できます。')}
+              {autoArtifact.filePath && (
+                <button
+                  onClick={() => window.batchStudio.file.showInFolder(autoArtifact.filePath!)}
+                >
+                  成果物ファイルの場所を開く
+                </button>
+              )}
+              {autoArtifact.issues?.map((issue, index) => (
+                <div key={index} className="issue error">
+                  {issue.message}
+                </div>
+              ))}
+            </div>
+          )}
           <h4>Grok返却ファイルを添付</h4>
           <p className="grok-return-note">
             Grokからダウンロードした <code>{returnFile.name}</code>{' '}
@@ -913,7 +945,11 @@ export function ModelsStage({
             onImport={(raw) => importModels(raw, 'models')}
             onAutoImported={async () => {
               setEditing(true);
-              const next = await window.batchStudio.artifact.read(project.rootPath, 'models', 'draft');
+              const next = await window.batchStudio.artifact.read(
+                project.rootPath,
+                'models',
+                'draft',
+              );
               setDoc(next);
               hydrate(next.content);
               setHasInitialSelection(true);
@@ -940,7 +976,11 @@ export function ModelsStage({
             onImport={(raw) => importModels(raw, 'models-fix')}
             onAutoImported={async () => {
               setEditing(true);
-              const next = await window.batchStudio.artifact.read(project.rootPath, 'models', 'draft');
+              const next = await window.batchStudio.artifact.read(
+                project.rootPath,
+                'models',
+                'draft',
+              );
               setDoc(next);
               hydrate(next.content);
               setHistoryRevision((value) => value + 1);
