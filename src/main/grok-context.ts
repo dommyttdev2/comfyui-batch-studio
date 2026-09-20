@@ -1,17 +1,18 @@
 import path from 'node:path';
-import type { GrokTask, ModelFamily } from '../shared/types.js';
+import type { GrokTask, ModelFamily, ModelsArtifact, PromptPlanArtifact } from '../shared/types.js';
 import { exists, readJson } from './fs-utils.js';
 import { catalogPathFor } from './model-catalog.js';
+import { validatePromptPlan } from './validation.js';
 
 async function attachment(name: string, p: string, purpose: string) {
   return { name, path: p, purpose, exists: await exists(p) };
 }
 const common = `あなたは ComfyUI Batch Studio の企画工程を支援します。
-Batch Studio と Grok の責務境界を守ってください。
+Batch Studio と生成アシスタントの責務境界を守ってください。
 - あなたは意味・創作上の判断を担当します。
 - ComfyUI Workflow JSON、node ID、link ID、group ID、node position、widgets_values は生成しません。
 - 添付ファイルに存在しない Model / Version / File identity を捏造しません。`;
-const artifactFileOutputRules = (fileName: string) => `## 出力契約
+export const artifactFileOutputRules = (fileName: string) => `## 出力契約
 - 最終成果物はチャット本文へ展開せず、\`${fileName}\` という名前のダウンロード可能なファイルとして生成・添付してください。
 - ファイル内容をチャット本文、code block、引用、要約へ再掲しません。
 - チャット本文には説明、挨拶、注釈、要約、注意書き、「以下です」「補足」等の成果物外テキストを付けません。
@@ -138,6 +139,8 @@ model_loras.json は次の形だけにしてください。
 - 不足が無い場合は missingRequirements を出力しません。
 - 定義されていない追加フィールドを出力しません。`;
 const planShape = `${artifactFileOutputRules('prompt_plan.json')}
+
+## Schema v2 JSON構造
 prompt_plan.json は Schema v2 の構造化Promptとして出力してください。
 {
   "schemaVersion": 2,
@@ -193,6 +196,14 @@ prompt_plan.json は Schema v2 の構造化Promptとして出力してくださ�
   ]
 }
 
+## 出力構造の厳守（全Branch・全Leafで例外なし）
+- 上記JSONは構造の例示です。id、名前、modelRef、タグやLoRA値を例示から機械的にコピーせず、添付したStoryとmodels.jsonを正本にしてください。
+- 全Branchで id、非空のlabel、loras配列、leaves配列を必ず出力してください。idはlabelの代用になりません。使用LoRAが無いBranchも必ず"loras": []を出力します。
+- 全Leafで id、非空のname、promptを必ず出力してください。idはnameの代用になりません。promptにはpositiveとnegativeのobjectを必ず出力し、タグを追加しない場合でもそれぞれ{}を出力します。
+- 共通のフィールドが繰り返されても省略・圧縮・キー名変更をしません。500枚など大量のLeafでも各Leafを完全な独立objectとして出力してください。
+- 配列の途中で説明文や「同様」などの省略表現を挿入せず、全Branch・全Leafを構造どおりに記述してください。
+- BranchとLeafの表示名は、そのシーンや画像を識別できる具体的な名前にしてください。枝葉の数を増やすためだけの無内容な重複画像を追加しません。
+
 ## Scopeルール
 - common には全Branch・全Leafで不変のタグだけを置いてください。
 - branch.prompt にはそのBranch配下の全Leafで不変のタグだけを置いてください。Branch共通タグが無い場合は prompt field 自体を省略できます。
@@ -200,6 +211,7 @@ prompt_plan.json は Schema v2 の構造化Promptとして出力してくださ�
 - 親scopeに存在するタグを子scopeへ再掲してはいけません。
 - 途中で変化する衣装、背景、状態を common へ置いてはいけません。
 - common と各 leaf.prompt は positive / negative object を必ず持たせてください。空categoryは省略できます。
+- 各Leafで意味のある差分（表情、動作、ポーズ、構図、衣装状態など）が必要ならleaf.prompt.positiveへ必ず記載してください。全Leafのpositiveを空にして済ませず、親Scopeから継承されるタグと画像固有の差分を区別してください。
 
 ## Positive category
 使用可能なkeyは次だけです。
@@ -208,7 +220,10 @@ subject, identity, appearance, style, outfit, expression, action, pose, camera, 
 camera は次のsubcategoryだけを使用できます。
 pov, angle, framing, gaze, focus
 
-- angle / framing / gaze は最終画像につき原則1タグです。
+- angle / framing / gaze はCommon→Branch→Leafを合成した最終画像につき各最大1タグです。同じsubcategoryを複数scopeで別値指定しても上書きされず、すべて残るので禁止します。
+- 各画像で構図・視線が変わるならcamera.angle / camera.framing / camera.gazeはLeafだけに配置し、CommonとBranchには配置しません。全配下で本当に不変のときだけ親scopeへの配置を許可します。
+- 例えばBranchでmedium_shot、Leafでclose-upと書くと2タグの競合です。画像ごとの構図はLeafのframingに1つだけ指定してください。
+- camera.pov・camera.focusなども親子の重複や意味の矛盾を防ぎます。
 - 競合する構図タグを同じ最終画像に指定しません。
 - expression は原則3タグ以内とします。
 
@@ -223,6 +238,7 @@ anatomy, identity, appearance, subject, outfit, action, camera, environment, art
 ## Tag形式
 - 1配列要素 = 1タグです。カンマ区切りの複数タグを1文字列へ入れてはいけません。
 - 同じタグを同一categoryや親子scopeへ重複させません。
+- 衣装の変化はBranchまたはLeafに置き、すべての画像へ残り続けるCommonに置きません。nude系タグとoutfitタグが共存する場合は意図した部分的な着衣状態だけに限定し、意味が矛盾するなら片方を除きます。
 - 通常タグはDanbooru canonical tagを使用してください。
 - Illustriousではunderscore形式、Animaではspace形式を使用します。
 
@@ -234,7 +250,7 @@ anatomy, identity, appearance, subject, outfit, action, camera, environment, art
 - commonでは基盤モデルおよびrootLoras、branch.promptとleaf.promptでは基盤モデル・rootLoras・当該branch.lorasからのみ選択できます。
 - LoRAを使用してもワードが不要ならwordsを空にするか、選択自体を省略してください。候補を全件選択したり、最低1語選択したりする義務はありません。
 - どのscopeでも選択しなかった候補は最終Promptに加えません。Compilerによる補完もありません。
-- 選択する語はmodels.jsonのtrainedWordsと完全一致させ、変換・翻訳・正規化しません。通常Danbooruタグのカテゴリへ混入させず、triggerWordsに分離してください。
+- 選択する語はmodels.jsonの当該modelRefのtrainedWordsと完全一致させ、変換・翻訳・正規化しません。前後に空白・改行を含む候補は選ばず、候補にない語句を自作しません。通常Danbooruタグのカテゴリへ混入させず、triggerWordsに分離してください。
 - ある語が親scopeで既に選択されているなら子scopeでは重複選択しません。
 
 ## LoRA
@@ -253,6 +269,13 @@ anatomy, identity, appearance, subject, outfit, action, camera, environment, art
 - 配列順が生成順です。order field は追加しません。
 - 1 Leaf = 1 image です。目標画像枚数に近づくようLeaf数を設計してください。ただし意味上必要なら目標と完全一致しなくても構いません。
 - common / rootLoras / branches / branch.prompt / leaves / leaf.prompt と triggerWordsMode / triggerWords の意味情報だけを出力し、Workflow内部fieldや未知fieldを追加しません。
+- Negativeに許されるキーは「Negative category」に列挙したものだけです。negative.expressionなどPositive専用categoryは出力しません。
+
+## ファイル出力前の全件チェック
+- Branch件数と各BranchのLeaf件数を数え、全Branchにid・label・loras・leaves、全Leafにid・name・prompt.positive・prompt.negativeがあるか全件確認します。表示名の欠落を許容しません。
+- Common/Branch/Leaf合成後の各Leafについてcamera.angle / framing / gazeの競合、同一タグの親子重複、Positive/Negativeの同一タグ混在、衣装状態の矛盾を確認し、修正してから出力します。
+- triggerWordsはmodelRefごとにmodels.jsonのtrainedWordsに実在する完全一致候補か確認し、余分な空白や改行を入れません。
+- schemaにないfieldを出力せず、全Leaf数が計画の目標枚数と整合するか実際に数えて確認します。
 - JSONとしてparse可能な厳密な構文にしてください。コメント、末尾カンマ、擬似値は出力しません。`;
 const captionShape = `${artifactFileOutputRules('caption_content.json')}
 caption_content.json は次の形だけにしてください。
@@ -369,17 +392,43 @@ export async function buildGrokTask(
       ],
     };
   const briefData = await readJson<any>(brief),
-    modelData = await readJson<any>(models);
+    modelData = await readJson<ModelsArtifact>(models);
+  const planDraft = path.join(root, '._batch_studio', 'drafts', 'prompt_plan.json');
+  const currentPlan =
+    stage === 'prompt-plan-fix'
+      ? (await exists(planDraft))
+        ? planDraft
+        : path.join(root, 'prompt_plan.json')
+      : null;
+  const planToFix = currentPlan ? await readJson<PromptPlanArtifact>(currentPlan) : null;
+  const issues = planToFix ? validatePromptPlan(planToFix, modelData).issues : [];
+  const issueCounts = new Map<string, { count: number; examples: string[] }>();
+  for (const issue of issues) {
+    const entry = issueCounts.get(issue.code) ?? { count: 0, examples: [] };
+    entry.count++;
+    if (entry.examples.length < 2) entry.examples.push(`${issue.path ?? 'root'}: ${issue.message}`);
+    issueCounts.set(issue.code, entry);
+  }
+  const fixContext =
+    stage === 'prompt-plan-fix'
+      ? `\n\n## 修正対象・検証結果
+- 添付した現在のprompt_plan.jsonを修正対象として使い、正常なBranch/Leafのid・順序・内容を維持してください。問題のない画像を作り直したり、枚数を勝手に減らしたりしません。
+- 既存ファイルが構文不正ならまず構文を修正し、全件チェックを実施してください。
+${[...issueCounts].map(([code, item]) => `- ${code}: ${item.count}件。例: ${item.examples.join(' / ')}`).join('\n') || '- 構造検証の指摘はありません。追加の修正条件があればそれを優先してください。'}`
+      : '';
   const target = briefData?.generation?.target_image_count,
     family = modelData?.modelFamily as ModelFamily | undefined;
   return {
     stage,
     title: stage === 'prompt-plan' ? 'プロンプト設計' : 'プロンプト設計修正',
-    prompt: `${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan Schema v2 を作成してください。最終Prompt文字列を直接作らず、common / branch / leaf のscopeと意味categoryへDanbooruタグを構造化してください。models.json の trainedWords からシーンごとに必要な候補だけを triggerWords に選択してください。Compilerによるトリガーワードの自動注入は行いません。${Number.isInteger(target) ? `\n計画上の目標画像枚数は ${target} 枚です。` : ''}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${planShape}${extra ? `\n\n修正条件:\n${extra}` : ''}`,
+    prompt: `${common}\n\n## Task\n確定済み story.md と models.json を基に、Workflow Compilerへ渡す意味データとして Prompt Plan Schema v2 を作成してください。最終Prompt文字列を直接作らず、common / branch / leaf のscopeと意味categoryへDanbooruタグを構造化してください。models.json の trainedWords からシーンごとに必要な候補だけを triggerWords に選択してください。Compilerによるトリガーワードの自動注入は行いません。${Number.isInteger(target) ? `\n計画上の目標画像枚数は ${target} 枚です。` : ''}\n\n${dialectRule(family)}\n\n${danbooruTagRules}\n\n${planShape}${fixContext}${extra ? `\n\n修正条件:\n${extra}` : ''}`,
     attachments: [
       await attachment('project_brief.json', brief, '画像枚数などの計画条件'),
       await attachment('story.md', story, '確定ストーリー'),
       await attachment('models.json', models, '確定モデル・trainedWords（トリガーワード）'),
+      ...(currentPlan
+        ? [await attachment('prompt_plan.json', currentPlan, '現在のPrompt Plan（修正対象）')]
+        : []),
       ...((await exists(promptFallbacks))
         ? [
             await attachment(

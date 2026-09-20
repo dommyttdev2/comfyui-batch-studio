@@ -256,6 +256,55 @@ function plan() {
   const planTask = await grok.buildGrokTask(root, 'prompt-plan');
   assert.match(planTask.prompt, /1 Leaf = 1 image/);
   assert.match(planTask.prompt, /3 枚/);
+  assert.match(planTask.prompt, /全Branchで id、非空のlabel、loras配列、leaves配列/);
+  assert.match(planTask.prompt, /全Leafで id、非空のname、prompt/);
+  assert.match(planTask.prompt, /各画像で構図・視線が変わるなら/);
+  assert.match(planTask.prompt, /## Schema v2 JSON構造/);
+  assert.ok(
+    !planTask.attachments.some((file) => file.name === 'prompt_plan.json'),
+    'A new Prompt Plan must not inherit a previous plan',
+  );
+  const invalidDraft = {
+    schemaVersion: 2,
+    triggerWordsMode: 'selected',
+    common: { positive: {}, negative: {} },
+    rootLoras: [],
+    branches: [
+      {
+        id: 'b01',
+        loras: [],
+        prompt: { positive: { camera: { framing: ['medium_shot'] } }, negative: {} },
+        leaves: [
+          {
+            id: 'l01',
+            prompt: { positive: { camera: { framing: ['close-up'] } }, negative: {} },
+          },
+        ],
+      },
+    ],
+  };
+  const promptDraftPath = path.join(root, '._batch_studio', 'drafts', 'prompt_plan.json');
+  writeJson(promptDraftPath, invalidDraft);
+  const fixTask = await grok.buildGrokTask(root, 'prompt-plan-fix');
+  assert.ok(
+    fixTask.attachments.some(
+      (file) => file.name === 'prompt_plan.json' && file.path === promptDraftPath && file.exists,
+    ),
+    'Fix task must attach the actual current Prompt Plan draft',
+  );
+  assert.match(fixTask.prompt, /BRANCH_LABEL: 1件/);
+  assert.match(fixTask.prompt, /LEAF_NAME: 1件/);
+  assert.match(fixTask.prompt, /CAMERA_FRAMING_CONFLICT: 1件/);
+  assert.match(fixTask.prompt, /正常なBranch\/Leafのid・順序・内容を維持/);
+  const codexTaskPrompt = fixTask.prompt
+    .replace(grok.artifactFileOutputRules('prompt_plan.json'), '')
+    .replaceAll('Grok', 'Codex');
+  assert.doesNotMatch(codexTaskPrompt, /## 出力契約/);
+  assert.match(codexTaskPrompt, /## Schema v2 JSON構造/);
+  assert.match(codexTaskPrompt, /"label": "人間向け表示名"/);
+  assert.match(codexTaskPrompt, /"name": "S1-01_C1_example"/);
+  assert.match(codexTaskPrompt, /CAMERA_FRAMING_CONFLICT: 1件/);
+  fs.unlinkSync(promptDraftPath);
   const old = Date.now() - 10000;
   for (const [idx, name] of [
     'project_brief.json',

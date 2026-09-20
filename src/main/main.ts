@@ -59,7 +59,7 @@ import { readGrokLoraSelectionHistory } from './grok-lora-history.js';
 import { manualResetFrom, type ManualResetScope } from './model-downstream-reset.js';
 import { scanProject } from './project-scan.js';
 import { readProjectMeta, saveProjectSettings } from './project-meta.js';
-import { buildGrokTask } from './grok-context.js';
+import { artifactFileOutputRules, buildGrokTask } from './grok-context.js';
 import { catalogStatus } from './model-catalog.js';
 import { compileWorkflow } from './compiler.js';
 import { checkAvailability, checkLoraFileAvailability } from './availability.js';
@@ -1697,10 +1697,11 @@ async function codexSendTask(
   if (!codexTaskContexts[context.stage].includes(stage))
     throw new Error('選択した工程に対応しない依頼です。');
   const task = await buildGrokTask(context.root, stage, extra);
-  // Grok's file-attachment output contract cannot be used in the App Server chat.
+  // Only replace provider-specific file instructions. The shared Schema v2
+  // JSON example and all validation rules must reach both Grok and Codex.
   const prompt = task.prompt
-    .replaceAll('Grok', 'Codex')
-    .replace(/## 出力契約[\s\S]*?(?=\n## [^\n]+|$)/g, '');
+    .replace(artifactFileOutputRules(codexReturnFile[context.stage]), '')
+    .replaceAll('Grok', 'Codex');
   const files: string[] = [];
   let combinedSize = prompt.length;
   for (const attachment of task.attachments) {
