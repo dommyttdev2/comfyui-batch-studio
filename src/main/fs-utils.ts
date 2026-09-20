@@ -50,11 +50,7 @@ async function removeTemp(p: string, io: AtomicWriteIo) {
 function protectedJsonPath(file: string) {
   const basename = path.basename(file).toLowerCase();
   if (basename === 'project_meta.json') return true;
-  return (
-    path.basename(path.dirname(file)).toLowerCase() === 'execution_runs' &&
-    (basename === 'current.json' ||
-      /^[0-9a-f]{8}-[0-9a-f-]{27}\\.json$/i.test(basename))
-  );
+  return path.basename(path.dirname(file)).toLowerCase() === 'execution_runs' && basename.endsWith('.json');
 }
 
 export class PersistedJsonError extends Error {
@@ -153,11 +149,7 @@ export async function readJson<T>(p: string): Promise<T | null> {
 
 // File replacement must remain atomic. Never copy directly over the existing
 // target when Windows denies a rename: a partial copy could destroy the last good JSON.
-export async function writeTextAtomic(
-  p: string,
-  content: string,
-  io: AtomicWriteIo = nativeIo,
-) {
+export async function writeTextAtomic(p: string, content: string, io: AtomicWriteIo = nativeIo) {
   return withAtomicFileLock(p, async () => {
     await io.mkdir(path.dirname(p), { recursive: true });
     const protectedJson = protectedJsonPath(p);
@@ -218,11 +210,7 @@ export async function restoreJsonFromBackup(p: string, io: AtomicWriteIo = nativ
     }
   });
 }
-export async function writeJsonAtomic(
-  p: string,
-  v: unknown,
-  io: AtomicWriteIo = nativeIo,
-) {
+export async function writeJsonAtomic(p: string, v: unknown, io: AtomicWriteIo = nativeIo) {
   await writeTextAtomic(p, JSON.stringify(v, null, 2) + '\n', io);
 }
 export async function backupIfExists(source: string, historyDir: string) {
