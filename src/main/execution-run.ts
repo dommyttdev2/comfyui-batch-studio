@@ -188,7 +188,11 @@ async function captureSnapshot(
   )
     throw new Error('Execution cannot start/resume: Workflow/API graph is stale.');
   const models = await readJson<unknown>(path.join(root, 'models.json'));
-  if (!models || !expectedModelsSha || hashWorkflowModelInputs(models as ModelsArtifact) !== expectedModelsSha)
+  if (
+    !models ||
+    !expectedModelsSha ||
+    hashWorkflowModelInputs(models as ModelsArtifact) !== expectedModelsSha
+  )
     throw new Error('Execution cannot start/resume: WORKFLOW_MODEL_STALE (models.json changed).');
   const brief = await readJson<any>(path.join(root, 'project_brief.json'));
   if (!brief?.project?.id) throw new Error('Execution cannot start: project.id is missing.');
