@@ -151,10 +151,24 @@ export function CodexPane() {
       void switchContext(next);
     });
     const offArtifact = window.batchStudio.autoArtifact.onEvent((event) => {
-      if (event.provider !== 'codex' || !currentContext.current ||
-          currentContext.current !== event.root + '\0' + (event.stage.startsWith('story-') ? 'story' : event.stage.startsWith('models') ? 'models' : event.stage.startsWith('prompt-plan') ? 'prompt-plan' : 'caption')) return;
+      if (
+        event.provider !== 'codex' ||
+        !currentContext.current ||
+        currentContext.current !==
+          event.root +
+            '\0' +
+            (event.stage.startsWith('story-')
+              ? 'story'
+              : event.stage.startsWith('models')
+                ? 'models'
+                : event.stage.startsWith('prompt-plan')
+                  ? 'prompt-plan'
+                  : 'caption')
+      )
+        return;
       setAutoArtifact(event);
-      if (event.phase === 'imported' || event.phase === 'duplicate') artifactTaskRef.current = false;
+      if (event.phase === 'imported' || event.phase === 'duplicate')
+        artifactTaskRef.current = false;
     });
     const offEvent = window.batchStudio.codex.onEvent((event) => {
       if (event.method === 'account/updated' || event.method === 'account/login/completed') {
@@ -182,7 +196,11 @@ export function CodexPane() {
         return;
       }
       if (event.method === 'turn/started') setBusy(true);
-      if (event.method === 'item/agentMessage/delta' && !artifactTaskRef.current && typeof event.params.delta === 'string')
+      if (
+        event.method === 'item/agentMessage/delta' &&
+        !artifactTaskRef.current &&
+        typeof event.params.delta === 'string'
+      )
         setStream((text) => text + event.params.delta);
       if (event.method === 'turn/completed') {
         setBusy(false);
@@ -475,16 +493,44 @@ export function CodexPane() {
         {autoArtifact && (
           <section className="codex-artifact-result" aria-live="polite">
             <strong>{autoArtifact.fileName}</strong>
-            <span>{autoArtifact.phase === 'waiting' ? '成果物の生成を待っています…' :
-              autoArtifact.phase === 'detected' ? '成果物を検出しました' :
-              autoArtifact.phase === 'validating' ? '成果物を検証しています…' :
-              autoArtifact.phase === 'imported' ? 'ファイルに保存し、下書きへ取り込みました（未確定）' :
-              autoArtifact.phase === 'duplicate' ? '取り込み済みの成果物です' :
-              autoArtifact.message ?? '成果物を取り込めませんでした'}</span>
-            {autoArtifact.issues?.map((issue, index) => <small key={index}>{issue.message}</small>)}
-            {autoArtifact.filePath && <button onClick={() => void window.batchStudio.file.showInFolder(autoArtifact.filePath!)}>ファイルの場所を開く</button>}
-            {(autoArtifact.phase === 'invalid' || autoArtifact.phase === 'failed') &&
-              <button disabled={busy} onClick={() => void window.batchStudio.codex.retryArtifact().then((value) => { if (value) setAutoArtifact(value); }).catch((err) => setError(errorText(err)))}>成果物の取り込みを再試行</button>}
+            <span>
+              {autoArtifact.phase === 'waiting'
+                ? '成果物の生成を待っています…'
+                : autoArtifact.phase === 'detected'
+                  ? '成果物を検出しました'
+                  : autoArtifact.phase === 'validating'
+                    ? '成果物を検証しています…'
+                    : autoArtifact.phase === 'imported'
+                      ? 'ファイルに保存し、下書きへ取り込みました（未確定）'
+                      : autoArtifact.phase === 'duplicate'
+                        ? '取り込み済みの成果物です'
+                        : (autoArtifact.message ?? '成果物を取り込めませんでした')}
+            </span>
+            {autoArtifact.issues?.map((issue, index) => (
+              <small key={index}>{issue.message}</small>
+            ))}
+            {autoArtifact.filePath && (
+              <button
+                onClick={() => void window.batchStudio.file.showInFolder(autoArtifact.filePath!)}
+              >
+                ファイルの場所を開く
+              </button>
+            )}
+            {(autoArtifact.phase === 'invalid' || autoArtifact.phase === 'failed') && (
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void window.batchStudio.codex
+                    .retryArtifact()
+                    .then((value) => {
+                      if (value) setAutoArtifact(value);
+                    })
+                    .catch((err) => setError(errorText(err)))
+                }
+              >
+                成果物の取り込みを再試行
+              </button>
+            )}
           </section>
         )}
         {['completed', 'failed', 'interrupted', 'unknown'].includes(turnStatus.phase) && (
