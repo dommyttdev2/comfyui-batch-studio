@@ -213,7 +213,12 @@ function archiveEntries(root) {
   const [
     { modelGenerationInputsChanged, resetModelDownstream, manualResetFrom },
     { importGrok, confirmArtifact, saveDraft },
-  ] = await Promise.all([load('main/model-downstream-reset.js'), load('main/artifact-service.js')]);
+    transaction,
+  ] = await Promise.all([
+    load('main/model-downstream-reset.js'),
+    load('main/artifact-service.js'),
+    load('main/project-transaction.js'),
+  ]);
   const a = models(2, 2),
     catalogOnly = {
       ...a,
@@ -468,6 +473,112 @@ function archiveEntries(root) {
     3,
     'PR #28 provenance refresh must still be preserved',
   );
+  // An ordinary filesystem exception must restore the exact previous
+  // generation, including drafts, meta and fallback selections.
+  const preserved = (root) => {
+    const paths = [
+      'story.md',
+      'models.json',
+      'prompt_plan.json',
+      'LoRA_project.json',
+      'project_meta.json',
+      '._batch_studio/drafts/models.json',
+      '._batch_studio/drafts/prompt_plan.json',
+      '._batch_studio/model_prompt_fallbacks.json',
+      '._batch_studio/grok-responses/models-fix/one.txt',
+    ];
+    return Object.fromEntries(
+      paths.map((file) => {
+        const target = path.join(root, file);
+        return [file, exists(target) ? fs.readFileSync(target, 'utf8') : null];
+      }),
+    );
+  };
+  const assertPreserved = (root, old, scope) => {
+    assert.deepEqual(preserved(root), old, scope + ' may not leave mixed model/plan/workflow generations');
+    assert.equal(
+      exists(path.join(root, '._batch_studio', 'project-transaction.json')),
+      false,
+      scope + ' must release the journal after successful recovery',
+    );
+  };
+  for (const scope of ['workflow', 'prompt-plan', 'models-fix', 'models', 'base-models', 'story']) {
+    const failureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-reset-failure-'));
+    prepareManual(failureRoot);
+    const before = preserved(failureRoot);
+    const localImage = path.join(failureRoot, 'output', 'existing.png');
+    write(localImage, 'existing-local-artifact');
+    transaction.setProjectTransactionCheckpointForTests((step) => {
+      if (step.startsWith('archived:')) throw Object.assign(new Error('Injected EACCES'), { code: 'EACCES' });
+    });
+    try {
+      await assert.rejects(() => manualResetFrom(failureRoot, scope), /Injected EACCES/);
+      assertPreserved(failureRoot, before, scope);
+      assert.equal(fs.readFileSync(localImage, 'utf8'), 'existing-local-artifact');
+    } finally {
+      transaction.setProjectTransactionCheckpointForTests(null);
+    }
+    await manualResetFrom(failureRoot, scope);
+  }
+  {
+    const confirmRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-confirm-failure-'));
+    writeJson(path.join(confirmRoot, 'models.json'), models(3, 2));
+    downstream(confirmRoot);
+    writeJson(path.join(confirmRoot, 'models.json'), models(3, 2));
+    const imported = await importGrok(
+      confirmRoot,
+      'models',
+      JSON.stringify({
+        schemaVersion: 1,
+        loras: [lora3],
+        promptFallbacks: [
+          { requirement: 'camera angle', positiveTags: ['from_below'], negativeTags: [], reason: 'test' },
+        ],
+      }),
+      'models',
+    );
+    assert.equal(imported.validation.valid, true);
+    const before = preserved(confirmRoot);
+    for (const stage of ['models:confirmed', 'models:fallbacks-updated', 'archived:prompt_plan.json']) {
+      let hit = false;
+      transaction.setProjectTransactionCheckpointForTests((step) => {
+        if (!hit && step === stage) {
+          hit = true;
+          throw Object.assign(new Error('Injected ENOSPC at ' + step), { code: 'ENOSPC' });
+        }
+      });
+      try {
+        await assert.rejects(() => confirmArtifact(confirmRoot, 'models'), /Injected ENOSPC/);
+        assert.equal(hit, true);
+        assertPreserved(confirmRoot, before, 'model confirm ' + stage);
+      } finally {
+        transaction.setProjectTransactionCheckpointForTests(null);
+      }
+    }
+    // Simulate process termination after a rename. On the next project open
+    // recover from the durable journal before exposing partially moved files.
+    transaction.setProjectTransactionCheckpointForTests((step) => {
+      if (step === 'archived:prompt_plan.json')
+        throw new transaction.SimulatedProjectCrashForTest('Injected power loss');
+    });
+    try {
+      await assert.rejects(
+        () => confirmArtifact(confirmRoot, 'models'),
+        /Injected power loss/,
+      );
+    } finally {
+      transaction.setProjectTransactionCheckpointForTests(null);
+    }
+    assert.equal(exists(path.join(confirmRoot, '._batch_studio', 'project-transaction.json')), true);
+    assert.notDeepEqual(preserved(confirmRoot), before, 'crash should leave a partially applied transaction');
+    await transaction.recoverPendingProjectTransaction(confirmRoot);
+    assertPreserved(confirmRoot, before, 'crash recovery');
+    const confirmedAgain = await confirmArtifact(confirmRoot, 'models');
+    assert.equal(confirmedAgain.downstreamReset, true);
+    assert.equal(exists(path.join(confirmRoot, 'prompt_plan.json')), false);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(confirmRoot, 'models.json'), 'utf8')).loras[0].modelId, 3);
+  }
+
   console.log('Model downstream reset and manual stage reset tests passed.');
 })().catch((error) => {
   console.error(error);
