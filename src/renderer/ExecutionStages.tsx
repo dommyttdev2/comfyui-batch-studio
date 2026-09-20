@@ -142,13 +142,14 @@ export function AvailabilityStage({
         setModelFileError('');
         if (!a.content) return;
         if (!a.validation.valid) {
-          setModelFileError('models.jsonに検証エラーがあります。モデル選定工程で修正してください。');
+          setModelFileError(
+            'models.jsonに検証エラーがあります。モデル選定工程で修正してください。',
+          );
           return;
         }
         try {
           const models = JSON.parse(a.content) as ModelsArtifact;
-          if (!Array.isArray(models.loras))
-            throw new Error('lorasは配列である必要があります。');
+          if (!Array.isArray(models.loras)) throw new Error('lorasは配列である必要があります。');
           const baseFile =
             models.modelFamily === 'anima'
               ? (models.diffusionModel?.fileName ?? models.checkpoint?.fileName)
@@ -162,13 +163,17 @@ export function AvailabilityStage({
           setModelFileNames(names);
         } catch (error) {
           setModelFileNames([]);
-          setModelFileError(`models.jsonを読み込めません: ${error instanceof Error ? error.message : String(error)}`);
+          setModelFileError(
+            `models.jsonを読み込めません: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       })
       .catch((error) => {
         if (!cancelled) {
           setModelFileNames([]);
-          setModelFileError(`models.jsonの読み込みに失敗しました: ${error instanceof Error ? error.message : String(error)}`);
+          setModelFileError(
+            `models.jsonの読み込みに失敗しました: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       });
     void window.batchStudio.appSettings
@@ -233,7 +238,11 @@ export function AvailabilityStage({
           <div>
             <h3>モデル配置</h3>
             <p>ワークフロー実行先に応じて、必須となるモデル配置先を切り替えます。</p>
-            {modelFileError && <div className="issue error" role="alert">{modelFileError}</div>}
+            {modelFileError && (
+              <div className="issue error" role="alert">
+                {modelFileError}
+              </div>
+            )}
           </div>
           <div className="actions">
             <button onClick={() => void check()}>再確認</button>
