@@ -683,8 +683,7 @@ export function ModelsStage({
         ? draft
         : await window.batchStudio.artifact.read(project.rootPath, 'models', 'confirmed');
       const models = parseModelsArtifact(source.content);
-      if (!models || models.schemaVersion === 1)
-        throw new Error('models.jsonを読み込めません。');
+      if (!models || models.schemaVersion === 1) throw new Error('models.jsonを読み込めません。');
       const existing =
         selected.ref === 'checkpoint.main'
           ? models.checkpoint
@@ -718,7 +717,9 @@ export function ModelsStage({
       setEditing(true);
       hydrate(result.content);
       if (!result.validation.valid)
-        throw new Error('変更したmodels.jsonに検証エラーがあります。下書きの内容を確認してください。');
+        throw new Error(
+          '変更したmodels.jsonに検証エラーがあります。下書きの内容を確認してください。',
+        );
       return result;
     });
     if (!saved) throw new Error('保存に失敗しました。画面上部のエラーを確認してください。');
@@ -852,11 +853,7 @@ export function ModelsStage({
         </div>
       </section>
       {catalog && current && current.schemaVersion >= 2 && (
-        <SelectedModelCards
-          models={current}
-          catalog={catalog}
-          onSave={saveManualSelection}
-        />
+        <SelectedModelCards models={current} catalog={catalog} onSave={saveManualSelection} />
       )}
       {baseConfigured && (
         <>
