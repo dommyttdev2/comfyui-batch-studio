@@ -64,6 +64,10 @@ export class ExecutionCoordinator {
     return this.active.size > 0;
   }
 
+  hasActive(ref: ExecutionRef) {
+    return this.active.has(refKey(ref));
+  }
+
   async waitForSettled(ref: ExecutionRef) {
     const task = this.active.get(refKey(ref));
     if (task) await task.catch(() => {});
