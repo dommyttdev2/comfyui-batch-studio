@@ -514,7 +514,8 @@ def reconcile_submission(root,state,endpoint):
  meta=(state.get("branchRuns") or {}).get(branch_id)
  if isinstance(meta,dict):meta["lastPromptId"]=prompt_id
  state["current"]=current;state["error"]=None
- if state.get("status")=="failed":state["status"]="paused"
+ if state.get("status") in ("failed","running") and not sequence_running(root):
+  state["status"]="paused";state["workerPid"]=0
  save_state(root,state)
  return True
 
