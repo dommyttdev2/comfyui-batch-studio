@@ -128,7 +128,11 @@ async function makeProject(execution, hashCanonicalJson, projectId = 'local-api-
       },
     ],
   });
-  const models = { schemaVersion: 1, catalog: { schemaVersion: 1, generation: 1, generatedAt: '2026-09-11T00:00:00Z' }, loras: [] };
+  const models = {
+    schemaVersion: 1,
+    catalog: { schemaVersion: 1, generation: 1, generatedAt: '2026-09-11T00:00:00Z' },
+    loras: [],
+  };
   writeJson(path.join(root, 'models.json'), models);
   writeJson(path.join(root, 'project_meta.json'), {
     schemaVersion: 1,
