@@ -13,7 +13,12 @@ import { readProjectMeta, saveWorkflowBuild } from './project-meta.js';
 import { validateModels, validatePromptPlan, validateWorkflowManifest } from './validation.js';
 import { hashWorkflowTemplate } from './workflow-template-integrity.js';
 import { resolveWorkflowTemplatePaths } from './workflow-template-paths.js';
-import { buildApiGraph, hashCanonicalJson, validateCompiledApiGraph } from './workflow-api.js';
+import {
+  buildApiGraph,
+  hashCanonicalJson,
+  hashWorkflowModelInputs,
+  validateCompiledApiGraph,
+} from './workflow-api.js';
 import { compilePromptPlanPrompts } from '../shared/prompt-policy.js';
 
 type Node = {
@@ -550,7 +555,7 @@ export async function compileWorkflow(root: string): Promise<CompileResult> {
     workflowIdentity = hashCanonicalJson({ uiSha256, apiSha256 });
   await saveWorkflowBuild(root, {
     compilerVersion: '2.2.0',
-    modelsSha256: hashCanonicalJson(models),
+    modelsSha256: hashWorkflowModelInputs(models),
     generatedAt: new Date().toISOString(),
     template: {
       id: manifest.template.id,
