@@ -29,7 +29,7 @@ assert.ok(
 );
 assert.match(
   snapshot,
-  /if \(busy\) return/,
+  /if \(busy\)\s*return/,
   'Snapshot must bypass disk reads during an active turn',
 );
 assert.match(
