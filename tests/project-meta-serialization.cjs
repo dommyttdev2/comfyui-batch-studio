@@ -44,8 +44,8 @@ execFileSync(
   const saved = await metaApi.readProjectMeta(root);
   assert.equal(saved.schemaVersion, 1);
   assert.equal(saved.settings.artifactOutputPath, 'original-output');
-  assert.match(saved.settings.r2Bucket, /^bucket-\\d+$/);
-  assert.match(saved.workflowBuild.workflowIdentity, /^build-\\d+$/);
+  assert.match(saved.settings.r2Bucket, /^bucket-\d+$/);
+  assert.match(saved.workflowBuild.workflowIdentity, /^build-\d+$/);
 
   await Promise.all([
     metaApi.saveProjectSettings(root, { executionTarget: 'remote' }),
