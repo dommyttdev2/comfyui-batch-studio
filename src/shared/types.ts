@@ -1039,6 +1039,10 @@ export interface R2BatchDownloadTemplate {
 }
 export interface R2UploadJob {
   id: string;
+  kind?: 'upload' | 'move';
+  startedAt?: string;
+  initialTransferredBytes?: number;
+  completedAt?: string;
   bucket: string;
   key: string;
   filePath: string;
