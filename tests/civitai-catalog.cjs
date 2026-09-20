@@ -363,8 +363,14 @@ execFileSync(
     ]);
     const finalTemplates = await first.templates();
     assert.equal(finalTemplates.length, 25);
-    assert.equal(finalTemplates.some((item) => item.id === victim.id), false);
-    assert.equal(finalTemplates.some((item) => item.name === 'saved-while-deleting'), true);
+    assert.equal(
+      finalTemplates.some((item) => item.id === victim.id),
+      false,
+    );
+    assert.equal(
+      finalTemplates.some((item) => item.name === 'saved-while-deleting'),
+      true,
+    );
     assert.deepEqual(
       finalTemplates,
       JSON.parse(fs.readFileSync(first.templatesPath, 'utf8')),
