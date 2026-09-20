@@ -650,13 +650,26 @@ export class RemoteExecutionService {
       );
     const key = `batch-studio/executions/${safeProjectPart(run.projectId)}/${runId}/artifacts.zip`;
     const evidence = latestEvidence(run, 'R2_OBJECT_VERIFIED', 'remote-package');
-    if (evidence && evidence.data.bucket === bucket && evidence.data.key === key) {
-      try {
-        const remote = await this.r2.objectMetadata(bucket, key);
-        if (remote.size === pkg.size) return { bucket, key };
-      } catch {}
+    // Evidence records a past verification, not the current existence of an R2 object.
+    // Even if the verification was not persisted, a previously uploaded object may be reusable.
+    if (await this.r2.objectExists(bucket, key)) {
+      const remote = await this.r2.objectMetadata(bucket, key);
+      if (
+        remote.size === pkg.size &&
+        (!remote.sha256 || remote.sha256.toLowerCase() === pkg.sha256)
+      )
+        return { bucket, key };
     }
-    await this.uploadPackage(root, runId, pkg, bucket, key);
+    try {
+      await this.uploadPackage(root, runId, pkg, bucket, key);
+    } catch (error) {
+      if (latestEvidence(run, 'CLEANUP_COMPLETED', 'remote-artifacts'))
+        throw new ArtifactPipelineError(
+          'REMOTE_ARTIFACT_RECOVERY_UNAVAILABLE',
+          `The local ZIP is missing or damaged, the R2 package is unavailable, and the Remote package could not be restored: ${safeError(error)}. Restore the saved ZIP from a backup; no local artifacts were removed.`,
+        );
+      throw error;
+    }
     return { bucket, key };
   }
   private async ensureLocalFile(
@@ -676,19 +689,37 @@ export class RemoteExecutionService {
       manifestPath = path.join(dir, 'manifest.json'),
       manifestPart = manifestPath + '.part';
     const existing = latestEvidence(run, 'LOCAL_FILE_VERIFIED', 'remote-package');
+    // Always validate the actual bytes; saved LOCAL_FILE_VERIFIED evidence alone
+    // cannot establish that a ZIP or its manifest still exists.
     if (
-      existing &&
-      Number(existing.data.size) === pkg.size &&
-      String(existing.data.sha256) === pkg.sha256 &&
-      String(existing.data.path ?? '') === finalPath &&
-      String(existing.data.manifestPath ?? '') === manifestPath &&
       (await localMatches(finalPath, pkg.size, pkg.sha256)) &&
       (await manifestMatches(manifestPath, pkg.manifestJson))
-    )
+    ) {
+      if (
+        !existing ||
+        Number(existing.data.size) !== pkg.size ||
+        String(existing.data.sha256) !== pkg.sha256 ||
+        String(existing.data.path ?? '') !== finalPath ||
+        String(existing.data.manifestPath ?? '') !== manifestPath
+      )
+        await recordExecutionEvidence(root, runId, {
+          kind: 'LOCAL_FILE_VERIFIED',
+          scope: 'remote-package',
+          data: {
+            path: finalPath,
+            manifestPath,
+            size: pkg.size,
+            sha256: pkg.sha256,
+            manifestSha256: pkg.manifestSha256,
+            artifactCount: pkg.artifactCount,
+            archiveFileName: pkg.archiveFileName,
+          },
+        });
       return finalPath;
+    }
     await mkdir(dir, { recursive: true });
     if (!(await localMatches(finalPath, pkg.size, pkg.sha256))) {
-      await rm(finalPath, { force: true }).catch(() => {});
+      // Do not remove the existing local ZIP until a replacement is fully verified.
       await rm(partPath, { force: true }).catch(() => {});
       await mutateExecutionRun(root, runId, (current) => {
         current.phase = 'LOCAL_DOWNLOADING';
@@ -718,6 +749,7 @@ export class RemoteExecutionService {
           'Downloaded artifact package SHA-256 does not match the Remote package.',
         );
       }
+      await rm(finalPath, { force: true });
       await rename(partPath, finalPath);
     } else
       await mutateExecutionRun(root, runId, (current) => {
@@ -752,6 +784,12 @@ export class RemoteExecutionService {
     let run = await getExecutionRun(root, runId);
     if (!run) throw new Error('Execution Run was not found.');
     if (latestEvidence(run, 'CLEANUP_COMPLETED', 'remote-artifacts')) return;
+    const expectedKey = `batch-studio/executions/${safeProjectPart(run.projectId)}/${runId}/artifacts.zip`;
+    if (!bucket || key !== expectedKey)
+      throw new ArtifactPipelineError(
+        'REMOTE_ARTIFACT_CLEANUP_SCOPE_INVALID',
+        'Refusing cleanup outside this Execution Run artifact namespace.',
+      );
     await mutateExecutionRun(root, runId, (current) => {
       current.phase = 'REMOTE_CLEANUP';
     });
@@ -817,21 +855,41 @@ export class RemoteExecutionService {
     const pkg = await this.ensurePackage(root, runId);
     let run = await getExecutionRun(root, runId);
     if (!run) throw new Error('Execution Run was not found.');
-    const local = latestEvidence(run, 'LOCAL_FILE_VERIFIED', 'remote-package'),
-      uploaded = latestEvidence(run, 'R2_OBJECT_VERIFIED', 'remote-package');
-    let object: { bucket: string; key: string };
-    if (
-      local &&
-      uploaded &&
-      Number(local.data.size) === pkg.size &&
-      String(local.data.sha256) === pkg.sha256 &&
-      typeof uploaded.data.bucket === 'string' &&
-      typeof uploaded.data.key === 'string'
-    ) {
-      object = { bucket: uploaded.data.bucket, key: uploaded.data.key };
-    } else object = await this.ensureR2Object(root, runId, pkg);
-    await this.ensureLocalFile(root, runId, pkg, object.bucket, object.key);
-    await this.cleanup(root, runId, object.bucket, object.key);
+    const meta = await readProjectMeta(root),
+      base = meta?.settings.artifactOutputPath?.trim() || root,
+      finalPath = path.join(base, 'remote_output', runId, pkg.archiveFileName),
+      uploaded = latestEvidence(run, 'R2_OBJECT_VERIFIED', 'remote-package'),
+      bucket =
+        (process.env.BATCH_STUDIO_R2_BUCKET ?? '').trim() ||
+        (meta?.settings.r2Bucket?.trim() ?? '') ||
+        String(uploaded?.data.bucket ?? ''),
+      key = `batch-studio/executions/${safeProjectPart(run.projectId)}/${runId}/artifacts.zip`,
+      cleaned = Boolean(latestEvidence(run, 'CLEANUP_COMPLETED', 'remote-artifacts'));
+
+    // A verified local ZIP is the final artifact. It remains valid after the
+    // transport object and Remote worker package have been deliberately deleted.
+    if (await localMatches(finalPath, pkg.size, pkg.sha256)) {
+      await this.ensureLocalFile(root, runId, pkg, bucket, key);
+      if (!cleaned) {
+        if (!bucket)
+          throw new ArtifactPipelineError(
+            'R2_BUCKET_REQUIRED',
+            'Remote artifact cleanup requires the original R2 bucket.',
+          );
+        await this.cleanup(root, runId, bucket, key);
+      }
+    } else {
+      if (!bucket && cleaned)
+        throw new ArtifactPipelineError(
+          'REMOTE_ARTIFACT_RECOVERY_UNAVAILABLE',
+          'The local ZIP is missing or damaged and transport cleanup already completed. Restore the ZIP from a backup.',
+        );
+      // Revalidate R2 independently of old evidence before attempting a download.
+      // When it has been cleaned, re-upload only if the Remote package survives.
+      const object = await this.ensureR2Object(root, runId, pkg);
+      await this.ensureLocalFile(root, runId, pkg, object.bucket, object.key);
+      await this.cleanup(root, runId, object.bucket, object.key);
+    }
     await mutateExecutionRun(root, runId, (current) => {
       current.phase = 'COMPLETED';
       current.lifecycle = 'COMPLETED';
