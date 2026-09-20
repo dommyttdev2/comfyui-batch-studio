@@ -14,22 +14,51 @@ const send = main.slice(
   main.indexOf('async function codexSend('),
   main.indexOf('const codexTaskContexts:'),
 );
-const rendererSend = pane.slice(pane.indexOf('const send = async'), pane.indexOf('const selectChat'));
+const rendererSend = pane.slice(
+  pane.indexOf('const send = async'),
+  pane.indexOf('const selectChat'),
+);
 
-assert.ok(snapshot.includes("server.request<unknown>('thread/read'"), 'Saved history must remain readable');
-assert.ok(!snapshot.includes("'thread/resume'"), 'Viewing history must never resume an unpersisted thread');
-assert.match(snapshot, /if \(busy\) return/, 'Snapshot must bypass disk reads during an active turn');
-assert.match(snapshot, /historyUnavailable: true/, 'Unpersisted or missing rollouts should show a recoverable state');
-assert.match(snapshot, /setTimeout\(resolve, 250\)/, 'Recently finished turns should have time to persist');
+assert.ok(
+  snapshot.includes("server.request<unknown>('thread/read'"),
+  'Saved history must remain readable',
+);
+assert.ok(
+  !snapshot.includes("'thread/resume'"),
+  'Viewing history must never resume an unpersisted thread',
+);
+assert.match(
+  snapshot,
+  /if \(busy\) return/,
+  'Snapshot must bypass disk reads during an active turn',
+);
+assert.match(
+  snapshot,
+  /historyUnavailable: true/,
+  'Unpersisted or missing rollouts should show a recoverable state',
+);
+assert.match(
+  snapshot,
+  /setTimeout\(resolve, 250\)/,
+  'Recently finished turns should have time to persist',
+);
 assert.ok(
   send.indexOf('codexBusy.has(threadId)') < send.indexOf("server.request('thread/resume'"),
   'A running turn must not be resumed by a second send',
 );
-assert.match(send, /return store\.get\(context\.root, context\.stage\);/, 'Send must return thread IDs without reading rollout history');
+assert.match(
+  send,
+  /return store\.get\(context\.root, context\.stage\);/,
+  'Send must return thread IDs without reading rollout history',
+);
 assert.ok(
   !rendererSend.includes('codex.snapshot('),
   'Immediately after turn/start the renderer must not request a saved rollout',
 );
-assert.match(rendererSend, /setSnapshot\(\(previous\)/, 'Thread selection must update from send metadata');
+assert.match(
+  rendererSend,
+  /setSnapshot\(\(previous\)/,
+  'Thread selection must update from send metadata',
+);
 assert.match(pane, /履歴を再読み込み/, 'A missing rollout must provide a non-destructive retry');
 console.log('Codex first-turn snapshot race regression tests passed.');
