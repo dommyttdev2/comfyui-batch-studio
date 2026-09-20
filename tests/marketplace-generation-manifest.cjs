@@ -9,20 +9,60 @@ const repo = path.resolve(__dirname, '..');
 const build = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-marketplace-manifest-build-'));
 execFileSync(
   process.execPath,
-  [path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', path.join(repo, 'tsconfig.electron.json'), '--outDir', build],
+  [
+    path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc'),
+    '-p',
+    path.join(repo, 'tsconfig.electron.json'),
+    '--outDir',
+    build,
+  ],
   { cwd: repo, stdio: 'inherit' },
 );
 
 (async () => {
-  const core = await import(pathToFileURL(path.join(build, 'main', 'marketplace-generation-manifest.js')).href);
+  const core = await import(
+    pathToFileURL(path.join(build, 'main', 'marketplace-generation-manifest.js')).href
+  );
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-marketplace-manifest-'));
   const sourcePath = path.join(root, 'source.png');
   fs.writeFileSync(sourcePath, Buffer.from('first-source-bytes'));
   const targets = [
-    { id: 'fanza.package', service: 'FANZA', imageType: 'package', label: 'FANZA', width: 560, height: 420, fileName: 'package' },
-    { id: 'fanza.thumbnail', service: 'FANZA', imageType: 'thumbnail', label: 'FANZA', width: 100, height: 100, fileName: 'thumbnail' },
-    { id: 'dlsite.package', service: 'DLsite', imageType: 'package', label: 'DLsite', width: 560, height: 420, fileName: 'package' },
-    { id: 'dlsite.thumbnail', service: 'DLsite', imageType: 'thumbnail', label: 'DLsite', width: 300, height: 300, fileName: 'thumbnail' },
+    {
+      id: 'fanza.package',
+      service: 'FANZA',
+      imageType: 'package',
+      label: 'FANZA',
+      width: 560,
+      height: 420,
+      fileName: 'package',
+    },
+    {
+      id: 'fanza.thumbnail',
+      service: 'FANZA',
+      imageType: 'thumbnail',
+      label: 'FANZA',
+      width: 100,
+      height: 100,
+      fileName: 'thumbnail',
+    },
+    {
+      id: 'dlsite.package',
+      service: 'DLsite',
+      imageType: 'package',
+      label: 'DLsite',
+      width: 560,
+      height: 420,
+      fileName: 'package',
+    },
+    {
+      id: 'dlsite.thumbnail',
+      service: 'DLsite',
+      imageType: 'thumbnail',
+      label: 'DLsite',
+      width: 300,
+      height: 300,
+      fileName: 'thumbnail',
+    },
   ];
   const state = {
     schemaVersion: 1,
@@ -30,10 +70,9 @@ execFileSync(
     mode: 'marketplace',
     activeTargetId: targets[0].id,
     format: 'jpeg',
-    targets: Object.fromEntries(targets.map((target) => [
-      target.id,
-      { crop: { x: 2, y: 3, width: 420, height: 315 } },
-    ])),
+    targets: Object.fromEntries(
+      targets.map((target) => [target.id, { crop: { x: 2, y: 3, width: 420, height: 315 } }]),
+    ),
     custom: { width: 1024, height: 1024, lockAspect: true, crop: null },
   };
   const outputDirectory = path.join(root, 'marketplace');
@@ -43,7 +82,12 @@ execFileSync(
     const outputPath = path.join(outputDirectory, ...relativePath.split('/'));
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, bytes);
-    return { targetId: target.id, relativePath, size: bytes.length, sha256: core.sha256Bytes(bytes) };
+    return {
+      targetId: target.id,
+      relativePath,
+      size: bytes.length,
+      sha256: core.sha256Bytes(bytes),
+    };
   });
   const source = await core.fingerprintMarketplaceSource(sourcePath);
   const manifest = {
@@ -59,7 +103,12 @@ execFileSync(
     core.validateMarketplaceGeneration(manifest, s, t, src);
   assert.doesNotThrow(() => validate());
   for (const [index, target] of targets.entries()) {
-    const entry = await core.verifiedMarketplaceOutput(outputDirectory, outputs[index], target, 'jpg');
+    const entry = await core.verifiedMarketplaceOutput(
+      outputDirectory,
+      outputs[index],
+      target,
+      'jpg',
+    );
     assert.equal(entry.relativePath, outputs[index].relativePath);
   }
   const stale = /再生成してください/;
@@ -80,9 +129,15 @@ execFileSync(
   assert.throws(() => validate(state, changedCatalog), stale);
   const outputFile = path.join(outputDirectory, ...outputs[0].relativePath.split('/'));
   fs.writeFileSync(outputFile, Buffer.from('altered-output'));
-  await assert.rejects(() => core.verifiedMarketplaceOutput(outputDirectory, outputs[0], targets[0], 'jpg'), stale);
+  await assert.rejects(
+    () => core.verifiedMarketplaceOutput(outputDirectory, outputs[0], targets[0], 'jpg'),
+    stale,
+  );
   fs.unlinkSync(outputFile);
-  await assert.rejects(() => core.verifiedMarketplaceOutput(outputDirectory, outputs[0], targets[0], 'jpg'), stale);
+  await assert.rejects(
+    () => core.verifiedMarketplaceOutput(outputDirectory, outputs[0], targets[0], 'jpg'),
+    stale,
+  );
   const before = fs.statSync(sourcePath);
   fs.writeFileSync(sourcePath, Buffer.from('other-source-bytes'));
   fs.utimesSync(sourcePath, before.atime, before.mtime);
