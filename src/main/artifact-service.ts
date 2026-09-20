@@ -584,10 +584,7 @@ export async function createProject(parent: string, brief: ProjectBriefInput) {
   await mkdir(path.join(root, '._batch_studio', 'history'), { recursive: true });
   if (artifactOutputPath) await mkdir(artifactOutputPath, { recursive: true });
   await writeJsonAtomic(path.join(root, 'project_brief.json'), { schemaVersion: 1, ...brief });
-  await initializeProjectMeta(
-    root,
-    artifactOutputPath ? { artifactOutputPath } : {},
-  );
+  await initializeProjectMeta(root, artifactOutputPath ? { artifactOutputPath } : {});
   return root;
 }
 export async function savePromptPlan(root: string, plan: PromptPlanArtifact) {
