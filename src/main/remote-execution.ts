@@ -649,7 +649,6 @@ export class RemoteExecutionService {
         'Remote artifact retrieval requires an R2 bucket.',
       );
     const key = `batch-studio/executions/${safeProjectPart(run.projectId)}/${runId}/artifacts.zip`;
-    const evidence = latestEvidence(run, 'R2_OBJECT_VERIFIED', 'remote-package');
     // Evidence records a past verification, not the current existence of an R2 object.
     // Even if the verification was not persisted, a previously uploaded object may be reusable.
     if (await this.r2.objectExists(bucket, key)) {
@@ -780,10 +779,17 @@ export class RemoteExecutionService {
     });
     return finalPath;
   }
-  private async cleanup(root: string, runId: string, bucket: string, key: string) {
-    let run = await getExecutionRun(root, runId);
+  private async cleanup(
+    root: string,
+    runId: string,
+    bucket: string,
+    key: string,
+    force = false,
+  ) {
+    const run = await getExecutionRun(root, runId);
     if (!run) throw new Error('Execution Run was not found.');
-    if (latestEvidence(run, 'CLEANUP_COMPLETED', 'remote-artifacts')) return;
+    const previouslyCleaned = Boolean(latestEvidence(run, 'CLEANUP_COMPLETED', 'remote-artifacts'));
+    if (previouslyCleaned && !force) return;
     const expectedKey = `batch-studio/executions/${safeProjectPart(run.projectId)}/${runId}/artifacts.zip`;
     if (!bucket || key !== expectedKey)
       throw new ArtifactPipelineError(
@@ -793,10 +799,14 @@ export class RemoteExecutionService {
     await mutateExecutionRun(root, runId, (current) => {
       current.phase = 'REMOTE_CLEANUP';
     });
-    try {
-      await this.remote.requestWorker(root, runId, 'cleanup_artifacts');
-    } catch (error) {
-      throw new ArtifactPipelineError('REMOTE_ARTIFACT_CLEANUP_FAILED', safeError(error));
+    // Once Remote cleanup was evidenced, a later R2-only recovery must not
+    // require reconnecting to the already stopped or deleted Remote instance.
+    if (!previouslyCleaned) {
+      try {
+        await this.remote.requestWorker(root, runId, 'cleanup_artifacts');
+      } catch (error) {
+        throw new ArtifactPipelineError('REMOTE_ARTIFACT_CLEANUP_FAILED', safeError(error));
+      }
     }
     try {
       if (await this.r2.objectExists(bucket, key)) await this.r2.deleteExecutionObject(bucket, key);
@@ -888,7 +898,7 @@ export class RemoteExecutionService {
       // When it has been cleaned, re-upload only if the Remote package survives.
       const object = await this.ensureR2Object(root, runId, pkg);
       await this.ensureLocalFile(root, runId, pkg, object.bucket, object.key);
-      await this.cleanup(root, runId, object.bucket, object.key);
+      await this.cleanup(root, runId, object.bucket, object.key, cleaned);
     }
     await mutateExecutionRun(root, runId, (current) => {
       current.phase = 'COMPLETED';
