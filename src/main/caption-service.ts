@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import type {
   CaptionBuildInfo,
   CaptionContent,
@@ -34,6 +35,26 @@ function sha256(value: string) {
 
 function contentHash(content: CaptionContent) {
   return sha256(JSON.stringify(content));
+}
+
+// Increment when fixed text, formatting, or localization in renderCaption changes.
+const CAPTION_TEMPLATE_VERSION = 2;
+
+function renderInputHash(
+  content: CaptionContent,
+  imageCount: number,
+  sourceDirectory: string,
+  copyrightedCharacter: boolean,
+) {
+  return sha256(
+    JSON.stringify({
+      templateVersion: CAPTION_TEMPLATE_VERSION,
+      content,
+      imageCount,
+      sourceDirectory: path.resolve(sourceDirectory),
+      copyrightedCharacter,
+    }),
+  );
 }
 
 function jsonCandidate(raw: string) {
@@ -203,23 +224,38 @@ export async function getCaptionStatus(root: string): Promise<CaptionStatus> {
   const imageCount = finalArtifact.imageCount;
   const draft = await readDraft(root);
   const captionPath = outputPath(root);
-  const captionExists = await exists(captionPath);
+  const actualCaption = await readFile(captionPath, 'utf8').catch(() => null);
+  const captionExists = actualCaption !== null;
   const build = await readJson<CaptionBuildInfo>(buildPath(root));
   const brief = await readJson<ProjectBriefInput & { schemaVersion?: number }>(
     path.join(root, 'project_brief.json'),
   );
+  const copyrightedCharacter = brief?.subject?.copyrightedCharacter === true;
   const preview =
     draft.content && sourceExists && imageCount > 0
-      ? renderCaption(draft.content, imageCount, brief?.subject?.copyrightedCharacter === true)
+      ? renderCaption(draft.content, imageCount, copyrightedCharacter)
       : null;
+  const expectedInputHash =
+    draft.content && sourceDirectory
+      ? renderInputHash(draft.content, imageCount, sourceDirectory, copyrightedCharacter)
+      : null;
+  // Old metadata lacks versioned inputs/output hashes and must be regenerated.
+  // A missing caption.txt after an earlier build is stale rather than a fresh ready state.
   const stale =
-    captionExists &&
-    (!build ||
-      !sourceDirectory ||
-      build.sourceDirectory !== sourceDirectory ||
-      build.imageCount !== imageCount ||
-      !draft.content ||
-      build.contentSha256 !== contentHash(draft.content));
+    Boolean(build) || captionExists
+      ? !build ||
+        !captionExists ||
+        !sourceDirectory ||
+        build.sourceDirectory !== sourceDirectory ||
+        build.imageCount !== imageCount ||
+        !draft.content ||
+        build.contentSha256 !== contentHash(draft.content) ||
+        !build.renderInputSha256 ||
+        build.renderInputSha256 !== expectedInputHash ||
+        !build.outputSha256 ||
+        build.outputSha256 !== sha256(actualCaption ?? '') ||
+        preview !== actualCaption
+      : false;
 
   let state: CaptionStatus['state'];
   if (!sourceDirectory) state = 'unconfigured';
@@ -230,8 +266,9 @@ export async function getCaptionStatus(root: string): Promise<CaptionStatus> {
   )
     state = 'missing-content';
   else if (!draft.validation.valid) state = 'invalid-content';
+  else if (stale) state = 'stale';
   else if (!captionExists) state = 'ready';
-  else state = stale ? 'stale' : 'generated';
+  else state = 'generated';
 
   return {
     state,
@@ -317,11 +354,19 @@ export async function generateCaption(root: string): Promise<CaptionStatus> {
   if (!status.preview) throw new Error('caption.txt の生成内容を構築できません。');
 
   await writeTextAtomic(status.captionPath, status.preview);
+  const brief = await readJson<ProjectBriefInput>(path.join(root, 'project_brief.json'));
   const build: CaptionBuildInfo = {
     schemaVersion: 1,
     sourceDirectory: status.sourceDirectory,
     imageCount: status.imageCount,
     contentSha256: contentHash(status.content),
+    renderInputSha256: renderInputHash(
+      status.content,
+      status.imageCount,
+      status.sourceDirectory,
+      brief?.subject?.copyrightedCharacter === true,
+    ),
+    outputSha256: sha256(status.preview),
     generatedAt: new Date().toISOString(),
   };
   await writeJsonAtomic(buildPath(root), build);
