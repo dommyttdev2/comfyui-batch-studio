@@ -33,6 +33,11 @@ type RemoteSequenceState = {
     leafId?: string | null;
     index?: number;
     promptId?: string | null;
+    submission?: {
+      attemptId?: string;
+      status?: 'prepared' | 'sending' | 'acknowledged' | 'completed';
+      promptId?: string | null;
+    };
   };
   completed?: Record<string, number>;
   overallCompleted?: number;
