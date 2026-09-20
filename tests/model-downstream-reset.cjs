@@ -495,7 +495,11 @@ function archiveEntries(root) {
     );
   };
   const assertPreserved = (root, old, scope) => {
-    assert.deepEqual(preserved(root), old, scope + ' may not leave mixed model/plan/workflow generations');
+    assert.deepEqual(
+      preserved(root),
+      old,
+      scope + ' may not leave mixed model/plan/workflow generations',
+    );
     assert.equal(
       exists(path.join(root, '._batch_studio', 'project-transaction.json')),
       false,
@@ -509,7 +513,8 @@ function archiveEntries(root) {
     const localImage = path.join(failureRoot, 'output', 'existing.png');
     write(localImage, 'existing-local-artifact');
     transaction.setProjectTransactionCheckpointForTests((step) => {
-      if (step.startsWith('archived:')) throw Object.assign(new Error('Injected EACCES'), { code: 'EACCES' });
+      if (step.startsWith('archived:'))
+        throw Object.assign(new Error('Injected EACCES'), { code: 'EACCES' });
     });
     try {
       await assert.rejects(() => manualResetFrom(failureRoot, scope), /Injected EACCES/);
@@ -532,14 +537,23 @@ function archiveEntries(root) {
         schemaVersion: 1,
         loras: [lora3],
         promptFallbacks: [
-          { requirement: 'camera angle', positiveTags: ['from_below'], negativeTags: [], reason: 'test' },
+          {
+            requirement: 'camera angle',
+            positiveTags: ['from_below'],
+            negativeTags: [],
+            reason: 'test',
+          },
         ],
       }),
       'models',
     );
     assert.equal(imported.validation.valid, true);
     const before = preserved(confirmRoot);
-    for (const stage of ['models:confirmed', 'models:fallbacks-updated', 'archived:prompt_plan.json']) {
+    for (const stage of [
+      'models:confirmed',
+      'models:fallbacks-updated',
+      'archived:prompt_plan.json',
+    ]) {
       let hit = false;
       transaction.setProjectTransactionCheckpointForTests((step) => {
         if (!hit && step === stage) {
@@ -562,21 +576,28 @@ function archiveEntries(root) {
         throw new transaction.SimulatedProjectCrashForTest('Injected power loss');
     });
     try {
-      await assert.rejects(
-        () => confirmArtifact(confirmRoot, 'models'),
-        /Injected power loss/,
-      );
+      await assert.rejects(() => confirmArtifact(confirmRoot, 'models'), /Injected power loss/);
     } finally {
       transaction.setProjectTransactionCheckpointForTests(null);
     }
-    assert.equal(exists(path.join(confirmRoot, '._batch_studio', 'project-transaction.json')), true);
-    assert.notDeepEqual(preserved(confirmRoot), before, 'crash should leave a partially applied transaction');
+    assert.equal(
+      exists(path.join(confirmRoot, '._batch_studio', 'project-transaction.json')),
+      true,
+    );
+    assert.notDeepEqual(
+      preserved(confirmRoot),
+      before,
+      'crash should leave a partially applied transaction',
+    );
     await transaction.recoverPendingProjectTransaction(confirmRoot);
     assertPreserved(confirmRoot, before, 'crash recovery');
     const confirmedAgain = await confirmArtifact(confirmRoot, 'models');
     assert.equal(confirmedAgain.downstreamReset, true);
     assert.equal(exists(path.join(confirmRoot, 'prompt_plan.json')), false);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(confirmRoot, 'models.json'), 'utf8')).loras[0].modelId, 3);
+    assert.equal(
+      JSON.parse(fs.readFileSync(path.join(confirmRoot, 'models.json'), 'utf8')).loras[0].modelId,
+      3,
+    );
   }
 
   console.log('Model downstream reset and manual stage reset tests passed.');
