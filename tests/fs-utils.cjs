@@ -90,7 +90,9 @@ const load = (relative) => import(pathToFileURL(path.join(compiled, 'main', rela
       assert.equal(fs.readFileSync(protectedFile, 'utf8'), expected);
       assert.equal(fs.readFileSync(backup, 'utf8'), expected);
       assert.deepEqual(
-        fs.readdirSync(protectedDir).filter((name) => name.endsWith('.tmp') || name.endsWith('.backup')),
+        fs
+          .readdirSync(protectedDir)
+          .filter((name) => name.endsWith('.tmp') || name.endsWith('.backup')),
         [],
         'failed writes must clean all stage files without touching the original',
       );
@@ -135,14 +137,17 @@ const load = (relative) => import(pathToFileURL(path.join(compiled, 'main', rela
     const unreadable = path.join(protectedDir, 'current.json');
     fs.mkdirSync(unreadable);
     await assert.rejects(() => readJson(unreadable), { code: 'PERSISTED_JSON_UNREADABLE' });
-    await assert.rejects(
-      () => writeJsonAtomic(unreadable, { runId }),
-      { code: 'PERSISTED_JSON_UNREADABLE' },
-    );
+    await assert.rejects(() => writeJsonAtomic(unreadable, { runId }), {
+      code: 'PERSISTED_JSON_UNREADABLE',
+    });
     fs.rmSync(unreadable, { recursive: true });
     const draft = path.join(dir, 'draft.json');
     fs.writeFileSync(draft, '{truncated');
-    assert.equal(await readJson(draft), null, 'noncritical drafts preserve existing null semantics');
+    assert.equal(
+      await readJson(draft),
+      null,
+      'noncritical drafts preserve existing null semantics',
+    );
 
     // Settings and Run loaders must propagate critical corruption instead of resetting it.
     const metaRoot = path.join(dir, 'project-with-damaged-meta');
