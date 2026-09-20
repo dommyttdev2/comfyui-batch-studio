@@ -28,7 +28,7 @@ assert.match(renderer, /!Array\.isArray\(branch\.loras\)/);
 assert.match(renderer, /typeof entry\.name === 'string'/);
 assert.match(renderer, /if \(isRenderablePromptPlan\(parsed\)\) setPlan\(parsed\)/);
 assert.match(renderer, /setValidation\(source\.validation\.issues\)/);
-assert.match(renderer, /loadError && <div className="issue error"/);
+assert.match(renderer, /loadError && \(\s*<div className="issue error"/);
 
 const app = source('src/renderer/App.tsx');
 const boundary = source('src/renderer/StageErrorBoundary.tsx');
