@@ -228,9 +228,7 @@ export class RemoteExecutionService {
         let possiblyAccepted = false;
         if (current?.phase === 'EXECUTING' && current.lifecycle === 'RUNNING') {
           try {
-            const observed = asResponse(
-              (await this.remote.reconcile(root, runId)).response,
-            ).state;
+            const observed = asResponse((await this.remote.reconcile(root, runId)).response).state;
             possiblyAccepted =
               observed?.current?.submission?.status === 'sending' ||
               observed?.current?.submission?.status === 'acknowledged';
@@ -320,10 +318,7 @@ export class RemoteExecutionService {
     if (!state || state.runId !== runId)
       throw new Error('Remote Worker does not have state for the persisted Run.');
     while (state.status === 'running' || state.status === 'interrupting') {
-      if (
-        response.sequenceRunning !== true &&
-        state.current?.submission?.status === 'sending'
-      ) {
+      if (response.sequenceRunning !== true && state.current?.submission?.status === 'sending') {
         const resolved = asResponse(
           (await this.remote.requestWorker(root, runId, 'reconcile_submission')).response,
         ) as WorkerSequenceResponse & { found?: boolean };
@@ -353,10 +348,7 @@ export class RemoteExecutionService {
         throw new Error('Remote Worker state vanished while restoring monitoring.');
     }
     await this.syncState(root, runId, state);
-    if (
-      state.status === 'failed' &&
-      state.error?.code === 'REMOTE_PROMPT_ACK_UNCERTAIN'
-    ) {
+    if (state.status === 'failed' && state.error?.code === 'REMOTE_PROMPT_ACK_UNCERTAIN') {
       const resolved = asResponse(
         (await this.remote.requestWorker(root, runId, 'reconcile_submission')).response,
       ) as WorkerSequenceResponse & { found?: boolean };
