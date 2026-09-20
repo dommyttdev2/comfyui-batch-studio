@@ -26,21 +26,22 @@ assert.ok(
   'Generic issue rendering must show validator-provided locations',
 );
 assert.ok(
-  uiSrc.includes("issues.filter((issue) => issue.severity === 'warning')"),
-  'Generic issue rendering must collect the visible warnings for bulk copy',
+  uiSrc.includes('issues.length > 0 &&') &&
+    !uiSrc.includes("issues.filter((issue) => issue.severity === 'warning')"),
+  'Generic issue rendering must show bulk copy for errors as well as warnings',
 );
 assert.ok(
-  uiSrc.includes("warnings.map(formatValidationIssue).join('\\n')"),
-  'Bulk copy must preserve the same one-warning-per-line text shown in the UI',
+  uiSrc.includes("issues.map(formatValidationIssue).join('\\n')"),
+  'Bulk copy must preserve the displayed error and warning text in order',
 );
 assert.ok(
-  uiSrc.includes('Warningを一括コピー'),
-  'The issue view must expose a warning bulk-copy action',
+  uiSrc.includes('検証結果を一括コピー'),
+  'The issue view must expose a bulk-copy action for every validation result',
 );
 assert.ok(
   uiSrc.includes('navigator.clipboard?.writeText') &&
     uiSrc.includes("document.execCommand('copy')"),
-  'Warning copy must support the Clipboard API with an Electron-compatible fallback',
+  'Issue copy must support the Clipboard API with an Electron-compatible fallback',
 );
 assert.ok(
   promptPlanSrc.includes('issuesView(validation)'),
