@@ -189,13 +189,18 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
     ]);
     const after = await second.templates();
     assert.equal(after.length, 25);
-    assert.equal(after.some((item) => item.id === victim.id), false);
-    assert.equal(after.some((item) => item.name === 'added-during-delete'), true);
+    assert.equal(
+      after.some((item) => item.id === victim.id),
+      false,
+    );
+    assert.equal(
+      after.some((item) => item.name === 'added-during-delete'),
+      true,
+    );
     assert.deepEqual(
       after,
-      JSON.parse(
-        fs.readFileSync(path.join(root, 'r2', 'batch-download-templates.json'), 'utf8'),
-      ).templates,
+      JSON.parse(fs.readFileSync(path.join(root, 'r2', 'batch-download-templates.json'), 'utf8'))
+        .templates,
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
