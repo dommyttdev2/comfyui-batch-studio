@@ -7,7 +7,7 @@ import type {
   CodexModelSettings,
   CodexModelSelection,
   CodexTurnStatus,
-  CodexThreadState,
+  CodexSendResult,
   GrokTask,
 } from '../shared/types';
 import './codex-pane.css';
@@ -202,7 +202,7 @@ export function CodexPane() {
     return () => clearInterval(ticker);
   }, [turnStatus.phase]);
 
-  const send = async (request: () => Promise<CodexThreadState>, text: string) => {
+  const send = async (request: () => Promise<CodexSendResult>, text: string) => {
     const key = currentContext.current;
     setError('');
     setBusy(true);
