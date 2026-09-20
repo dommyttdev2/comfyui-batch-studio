@@ -716,6 +716,10 @@ export interface CaptionBuildInfo {
   imageCount: number;
   contentSha256: string;
   generatedAt: string;
+  /** Versioned hash of all inputs that affect deterministic caption rendering. */
+  renderInputSha256?: string;
+  /** SHA-256 of the caption.txt bytes written for this build. */
+  outputSha256?: string;
 }
 export interface CaptionStatus {
   state:
