@@ -41,7 +41,7 @@ import {
   normalizeR2PutObjectKey,
   objectName,
 } from '../shared/r2-manager-utils.js';
-import { exists, readJson, writeJsonAtomic } from './fs-utils.js';
+import { exists, readJson, withTemplateStoreLock, writeJsonAtomic } from './fs-utils.js';
 import { R2ConfigStore, type R2ConnectionInput } from './r2-config.js';
 import { R2ObjectIndex } from './r2-object-index.js';
 
@@ -180,26 +180,28 @@ export class R2Manager {
     if (!(await exists(legacyPath))) return;
     const raw = await readJson<Record<string, unknown>>(legacyPath);
     if (!raw || Array.isArray(raw) || typeof raw !== 'object') return;
-    const current = (await readJson<TemplateState>(this.templatesPath)) ?? {
-      schemaVersion: 1 as const,
-      templates: [],
-    };
-    const ids = new Set(current.templates.map((x) => x.id));
-    const names = new Set(
-      current.templates.map((x) => `${x.bucket}\u0000${x.name.toLocaleLowerCase()}`),
-    );
-    let changed = false;
-    for (const [fallbackId, value] of Object.entries(raw)) {
-      const converted = legacyTemplate(value, fallbackId);
-      if (!converted) continue;
-      const nameKey = `${converted.bucket}\u0000${converted.name.toLocaleLowerCase()}`;
-      if (ids.has(converted.id) || names.has(nameKey)) continue;
-      current.templates.push(converted);
-      ids.add(converted.id);
-      names.add(nameKey);
-      changed = true;
-    }
-    if (changed) await writeJsonAtomic(this.templatesPath, current);
+    await withTemplateStoreLock(this.templatesPath, async () => {
+      const current = (await readJson<TemplateState>(this.templatesPath)) ?? {
+        schemaVersion: 1 as const,
+        templates: [],
+      };
+      const ids = new Set(current.templates.map((x) => x.id));
+      const names = new Set(
+        current.templates.map((x) => `${x.bucket}\u0000${x.name.toLocaleLowerCase()}`),
+      );
+      let changed = false;
+      for (const [fallbackId, value] of Object.entries(raw)) {
+        const converted = legacyTemplate(value, fallbackId);
+        if (!converted) continue;
+        const nameKey = `${converted.bucket}\u0000${converted.name.toLocaleLowerCase()}`;
+        if (ids.has(converted.id) || names.has(nameKey)) continue;
+        current.templates.push(converted);
+        ids.add(converted.id);
+        names.add(nameKey);
+        changed = true;
+      }
+      if (changed) await writeJsonAtomic(this.templatesPath, current);
+    });
   }
   async settings() {
     return this.config.status();
@@ -893,44 +895,50 @@ export class R2Manager {
       bucket = String(input.bucket ?? '').trim(),
       objects = normalizeBatchTemplateObjects(input.objects);
     if (!bucket) throw new Error('バケットを指定してください。');
-    const s = await this.templateState(),
-      now = new Date().toISOString(),
-      i = input.id ? s.templates.findIndex((x) => x.id === input.id) : -1;
-    if (input.id && i < 0) throw new Error('テンプレートが見つかりません。');
-    if (
-      s.templates.some(
-        (x, index) =>
-          index !== i &&
-          x.bucket === bucket &&
-          x.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+    await this.templateMigration;
+    return withTemplateStoreLock(this.templatesPath, async () => {
+      const s = await this.templateState(),
+        now = new Date().toISOString(),
+        i = input.id ? s.templates.findIndex((x) => x.id === input.id) : -1;
+      if (input.id && i < 0) throw new Error('テンプレートが見つかりません。');
+      if (
+        s.templates.some(
+          (x, index) =>
+            index !== i &&
+            x.bucket === bucket &&
+            x.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+        )
       )
-    )
-      throw new Error('同名のテンプレートがすでに存在します。');
-    if (
-      i < 0 &&
-      s.templates.filter((x) => x.bucket === bucket).length >= MAX_BATCH_TEMPLATES_PER_BUCKET
-    )
-      throw new Error('1つのバケットに保存できるテンプレートは100件までです。');
-    if (i >= 0 && s.templates[i].bucket !== bucket)
-      throw new Error('テンプレートのバケットが一致しません。');
-    const t: R2BatchDownloadTemplate = {
-      id: input.id || randomUUID(),
-      name,
-      bucket,
-      createdAt: i >= 0 ? s.templates[i].createdAt : now,
-      updatedAt: now,
-      objects,
-    };
-    if (i >= 0) s.templates[i] = t;
-    else s.templates.push(t);
-    await writeJsonAtomic(this.templatesPath, s);
-    return s.templates;
+        throw new Error('同名のテンプレートがすでに存在します。');
+      if (
+        i < 0 &&
+        s.templates.filter((x) => x.bucket === bucket).length >= MAX_BATCH_TEMPLATES_PER_BUCKET
+      )
+        throw new Error('1つのバケットに保存できるテンプレートは100件までです。');
+      if (i >= 0 && s.templates[i].bucket !== bucket)
+        throw new Error('テンプレートのバケットが一致しません。');
+      const t: R2BatchDownloadTemplate = {
+        id: input.id || randomUUID(),
+        name,
+        bucket,
+        createdAt: i >= 0 ? s.templates[i].createdAt : now,
+        updatedAt: now,
+        objects,
+      };
+      if (i >= 0) s.templates[i] = t;
+      else s.templates.push(t);
+      await writeJsonAtomic(this.templatesPath, s);
+      return s.templates;
+    });
   }
   async deleteTemplate(id: string) {
-    const s = await this.templateState();
-    s.templates = s.templates.filter((x) => x.id !== id);
-    await writeJsonAtomic(this.templatesPath, s);
-    return s.templates;
+    await this.templateMigration;
+    return withTemplateStoreLock(this.templatesPath, async () => {
+      const s = await this.templateState();
+      s.templates = s.templates.filter((x) => x.id !== id);
+      await writeJsonAtomic(this.templatesPath, s);
+      return s.templates;
+    });
   }
   async metrics() {
     const c = await this.config.credentials();
