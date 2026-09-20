@@ -213,6 +213,137 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
     fs.rmSync(root, { recursive: true, force: true });
   }
 
+  {
+    const {
+      UploadPartCommand,
+      CompleteMultipartUploadCommand,
+      AbortMultipartUploadCommand,
+    } = require('@aws-sdk/client-s3');
+    const uploadRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'r2-single-flight-'));
+    const file = path.join(uploadRoot, 'twenty-bytes.bin');
+    fs.writeFileSync(file, Buffer.alloc(20, 0x41));
+    const makeJob = (id) => ({
+      id,
+      kind: 'upload',
+      bucket: 'models',
+      key: id + '.bin',
+      filePath: file,
+      fileName: path.basename(file),
+      size: 20,
+      contentType: 'application/octet-stream',
+      uploadId: 'multipart-' + id,
+      partSize: 5,
+      completedParts: {},
+      status: 'paused',
+      transferredBytes: 0,
+      error: '',
+      createdAt: new Date().toISOString(),
+    });
+    const original = [makeJob('duplicate'), makeJob('cancel'), makeJob('complete-race')];
+    const statePath = path.join(uploadRoot, 'r2', 'uploads.json');
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, JSON.stringify({ schemaVersion: 1, jobs: original }));
+    const manager = new R2Manager({}, uploadRoot);
+    const calls = { parts: [], completes: [], aborts: [] },
+      held = [],
+      heldFor = new Set(['duplicate', 'cancel', 'complete-race']);
+    manager.syncIndex = () => {};
+    manager.clientFor = async () => ({
+      send(command) {
+        if (command instanceof UploadPartCommand) {
+          const id = String(command.input.UploadId).replace('multipart-', '');
+          calls.parts.push({ id, part: command.input.PartNumber });
+          command.input.Body?.destroy?.();
+          if (heldFor.has(id))
+            return new Promise((resolve) => {
+              held.push({ id, resolve, part: command.input.PartNumber });
+            });
+          return Promise.resolve({ ETag: 'etag-' + command.input.PartNumber });
+        }
+        if (command instanceof CompleteMultipartUploadCommand) {
+          calls.completes.push(String(command.input.UploadId).replace('multipart-', ''));
+          return Promise.resolve({});
+        }
+        if (command instanceof AbortMultipartUploadCommand) {
+          calls.aborts.push(String(command.input.UploadId).replace('multipart-', ''));
+          return Promise.resolve({});
+        }
+        throw new Error('Unexpected S3 command: ' + command.constructor.name);
+      },
+    });
+    const waitFor = async (predicate) => {
+      const deadline = Date.now() + 5000;
+      while (!predicate()) {
+        if (Date.now() > deadline) throw new Error('R2 test timed out');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    };
+    const status = async (id) => (await manager.uploads()).find((job) => job.id === id)?.status;
+    try {
+      const concurrent = await Promise.all([
+        manager.resumeUpload('duplicate'),
+        manager.resumeUpload('duplicate'),
+        manager.resumeUpload('duplicate'),
+      ]);
+      assert.equal(concurrent.length, 3);
+      await waitFor(() => held.filter((item) => item.id === 'duplicate').length === 3);
+      assert.deepEqual(
+        calls.parts.filter((item) => item.id === 'duplicate').map((item) => item.part),
+        [1, 2, 3],
+        'duplicate Resume calls must not create additional workers for the same parts',
+      );
+      let pauseSettled = false;
+      const pause = manager.pauseUpload('duplicate').then((job) => {
+        pauseSettled = true;
+        return job;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assert.equal(pauseSettled, false, 'Pause must drain all in-flight UploadPart requests');
+      heldFor.delete('duplicate');
+      for (const item of held.filter((item) => item.id === 'duplicate'))
+        item.resolve({ ETag: 'etag-' + item.part });
+      const paused = await pause;
+      assert.equal(paused.status, 'paused');
+      assert.equal(await status('duplicate'), 'paused');
+      assert.equal(calls.completes.includes('duplicate'), false);
+      await manager.resumeUpload('duplicate');
+      await waitFor(async () => (await status('duplicate')) === 'complete');
+      assert.deepEqual(
+        calls.parts.filter((item) => item.id === 'duplicate').map((item) => item.part),
+        [1, 2, 3, 4],
+        'Resume after Pause must not replay parts already acknowledged by the old generation',
+      );
+      assert.equal(calls.completes.filter((id) => id === 'duplicate').length, 1);
+
+      await manager.resumeUpload('cancel');
+      await waitFor(() => held.filter((item) => item.id === 'cancel').length === 3);
+      const cancel = manager.cancelUpload('cancel');
+      heldFor.delete('cancel');
+      for (const item of held.filter((item) => item.id === 'cancel'))
+        item.resolve({ ETag: 'etag-' + item.part });
+      const cancelled = await cancel;
+      assert.equal(cancelled.status, 'cancelled');
+      assert.equal(await status('cancel'), 'cancelled');
+      assert.equal(calls.aborts.filter((id) => id === 'cancel').length, 1);
+      assert.equal(calls.completes.includes('cancel'), false);
+      const beforeCancelResume = calls.parts.length;
+      assert.equal((await manager.resumeUpload('cancel')).status, 'cancelled');
+      assert.equal(calls.parts.length, beforeCancelResume, 'Cancel must prevent further S3 sends');
+
+      await manager.resumeUpload('complete-race');
+      await waitFor(() => held.filter((item) => item.id === 'complete-race').length === 3);
+      const cancelBeforeComplete = manager.cancelUpload('complete-race');
+      heldFor.delete('complete-race');
+      for (const item of held.filter((item) => item.id === 'complete-race'))
+        item.resolve({ ETag: 'etag-' + item.part });
+      assert.equal((await cancelBeforeComplete).status, 'cancelled');
+      assert.equal(calls.completes.includes('complete-race'), false);
+      assert.equal(calls.aborts.filter((id) => id === 'complete-race').length, 1);
+    } finally {
+      fs.rmSync(uploadRoot, { recursive: true, force: true });
+    }
+  }
+
   console.log('R2 File Manager parity tests passed.');
 })().catch((error) => {
   console.error(error);
