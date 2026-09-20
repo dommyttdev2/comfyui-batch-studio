@@ -26,6 +26,17 @@ const fileNames: Partial<Record<Stage, string>> = {
 export function expectedArtifact(stage: Stage): string | null {
   return fileNames[stage] ?? null;
 }
+export function artifactFileContent(stage: Stage, raw: string, extracted: string): string {
+  if (stage === 'story-finalize' || stage === 'story-fix') return extracted.trimEnd();
+  if (stage === 'models' || stage === 'models-fix') {
+    // importGrok merges LoRA selections with the user's base models for the draft.
+    // The downloadable model_loras.json must retain ONLY the agent's LoRA payload.
+    const fenced = raw.match(/`{3}(?:json)?\s*\n([\s\S]*?)`{3}/i);
+    const candidate = fenced?.[1] ?? raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
+    return JSON.stringify(JSON.parse(candidate.trim()), null, 2);
+  }
+  return JSON.stringify(JSON.parse(extracted), null, 2);
+}
 
 function ledgerPath(root: string) {
   return path.join(internalDir(root), 'auto-artifacts.json');
@@ -129,10 +140,7 @@ export async function importAutoArtifact(
     // Store the actual expected artifact (model_loras.json, not merged models.json).
     const artifactDir = path.join(internalDir(root), 'agent-artifacts', provider, stage, key);
     const filePath = path.join(artifactDir, fileName);
-    const content =
-      stage === 'story-finalize' || stage === 'story-fix'
-        ? result.extracted
-        : JSON.stringify(JSON.parse(result.extracted), null, 2);
+    const content = artifactFileContent(stage, raw, result.extracted);
     await writeTextAtomic(filePath, content.trimEnd() + '\n');
     const imported: AutoArtifactEvent = {
       ...base,
