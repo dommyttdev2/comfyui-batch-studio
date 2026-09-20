@@ -1,4 +1,4 @@
-import { createHash, randomInt } from 'node:crypto';
+import { createHash, randomInt, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -326,16 +326,37 @@ export class LocalExecutionService {
     return worker;
   }
   private async recoverPrompt(root: string, runId: string) {
-    const run = await getExecutionRun(root, runId);
+    let run = await getExecutionRun(root, runId);
     if (!run || run.lifecycle !== 'RUNNING' || run.executionTarget !== 'local') return;
-    const promptId = run.current.promptId;
+    const settings = await this.settingsProvider(),
+      { comfy } = this.clientFactory(settings.endpoint);
+    await comfy.health();
+    let promptId = run.current.promptId;
+    if (!promptId && run.submission?.status === 'sending') {
+      const recoveredId = await comfy.findPromptBySubmissionId(run.submission.attemptId);
+      if (!recoveredId)
+        throw new Error(
+          'Submission was attempted but no matching ID is visible in Queue/History. The accepted prompt may have been pruned; no POST was retried.',
+        );
+      run = await mutateExecutionRun(root, runId, (current) => {
+        if (
+          current.lifecycle !== 'RUNNING' ||
+          current.submission?.attemptId !== run!.submission?.attemptId ||
+          current.current.promptId
+        )
+          throw new Error('Run identity changed while resolving a submitted prompt.');
+        current.current.promptId = recoveredId;
+        current.submission.status = 'acknowledged';
+        current.submission.promptId = recoveredId;
+        if (!current.promptIds.includes(recoveredId)) current.promptIds.push(recoveredId);
+        markGenerationStarted(current, recoveredId);
+      });
+      promptId = recoveredId;
+    }
     if (!promptId || !run.current.branchId || !run.current.leafId)
       throw new Error(
         'No persisted prompt ID/branch/leaf; submission may have succeeded before the Run was saved.',
       );
-    const settings = await this.settingsProvider(),
-      { comfy } = this.clientFactory(settings.endpoint);
-    await comfy.health();
     let history: any = null;
     let missingPolls = 0;
     for (;;) {
@@ -389,6 +410,7 @@ export class LocalExecutionService {
       branch.state = branch.completed >= branch.total ? 'completed' : 'pending';
       markGenerationCompleted(current);
       current.current = { branchId: null, leafId: null, promptId: null };
+      if (current.submission?.promptId === promptId) current.submission.status = 'completed';
       current.lifecycle = 'PAUSED';
       current.controls.scheduling = 'STOPPED';
     });
@@ -466,6 +488,8 @@ export class LocalExecutionService {
             return;
           }
           applyExpandState(branchGraph, binding.expandNodeId, continuousId, index);
+          const attemptId = randomUUID(),
+            graphSha256 = createHash('sha256').update(JSON.stringify(branchGraph)).digest('hex');
           await mutateExecutionRun(root, runId, (r) => {
             r.phase = 'EXECUTING';
             r.current = {
@@ -473,13 +497,34 @@ export class LocalExecutionService {
               leafId: binding.leafIds[index],
               promptId: null,
             };
+            r.submission = {
+              attemptId,
+              branchId: binding.branchId,
+              leafId: binding.leafIds[index],
+              index,
+              graphSha256,
+              status: 'prepared',
+              promptId: null,
+            };
             const bp = r.progress.branches.find((x) => x.branchId === binding.branchId);
             if (bp) bp.state = 'running';
           });
-          const submitted = await comfy.prompt(branchGraph, run.runId);
+          // The durable sending transition precedes every POST. If the call
+          // succeeds but its response/persistence fails, recovery finds this
+          // exact attempt or stops rather than resubmitting the leaf.
+          await mutateExecutionRun(root, runId, (r) => {
+            if (r.submission?.attemptId !== attemptId)
+              throw new Error('Prompt submission attempt was replaced before POST.');
+            r.submission.status = 'sending';
+          });
+          const submitted = await comfy.prompt(branchGraph, run.runId, attemptId);
           lastPromptId = submitted.prompt_id;
           await mutateExecutionRun(root, runId, (r) => {
+            if (r.submission?.attemptId !== attemptId)
+              throw new Error('Prompt submission attempt was replaced after POST.');
             r.current.promptId = lastPromptId;
+            r.submission.status = 'acknowledged';
+            r.submission.promptId = lastPromptId;
             if (!r.promptIds.includes(lastPromptId)) r.promptIds.push(lastPromptId);
             markGenerationStarted(r, lastPromptId);
           });
@@ -553,6 +598,7 @@ export class LocalExecutionService {
               r.progress.overall.completed + 1,
             );
             markGenerationCompleted(r);
+            if (r.submission?.promptId === lastPromptId) r.submission.status = 'completed';
             r.current.promptId = null;
           });
           run = await getExecutionRun(root, runId);
