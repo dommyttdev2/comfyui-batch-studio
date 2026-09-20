@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readdir } from 'node:fs/promises';
+import { readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   ExecutionEvidence,
@@ -240,6 +240,113 @@ async function captureSnapshot(
   };
 }
 
+function runSnapshotPaths(runId: string) {
+  assertRunId(runId);
+  const base = path.posix.join(RUNS_DIR, runId, 'snapshot');
+  return {
+    uiPath: path.posix.join(base, 'workflow-ui.json'),
+    apiPath: path.posix.join(base, 'workflow-api.json'),
+    planPath: path.posix.join(base, 'prompt-plan.json'),
+    modelsPath: path.posix.join(base, 'models.json'),
+  };
+}
+
+function requireRunOwnedSnapshot(run: ExecutionRun) {
+  const immutable = run.snapshot.workflow.immutable;
+  if (!immutable) return;
+  const expected = runSnapshotPaths(run.runId);
+  if (
+    run.snapshot.workflow.uiPath !== expected.uiPath ||
+    run.snapshot.workflow.apiPath !== expected.apiPath ||
+    immutable.planPath !== expected.planPath ||
+    immutable.modelsPath !== expected.modelsPath
+  )
+    throw new Error('EXECUTION_SNAPSHOT_PATH_INVALID: Run snapshot must belong to its original Run ID.');
+}
+
+// Every graph consumer verifies the Run's recorded hashes before executing.
+// Legacy Runs without an immutable snapshot may only read their original
+// recorded file with the matching hash; they must never silently fall back.
+export async function readExecutionWorkflow(root: string, run: ExecutionRun) {
+  requireRunOwnedSnapshot(run);
+  const { workflow } = run.snapshot;
+  const ui = await readJson<unknown>(path.join(root, workflow.uiPath));
+  const api = await readJson<unknown>(path.join(root, workflow.apiPath));
+  if (!ui || !api)
+    throw new Error('EXECUTION_SNAPSHOT_MISSING: saved Run workflow is absent; project files cannot replace it.');
+  const uiSha256 = hashCanonicalJson(ui),
+    apiSha256 = hashCanonicalJson(api);
+  if (
+    uiSha256 !== workflow.uiSha256 ||
+    apiSha256 !== workflow.apiSha256 ||
+    hashCanonicalJson({ uiSha256, apiSha256 }) !== workflow.workflowIdentity
+  )
+    throw new Error('EXECUTION_SNAPSHOT_HASH_MISMATCH: saved Run workflow was modified.');
+  if (workflow.immutable) {
+    const plan = await readJson<unknown>(path.join(root, workflow.immutable.planPath));
+    const models = await readJson<unknown>(path.join(root, workflow.immutable.modelsPath));
+    if (
+      !plan ||
+      !models ||
+      hashCanonicalJson(plan) !== run.snapshot.plan.sha256 ||
+      hashWorkflowModelInputs(models as ModelsArtifact) !== workflow.modelsSha256
+    )
+      throw new Error('EXECUTION_SNAPSHOT_HASH_MISMATCH: saved Run Prompt Plan or model identity is absent or modified.');
+  }
+  return { ui, api };
+}
+
+// Capture the validated graph and its semantic inputs into a Run-owned
+// directory. Never re-use a Project output file during Local/Remote execution.
+async function persistRunSnapshot(
+  root: string,
+  runId: string,
+  snapshot: ExecutionRunSnapshot,
+): Promise<ExecutionRunSnapshot> {
+  const paths = runSnapshotPaths(runId);
+  const [ui, api, plan, models] = await Promise.all([
+    readJson<unknown>(path.join(root, snapshot.workflow.uiPath)),
+    readJson<unknown>(path.join(root, snapshot.workflow.apiPath)),
+    readJson<unknown>(path.join(root, 'prompt_plan.json')),
+    readJson<unknown>(path.join(root, 'models.json')),
+  ]);
+  if (
+    !ui ||
+    !api ||
+    !plan ||
+    !models ||
+    hashCanonicalJson(ui) !== snapshot.workflow.uiSha256 ||
+    hashCanonicalJson(api) !== snapshot.workflow.apiSha256 ||
+    hashCanonicalJson(plan) !== snapshot.plan.sha256 ||
+    hashWorkflowModelInputs(models as ModelsArtifact) !== snapshot.workflow.modelsSha256
+  )
+    throw new Error('EXECUTION_SNAPSHOT_SOURCE_CHANGED: Workflow, Prompt Plan or models changed while the Run was being created.');
+  const dir = path.join(root, RUNS_DIR, runId, 'snapshot');
+  try {
+    await writeJsonAtomic(path.join(root, paths.uiPath), ui);
+    await writeJsonAtomic(path.join(root, paths.apiPath), api);
+    await writeJsonAtomic(path.join(root, paths.planPath), plan);
+    await writeJsonAtomic(path.join(root, paths.modelsPath), models);
+    const next: ExecutionRunSnapshot = {
+      ...snapshot,
+      workflow: {
+        ...snapshot.workflow,
+        uiPath: paths.uiPath,
+        apiPath: paths.apiPath,
+        immutable: { planPath: paths.planPath, modelsPath: paths.modelsPath },
+      },
+    };
+    await readExecutionWorkflow(root, {
+      runId,
+      snapshot: next,
+    } as ExecutionRun);
+    return next;
+  } catch (error) {
+    await rm(dir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
 function sameSnapshot(a: ExecutionRunSnapshot, b: ExecutionRunSnapshot) {
   return (
     a.runIdentity === b.runIdentity &&
@@ -336,7 +443,13 @@ export async function startExecutionRun(
       );
     const now = new Date().toISOString(),
       runId = randomUUID();
-    const branches = snapshot.plan.branches.map((branch) => ({
+    const stable = await persistRunSnapshot(root, runId, snapshot);
+    // Compilers and reset operations may not share this project's Run lock.
+    // A second provenance capture catches changes during the copy phase.
+    const postCopy = await captureSnapshot(root, preflight);
+    if (!sameSnapshot(snapshot, postCopy))
+      throw new Error('EXECUTION_SNAPSHOT_SOURCE_CHANGED: Project workflow changed during Run creation.');
+    const branches = stable.plan.branches.map((branch) => ({
       branchId: branch.branchId,
       completed: 0,
       total: branch.leafIds.length,
@@ -378,7 +491,7 @@ export async function startExecutionRun(
       evidence: [],
       error: null,
       errorHistory: [],
-      snapshot,
+      snapshot: stable,
       resume: {
         attempts: 0,
         lastAttemptAt: null,
@@ -586,9 +699,12 @@ export async function resumeExecutionRun(
       warnings: [],
       sections: [],
     };
+    await readExecutionWorkflow(root, run);
     const before = await captureSnapshot(root, placeholder);
     if (!sameSnapshot(run.snapshot, before))
-      throw new Error('Execution cannot resume: Workflow/API graph or Prompt Plan is stale.');
+      throw new Error(
+        'Execution cannot resume: Project inputs no longer match this immutable Run. The old graph is preserved but the changed model/preflight environment cannot be used for automatic Resume.',
+      );
     const preflight = await preflightProvider();
     if (preflight.state !== 'READY')
       throw new Error(
