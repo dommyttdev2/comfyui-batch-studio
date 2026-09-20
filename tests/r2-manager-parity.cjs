@@ -273,7 +273,7 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
     });
     const waitFor = async (predicate) => {
       const deadline = Date.now() + 5000;
-      while (!predicate()) {
+      while (!(await predicate())) {
         if (Date.now() > deadline) throw new Error('R2 test timed out');
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
