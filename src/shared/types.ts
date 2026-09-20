@@ -1105,6 +1105,7 @@ export interface CodexThreadState {
 }
 export interface CodexSendResult extends CodexThreadState {
   status: CodexTurnStatus;
+  artifact?: AutoArtifactEvent | null;
 }
 export interface CodexSnapshot extends CodexContext, CodexSendResult {
   messages: CodexMessage[];
@@ -1174,6 +1175,10 @@ export interface BatchStudioApi {
   };
   grokTask: {
     build: (root: string, stage: GrokTask['stage'], extra?: string) => Promise<GrokTask>;
+  };
+  autoArtifact: {
+    armGrok: (root: string, stage: GrokTask['stage']) => Promise<AutoArtifactEvent | null>;
+    onEvent: (listener: (event: AutoArtifactEvent) => void) => () => void;
   };
   file: { showInFolder: (filePath: string) => Promise<void> };
   catalog: {
