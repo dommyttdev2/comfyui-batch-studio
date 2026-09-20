@@ -21,6 +21,7 @@ import { ServiceIntegrationsStage } from './ServiceIntegrationsStage';
 import { VastAiIntegrationPanel } from './integrations/VastAiIntegrationPanel';
 import { HomeConnectedServices } from './HomeConnectedServices';
 import { StageResetMenu, type ResetScope } from './StageResetMenu';
+import { StageErrorBoundary } from './StageErrorBoundary';
 import './divider.css';
 
 const blankBrief: ProjectBriefInput = {
@@ -74,7 +75,8 @@ function App() {
     [environmentOpen, setEnvironmentOpen] = useState(false),
     [restoring, setRestoring] = useState(true),
     [tool, setTool] = useState<StandaloneTool>(null),
-    [resetRevision, setResetRevision] = useState(0);
+    [resetRevision, setResetRevision] = useState(0),
+    [stageReloadRevision, setStageReloadRevision] = useState(0);
   const refresh = async () =>
     project && setProject(await window.batchStudio.project.scan(project.rootPath));
   const run: Runner = async (fn) => {
@@ -346,15 +348,23 @@ function App() {
                 <h2>{stage}</h2>
                 {resetScope && <StageResetMenu scope={resetScope} onReset={resetFrom} />}
               </div>
-              <StageView
-                key={`${stage}:${resetRevision}`}
-                project={project}
+              <StageErrorBoundary
+                key={`${project.rootPath}:${stage}:${resetRevision}:${stageReloadRevision}`}
                 stage={stage}
-                refresh={refresh}
-                setProject={setProject}
-                run={run}
-                resetFrom={resetFrom}
-              />
+                onRetry={() => {
+                  setError('');
+                  setStageReloadRevision((revision) => revision + 1);
+                }}
+              >
+                <StageView
+                  project={project}
+                  stage={stage}
+                  refresh={refresh}
+                  setProject={setProject}
+                  run={run}
+                  resetFrom={resetFrom}
+                />
+              </StageErrorBoundary>
             </>
           )}
           {!project && tool === 'services' && (

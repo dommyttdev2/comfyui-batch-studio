@@ -22,6 +22,64 @@ type PlanSelection =
   | { type: 'matrix'; branch: number }
   | { type: 'leaf'; branch: number; leaf: number };
 
+/**
+ * Validation errors are displayed as-is, but an incomplete JSON document must
+ * never be cast to PromptPlanArtifact and sent into the renderer/compiler.
+ * Semantic validation remains the responsibility of the artifact service.
+ */
+function isRenderablePromptPlan(value: unknown): value is PromptPlanArtifact {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const plan = value as Record<string, unknown>;
+  if (
+    (plan.schemaVersion !== 1 && plan.schemaVersion !== 2) ||
+    !plan.common ||
+    typeof plan.common !== 'object' ||
+    !Array.isArray(plan.rootLoras) ||
+    !Array.isArray(plan.branches)
+  )
+    return false;
+  return (
+    plan.branches.every((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+      const branch = item as Record<string, unknown>;
+      if (
+        typeof branch.id !== 'string' ||
+        typeof branch.label !== 'string' ||
+        !Array.isArray(branch.loras) ||
+        !Array.isArray(branch.leaves)
+      )
+        return false;
+      if (plan.schemaVersion === 2 && branch.prompt != null && !isStructuredPrompt(branch.prompt))
+        return false;
+      return branch.leaves.every((leaf) => {
+        if (!leaf || typeof leaf !== 'object' || Array.isArray(leaf)) return false;
+        const entry = leaf as Record<string, unknown>;
+        return (
+          typeof entry.id === 'string' &&
+          typeof entry.name === 'string' &&
+          (plan.schemaVersion === 1
+            ? typeof entry.positive === 'string' && typeof entry.negative === 'string'
+            : isStructuredPrompt(entry.prompt))
+        );
+      });
+    }) &&
+    (plan.schemaVersion === 1 || isStructuredPrompt(plan.common))
+  );
+}
+
+function isStructuredPrompt(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prompt = value as Record<string, unknown>;
+  return (
+    !!prompt.positive &&
+    typeof prompt.positive === 'object' &&
+    !Array.isArray(prompt.positive) &&
+    !!prompt.negative &&
+    typeof prompt.negative === 'object' &&
+    !Array.isArray(prompt.negative)
+  );
+}
+
 export function PromptPlanStage({
   project,
   setProject,
@@ -35,27 +93,41 @@ export function PromptPlanStage({
     [models, setModels] = useState<ModelsArtifact | null>(null),
     [validation, setValidation] = useState<ValidationIssue[]>([]),
     [selected, setSelected] = useState<PlanSelection | null>(null),
-    [editing, setEditing] = useState(false);
+    [editing, setEditing] = useState(false),
+    [loadError, setLoadError] = useState('');
   async function load() {
     const draft = await window.batchStudio.artifact.read(project.rootPath, 'promptPlan', 'draft');
     let source = draft;
     if (!draft.exists)
       source = await window.batchStudio.artifact.read(project.rootPath, 'promptPlan', 'confirmed');
     setEditing(draft.exists);
+    setSelected(null);
+    setValidation(source.validation.issues);
+    setLoadError('');
+    setPlan(null);
+    setModels(null);
     if (source.content) {
       try {
-        setPlan(JSON.parse(source.content));
-        setValidation(source.validation.issues);
+        const parsed: unknown = JSON.parse(source.content);
+        if (isRenderablePromptPlan(parsed)) setPlan(parsed);
+        else
+          setLoadError(
+            'Prompt Planの必須項目が不足しているか、型が不正です。検証エラーを確認し、JSONを修正して再取り込みしてください。',
+          );
       } catch {
-        setPlan(null);
+        setLoadError(
+          'Prompt PlanをJSONとして解析できません。ファイルを修正して再取り込みしてください。',
+        );
       }
-    } else setPlan(null);
+    }
     const m = await window.batchStudio.artifact.read(project.rootPath, 'models', 'confirmed');
-    if (m.content) {
+    if (m.content && m.validation.valid) {
       try {
-        setModels(JSON.parse(m.content));
+        const parsed: unknown = JSON.parse(m.content);
+        if (parsed && typeof parsed === 'object' && Array.isArray((parsed as ModelsArtifact).loras))
+          setModels(parsed as ModelsArtifact);
       } catch {
-        setModels(null);
+        // The models artifact has its own validation UI in the model stage.
       }
     }
   }
@@ -114,7 +186,12 @@ export function PromptPlanStage({
                       'promptPlan',
                     );
                     if (d.content) {
-                      setPlan(JSON.parse(d.content));
+                      const parsed: unknown = JSON.parse(d.content);
+                      if (!isRenderablePromptPlan(parsed))
+                        throw new Error(
+                          'Prompt Planの構造が不正です。JSONを修正して再取り込みしてください。',
+                        );
+                      setPlan(parsed);
                       setValidation(d.validation.issues);
                       setEditing(true);
                     }
@@ -152,8 +229,17 @@ export function PromptPlanStage({
           </div>
         </div>
         {issuesView(validation)}
+        {loadError && (
+          <div className="issue error" role="alert">
+            {loadError}
+          </div>
+        )}
         {!plan ? (
-          <p>Prompt Planはまだありません。Grokの結果を取り込んでください。</p>
+          <p>
+            {loadError
+              ? '不正な下書きは保持されています。修正済みJSONを再取り込みしてください。'
+              : 'Prompt Planはまだありません。Grokの結果を取り込んでください。'}
+          </p>
         ) : (
           <div className="flow">
             <button className="node common" onClick={() => setSelected({ type: 'common' })}>
