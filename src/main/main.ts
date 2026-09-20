@@ -74,6 +74,7 @@ import {
   requestForceInterrupt,
   requestStopScheduling,
   resumeExecutionRun,
+  resumeExecutionRunFinalization,
   startExecutionRun,
 } from './execution-run.js';
 import { LocalExecutionService } from './local-execution.js';
