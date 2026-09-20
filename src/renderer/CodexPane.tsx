@@ -613,7 +613,6 @@ export function CodexPane() {
           <div className="codex-auto-import-note">
             工程用の依頼は回答完了後に自動で検証・保存され、左側の工程の下書きに反映されます。確定操作は別途必要です。
           </div>
-          {/* 確定済みファイルは工程画面で管理します。 */}
         </section>
       )}
     </main>
