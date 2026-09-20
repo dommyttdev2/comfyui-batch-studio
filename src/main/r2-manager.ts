@@ -141,6 +141,12 @@ function legacyTemplate(value: unknown, fallbackId: string): R2BatchDownloadTemp
   return { id, name, bucket, createdAt: created, updatedAt: updated, objects };
 }
 
+interface UploadControl {
+  paused: boolean;
+  cancelled: boolean;
+  completing: boolean;
+  generation: string;
+}
 interface UploadState {
   schemaVersion: 1;
   jobs: R2UploadJob[];
@@ -156,7 +162,11 @@ export class R2Manager {
   private readonly templatesPath: string;
   private readonly templateMigration: Promise<void>;
   private readonly objectIndex: R2ObjectIndex;
-  private controls = new Map<string, { paused: boolean; cancelled: boolean }>();
+  private controls = new Map<string, UploadControl>();
+  private readonly startingUploads = new Map<string, Promise<R2UploadJob>>();
+  private readonly activeUploads = new Map<string, Promise<void>>();
+  private readonly cancellingUploads = new Map<string, Promise<R2UploadJob | undefined>>();
+  private readonly cancellationRequested = new Set<string>();
   private activeMoveJobs = new Set<string>();
   private saveQueue: Promise<void> = Promise.resolve();
   constructor(
@@ -639,7 +649,10 @@ export class R2Manager {
     await writeJsonAtomic(this.uploadsPath, s);
   }
   private async saveUpload(job: R2UploadJob) {
-    const task = this.saveQueue.then(() => this.saveUploadNow(job));
+    // Capture the state at enqueue time: later worker mutations must not
+    // rewrite an earlier save with an unintended newer status.
+    const snapshot = structuredClone(job);
+    const task = this.saveQueue.then(() => this.saveUploadNow(snapshot));
     this.saveQueue = task.catch(() => {});
     return task;
   }
@@ -707,28 +720,67 @@ export class R2Manager {
     void this.resumeUpload(job.id);
     return job;
   }
-  async resumeUpload(id: string) {
-    const state = await this.uploadState(),
-      job: any = state.jobs.find((x) => x.id === id);
-    if (!job) throw new Error('アップロードセッションが見つかりません。');
-    if (job.kind === 'move') throw new Error('移動ジョブは再開操作できません。');
-    if (job.status === 'complete' || job.status === 'cancelled') return job;
-    if (!(await exists(job.filePath))) throw new Error('元ファイルが見つかりません。');
-    const control = { paused: false, cancelled: false };
+  async resumeUpload(id: string): Promise<R2UploadJob> {
+    const inFlight = this.startingUploads.get(id);
+    if (inFlight) return inFlight;
+    if (this.cancellationRequested.has(id))
+      throw new Error('このアップロードはキャンセル処理中です。');
+    const active = this.controls.get(id);
+    if (active) {
+      const state = await this.uploadState();
+      const job = state.jobs.find((item) => item.id === id);
+      if (!job) throw new Error('アップロードセッションが見つかりません。');
+      return job;
+    }
+    const control: UploadControl = {
+      paused: false,
+      cancelled: false,
+      completing: false,
+      generation: randomUUID(),
+    };
+    // Register synchronously before the first await. Both IPC duplicate Resume
+    // and concurrent Pause/Cancel now reference the same worker control.
     this.controls.set(id, control);
-    job.status = 'uploading';
-    job.error = '';
-    job.startedAt = new Date().toISOString();
-    job.initialTransferredBytes = job.transferredBytes;
-    await this.saveUpload(job);
-    void this.runUpload(job, control);
-    return job;
+    const starter = this.startUpload(id, control).finally(() => {
+      if (this.startingUploads.get(id) === starter) this.startingUploads.delete(id);
+    });
+    this.startingUploads.set(id, starter);
+    return starter;
+  }
+  private async startUpload(id: string, control: UploadControl): Promise<R2UploadJob> {
+    try {
+      const state = await this.uploadState(),
+        job = state.jobs.find((item) => item.id === id);
+      if (!job) throw new Error('アップロードセッションが見つかりません。');
+      if (job.kind === 'move') throw new Error('移動ジョブは再開操作できません。');
+      if (job.status === 'complete' || job.status === 'cancelled') return job;
+      if (!(await exists(job.filePath))) throw new Error('元ファイルが見つかりません。');
+      if (control.cancelled || control.paused) return job;
+      job.status = 'uploading';
+      job.error = '';
+      job.startedAt = new Date().toISOString();
+      job.initialTransferredBytes = job.transferredBytes;
+      await this.saveUpload(job);
+      const worker = this.runUpload(job, control).finally(() => {
+        if (this.activeUploads.get(id) === worker) this.activeUploads.delete(id);
+        if (this.controls.get(id) === control) this.controls.delete(id);
+      });
+      this.activeUploads.set(id, worker);
+      return job;
+    } catch (error) {
+      if (this.controls.get(id) === control) this.controls.delete(id);
+      throw error;
+    } finally {
+      // No worker was started for terminal/invalid jobs.
+      if (!this.activeUploads.has(id) && this.controls.get(id) === control)
+        this.controls.delete(id);
+    }
   }
   private async uploadPartWithRetry(
     job: any,
     number: number,
     client: S3Client,
-    control: { paused: boolean; cancelled: boolean },
+    control: UploadControl,
   ) {
     const start = (number - 1) * job.partSize,
       end = Math.min(job.size - 1, start + job.partSize - 1),
@@ -767,10 +819,24 @@ export class R2Manager {
     }
     throw lastError;
   }
-  private async runUpload(job: any, control: { paused: boolean; cancelled: boolean }) {
+  private async runUpload(job: any, control: UploadControl) {
     try {
+      if (control.cancelled) return;
+      if (control.paused) {
+        job.status = 'paused';
+        await this.saveUpload(job);
+        return;
+      }
       const client = await this.clientFor();
+      if (control.cancelled) return;
+      if (control.paused) {
+        job.status = 'paused';
+        await this.saveUpload(job);
+        return;
+      }
       if (job.size === 0) {
+        if (control.cancelled || control.paused) return;
+        control.completing = true;
         await client.send(
           new PutObjectCommand({
             Bucket: job.bucket,
@@ -813,6 +879,9 @@ export class R2Manager {
         return;
       }
       if (failure) throw failure;
+      // Claim the completion phase synchronously with the final cancellation
+      // check. Cancel waits for this request and never aborts a completed upload.
+      control.completing = true;
       const parts = Array.from({ length: count }, (_, i) => ({
         PartNumber: i + 1,
         ETag: job.completedParts[String(i + 1)],
@@ -836,41 +905,60 @@ export class R2Manager {
       job.error = e instanceof Error ? e.message : String(e);
       job.completedAt = new Date().toISOString();
       await this.saveUpload(job);
-    } finally {
-      this.controls.delete(job.id);
     }
   }
   async pauseUpload(id: string) {
-    const c = this.controls.get(id);
-    if (c) c.paused = true;
-    const s = await this.uploadState(),
-      job: any = s.jobs.find((x) => x.id === id);
+    const control = this.controls.get(id);
+    if (control) control.paused = true;
+    // Wait for startup and every in-flight UploadPart/Complete request. Once
+    // this returns, the previous generation cannot write any more state.
+    await this.startingUploads.get(id)?.catch(() => {});
+    await this.activeUploads.get(id)?.catch(() => {});
+    const state = await this.uploadState(),
+      job = state.jobs.find((item) => item.id === id);
     if (!job) throw new Error('アップロードセッションが見つかりません。');
     if (job.kind === 'move') throw new Error('移動ジョブは一時停止できません。');
+    if (this.cancellationRequested.has(id)) return job;
+    if (job.status === 'complete' || job.status === 'cancelled') return job;
     job.status = 'paused';
     await this.saveUpload(job);
     return job;
   }
-  async cancelUpload(id: string) {
-    const c = this.controls.get(id);
-    if (c) c.cancelled = true;
-    const s = await this.uploadState(),
-      job: any = s.jobs.find((x) => x.id === id);
-    if (!job) return;
+  async cancelUpload(id: string): Promise<R2UploadJob | undefined> {
+    const existing = this.cancellingUploads.get(id);
+    if (existing) return existing;
+    this.cancellationRequested.add(id);
+    const control = this.controls.get(id);
+    if (control) control.cancelled = true;
+    const task = this.cancelUploadAfterDrain(id).finally(() => {
+      if (this.cancellingUploads.get(id) === task) this.cancellingUploads.delete(id);
+      this.cancellationRequested.delete(id);
+    });
+    this.cancellingUploads.set(id, task);
+    return task;
+  }
+  private async cancelUploadAfterDrain(id: string): Promise<R2UploadJob | undefined> {
+    await this.startingUploads.get(id)?.catch(() => {});
+    await this.activeUploads.get(id)?.catch(() => {});
+    const state = await this.uploadState(),
+      job = state.jobs.find((item) => item.id === id);
+    if (!job) return undefined;
     if (job.kind === 'move') throw new Error('移動ジョブはキャンセルできません。');
+    // CompleteMultipartUpload may have entered S3 before Cancel was requested.
+    // An already completed object is never relabeled cancelled or aborted.
+    if (job.status === 'complete' || job.status === 'cancelled') return job;
     if (job.uploadId)
-      await (await this.clientFor())
-        .send(
-          new AbortMultipartUploadCommand({
-            Bucket: job.bucket,
-            Key: job.key,
-            UploadId: job.uploadId,
-          }),
-        )
-        .catch(() => {});
+      await (await this.clientFor()).send(
+        new AbortMultipartUploadCommand({
+          Bucket: job.bucket,
+          Key: job.key,
+          UploadId: job.uploadId,
+        }),
+      );
     job.status = 'cancelled';
     job.completedAt = new Date().toISOString();
     await this.saveUpload(job);
+    return job;
   }
   private async templateState() {
     await this.templateMigration;
