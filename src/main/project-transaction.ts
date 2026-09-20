@@ -33,11 +33,13 @@ function journalPath(root: string) {
   return path.join(root, INTERNAL, JOURNAL_NAME);
 }
 function snapshotDir(root: string, id: string) {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('PROJECT_TRANSACTION_RECOVERY_REQUIRED: invalid transaction ID');
+  if (!/^[0-9a-f-]{36}$/i.test(id))
+    throw new Error('PROJECT_TRANSACTION_RECOVERY_REQUIRED: invalid transaction ID');
   return path.join(root, INTERNAL, 'project-transactions', id);
 }
 function insideProject(root: string, relative: string) {
-  if (!relative || path.isAbsolute(relative)) throw new Error('PROJECT_TRANSACTION_RECOVERY_REQUIRED: invalid relative path');
+  if (!relative || path.isAbsolute(relative))
+    throw new Error('PROJECT_TRANSACTION_RECOVERY_REQUIRED: invalid relative path');
   const absolute = path.resolve(root, relative),
     base = path.resolve(root);
   if (!absolute.startsWith(base + path.sep) || absolute === journalPath(root))
@@ -47,7 +49,8 @@ function insideProject(root: string, relative: string) {
 async function kindOf(file: string): Promise<EntryKind> {
   try {
     const st = await lstat(file);
-    if (st.isSymbolicLink()) throw new Error('PROJECT_TRANSACTION_RECOVERY_REQUIRED: symlink in project transaction');
+    if (st.isSymbolicLink())
+      throw new Error('PROJECT_TRANSACTION_RECOVERY_REQUIRED: symlink in project transaction');
     if (st.isFile()) return 'file';
     if (st.isDirectory()) return 'directory';
     throw new Error('PROJECT_TRANSACTION_RECOVERY_REQUIRED: unsupported project artifact type');
@@ -118,7 +121,9 @@ async function takeBackup(root: string, id: string): Promise<SnapshotEntry[]> {
         await copyFile(source, backup);
         oldSha256 = await fileHash(backup);
         if (oldSha256 !== (await fileHash(source)))
-          throw new Error('PROJECT_TRANSACTION_SOURCE_CHANGED: an artifact changed while preparing the backup');
+          throw new Error(
+            'PROJECT_TRANSACTION_SOURCE_CHANGED: an artifact changed while preparing the backup',
+          );
       }
     }
     entries.push({ relative, kind, oldSha256 });
@@ -156,7 +161,9 @@ async function restore(root: string, journal: TransactionJournal) {
     else {
       await copyFile(backup, target);
       if ((await fileHash(target)) !== entry.oldSha256)
-        throw new Error('PROJECT_TRANSACTION_RECOVERY_REQUIRED: restoring an old artifact failed hash verification');
+        throw new Error(
+          'PROJECT_TRANSACTION_RECOVERY_REQUIRED: restoring an old artifact failed hash verification',
+        );
     }
   }
   // Existing history and generated Local images are intentionally excluded.
@@ -173,7 +180,9 @@ async function recoverUnlocked(root: string) {
     !Array.isArray(journal.entries) ||
     !['applying', 'committed'].includes(journal.status)
   )
-    throw new Error('PROJECT_TRANSACTION_RECOVERY_REQUIRED: transaction journal is invalid; no new edits were applied');
+    throw new Error(
+      'PROJECT_TRANSACTION_RECOVERY_REQUIRED: transaction journal is invalid; no new edits were applied',
+    );
   if (journal.status === 'committed') {
     await cleanup(root, journal);
     return;
