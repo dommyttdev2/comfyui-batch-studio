@@ -30,19 +30,21 @@ export class CodexModelSelectionStore {
   async get(root: string, stage: GrokContextStage): Promise<CodexModelSelection | null> {
     await this.writes;
     const value = (await this.read()).projects[projectKey(root)]?.[stage];
-    if (!value || typeof value.model !== 'string' || typeof value.effort !== 'string')
-      return null;
+    if (!value || typeof value.model !== 'string' || typeof value.effort !== 'string') return null;
     return { model: value.model, effort: value.effort };
   }
 
   async remember(root: string, stage: GrokContextStage, value: CodexModelSelection): Promise<void> {
-    if (!value.model.trim() || !value.effort.trim()) throw new Error('Invalid Codex model selection.');
-    this.writes = this.writes.catch(() => {}).then(async () => {
-      const state = await this.read();
-      const key = projectKey(root);
-      state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: { ...value } };
-      await writeJsonAtomic(this.filePath, state);
-    });
+    if (!value.model.trim() || !value.effort.trim())
+      throw new Error('Invalid Codex model selection.');
+    this.writes = this.writes
+      .catch(() => {})
+      .then(async () => {
+        const state = await this.read();
+        const key = projectKey(root);
+        state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: { ...value } };
+        await writeJsonAtomic(this.filePath, state);
+      });
     await this.writes;
   }
 }
