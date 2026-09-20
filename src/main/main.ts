@@ -1107,7 +1107,10 @@ async function reconcilePersistedExecutionRuns(root: string) {
         else if (run.remote?.provider === 'vastai' && run.remote.instanceId)
           executionCoordinator.reserveRemote(ref, 'vastai', run.remote.instanceId);
       } catch (error) {
-        console.warn('Could not reserve an uncertain Execution Run resource:', safeExecutionError(error));
+        console.warn(
+          'Could not reserve an uncertain Execution Run resource:',
+          safeExecutionError(error),
+        );
       }
     }
     for (const run of [...runs].reverse()) {
@@ -1148,8 +1151,11 @@ async function reconcilePersistedExecutionRuns(root: string) {
             });
           } else {
             executionCoordinator.reserveLocal(ref, endpoint);
-            await markExecutionRecoveryUncertain(root, run.runId,
-              'No persisted prompt ID; a response may have been lost after POST /prompt.');
+            await markExecutionRecoveryUncertain(
+              root,
+              run.runId,
+              'No persisted prompt ID; a response may have been lost after POST /prompt.',
+            );
           }
           continue;
         }
