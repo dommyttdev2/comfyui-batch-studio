@@ -126,3 +126,101 @@
   font-size: 12px;
   color: #9aa8ba;
 }
+
+.codex-runtime {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #303946;
+  background: #171d27;
+}
+
+.codex-runtime-state {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.codex-runtime-state strong {
+  font-size: 12px;
+}
+
+.codex-runtime-state small,
+.codex-model-note {
+  font-size: 11px;
+  color: #b4c0cf;
+}
+
+.codex-runtime-indicator {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #808a99;
+}
+
+.codex-runtime-sending .codex-runtime-indicator,
+.codex-runtime-processing .codex-runtime-indicator,
+.codex-runtime-streaming .codex-runtime-indicator {
+  background: #75b9fa;
+  box-shadow: 0 0 0 3px #75b9fa26;
+  animation: codex-working-pulse 1.5s ease-in-out infinite;
+}
+
+.codex-runtime-completed .codex-runtime-indicator {
+  background: #77c99b;
+}
+
+.codex-runtime-failed .codex-runtime-indicator,
+.codex-runtime-interrupted .codex-runtime-indicator {
+  background: #f2a18e;
+}
+
+.codex-runtime-unknown .codex-runtime-indicator {
+  background: #e8c46d;
+}
+
+.codex-model-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.codex-model-controls label {
+  display: flex;
+  flex: 1 1 135px;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #b4c0cf;
+  min-width: 0;
+}
+
+.codex-model-controls select {
+  width: 100%;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid #39414d;
+  border-radius: 6px;
+  background: #20262f;
+  color: #e8ebef;
+}
+
+.codex-model-controls select:disabled {
+  opacity: 0.6;
+}
+
+.codex-turn-result {
+  font-size: 12px;
+  color: #b4c0cf;
+}
+
+@keyframes codex-working-pulse {
+  50% { opacity: 0.48; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .codex-runtime-indicator { animation: none; }
+}
