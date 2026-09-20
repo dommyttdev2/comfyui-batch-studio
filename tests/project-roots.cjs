@@ -122,8 +122,8 @@ matchCode(
 );
 matchCode(
   artifactService,
-  /settings:artifactOutputPath\?\{artifactOutputPath\}:\{\}/,
-  '成果物フォルダをproject metaへ記録する',
+  /initializeProjectMeta\(root,artifactOutputPath\?\{artifactOutputPath\}:\{\}\)/,
+  '成果物フォルダを直列化されたproject meta初期化処理へ記録する',
 );
 
 console.log('Project/artifact root tests passed.');

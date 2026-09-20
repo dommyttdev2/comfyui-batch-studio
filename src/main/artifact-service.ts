@@ -29,6 +29,7 @@ import {
 } from './validation.js';
 import { loadCatalog, validateModelsAgainstCatalog } from './model-catalog.js';
 import { modelGenerationInputsChanged, resetModelDownstream } from './model-downstream-reset.js';
+import { initializeProjectMeta } from './project-meta.js';
 const FILES: Partial<Record<ArtifactKey, string>> = {
   projectBrief: 'project_brief.json',
   story: 'story.md',
@@ -583,11 +584,7 @@ export async function createProject(parent: string, brief: ProjectBriefInput) {
   await mkdir(path.join(root, '._batch_studio', 'history'), { recursive: true });
   if (artifactOutputPath) await mkdir(artifactOutputPath, { recursive: true });
   await writeJsonAtomic(path.join(root, 'project_brief.json'), { schemaVersion: 1, ...brief });
-  await writeJsonAtomic(path.join(root, 'project_meta.json'), {
-    schemaVersion: 1,
-    createdAt: new Date().toISOString(),
-    settings: artifactOutputPath ? { artifactOutputPath } : {},
-  });
+  await initializeProjectMeta(root, artifactOutputPath ? { artifactOutputPath } : {});
   return root;
 }
 export async function savePromptPlan(root: string, plan: PromptPlanArtifact) {
