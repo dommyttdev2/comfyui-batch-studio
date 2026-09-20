@@ -3201,11 +3201,8 @@ function register() {
       thread?: { turns?: Array<{ id?: unknown; status?: string; items?: unknown[] }> };
     }>('thread/read', { threadId, includeTurns: true });
     const fileName = expectedArtifact(context.stage === 'story' ? 'story-finalize' : context.stage);
-    const turn = fileName
-      ? latestCompletedArtifactTurn(read.thread?.turns ?? [], fileName)
-      : null;
-    if (!turn)
-      throw new Error('この工程の完了済みArtifact依頼が見つかりません。');
+    const turn = fileName ? latestCompletedArtifactTurn(read.thread?.turns ?? [], fileName) : null;
+    if (!turn) throw new Error('この工程の完了済みArtifact依頼が見つかりません。');
     const reply = [...(turn.items ?? [])]
       .reverse()
       .find((item) => (item as { type?: string } | null)?.type === 'agentMessage');
