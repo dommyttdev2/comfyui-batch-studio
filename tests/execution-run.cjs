@@ -22,7 +22,7 @@ const writeJson = (file, value) => {
 (async () => {
   const execution = await load('execution-run.js');
   const progress = await load('../shared/execution-progress.js');
-  const { hashCanonicalJson } = await load('workflow-api.js');
+  const { hashCanonicalJson, hashWorkflowModelInputs } = await load('workflow-api.js');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-execution-project-'));
   const ui = { nodes: [{ id: 1, type: 'TestNode' }], links: [] };
   const api = { 1: { class_type: 'TestNode', inputs: {} } };
@@ -76,7 +76,7 @@ const writeJson = (file, value) => {
         api: { path: 'LoRA_project.api.json', sha256: apiSha256 },
       },
       workflowIdentity,
-      modelsSha256: hashCanonicalJson(initialModels),
+      modelsSha256: hashWorkflowModelInputs(initialModels),
     },
   });
 
