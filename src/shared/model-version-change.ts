@@ -63,7 +63,9 @@ export function replaceSelectedModelVersion(
     fileName: file.name,
     modelUrl: `https://civitai.com/models/${item.modelId}?modelVersionId=${version.versionId}`,
     trainedWords:
-      version.trainedWords ?? (version.versionId === item.versionId ? item.trainedWords : undefined) ?? [],
+      version.trainedWords ??
+      (version.versionId === item.versionId ? item.trainedWords : undefined) ??
+      [],
     reason: 'ユーザーがモデル選定画面でバージョン・ファイルを手動指定',
   };
   if (role === 'lora') {
