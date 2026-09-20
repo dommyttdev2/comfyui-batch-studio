@@ -11,6 +11,15 @@ const modelStageUi = fs.readFileSync(path.join(repo, 'src/renderer/GrokStages.ts
 const explorerUi = fs.readFileSync(path.join(repo, 'src/renderer/CivitExplorerStage.tsx'), 'utf8');
 const modelPickerUi = fs.readFileSync(path.join(repo, 'src/renderer/ModelPicker.tsx'), 'utf8');
 const loraHistoryUi = fs.readFileSync(path.join(repo, 'src/renderer/GrokLoraHistory.tsx'), 'utf8');
+const selectedCardsUi = fs.readFileSync(
+  path.join(repo, 'src/renderer/SelectedModelCards.tsx'),
+  'utf8',
+);
+assert.match(modelStageUi, /<SelectedModelCards/, 'model stage must expose editable current selections');
+assert.match(selectedCardsUi, /変更を下書きへ保存/, 'manual selection must have an explicit save action');
+assert.match(selectedCardsUi, /civit-model-card/, 'manual selection must reuse Civit Explorer cards');
+assert.match(modelStageUi, /artifact\.saveDraft\(/, 'manual version updates must persist models draft');
+assert.match(modelStageUi, /artifact\.confirm\(/, 'manual changes must still require models confirmation');
 assert.match(
   modelStageUi,
   /Civitai モデルカタログを更新/,
@@ -106,12 +115,17 @@ const selection = (ref, n) => ({
 });
 const modelFile = (ref, fileName) => ({ ref, fileName, reason: 'user selected' });
 (async () => {
-  const [{ candidateVersions, itemMatchesRole }, { validateModels }, { readArtifact }] =
-    await Promise.all([
-      load('shared/model-selection.js'),
-      load('main/validation.js'),
-      load('main/artifact-service.js'),
-    ]);
+  const [
+    { candidateVersions, itemMatchesRole },
+    { catalogItemForSelection, replaceSelectedModelVersion },
+    { validateModels },
+    { readArtifact },
+  ] = await Promise.all([
+    load('shared/model-selection.js'),
+    load('shared/model-version-change.js'),
+    load('main/validation.js'),
+    load('main/artifact-service.js'),
+  ]);
   const checkpoint = item(1, 'Checkpoint'),
     textEncoder = item(2, 'TextEncoder'),
     clip = item(3, 'CLIP'),
@@ -164,6 +178,111 @@ const modelFile = (ref, fileName) => ({ ref, fileName, reason: 'user selected' }
     0,
     'legacy item Base Model must still participate in family filtering',
   );
+  const oldFile = { id: 91, name: 'old.safetensors', type: 'Model' };
+  const newFile = { id: 92, name: 'new.safetensors', type: 'Model', primary: true };
+  const alternateFile = { id: 93, name: 'alternate.safetensors', type: 'Model' };
+  const versionedItem = {
+    modelId: 9,
+    modelName: 'Versioned LoRA',
+    modelType: 'LORA',
+    versionId: 901,
+    versionName: 'old',
+    files: [oldFile],
+    trainedWords: ['old trigger'],
+    strengthBaseline: { value: 0.3, provenance: { source: 'civitai', basis: 'creator-declared' } },
+    versions: [
+      { versionId: 901, versionName: 'old', files: [oldFile], trainedWords: ['old trigger'] },
+      {
+        versionId: 902,
+        versionName: 'new',
+        baseModel: 'Illustrious',
+        files: [newFile, alternateFile],
+        trainedWords: ['new trigger'],
+        strengthBaseline: {
+          value: 0.8,
+          provenance: { source: 'civitai', basis: 'creator-declared' },
+        },
+      },
+      { versionId: 903, versionName: 'no model weights', files: [
+        { id: 94, name: 'training.zip', type: 'Training Data' },
+      ] },
+    ],
+  };
+  const original = {
+    ref: 'lora.character',
+    modelId: 9,
+    modelName: 'Versioned LoRA',
+    versionId: 901,
+    versionName: 'old',
+    fileId: 91,
+    fileName: 'old.safetensors',
+    modelUrl: 'https://civitai.com/models/9?modelVersionId=901',
+    trainedWords: ['old trigger'],
+    reason: 'Grok selected',
+    strengthBaseline: versionedItem.strengthBaseline,
+  };
+  const editableCatalog = {
+    collections: [{ id: 1, name: 'Test', items: [versionedItem] }],
+  };
+  assert.equal(
+    catalogItemForSelection(editableCatalog, original, 'lora'),
+    versionedItem,
+    'selected model must resolve by its model identity',
+  );
+  const changedVersion = replaceSelectedModelVersion(original, versionedItem, 'lora', 902);
+  assert.equal(changedVersion.ref, original.ref, 'manual changes must preserve LoRA ref');
+  assert.equal(changedVersion.modelId, original.modelId);
+  assert.equal(changedVersion.versionId, 902);
+  assert.equal(changedVersion.versionName, 'new');
+  assert.equal(changedVersion.fileId, 92, 'version change should pick its primary model weight');
+  assert.equal(changedVersion.fileName, 'new.safetensors');
+  assert.deepEqual(changedVersion.trainedWords, ['new trigger']);
+  assert.equal(changedVersion.strengthBaseline.value, 0.8);
+  assert.equal(changedVersion.modelUrl, 'https://civitai.com/models/9?modelVersionId=902');
+  assert.equal(original.versionId, 901, 'original selection must not be mutated');
+  const changedFile = replaceSelectedModelVersion(
+    original, versionedItem, 'lora', 902, 93,
+  );
+  assert.equal(changedFile.fileName, 'alternate.safetensors');
+  assert.throws(
+    () => replaceSelectedModelVersion(original, versionedItem, 'lora', 902, 91),
+    /指定したファイル/,
+    'file from previous version must not be reused',
+  );
+  assert.throws(
+    () => replaceSelectedModelVersion(original, versionedItem, 'lora', 903),
+    /指定したバージョン/,
+    'version without model weights must not be selectable',
+  );
+  assert.throws(
+    () => replaceSelectedModelVersion(original, versionedItem, 'lora', 999),
+    /指定したバージョン/,
+  );
+  assert.throws(
+    () => replaceSelectedModelVersion(original, { ...versionedItem, modelId: 10 }, 'lora', 902),
+    /別のモデル/,
+  );
+  const noBaseline = replaceSelectedModelVersion(
+    changedVersion, versionedItem, 'lora', 901, 91,
+  );
+  assert.equal(noBaseline.strengthBaseline?.value, 0.3);
+  assert.deepEqual(noBaseline.trainedWords, ['old trigger']);
+  const checkpointItem = {
+    ...versionedItem,
+    modelType: 'Checkpoint',
+    versions: [{
+      versionId: 902,
+      versionName: 'new',
+      baseModel: 'Illustrious',
+      files: [newFile],
+    }],
+  };
+  assert.throws(
+    () => replaceSelectedModelVersion(original, checkpointItem, 'checkpoint', 902, undefined, 'anima'),
+    /指定したバージョン/,
+    'base model version changes must respect selected model family',
+  );
+
   const catalog = { schemaVersion: 1, generation: 1, generatedAt: '2026-09-09T00:00:00Z' };
   const legacyV2 = {
     schemaVersion: 2,
