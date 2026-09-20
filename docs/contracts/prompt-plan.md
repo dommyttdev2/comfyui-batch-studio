@@ -4,7 +4,7 @@ Status: Active / Schema v2, Schema v1 compatibility
 
 ## 1. 目的
 
-`prompt_plan.json` は Grok が返す「意味的な生成計画」と Workflow Compiler の入力をつなぐ契約である。
+`prompt_plan.json` は Grok / Codex が返す「意味的な生成計画」と Workflow Compiler の入力をつなぐ契約である。
 
 このファイルは ComfyUI Workflow JSON ではない。Node / Link / Widget 構造を持たず、作品全体の Prompt scope、使用 LoRA、Branch、Leaf を表す。
 
@@ -17,6 +17,9 @@ schemas/prompt-plan.schema.json
 ```
 
 ## 2. 責務境界
+
+GrokとCodexは同じ `buildGrokTask` のPrompt Plan指示・Schema v2出力例・検証ルールを使用する。
+Codexでの出力契約の変換はファイル添付用の指示だけを対象とし、JSON構造例や必須fieldを削除してはいけない。
 
 ### Grok
 
@@ -525,7 +528,17 @@ Prompt Plan Web UI はv2でcategory単位の編集を提供する。
 
 Compiled Preview は保存Artifactではなく、現在の `prompt_plan.json` と `models.json` から都度生成する。
 
-## 18. Grokが返さないfield
+## 18. 大量Leaf生成・修正時の品質契約
+
+- Branchの`id`、非空`label`、`loras`（使用しない場合も`[]`）、`leaves`はすべて必須。
+- Leafの`id`、非空`name`、`prompt`（`positive`/`negative` objectを含む）はすべて必須。大量生成でも省略しない。
+- 各画像で構図が変わる場合、`camera.angle`/`framing`/`gaze`はLeafに置く。親scopeの値は子scopeで上書きされないため、Common/Branch/Leafを合成したとき各subcategoryは最大1タグ。
+- 衣装など途中で変化する属性をCommonに置かない。意味のあるLeaf差分が必要なら`leaf.prompt.positive`へ指定し、親子scopeで同じタグを重複させない。
+- トリガーワードは当該modelRefの`models.json.trainedWords`の原文と完全一致させ、未知の候補や前後空白・改行のある文字列は使わない。
+- `prompt-plan-fix`では確定版より現在のDraftを優先して修正対象に添付する。検証エラーはcodeごとに件数と代表例を提示し、問題のないBranch/Leafのid・順序・内容を保ったまま修正させる。
+- 生成・修正後は既存のBatch Studio validatorによる全件検証とユーザーの確認を維持する。指示文による自己検証だけで妥当性を保証したことにはしない。
+
+## 19. Grok / Codexが返さないfield
 
 次は引き続き Workflow Compiler の責務である。
 
