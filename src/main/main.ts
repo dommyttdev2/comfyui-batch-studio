@@ -1259,8 +1259,10 @@ function codexTaskFileForTurn(turn: unknown): string | null {
   if (!message || typeof message !== 'object') return null;
   const text = messageText(message as Record<string, unknown>);
   if (!text.includes('## Codex向け出力契約')) return null;
+  // The story discussion task also mentions story.md, but does not produce a file.
+  // Only classify turns with an explicit artifact output instruction.
   const match = text.match(
-    /(?:story\.md|model_loras\.json|prompt_plan\.json|caption_content\.json)/,
+    /回答の最後に\s*(story\.md|model_loras\.json|prompt_plan\.json|caption_content\.json)/,
   );
   return match?.[0] ?? null;
 }
