@@ -139,7 +139,7 @@ export function GrokBridge({
         <div>
           <h3>{title}</h3>
           <p className="assistant-stage-hint">
-            {provider === 'codex' ? 'Codex' : 'Grok'}で作成した成果物を自動で検証し、下書きに反映します。確定操作は別途必要です。
+            {receive ? `${provider === 'codex' ? 'Codex' : 'Grok'}で作成した成果物を自動で検証し、下書きに反映します。確定操作は別途必要です。` : '右側のAI Paneでストーリーを検討します。この依頼では成果物を作成しません。'}
           </p>
         </div>
         {resetScope && onReset && <StageResetMenu scope={resetScope} onReset={onReset} />}
@@ -179,9 +179,9 @@ export function GrokBridge({
       )}
       {provider === 'codex' ? (
         <div className="assistant-stage-guide">
-          <strong>右側のCodex Paneで工程用の依頼を送信してください。</strong>
+          <strong>右側のCodex Paneで{receive ? '対応する工程用の依頼を送信' : '「ストーリーを検討」を選択'}してください。</strong>
           <p>
-            完了すると成果物を自動的に検証・取り込みます。通常の「送信」ではなく「工程用の依頼を送信」を使用してください。
+            {receive ? '完了すると成果物を自動的に検証・取り込みます。通常の「送信」ではなく「工程用の依頼を送信」を使用してください。' : '右側の工程選択で「ストーリーを検討」を選択し、工程用の依頼を送信してください。'}
             {receive && returnFile ? ` 取り込み先: ${returnFile.name}（下書き）` : ''}
           </p>
         </div>
@@ -335,7 +335,8 @@ export function GrokBridge({
         </>
       )}
     </section>
-  );}
+  );
+}
 
 async function loadEditable(
   root: string,
@@ -355,10 +356,12 @@ export function StoryStage({
   project,
   setProject,
   run,
+  provider,
 }: {
   project: ProjectSummary;
   setProject: (p: ProjectSummary) => void;
   run: Runner;
+  provider: AssistantPaneProvider;
 }) {
   const [doc, setDoc] = useState<ArtifactReadResult | null>(null),
     [editing, setEditing] = useState(false);
@@ -377,13 +380,15 @@ export function StoryStage({
     <>
       <GrokBridge
         project={project}
+        provider={provider}
         stage="story-initial"
-        title="1. Grokでストーリーを検討"
+        title="1. ストーリーを検討"
         run={run}
         receive={false}
       />
       <GrokBridge
         project={project}
+        provider={provider}
         stage="story-finalize"
         title="2. 完成版 story.md を作成"
         run={run}
@@ -396,6 +401,7 @@ export function StoryStage({
       {project.artifacts.find((a) => a.key === 'story')?.state !== 'missing' && (
         <GrokBridge
           project={project}
+          provider={provider}
           stage="story-fix"
           title="確定済みストーリーを修正"
           run={run}
@@ -569,11 +575,13 @@ export function ModelsStage({
   setProject,
   run,
   resetFrom,
+  provider,
 }: {
   project: ProjectSummary;
   setProject: (p: ProjectSummary) => void;
   run: Runner;
   resetFrom: (scope: ResetScope) => Promise<void>;
+  provider: AssistantPaneProvider;
 }) {
   const [cat, setCat] = useState<CatalogStatus | null>(null),
     [catalog, setCatalog] = useState<ModelCatalog | null>(null),
@@ -956,7 +964,7 @@ export function ModelsStage({
           </button>
           {baseConfigured ? (
             <span className="model-base-ready">
-              ✓ 基盤モデル確定済み — GrokはLoRAのみ選定します
+              ✓ 基盤モデル確定済み — AIはLoRAのみ選定します
             </span>
           ) : (
             family && (
@@ -972,8 +980,9 @@ export function ModelsStage({
         <>
           <GrokBridge
             project={project}
+            provider={provider}
             stage="models"
-            title="GrokでLoRAを選定"
+            title="LoRAを選定"
             run={run}
             resetScope={hasInitialSelection ? 'models' : undefined}
             onReset={resetFrom}
@@ -1003,6 +1012,7 @@ export function ModelsStage({
         <>
           <GrokBridge
             project={project}
+            provider={provider}
             stage="models-fix"
             title="LoRAを再選定"
             run={run}
