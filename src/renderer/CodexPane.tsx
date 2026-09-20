@@ -152,7 +152,11 @@ export function CodexPane() {
         setBusy(false);
         setTurnStatus((previous) =>
           ['sending', 'processing', 'streaming'].includes(previous.phase)
-            ? { ...previous, phase: 'unknown', error: 'Codexとの接続が切れたため、終了状態を確認できません。' }
+            ? {
+                ...previous,
+                phase: 'unknown',
+                error: 'Codexとの接続が切れたため、終了状態を確認できません。',
+              }
             : previous,
         );
         setError(String(event.params.message ?? 'Codexとの接続が切れました。'));
@@ -202,7 +206,12 @@ export function CodexPane() {
     const key = currentContext.current;
     setError('');
     setBusy(true);
-    setTurnStatus({ ...idleStatus, phase: 'sending', startedAt: Date.now(), updatedAt: Date.now() });
+    setTurnStatus({
+      ...idleStatus,
+      phase: 'sending',
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
     setStream('');
     setMessages((before) => [...before, { id: 'pending-' + Date.now(), role: 'user', text }]);
     try {
@@ -218,7 +227,12 @@ export function CodexPane() {
     } catch (err) {
       if (key === currentContext.current) {
         setBusy(false);
-        setTurnStatus({ ...idleStatus, phase: 'failed', finishedAt: Date.now(), error: errorText(err) });
+        setTurnStatus({
+          ...idleStatus,
+          phase: 'failed',
+          finishedAt: Date.now(),
+          error: errorText(err),
+        });
         setError(errorText(err));
         void refresh(key).catch(() => {});
       }
@@ -254,20 +268,24 @@ export function CodexPane() {
     try {
       const selection = await window.batchStudio.codex.selectModel(next);
       if (key === currentContext.current)
-        setModelSettings((previous) => previous ? { ...previous, selection } : previous);
+        setModelSettings((previous) => (previous ? { ...previous, selection } : previous));
     } catch (err) {
       if (key === currentContext.current) setModelError(errorText(err));
     } finally {
       if (key === currentContext.current) setModelSaving(false);
     }
   };
-  const selectedModel = modelSettings?.models.find((item) =>
-    item.id === modelSettings.selection.model,
+  const selectedModel = modelSettings?.models.find(
+    (item) => item.id === modelSettings.selection.model,
   );
   const activeTurn = ['sending', 'processing', 'streaming'].includes(turnStatus.phase);
-  const elapsed = turnStatus.startedAt !== null
-    ? formatDuration((activeTurn ? clock : (turnStatus.finishedAt ?? turnStatus.updatedAt ?? clock)) - turnStatus.startedAt)
-    : null;
+  const elapsed =
+    turnStatus.startedAt !== null
+      ? formatDuration(
+          (activeTurn ? clock : (turnStatus.finishedAt ?? turnStatus.updatedAt ?? clock)) -
+            turnStatus.startedAt,
+        )
+      : null;
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
   const output = latestAssistant?.text ?? stream;
 
@@ -299,11 +317,17 @@ export function CodexPane() {
       </header>
       {context && (
         <section className="codex-runtime" aria-label="Codexの実行状態">
-          <div className={'codex-runtime-state codex-runtime-' + turnStatus.phase} role="status" aria-live="polite">
+          <div
+            className={'codex-runtime-state codex-runtime-' + turnStatus.phase}
+            role="status"
+            aria-live="polite"
+          >
             <span className="codex-runtime-indicator" aria-hidden="true" />
             <strong>{phaseLabel[turnStatus.phase]}</strong>
             {elapsed && <small>経過時間: {elapsed}</small>}
-            {turnStatus.finishedAt && <small>終了: {new Date(turnStatus.finishedAt).toLocaleTimeString('ja-JP')}</small>}
+            {turnStatus.finishedAt && (
+              <small>終了: {new Date(turnStatus.finishedAt).toLocaleTimeString('ja-JP')}</small>
+            )}
             {turnStatus.error && <small>{turnStatus.error}</small>}
           </div>
           <div className="codex-model-controls">
@@ -314,16 +338,21 @@ export function CodexPane() {
                 value={modelSettings?.selection.model ?? ''}
                 disabled={!modelSettings || modelLoading || modelSaving || loading || busy}
                 onChange={(event) => {
-                  const selected = modelSettings?.models.find((item) => item.id === event.target.value);
-                  if (selected) void chooseModel({
-                    model: selected.id,
-                    effort: selected.defaultReasoningEffort,
-                  });
+                  const selected = modelSettings?.models.find(
+                    (item) => item.id === event.target.value,
+                  );
+                  if (selected)
+                    void chooseModel({
+                      model: selected.id,
+                      effort: selected.defaultReasoningEffort,
+                    });
                 }}
               >
                 {!modelSettings && <option value="">モデル一覧を読み込み中…</option>}
                 {modelSettings?.models.map((item) => (
-                  <option key={item.id} value={item.id}>{item.displayName}</option>
+                  <option key={item.id} value={item.id}>
+                    {item.displayName}
+                  </option>
                 ))}
               </select>
             </label>
@@ -334,10 +363,11 @@ export function CodexPane() {
                 value={modelSettings?.selection.effort ?? ''}
                 disabled={!selectedModel || modelLoading || modelSaving || loading || busy}
                 onChange={(event) => {
-                  if (modelSettings) void chooseModel({
-                    ...modelSettings.selection,
-                    effort: event.target.value,
-                  });
+                  if (modelSettings)
+                    void chooseModel({
+                      ...modelSettings.selection,
+                      effort: event.target.value,
+                    });
                 }}
               >
                 {!selectedModel && <option value="">未選択</option>}
@@ -351,10 +381,15 @@ export function CodexPane() {
           </div>
           {modelSettings && (
             <small className="codex-model-note">
-              次の依頼に適用: {selectedModel?.displayName ?? modelSettings.selection.model} · {modelSettings.selection.effort}
+              次の依頼に適用: {selectedModel?.displayName ?? modelSettings.selection.model} ·{' '}
+              {modelSettings.selection.effort}
             </small>
           )}
-          {modelError && <div className="codex-error" role="alert">{modelError}</div>}
+          {modelError && (
+            <div className="codex-error" role="alert">
+              {modelError}
+            </div>
+          )}
         </section>
       )}
       {context && (
@@ -462,7 +497,9 @@ export function CodexPane() {
           <div className="codex-actions">
             <button
               className="primary"
-              disabled={loading || busy || !modelSettings || !input.trim() || !account?.authenticated}
+              disabled={
+                loading || busy || !modelSettings || !input.trim() || !account?.authenticated
+              }
               onClick={() => void send(() => window.batchStudio.codex.send(input), input)}
             >
               送信
