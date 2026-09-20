@@ -149,9 +149,7 @@ export function CodexPane() {
         setExtra('');
         // A newly started thread has an ID immediately, but no persisted rollout
         // until its turn finishes. Update history selection without reading it.
-        setSnapshot((previous) =>
-          previous ? { ...previous, ...threads } : previous,
-        );
+        setSnapshot((previous) => (previous ? { ...previous, ...threads } : previous));
       }
     } catch (err) {
       if (key === currentContext.current) {
