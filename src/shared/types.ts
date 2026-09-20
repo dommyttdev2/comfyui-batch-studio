@@ -918,6 +918,10 @@ export interface ExecutionRunSnapshot {
     apiSha256: string;
     workflowIdentity: string;
     modelsSha256?: string;
+    immutable?: {
+      planPath: string;
+      modelsPath: string;
+    };
   };
   plan: { sha256: string; branches: Array<{ branchId: string; leafIds: string[] }> };
   runIdentity: string;
