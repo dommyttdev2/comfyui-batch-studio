@@ -10,8 +10,13 @@ const plan = JSON.stringify({
   schemaVersion: 2,
   common: { positive: {}, negative: {} },
   rootLoras: [],
-  branches: [{ id: 'b01', prompt: { positive: {}, negative: {} },
-    leaves: [{ id: 'b01.001', prompt: { positive: {}, negative: {} } }] }],
+  branches: [
+    {
+      id: 'b01',
+      prompt: { positive: {}, negative: {} },
+      leaves: [{ id: 'b01.001', prompt: { positive: {}, negative: {} } }],
+    },
+  ],
 });
 const malformed = JSON.parse(plan);
 assert.equal(malformed.branches[0].loras, undefined);
