@@ -169,8 +169,9 @@ export class GrokAutoArtifactWatcher {
           const fileName = ${JSON.stringify(expected.fileName)};
           const anchor = [...document.querySelectorAll('a[href]')].find((item) =>
             item.href === href &&
-            ((item.getAttribute('download') || item.getAttribute('aria-label') ||
-              item.textContent || '').includes(fileName)));
+            (item.getAttribute('download') === fileName ||
+              ((item.getAttribute('aria-label') || '').includes(fileName) &&
+                /download|ダウンロード/i.test(item.getAttribute('aria-label') || ''))));
           if (anchor) anchor.click();
         })()`,
             true,
