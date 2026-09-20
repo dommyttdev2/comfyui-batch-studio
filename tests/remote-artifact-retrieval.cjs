@@ -11,6 +11,13 @@ const { pathToFileURL } = require('node:url');
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-remote-artifact-'));
 const compiled = path.join(runtime, 'compiled');
+// Compiled service modules live outside the repository; link its installed
+// runtime dependencies so ESM can resolve the R2 SDK during integration tests.
+fs.symlinkSync(
+  path.join(repo, 'node_modules'),
+  path.join(runtime, 'node_modules'),
+  process.platform === 'win32' ? 'junction' : 'dir',
+);
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(
   process.execPath,
@@ -210,10 +217,164 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
   );
   matchCode(
     executionSource,
-    /local&&uploaded/,
-    'resume after local verification must not require re-uploading an already-cleaned R2 object',
+    /localMatches\(finalPath,pkg.size,pkg.sha256\)/,
+    'resume must revalidate the local ZIP instead of trusting old transport evidence',
   );
   doesNotMatchCode(executionSource, /scp/i, 'artifact recovery must not use SCP');
+
+  // Exercise the actual service recovery flow with durable Run evidence and a
+  // deterministic R2/Remote mock. No live cloud resources are required.
+  const { RemoteExecutionService } = await load('remote-execution.js');
+  const execution = await load('execution-run.js');
+  const recoveryRoot = path.join(runtime, 'recovery-project');
+  const recoveredRunId = '22222222-2222-4222-8222-222222222222';
+  const recoveredDir = path.join(recoveryRoot, 'remote_output', recoveredRunId);
+  const recoveredZip = path.join(recoveredDir, '20260912_234512.zip');
+  const recoveredManifest = path.join(recoveredDir, 'manifest.json');
+  fs.mkdirSync(path.join(recoveryRoot, 'execution_runs'), { recursive: true });
+  fs.mkdirSync(recoveredDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(recoveryRoot, 'project_meta.json'),
+    JSON.stringify({ schemaVersion: 1, settings: { r2Bucket: 'test-bucket' } }),
+  );
+  const packagedBytes = uploaded;
+  assert.equal(sha(packagedBytes), packaged.package.sha256);
+  const runState = {
+    schemaVersion: 1,
+    runId: recoveredRunId,
+    projectId: 'test',
+    executionTarget: 'remote',
+    lifecycle: 'RUNNING',
+    phase: 'ARTIFACTS_COLLECTING',
+    controls: { scheduling: 'ACTIVE', interrupt: 'IDLE' },
+    current: { branchId: null, leafId: null, promptId: null },
+    progress: { overall: { completed: 2, total: 2 }, branches: [] },
+    snapshot: { runIdentity: 'artifact-recovery-fixture' },
+    evidence: [],
+    error: null,
+    errorHistory: [],
+    completedAt: null,
+  };
+  fs.writeFileSync(
+    path.join(recoveryRoot, 'execution_runs', recoveredRunId + '.json'),
+    JSON.stringify(runState),
+  );
+  const artifactKey = 'batch-studio/executions/test/' + recoveredRunId + '/artifacts.zip';
+  const expectedManifest = packaged.manifestJson;
+  await execution.recordExecutionEvidence(recoveryRoot, recoveredRunId, {
+    kind: 'PACKAGE_VERIFIED',
+    scope: 'remote-package',
+    data: {
+      artifactCount: 2,
+      size: packaged.package.size,
+      sha256: packaged.package.sha256,
+      manifestSha256: packaged.manifestSha256,
+      manifestJson: expectedManifest,
+      archiveFileName: '20260912_234512.zip',
+      outputPrefix,
+    },
+  });
+  await execution.recordExecutionEvidence(recoveryRoot, recoveredRunId, {
+    kind: 'R2_OBJECT_VERIFIED',
+    scope: 'remote-package',
+    data: { bucket: 'test-bucket', key: artifactKey, size: packaged.package.size },
+  });
+  await execution.recordExecutionEvidence(recoveryRoot, recoveredRunId, {
+    kind: 'LOCAL_FILE_VERIFIED',
+    scope: 'remote-package',
+    data: {
+      path: recoveredZip,
+      manifestPath: recoveredManifest,
+      size: packaged.package.size,
+      sha256: packaged.package.sha256,
+    },
+  });
+  await execution.recordExecutionEvidence(recoveryRoot, recoveredRunId, {
+    kind: 'CLEANUP_COMPLETED',
+    scope: 'remote-artifacts',
+    data: { remote: true, r2: true },
+  });
+
+  let r2Object = null;
+  const operations = { downloads: 0, deletes: 0, remoteCleanups: 0, uploads: 0 };
+  const remoteMock = {
+    requestWorker: async (_root, _id, operation) => {
+      if (operation === 'cleanup_artifacts') {
+        operations.remoteCleanups++;
+        return { response: { ok: true } };
+      }
+      if (operation === 'upload_artifact_package') {
+        operations.uploads++;
+        throw new Error('Remote package has been deleted');
+      }
+      throw new Error('Unexpected Remote operation: ' + operation);
+    },
+  };
+  const r2Mock = {
+    objectExists: async (bucket, key) => {
+      assert.equal(bucket, 'test-bucket');
+      assert.equal(key, artifactKey);
+      return r2Object !== null;
+    },
+    objectMetadata: async () => {
+      if (!r2Object) throw new Error('R2 object missing');
+      return { size: r2Object.length, sha256: sha(r2Object) };
+    },
+    downloadExecutionObject: async (_bucket, _key, dest) => {
+      operations.downloads++;
+      if (!r2Object) throw new Error('Do not download a missing R2 object');
+      fs.writeFileSync(dest, r2Object);
+    },
+    deleteExecutionObject: async (_bucket, key) => {
+      assert.equal(key, artifactKey, 'cleanup must only delete this Run object');
+      operations.deletes++;
+      r2Object = null;
+    },
+    putUrlInfo: async () => ({ url: 'https://example.invalid/package', contentType: null }),
+  };
+  const service = new RemoteExecutionService(remoteMock, r2Mock);
+  fs.writeFileSync(recoveredZip, packagedBytes);
+  fs.writeFileSync(recoveredManifest, expectedManifest);
+
+  // Previous cleanup removed R2 and Remote packages; intact local ZIP must
+  // complete with zero network operations.
+  await service.collectArtifacts(recoveryRoot, recoveredRunId);
+  assert.equal(
+    (await execution.getExecutionRun(recoveryRoot, recoveredRunId)).lifecycle,
+    'COMPLETED',
+  );
+  assert.deepEqual(operations, { downloads: 0, deletes: 0, remoteCleanups: 0, uploads: 0 });
+
+  // A corrupt ZIP must be replaced from surviving R2 bytes, even when old
+  // CLEANUP_COMPLETED and LOCAL_FILE_VERIFIED evidence are still present.
+  fs.writeFileSync(recoveredZip, 'damaged');
+  r2Object = Buffer.from(packagedBytes);
+  await service.collectArtifacts(recoveryRoot, recoveredRunId);
+  assert.equal(sha(fs.readFileSync(recoveredZip)), packaged.package.sha256);
+  assert.equal(operations.downloads, 1);
+  assert.equal(operations.deletes, 1, 'recovered transport object must be cleaned again');
+  assert.equal(operations.remoteCleanups, 0, 'already-cleaned Remote host must not be required');
+
+  // With both transport copies gone, recovery must report a dedicated error
+  // without blindly downloading a missing R2 key or deleting the local file.
+  fs.writeFileSync(recoveredZip, 'damaged again');
+  await assert.rejects(
+    () => service.collectArtifacts(recoveryRoot, recoveredRunId),
+    (error) => error.code === 'REMOTE_ARTIFACT_RECOVERY_UNAVAILABLE',
+  );
+  assert.equal(operations.downloads, 1);
+  assert.equal(fs.readFileSync(recoveredZip, 'utf8'), 'damaged again');
+  await assert.rejects(
+    () =>
+      service.cleanup(
+        recoveryRoot,
+        recoveredRunId,
+        'test-bucket',
+        'another-run/artifacts.zip',
+        true,
+      ),
+    (error) => error.code === 'REMOTE_ARTIFACT_CLEANUP_SCOPE_INVALID',
+  );
 
   console.log('Remote artifact retrieval tests passed.');
 })().catch((error) => {
