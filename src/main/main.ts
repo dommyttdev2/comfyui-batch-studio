@@ -2963,7 +2963,8 @@ function register() {
     }>('thread/read', { threadId, includeTurns: true });
     const turn = read.thread?.turns?.at(-1);
     const expected = turn ? codexTaskFileForTurn(turn) : null;
-    const fileName = turn && expectedArtifact(context.stage === 'story' ? 'story-finalize' : context.stage);
+    const fileName =
+      turn && expectedArtifact(context.stage === 'story' ? 'story-finalize' : context.stage);
     if (!turn || turn.status !== 'completed' || !fileName || expected !== fileName)
       throw new Error('この工程の完了済みArtifact依頼が見つかりません。');
     const reply = [...(turn.items ?? [])]
