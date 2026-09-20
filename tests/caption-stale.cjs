@@ -24,7 +24,9 @@ const writeJson = (file, value) => {
 };
 
 (async () => {
-  const caption = await import(pathToFileURL(path.join(compiled, 'main', 'caption-service.js')).href);
+  const caption = await import(
+    pathToFileURL(path.join(compiled, 'main', 'caption-service.js')).href
+  );
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-caption-stale-project-'));
   const finalDir = path.join(root, 'final-output');
   fs.mkdirSync(finalDir);
@@ -70,7 +72,10 @@ const writeJson = (file, value) => {
   assert.equal(status.state, 'stale', 'fan-work toggle must invalidate previous build');
   status = await caption.generateCaption(root);
   assert.equal(status.state, 'generated');
-  assert.match(fs.readFileSync(captionPath, 'utf8'), /※二次創作です。公式とは無関係です。\n※AI生成作品です。/);
+  assert.match(
+    fs.readFileSync(captionPath, 'utf8'),
+    /※二次創作です。公式とは無関係です。\n※AI生成作品です。/,
+  );
   brief.subject.copyrightedCharacter = false;
   writeJson(briefPath, brief);
   assert.equal((await caption.getCaptionStatus(root)).state, 'stale');
@@ -92,7 +97,11 @@ const writeJson = (file, value) => {
   delete legacy.renderInputSha256;
   delete legacy.outputSha256;
   writeJson(buildPath, legacy);
-  assert.equal((await caption.getCaptionStatus(root)).state, 'stale', 'legacy build must be regenerated');
+  assert.equal(
+    (await caption.getCaptionStatus(root)).state,
+    'stale',
+    'legacy build must be regenerated',
+  );
   status = await caption.generateCaption(root);
   assert.equal(status.state, 'generated');
 
@@ -101,7 +110,11 @@ const writeJson = (file, value) => {
   assert.equal((await caption.getCaptionStatus(root)).state, 'stale');
   await caption.generateCaption(root);
   fs.writeFileSync(path.join(finalDir, 'b.png'), 'image-b');
-  assert.equal((await caption.getCaptionStatus(root)).state, 'stale', 'count change invalidates caption');
+  assert.equal(
+    (await caption.getCaptionStatus(root)).state,
+    'stale',
+    'count change invalidates caption',
+  );
   await caption.generateCaption(root);
   const finalDir2 = path.join(root, 'other-final');
   fs.mkdirSync(finalDir2);
@@ -111,7 +124,11 @@ const writeJson = (file, value) => {
     createdAt: new Date().toISOString(),
     settings: { finalArtifactDirectory: finalDir2 },
   });
-  assert.equal((await caption.getCaptionStatus(root)).state, 'stale', 'directory change invalidates caption');
+  assert.equal(
+    (await caption.getCaptionStatus(root)).state,
+    'stale',
+    'directory change invalidates caption',
+  );
   status = await caption.generateCaption(root);
   assert.equal(status.state, 'generated');
   console.log('Caption stale build and file integrity tests passed.');
