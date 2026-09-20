@@ -48,7 +48,7 @@ assert.ok(
 );
 assert.match(
   send,
-  /return store\.get\(context\.root, context\.stage\);/,
+  /\.\.\.\(await store\.get\(context\.root, context\.stage\)\)/,
   'Send must return thread IDs without reading rollout history',
 );
 assert.ok(
