@@ -12,6 +12,7 @@ import { exists, readJson } from './fs-utils.js';
 import { enumerateSceneBranches, sliceSceneBranchGraph } from './local-execution.js';
 import {
   getExecutionRun,
+  readExecutionWorkflow,
   mutateExecutionRun,
   recordExecutionEvidence,
   validatedExecutionEvidence,
@@ -454,9 +455,7 @@ export class RemoteExecutionService {
       await pauseForStop(root, runId);
       return false;
     }
-    const graph = await readJson<ApiGraph>(path.join(root, run.snapshot.workflow.apiPath));
-    const workflow = await readJson<unknown>(path.join(root, run.snapshot.workflow.uiPath));
-    if (!graph || !workflow) throw new Error('Execution workflow snapshot files are missing.');
+    const { api: graph, ui: workflow } = await readExecutionWorkflow(root, run);
     const bindings = enumerateSceneBranches(graph, run);
     const branches = bindings.map((binding) => ({
       branchId: binding.branchId,

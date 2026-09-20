@@ -97,6 +97,46 @@ const writeJson = (file, value) => {
   assert.deepEqual(started.snapshot.plan.branches, [
     { branchId: 'branch-a', leafIds: ['leaf-a1', 'leaf-a2'] },
   ]);
+  assert.equal(
+    started.snapshot.workflow.uiPath,
+    `execution_runs/${started.runId}/snapshot/workflow-ui.json`,
+  );
+  assert.equal(
+    started.snapshot.workflow.apiPath,
+    `execution_runs/${started.runId}/snapshot/workflow-api.json`,
+  );
+  const runOwnedApi = path.join(root, started.snapshot.workflow.apiPath);
+  const frozenApi = fs.readFileSync(runOwnedApi);
+  assert.deepEqual((await execution.readExecutionWorkflow(root, started)).api, api);
+  writeJson(path.join(root, 'LoRA_project.api.json'), {
+    1: { class_type: 'RecompiledNode', inputs: {} },
+  });
+  assert.deepEqual(
+    (await execution.readExecutionWorkflow(root, started)).api,
+    api,
+    'a changed project graph must not affect a running Run snapshot',
+  );
+  fs.rmSync(path.join(root, 'LoRA_project.api.json'));
+  assert.deepEqual(
+    (await execution.readExecutionWorkflow(root, started)).api,
+    api,
+    'project workflow reset must not remove the Run-owned graph',
+  );
+  writeJson(path.join(root, 'LoRA_project.api.json'), api);
+  writeJson(runOwnedApi, { 1: { class_type: 'Tampered', inputs: {} } });
+  await assert.rejects(
+    () => execution.readExecutionWorkflow(root, started),
+    /EXECUTION_SNAPSHOT_HASH_MISMATCH/,
+    'tampered Run-owned graph must not fall back to the project graph',
+  );
+  fs.writeFileSync(runOwnedApi, frozenApi);
+  fs.rmSync(runOwnedApi);
+  await assert.rejects(
+    () => execution.readExecutionWorkflow(root, started),
+    /EXECUTION_SNAPSHOT_MISSING/,
+    'missing Run-owned graph must not be replaced with the current project file',
+  );
+  fs.writeFileSync(runOwnedApi, frozenApi);
   assert.deepEqual(started.progress.overall, { completed: 0, total: 2 });
   assert.deepEqual(started.progress.generationTiming, {
     currentPromptId: null,

@@ -342,6 +342,11 @@ function startServer(install, options = {}) {
         endpoint: mock.endpoint,
         installPath: install,
       }));
+      // The Project graph can be overwritten between Run creation and the
+      // Local executor reading it; only the pinned graph may be submitted.
+      const originalApiPath = path.join(root, 'LoRA_project.api.json'),
+        originalApi = fs.readFileSync(originalApiPath);
+      writeJson(originalApiPath, { 1: { class_type: 'RecompiledNode', inputs: {} } });
       service.start(root, run.runId);
       const done = await waitFor(async () => {
         const current = await execution.getExecutionRun(root, run.runId);
@@ -387,6 +392,7 @@ function startServer(install, options = {}) {
         'a deleted Run-owned image must fail verification',
       );
       fs.writeFileSync(firstFile, 'png');
+      fs.writeFileSync(originalApiPath, originalApi);
       const next = await execution.startExecutionRun(root, async () => ready);
       // Old files, even with a colliding mtime, must never count toward a new Run.
       const legacy = path.join(install, 'output', 'BatchStudio', run.projectId, 'legacy.png');
