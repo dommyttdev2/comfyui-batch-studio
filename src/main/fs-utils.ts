@@ -218,8 +218,12 @@ export async function restoreJsonFromBackup(p: string, io: AtomicWriteIo = nativ
     }
   });
 }
-export async function writeJsonAtomic(p: string, v: unknown) {
-  await writeTextAtomic(p, JSON.stringify(v, null, 2) + '\n');
+export async function writeJsonAtomic(
+  p: string,
+  v: unknown,
+  io: AtomicWriteIo = nativeIo,
+) {
+  await writeTextAtomic(p, JSON.stringify(v, null, 2) + '\n', io);
 }
 export async function backupIfExists(source: string, historyDir: string) {
   if (!(await exists(source))) return null;
