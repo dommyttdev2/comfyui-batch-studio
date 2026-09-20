@@ -1039,8 +1039,19 @@ export interface R2BatchDownloadTemplate {
   updatedAt: string;
   objects: Array<{ key: string; name: string; size?: number }>;
 }
+export interface R2UploadSourceFingerprint {
+  size: number;
+  mtimeMs: number;
+  ctimeMs: number;
+  dev: number;
+  ino: number;
+  sha256: string;
+  partSha256: string[];
+}
 export interface R2UploadJob {
   id: string;
+  sourceFingerprint?: R2UploadSourceFingerprint;
+  hashProgressBytes?: number;
   kind?: 'upload' | 'move';
   startedAt?: string;
   initialTransferredBytes?: number;
