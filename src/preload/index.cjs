@@ -58,6 +58,7 @@ const I = {
   PREFLIGHT_RUN: 'preflight:run',
   EXECUTION_START: 'execution:start',
   EXECUTION_STATUS: 'execution:status',
+  EXECUTION_RECONCILE: 'execution:reconcile',
   EXECUTION_GET: 'execution:get',
   EXECUTION_STOP_SCHEDULING: 'execution:stop-scheduling',
   EXECUTION_FORCE_INTERRUPT: 'execution:force-interrupt',
@@ -233,6 +234,7 @@ contextBridge.exposeInMainWorld('batchStudio', {
   execution: {
     start: (r) => ipcRenderer.invoke(I.EXECUTION_START, r),
     status: (r) => ipcRenderer.invoke(I.EXECUTION_STATUS, r),
+    reconcile: (r, id) => ipcRenderer.invoke(I.EXECUTION_RECONCILE, r, id),
     get: (r, id) => ipcRenderer.invoke(I.EXECUTION_GET, r, id),
     stopScheduling: (r, id) => ipcRenderer.invoke(I.EXECUTION_STOP_SCHEDULING, r, id),
     forceInterrupt: (r, id) => ipcRenderer.invoke(I.EXECUTION_FORCE_INTERRUPT, r, id),

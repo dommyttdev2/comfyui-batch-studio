@@ -387,6 +387,26 @@ const writeJson = (file, value) => {
     /Preflight is BLOCKED/,
   );
 
+  await execution.mutateExecutionRun(root, second.runId, (run) => {
+    run.lifecycle = 'FAILED';
+    run.current = { branchId: 'branch-a', leafId: 'leaf-a1', promptId: 'accepted-unknown' };
+    run.error = {
+      code: 'EXECUTION_RECOVERY_UNCERTAIN',
+      message: 'Old ComfyUI prompt may still exist.',
+      phase: 'EXECUTING',
+      at: new Date().toISOString(),
+      retryable: false,
+    };
+  });
+  await assert.rejects(
+    () => execution.resumeExecutionRun(root, second.runId, async () => ready),
+    /recovery is uncertain/,
+    'a persisted ambiguous accepted prompt must not be resubmitted during Resume',
+  );
+  const unsafe = await execution.getExecutionRun(root, second.runId);
+  assert.equal(unsafe.current.promptId, 'accepted-unknown');
+  assert.equal(unsafe.lifecycle, 'FAILED');
+
   const mainSource = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
   const uiSource = fs.readFileSync(path.join(repo, 'src/renderer/ExecutionStages.tsx'), 'utf8');
   const restartHandlerStart = mainSource.indexOf('IPC.EXECUTION_RESTART_FROM_SCRATCH');

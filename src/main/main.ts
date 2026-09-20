@@ -76,8 +76,9 @@ import {
   resumeExecutionRun,
   resumeExecutionRunFinalization,
   startExecutionRun,
+  validatedExecutionEvidence,
 } from './execution-run.js';
-import { LocalExecutionService } from './local-execution.js';
+import { LocalExecutionService, verifyLocalOutputs } from './local-execution.js';
 import { ExecutionCoordinator } from './execution-coordinator.js';
 import {
   canonicalGrokConversationUrl,
@@ -208,6 +209,7 @@ const standaloneToolWindows = new Map<StandaloneWindowTool, StandaloneToolWindow
 const thumbnailPickerWindows = new Map<number, ThumbnailPickerWindowState>();
 const marketplacePickerWindows = new Map<number, MarketplacePickerWindowState>();
 const executionCoordinator = new ExecutionCoordinator();
+const executionRecoveryChecks = new Map<string, Promise<void>>();
 type ProjectWindowState = {
   window: BaseWindow;
   localView: WebContentsView;
@@ -1048,6 +1050,138 @@ async function prepareRemoteExecution(root: string, runId: string) {
     await finalizeRemoteInstance(root, runId);
     remoteExecutor().disconnect(root, runId);
   }
+}
+
+async function markExecutionRecoveryUncertain(root: string, runId: string, reason: unknown) {
+  return mutateExecutionRun(root, runId, (run) => {
+    if (run.lifecycle !== 'RUNNING') return;
+    const failure = {
+      code: 'EXECUTION_RECOVERY_UNCERTAIN',
+      message: `前回の実行状態を確定できません。既存PromptやWorkerが稼働中の可能性があるため、重複投入を防止しました。ComfyUI Queue/HistoryとVast.ai Instanceの状態を確認してください: ${safeExecutionError(reason)}`,
+      phase: run.phase,
+      at: new Date().toISOString(),
+      retryable: false,
+    };
+    run.error = failure;
+    run.errorHistory.push(failure);
+    run.lifecycle = 'FAILED';
+    run.controls.scheduling = 'STOPPED';
+    // Preserve current.promptId, progress and evidence for manual reconciliation.
+  });
+}
+
+async function recoverRemoteFinalization(root: string, runId: string) {
+  const run = await getExecutionRun(root, runId);
+  if (!run) return;
+  const evidence = validatedExecutionEvidence(run).valid,
+    kinds = new Set(evidence.map((item) => item.kind));
+  if (!kinds.has('LOCAL_FILE_VERIFIED') || !kinds.has('CLEANUP_COMPLETED'))
+    throw new Error('Completion evidence is incomplete. Refusing a finalize-only recovery.');
+  await finalizeRemoteInstance(root, runId);
+  const latest = await getExecutionRun(root, runId);
+  if (latest?.remoteLifecycle?.finalizedAt && latest.lifecycle === 'RUNNING')
+    await mutateExecutionRun(root, runId, (current) => {
+      current.lifecycle = 'COMPLETED';
+      current.phase = 'COMPLETED';
+      current.completedAt = new Date().toISOString();
+      current.controls.scheduling = 'STOPPED';
+    });
+}
+
+// Called on project open/status (and before Start/Resume). Persisted RUNNING is
+// not proof that a worker is still active in this Main Process.
+async function reconcilePersistedExecutionRuns(root: string) {
+  const key = path.resolve(root);
+  const pending = executionRecoveryChecks.get(key);
+  if (pending) return pending;
+  const check = (async () => {
+    const runs = await listExecutionRuns(root);
+    const settings = await settingsStore().status();
+    // Claim all pre-existing uncertain resources before starting other Runs.
+    for (const run of [...runs].reverse()) {
+      if (run.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN') continue;
+      const ref = { projectRoot: key, runId: run.runId };
+      try {
+        if (run.executionTarget === 'local')
+          executionCoordinator.reserveLocal(ref, settings.comfyUiApiEndpoint);
+        else if (run.remote?.provider === 'vastai' && run.remote.instanceId)
+          executionCoordinator.reserveRemote(ref, 'vastai', run.remote.instanceId);
+      } catch (error) {
+        console.warn(
+          'Could not reserve an uncertain Execution Run resource:',
+          safeExecutionError(error),
+        );
+      }
+    }
+    for (const run of [...runs].reverse()) {
+      if (run.lifecycle !== 'RUNNING') continue;
+      const ref = { projectRoot: key, runId: run.runId };
+      if (executionCoordinator.hasActive(ref)) continue;
+      try {
+        if (run.executionTarget === 'local') {
+          const endpoint = settings.comfyUiApiEndpoint;
+          if (run.current.promptId) {
+            void executionCoordinator
+              .startLocal(ref, endpoint, async () => {
+                await localExecutor().recover(root, run.runId);
+                const latest = await getExecutionRun(root, run.runId);
+                if (latest?.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
+                  executionCoordinator.retain(ref);
+              })
+              .finally(maybeQuitAfterExecution);
+          } else if (
+            run.phase === 'LOCAL_COMFYUI_CONNECTING' ||
+            run.phase === 'LOCAL_CAPABILITY_CHECKING' ||
+            run.phase === 'WORKFLOW_PREPARING'
+          ) {
+            // These phases precede every local POST /prompt.
+            await mutateExecutionRun(root, run.runId, (current) => {
+              if (current.lifecycle !== 'RUNNING' || current.current.promptId) return;
+              current.lifecycle = 'PAUSED';
+              current.controls.scheduling = 'STOPPED';
+              current.error = null;
+            });
+          } else if (run.phase === 'COMPLETED') {
+            await verifyLocalOutputs(settings.comfyUiInstallPath, run);
+            await mutateExecutionRun(root, run.runId, (current) => {
+              if (current.lifecycle !== 'RUNNING') return;
+              current.lifecycle = 'COMPLETED';
+              current.completedAt = new Date().toISOString();
+              current.controls.scheduling = 'STOPPED';
+            });
+          } else {
+            executionCoordinator.reserveLocal(ref, endpoint);
+            await markExecutionRecoveryUncertain(
+              root,
+              run.runId,
+              'No persisted prompt ID; a response may have been lost after POST /prompt.',
+            );
+          }
+          continue;
+        }
+        if (run.remote?.provider !== 'vastai' || !run.remote.instanceId)
+          throw new Error('Remote Run has no valid instance identity.');
+        void executionCoordinator
+          .startRemote(ref, 'vastai', run.remote.instanceId, async () => {
+            try {
+              if (run.phase === 'CLOUD_INSTANCE_FINALIZING')
+                await recoverRemoteFinalization(root, run.runId);
+              else await remoteSceneExecutor().recover(root, run.runId);
+            } catch (error) {
+              await markExecutionRecoveryUncertain(root, run.runId, error);
+            }
+            const latest = await getExecutionRun(root, run.runId);
+            if (latest?.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
+              executionCoordinator.retain(ref);
+          })
+          .finally(maybeQuitAfterExecution);
+      } catch (error) {
+        await markExecutionRecoveryUncertain(root, run.runId, error);
+      }
+    }
+  })().finally(() => executionRecoveryChecks.delete(key));
+  executionRecoveryChecks.set(key, check);
+  return check;
 }
 
 async function startExecutionRuntime(root: string, run: ExecutionRun) {
@@ -2227,13 +2361,35 @@ function register() {
   });
   ipcMain.handle(IPC.EXECUTION_START, async (_e, root: unknown) => {
     validRoot(root);
+    await reconcilePersistedExecutionRuns(root);
     const run = await startExecutionRun(root, () => executionPreflight(root));
     await startExecutionRuntime(root, run);
     return run;
   });
   ipcMain.handle(IPC.EXECUTION_STATUS, async (_e, root: unknown) => {
     validRoot(root);
+    await reconcilePersistedExecutionRuns(root);
     return getCurrentExecutionRun(root);
+  });
+  ipcMain.handle(IPC.EXECUTION_RECONCILE, async (_e, root: unknown, runId: unknown) => {
+    validRoot(root);
+    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
+    await reconcilePersistedExecutionRuns(root);
+    const previous = await getExecutionRun(root, runId);
+    if (!previous || previous.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN')
+      throw new Error('Only a previously uncertain Run can be rechecked.');
+    const ref = { projectRoot: path.resolve(root), runId };
+    if (executionCoordinator.hasActive(ref)) return previous;
+    await mutateExecutionRun(root, runId, (current) => {
+      if (current.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN') return;
+      current.lifecycle = 'RUNNING';
+      current.error = null;
+      current.controls.scheduling = 'ACTIVE';
+    });
+    await reconcilePersistedExecutionRuns(root);
+    const latest = await getExecutionRun(root, runId);
+    if (!latest) throw new Error('Execution Run disappeared while reconciling.');
+    return latest;
   });
   ipcMain.handle(IPC.EXECUTION_GET, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
@@ -2333,6 +2489,7 @@ function register() {
   });
   ipcMain.handle(IPC.EXECUTION_RESUME, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
+    await reconcilePersistedExecutionRuns(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     const previous = await getExecutionRun(root, runId);
     if (!previous) throw new Error(`Execution Run ${runId} was not found.`);

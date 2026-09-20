@@ -250,6 +250,103 @@ export class RemoteExecutionService {
     this.workers.set(runId, task);
     return task;
   }
+  // Reattach to the existing sequence without issuing run_scene_sequence, which could
+  // submit an already accepted prompt again after a Main Process crash.
+  recover(root: string, runId: string): Promise<void> {
+    const existing = this.workers.get(runId);
+    if (existing) return existing;
+    const task = this.recoverSequence(root, runId)
+      .catch(async (error) => {
+        await mutateExecutionRun(root, runId, (run) => {
+          if (run.lifecycle !== 'RUNNING') return;
+          const failure = {
+            code: 'EXECUTION_RECOVERY_UNCERTAIN',
+            message: `Remote Runの復旧確認ができません。旧WorkerまたはPromptが稼働中の可能性があります。新しいPromptは投入していません。Vast.ai Instanceの課金状態を確認してください: ${safeError(error)}`,
+            phase: run.phase,
+            at: new Date().toISOString(),
+            retryable: false,
+          };
+          run.error = failure;
+          run.errorHistory.push(failure);
+          run.lifecycle = 'FAILED';
+          run.controls.scheduling = 'STOPPED';
+          // Keep the prompt identity and partial artifacts until their fate is known.
+        });
+      })
+      .finally(async () => {
+        try {
+          const run = await getExecutionRun(root, runId);
+          // An unreachable worker may still be generating. Never stop its instance
+          // solely because a recovery probe failed.
+          if (run?.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN')
+            await this.onSettled?.(root, runId);
+        } finally {
+          this.remote.disconnect(root, runId);
+          this.workers.delete(runId);
+        }
+      });
+    this.workers.set(runId, task);
+    return task;
+  }
+  private async recoverSequence(root: string, runId: string) {
+    let response = asResponse(
+      (await this.remote.reconcile(root, runId)).response,
+    ) as WorkerSequenceResponse & { sequenceRunning?: boolean };
+    let state = response.state;
+    if (!state || state.runId !== runId)
+      throw new Error('Remote Worker does not have state for the persisted Run.');
+    while (state.status === 'running' || state.status === 'interrupting') {
+      if (response.sequenceRunning !== true)
+        throw new Error(
+          'Persisted Worker is not holding the sequence lock; an in-flight Prompt cannot be ruled out.',
+        );
+      await this.syncState(root, runId, state);
+      await sleep(750);
+      response = asResponse(
+        (await this.remote.reconcile(root, runId)).response,
+      ) as WorkerSequenceResponse & { sequenceRunning?: boolean };
+      state = response.state;
+      if (!state || state.runId !== runId)
+        throw new Error('Remote Worker state vanished while restoring monitoring.');
+    }
+    await this.syncState(root, runId, state);
+    if (state.status === 'paused' || state.status === 'interrupted') {
+      await mutateExecutionRun(root, runId, (run) => {
+        run.lifecycle = state!.status === 'paused' ? 'PAUSED' : 'INTERRUPTED';
+        run.controls.scheduling = 'STOPPED';
+        if (state!.status === 'interrupted') run.controls.interrupt = 'INTERRUPTED';
+      });
+      return;
+    }
+    if (state.status !== 'completed')
+      throw new Error(
+        `Remote Worker ended with status ${state.status ?? 'unknown'}; inspect its current Prompt before resuming.`,
+      );
+    const run = await getExecutionRun(root, runId);
+    if (!run || run.lifecycle !== 'RUNNING') return;
+    const completed = Number(state.overallCompleted);
+    if (completed !== run.progress.overall.total)
+      throw new Error(
+        `Remote Worker completed ${completed} of ${run.progress.overall.total} images.`,
+      );
+    if (!latestEvidence(run, 'EXECUTION_COMPLETED', 'remote-generation')) {
+      await recordExecutionEvidence(root, runId, {
+        kind: 'EXECUTION_COMPLETED',
+        scope: 'remote-generation',
+        data: {
+          images: completed,
+          expectedImages: run.progress.overall.total,
+          outputPrefix:
+            state.artifact?.outputPrefix ??
+            `BatchStudio/${safeProjectPart(run.projectId)}/${runId}`,
+          baselineCapturedAt: state.artifact?.capturedAt ?? null,
+        },
+      });
+    }
+    // execute() observes the verified evidence and enters artifact collection,
+    // never the prompt-submitting generation branch.
+    await this.execute(root, runId);
+  }
   beginDiscard(runId: string) {
     this.discardingRuns.add(runId);
   }

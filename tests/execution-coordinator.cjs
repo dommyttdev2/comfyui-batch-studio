@@ -60,6 +60,33 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, 'main', relat
   await remoteTask;
   assert.equal(coordinator.hasActiveRuns(), false);
 
+  // A previously persisted RUNNING Run can retain ownership when its Prompt
+  // might still be active after the original Main Process disappears.
+  const uncertain = { projectRoot: path.join(runtime, 'uncertain'), runId: 'orphan' };
+  const contender = { projectRoot: path.join(runtime, 'contender'), runId: 'other' };
+  const orphanTask = coordinator.startRemote(uncertain, 'vastai', 202, async () => {
+    assert.equal(coordinator.hasActive(uncertain), true);
+    coordinator.retain(uncertain);
+  });
+  await orphanTask;
+  assert.equal(coordinator.hasActive(uncertain), false);
+  assert.equal(coordinator.hasActiveRuns(), false);
+  assert.throws(
+    () => coordinator.startRemote(contender, 'vastai', 202, async () => {}),
+    /already in use/,
+    'an uncertain orphan must keep its resource lock after monitoring settles',
+  );
+  // Explicit recheck reattaches the original owner without reacquiring twice.
+  await coordinator.startRemote(uncertain, 'vastai', 202, async () => {});
+  await coordinator.startRemote(contender, 'vastai', 202, async () => {});
+  coordinator.reserveLocal(uncertain, 'http://127.0.0.1:8188');
+  assert.throws(
+    () => coordinator.startLocal(contender, 'http://127.0.0.1:8188', async () => {}),
+    /already in use/,
+  );
+  coordinator.releaseReservation(uncertain);
+  await coordinator.startLocal(contender, 'http://127.0.0.1:8188', async () => {});
+
   console.log('Execution coordinator tests passed.');
 })().catch((error) => {
   console.error(error);

@@ -57,6 +57,7 @@ export const IPC = {
   PREFLIGHT_RUN: 'preflight:run',
   EXECUTION_START: 'execution:start',
   EXECUTION_STATUS: 'execution:status',
+  EXECUTION_RECONCILE: 'execution:reconcile',
   EXECUTION_GET: 'execution:get',
   EXECUTION_STOP_SCHEDULING: 'execution:stop-scheduling',
   EXECUTION_FORCE_INTERRUPT: 'execution:force-interrupt',

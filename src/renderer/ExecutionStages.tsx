@@ -682,15 +682,19 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
   const canRestartRemote = Boolean(
     active && remoteInstanceChanged && phaseIndex(current!.phase) < phaseIndex('EXECUTING'),
   );
+  const recoveryUncertain = current?.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN';
   const canRestartFromScratch = Boolean(
     current &&
+      !recoveryUncertain &&
       (current.lifecycle !== 'RUNNING' ||
         current.executionTarget === 'local' ||
         phaseIndex(current.phase) <= phaseIndex('EXECUTING')),
   );
-  const canStart = preflight?.state === 'READY' && !active;
+  const canStart = preflight?.state === 'READY' && !active && !recoveryUncertain;
   const canResume = Boolean(
-    current && ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
+    current &&
+      !recoveryUncertain &&
+      ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
   );
   const canStopScheduling = Boolean(
     current &&
@@ -704,32 +708,37 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
       current.phase === 'EXECUTING' &&
       current.controls.interrupt !== 'INTERRUPTED',
   );
-  const startBanner = checking
-    ? { state: 'CHECKING', message: 'Preflightを確認しています。' }
-    : canRestartRemote
-      ? {
-          state: 'INSTANCE CHANGED',
-          message: `現在のRunは Vast.ai Instance #${current?.remote?.instanceId ?? '-'} を使用しています。Projectでは #${selectedProjectRemoteInstanceId ?? '-'} が選択されています。「別Instanceで新しく実行」で新しいRunを開始できます。`,
-        }
-      : preflight?.state !== 'READY'
+  const startBanner = recoveryUncertain
+    ? {
+        state: 'RECOVERY REQUIRED',
+        message: `既存Prompt/Workerの状態が未確定のため、自動生成とResumeを停止しています。「状態を再確認」は既存処理の確認のみ行い、新しいPromptを投入しません。Remoteの場合はVast.ai Instanceの課金状態も確認してください。`,
+      }
+    : checking
+      ? { state: 'CHECKING', message: 'Preflightを確認しています。' }
+      : canRestartRemote
         ? {
-            state: preflight?.state ?? 'UNKNOWN',
-            message: current
-              ? '通常のStartにはPreflight READYが必要です。prompt_plan変更後は「最新のPrompt Planで最初から実行」でWorkflowを再生成して新しいRunを開始できます。'
-              : 'StartにはPreflight READYが必要です',
+            state: 'INSTANCE CHANGED',
+            message: `現在のRunは Vast.ai Instance #${current?.remote?.instanceId ?? '-'} を使用しています。Projectでは #${selectedProjectRemoteInstanceId ?? '-'} が選択されています。「別Instanceで新しく実行」で新しいRunを開始できます。`,
           }
-        : active
-          ? current?.lifecycle === 'RUNNING'
-            ? {
-                state: 'RUN RUNNING',
-                message:
-                  '既存Runが実行中です。通常の停止はStop scheduling / Force interrupt、prompt_plan変更後の再実行は「最新のPrompt Planで最初から実行」を使用してください。',
-              }
-            : {
-                state: `RUN ${current?.lifecycle ?? 'ACTIVE'}`,
-                message: '既存Runが未完了です。新規StartではなくResumeで再開してください。',
-              }
-          : { state: 'READY', message: 'Start可能です' };
+        : preflight?.state !== 'READY'
+          ? {
+              state: preflight?.state ?? 'UNKNOWN',
+              message: current
+                ? '通常のStartにはPreflight READYが必要です。prompt_plan変更後は「最新のPrompt Planで最初から実行」でWorkflowを再生成して新しいRunを開始できます。'
+                : 'StartにはPreflight READYが必要です',
+            }
+          : active
+            ? current?.lifecycle === 'RUNNING'
+              ? {
+                  state: 'RUN RUNNING',
+                  message:
+                    '既存Runが実行中です。通常の停止はStop scheduling / Force interrupt、prompt_plan変更後の再実行は「最新のPrompt Planで最初から実行」を使用してください。',
+                }
+              : {
+                  state: `RUN ${current?.lifecycle ?? 'ACTIVE'}`,
+                  message: '既存Runが未完了です。新規StartではなくResumeで再開してください。',
+                }
+            : { state: 'READY', message: 'Start可能です' };
   const branch =
     current?.progress.branches.find((x) => x.branchId === current.current.branchId) ?? null;
   const delivery = current ? deliveryStatus(current) : null;
@@ -833,6 +842,17 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
           >
             Resume
           </button>
+          {recoveryUncertain && current && (
+            <button
+              onClick={() =>
+                void apply(() =>
+                  window.batchStudio.execution.reconcile(project.rootPath, current.runId),
+                )
+              }
+            >
+              既存Runの状態を再確認
+            </button>
+          )}
           <button
             disabled={current?.lifecycle !== 'COMPLETED'}
             onClick={() => void window.batchStudio.project.openFolder(outputPath)}
