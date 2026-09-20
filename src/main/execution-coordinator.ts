@@ -57,6 +57,7 @@ export class ExecutionResourceLockManager {
 
 export class ExecutionCoordinator {
   private readonly active = new Map<string, Promise<void>>();
+  private readonly retained = new Set<string>();
 
   constructor(private readonly locks = new ExecutionResourceLockManager()) {}
 
@@ -66,6 +67,36 @@ export class ExecutionCoordinator {
 
   hasActive(ref: ExecutionRef) {
     return this.active.has(refKey(ref));
+  }
+
+  // Retain an uncertain Run's resource across a failed recovery: the old
+  // ComfyUI process may still own an unobserved accepted Prompt.
+  retain(ref: ExecutionRef) {
+    const key = refKey(ref);
+    if (!this.active.has(key) && !this.retained.has(key))
+      throw new Error('A resource must be acquired before its reservation can be retained.');
+    this.retained.add(key);
+  }
+
+  reserveLocal(ref: ExecutionRef, endpoint: string) {
+    this.reserve(ref, () => this.locks.acquireLocal(endpoint, ref));
+  }
+
+  reserveRemote(ref: ExecutionRef, provider: string, instanceId: number) {
+    this.reserve(ref, () => this.locks.acquireRemote(provider, instanceId, ref));
+  }
+
+  private reserve(ref: ExecutionRef, acquire: () => void) {
+    const key = refKey(ref);
+    if (this.active.has(key) || this.retained.has(key)) return;
+    acquire();
+    this.retained.add(key);
+  }
+
+  releaseReservation(ref: ExecutionRef) {
+    const key = refKey(ref);
+    if (!this.retained.delete(key)) return;
+    if (!this.active.has(key)) this.locks.release(ref);
   }
 
   async waitForSettled(ref: ExecutionRef) {
@@ -85,11 +116,13 @@ export class ExecutionCoordinator {
     const key = refKey(ref);
     const existing = this.active.get(key);
     if (existing) return existing;
-    acquire();
+    // A persisted uncertain owner may have been reserved before reattachment.
+    if (!this.retained.has(key)) acquire();
+    else this.retained.delete(key);
     const task = Promise.resolve()
       .then(work)
       .finally(() => {
-        this.locks.release(ref);
+        if (!this.retained.has(key)) this.locks.release(ref);
         this.active.delete(key);
       });
     this.active.set(key, task);
