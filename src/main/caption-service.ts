@@ -249,19 +249,23 @@ export async function getCaptionStatus(root: string): Promise<CaptionStatus> {
   };
 }
 
-async function saveRawResponse(root: string, raw: string) {
+async function saveRawResponse(root: string, raw: string, provider: 'grok' | 'codex') {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const file = path.join(
     internalDir(root),
-    'grok-responses',
+    provider === 'codex' ? 'codex-responses' : 'grok-responses',
     'caption',
     `${stamp}-${randomUUID()}.txt`,
   );
   await writeTextAtomic(file, raw);
 }
 
-export async function importCaptionGrok(root: string, raw: string): Promise<ImportResult> {
-  await saveRawResponse(root, raw);
+export async function importCaptionGrok(
+  root: string,
+  raw: string,
+  options: { automatic?: boolean; provider?: 'grok' | 'codex' } = {},
+): Promise<ImportResult> {
+  await saveRawResponse(root, raw, options.provider ?? 'grok');
   const extracted = jsonCandidate(raw);
   let parsed: unknown;
   try {
@@ -284,7 +288,7 @@ export async function importCaptionGrok(root: string, raw: string): Promise<Impo
     };
   }
   const validation = validateCaptionContent(parsed);
-  await writeJsonAtomic(draftPath(root), parsed);
+  if (!options.automatic || validation.valid) await writeJsonAtomic(draftPath(root), parsed);
   const summary: ImportResult['summary'] = {};
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
     const value = parsed as Partial<CaptionContent>;
