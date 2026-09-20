@@ -218,9 +218,13 @@
 }
 
 @keyframes codex-working-pulse {
-  50% { opacity: 0.48; }
+  50% {
+    opacity: 0.48;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .codex-runtime-indicator { animation: none; }
+  .codex-runtime-indicator {
+    animation: none;
+  }
 }
