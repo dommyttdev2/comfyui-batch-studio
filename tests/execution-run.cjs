@@ -318,7 +318,11 @@ const writeJson = (file, value) => {
   await execution.mutateExecutionRun(root, second.runId, (run) => {
     run.lifecycle = 'FAILED';
   });
-  const cleanupPendingStop = await execution.resumeExecutionRun(root, second.runId, async () => ready);
+  const cleanupPendingStop = await execution.resumeExecutionRun(
+    root,
+    second.runId,
+    async () => ready,
+  );
   assert.equal(cleanupPendingStop.lifecycle, 'RUNNING');
   assert.equal(cleanupPendingStop.phase, 'CLOUD_INSTANCE_FINALIZING');
   await execution.mutateExecutionRun(root, second.runId, (run) => {
