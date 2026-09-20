@@ -139,7 +139,9 @@ export function GrokBridge({
         <div>
           <h3>{title}</h3>
           <p className="assistant-stage-hint">
-            {receive ? `${provider === 'codex' ? 'Codex' : 'Grok'}で作成した成果物を自動で検証し、下書きに反映します。確定操作は別途必要です。` : '右側のAI Paneでストーリーを検討します。この依頼では成果物を作成しません。'}
+            {receive
+              ? `${provider === 'codex' ? 'Codex' : 'Grok'}で作成した成果物を自動で検証し、下書きに反映します。確定操作は別途必要です。`
+              : '右側のAI Paneでストーリーを検討します。この依頼では成果物を作成しません。'}
           </p>
         </div>
         {resetScope && onReset && <StageResetMenu scope={resetScope} onReset={onReset} />}
@@ -158,13 +160,18 @@ export function GrokBridge({
                     ? '取り込み完了：下書きに反映しました（未確定）'
                     : autoArtifact.phase === 'duplicate'
                       ? '取り込み済みの成果物です'
-                      : (autoArtifact.message ?? '取り込みに失敗しました。既存の下書きは維持されます。')}
+                      : (autoArtifact.message ??
+                        '取り込みに失敗しました。既存の下書きは維持されます。')}
           </span>
           {autoArtifact.issues?.map((issue, index) => (
-            <div className="issue error" key={index}>{issue.message}</div>
+            <div className="issue error" key={index}>
+              {issue.message}
+            </div>
           ))}
           {autoArtifact.filePath && (
-            <button onClick={() => void window.batchStudio.file.showInFolder(autoArtifact.filePath!)}>
+            <button
+              onClick={() => void window.batchStudio.file.showInFolder(autoArtifact.filePath!)}
+            >
               ファイルの場所を開く
             </button>
           )}
@@ -179,9 +186,14 @@ export function GrokBridge({
       )}
       {provider === 'codex' ? (
         <div className="assistant-stage-guide">
-          <strong>右側のCodex Paneで{receive ? '対応する工程用の依頼を送信' : '「ストーリーを検討」を選択'}してください。</strong>
+          <strong>
+            右側のCodex Paneで
+            {receive ? '対応する工程用の依頼を送信' : '「ストーリーを検討」を選択'}してください。
+          </strong>
           <p>
-            {receive ? '完了すると成果物を自動的に検証・取り込みます。通常の「送信」ではなく「工程用の依頼を送信」を使用してください。' : '右側の工程選択で「ストーリーを検討」を選択し、工程用の依頼を送信してください。'}
+            {receive
+              ? '完了すると成果物を自動的に検証・取り込みます。通常の「送信」ではなく「工程用の依頼を送信」を使用してください。'
+              : '右側の工程選択で「ストーリーを検討」を選択し、工程用の依頼を送信してください。'}
             {receive && returnFile ? ` 取り込み先: ${returnFile.name}（下書き）` : ''}
           </p>
         </div>
@@ -191,147 +203,147 @@ export function GrokBridge({
             依頼内容を生成してコピーし、右側のGrok Paneに送信してください。
             {receive ? ' 成果物の返却を自動で監視し、検証後に下書きへ反映します。' : ''}
           </p>
-      {isFix && (
-        <label>
-          修正条件
-          <textarea
-            value={extra}
-            onChange={(e) => setExtra(e.target.value)}
-            placeholder="直したい点を入力（任意）"
-          />
-        </label>
-      )}
-      <div className="actions">
-        <button
-          onClick={() =>
-            run(async () =>
-              setTask(await window.batchStudio.grokTask.build(project.rootPath, stage, extra)),
-            )
-          }
-        >
-          依頼内容を生成
-        </button>
-        {task && (
-          <button
-            onClick={() =>
-              run(async () => {
-                window.batchStudio.clipboard.writeText(task.prompt);
-                if (receive)
-                  setAutoArtifact(
-                    await window.batchStudio.autoArtifact.armGrok(project.rootPath, stage),
-                  );
-              })
-            }
-          >
-            コピー・自動取り込み待機
-          </button>
-        )}
-      </div>
-      {task && (
-        <>
-          <textarea className="promptbox" value={task.prompt} readOnly />
-          <div className="attachments">
-            {task.attachments.map((a) => (
-              <div className="attachment-row" key={`${a.path}:${a.name}`}>
-                <span>
-                  {a.exists ? '✓' : '✕'} {a.name} — {a.purpose}
-                </span>
-                <button
-                  disabled={!a.exists}
-                  onClick={() => window.batchStudio.file.showInFolder(a.path)}
-                >
-                  場所を開く
-                </button>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      {receive && returnFile ? (
-        <details className="assistant-manual-fallback">
-          <summary>自動取り込みできない場合（手動でファイルを選択）</summary>
-          <h4>Grok返却ファイルを添付</h4>
-          <p className="grok-return-note">
-            自動取り込みできない場合のみ、Grokからダウンロードした <code>{returnFile.name}</code>{' '}
-            を添付してください。検証後、下書きへ取り込みます。
-          </p>
-          <div
-            className={`grok-file-dropzone ${dragging ? 'dragging' : ''}`}
-            onDragEnter={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setDragging(true);
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setDragging(true);
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setDragging(false);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setDragging(false);
-              selectReturnFile(e.dataTransfer.files?.[0] ?? null);
-            }}
-          >
-            <input
-              ref={fileInput}
-              type="file"
-              accept={returnFile.accept}
-              onChange={(e) => {
-                selectReturnFile(e.currentTarget.files?.[0] ?? null);
-                e.currentTarget.value = '';
-              }}
-            />
-            <strong>
-              {selectedFile ? selectedFile.name : `${returnFile.name} をここにドラッグ＆ドロップ`}
-            </strong>
-            <span>
-              {selectedFile
-                ? `${fileSizeLabel(selectedFile.size)} · 取り込み待ち`
-                : 'またはファイルエクスプローラーから選択'}
-            </span>
-            <button type="button" onClick={() => fileInput.current?.click()}>
-              ファイルを選択
-            </button>
-          </div>
-          {fileIssue && <div className="issue error">✕ {fileIssue}</div>}
-          <div className="actions grok-file-actions">
+          {isFix && (
+            <label>
+              修正条件
+              <textarea
+                value={extra}
+                onChange={(e) => setExtra(e.target.value)}
+                placeholder="直したい点を入力（任意）"
+              />
+            </label>
+          )}
+          <div className="actions">
             <button
-              className="primary"
-              disabled={!selectedFile || !onImport}
-              onClick={() => void importReturnFile()}
+              onClick={() =>
+                run(async () =>
+                  setTask(await window.batchStudio.grokTask.build(project.rootPath, stage, extra)),
+                )
+              }
             >
-              ファイルを解析・取り込む
+              依頼内容を生成
             </button>
-            {selectedFile && (
-              <button type="button" onClick={() => selectReturnFile(null)}>
-                選択を解除
+            {task && (
+              <button
+                onClick={() =>
+                  run(async () => {
+                    window.batchStudio.clipboard.writeText(task.prompt);
+                    if (receive)
+                      setAutoArtifact(
+                        await window.batchStudio.autoArtifact.armGrok(project.rootPath, stage),
+                      );
+                  })
+                }
+              >
+                コピー・自動取り込み待機
               </button>
             )}
           </div>
-          {importResultView(result)}
-        </details>
-      ) : receive ? (
-        <details className="assistant-manual-fallback">
-          <summary>自動取り込みできない場合（手動）</summary>
-          <h4>Grokの回答を貼り付け</h4>
-          <textarea className="raw" value={raw} onChange={(e) => setRaw(e.target.value)} />
-          <button
-            className="primary"
-            disabled={!raw.trim() || !onImport}
-            onClick={() => onImport && run(async () => setResult(await onImport(raw)))}
-          >
-            結果を解析・取り込む
-          </button>
-          {importResultView(result)}
-        </details>
-      ) : null}
+          {task && (
+            <>
+              <textarea className="promptbox" value={task.prompt} readOnly />
+              <div className="attachments">
+                {task.attachments.map((a) => (
+                  <div className="attachment-row" key={`${a.path}:${a.name}`}>
+                    <span>
+                      {a.exists ? '✓' : '✕'} {a.name} — {a.purpose}
+                    </span>
+                    <button
+                      disabled={!a.exists}
+                      onClick={() => window.batchStudio.file.showInFolder(a.path)}
+                    >
+                      場所を開く
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {receive && returnFile ? (
+            <details className="assistant-manual-fallback">
+              <summary>自動取り込みできない場合（手動でファイルを選択）</summary>
+              <h4>Grok返却ファイルを添付</h4>
+              <p className="grok-return-note">
+                自動取り込みできない場合のみ、Grokからダウンロードした <code>{returnFile.name}</code>{' '}
+                を添付してください。検証後、下書きへ取り込みます。
+              </p>
+              <div
+                className={`grok-file-dropzone ${dragging ? 'dragging' : ''}`}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragging(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragging(false);
+                  selectReturnFile(e.dataTransfer.files?.[0] ?? null);
+                }}
+              >
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept={returnFile.accept}
+                  onChange={(e) => {
+                    selectReturnFile(e.currentTarget.files?.[0] ?? null);
+                    e.currentTarget.value = '';
+                  }}
+                />
+                <strong>
+                  {selectedFile ? selectedFile.name : `${returnFile.name} をここにドラッグ＆ドロップ`}
+                </strong>
+                <span>
+                  {selectedFile
+                    ? `${fileSizeLabel(selectedFile.size)} · 取り込み待ち`
+                    : 'またはファイルエクスプローラーから選択'}
+                </span>
+                <button type="button" onClick={() => fileInput.current?.click()}>
+                  ファイルを選択
+                </button>
+              </div>
+              {fileIssue && <div className="issue error">✕ {fileIssue}</div>}
+              <div className="actions grok-file-actions">
+                <button
+                  className="primary"
+                  disabled={!selectedFile || !onImport}
+                  onClick={() => void importReturnFile()}
+                >
+                  ファイルを解析・取り込む
+                </button>
+                {selectedFile && (
+                  <button type="button" onClick={() => selectReturnFile(null)}>
+                    選択を解除
+                  </button>
+                )}
+              </div>
+              {importResultView(result)}
+            </details>
+          ) : receive ? (
+            <details className="assistant-manual-fallback">
+              <summary>自動取り込みできない場合（手動）</summary>
+              <h4>Grokの回答を貼り付け</h4>
+              <textarea className="raw" value={raw} onChange={(e) => setRaw(e.target.value)} />
+              <button
+                className="primary"
+                disabled={!raw.trim() || !onImport}
+                onClick={() => onImport && run(async () => setResult(await onImport(raw)))}
+              >
+                結果を解析・取り込む
+              </button>
+              {importResultView(result)}
+            </details>
+          ) : null}
         </>
       )}
     </section>
