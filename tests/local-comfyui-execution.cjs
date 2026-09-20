@@ -161,6 +161,7 @@ function startServer(install, options = {}) {
       interrupts: 0,
     },
     history = new Map(),
+    outputs = new Map(),
     running = new Set(),
     claimedHandles = new Map();
   let holdFirst = Boolean(options.holdFirst);
@@ -192,7 +193,8 @@ function startServer(install, options = {}) {
     if (req.url === '/prompt') {
       const graph = body.prompt,
         expand = Object.entries(graph).find(([, n]) => n.class_type === 'ScenePrompterExpand'),
-        save = Object.values(graph).find((n) => n.class_type === 'SceneSaveImage'),
+        saveEntry = Object.entries(graph).find(([, n]) => n.class_type === 'SceneSaveImage'),
+        save = saveEntry[1],
         promptId = `prompt-${calls.prompts.length + 1}`;
       const record = {
         promptId,
@@ -204,6 +206,11 @@ function startServer(install, options = {}) {
       calls.prompts.push(record);
       running.add(promptId);
       history.set(promptId, 'pending');
+      outputs.set(promptId, {
+        [saveEntry[0]]: {
+          images: [{ filename: `${promptId}.png`, subfolder: save.inputs.path, type: 'output' }],
+        },
+      });
       const target = path.join(install, 'output', String(save.inputs.path));
       fs.mkdirSync(target, { recursive: true });
       fs.writeFileSync(path.join(target, `${promptId}.png`), 'png');
@@ -245,7 +252,12 @@ function startServer(install, options = {}) {
       const id = decodeURIComponent(req.url.slice('/history/'.length)),
         state = history.get(id);
       if (!state) return json(200, {});
-      return json(200, { [id]: { status: { status_str: state, completed: state !== 'pending' } } });
+      return json(200, {
+        [id]: {
+          status: { status_str: state, completed: state !== 'pending' },
+          outputs: outputs.get(id),
+        },
+      });
     }
     return json(404, { error: 'not found' });
   });
@@ -273,10 +285,10 @@ function startServer(install, options = {}) {
 (async () => {
   const execution = await load('execution-run.js'),
     { hashCanonicalJson } = await load('workflow-api.js'),
-    { LocalExecutionService, enumerateSceneBranches, sliceSceneBranchGraph } =
+    { LocalExecutionService, enumerateSceneBranches, sliceSceneBranchGraph, verifyLocalOutputs } =
       await load('local-execution.js');
   {
-    const { root, install, run } = await makeProject(execution, hashCanonicalJson),
+    const { root, install, run, ready } = await makeProject(execution, hashCanonicalJson),
       mock = await startServer(install);
     try {
       const api = JSON.parse(fs.readFileSync(path.join(root, 'LoRA_project.api.json'), 'utf8'));
@@ -323,6 +335,44 @@ function startServer(install, options = {}) {
       assert.equal(mock.calls.releases.length, 2);
       assert.equal(done.progress.overall.completed, 3);
       assert.equal(done.promptIds.length, 3);
+      assert.ok(
+        mock.calls.prompts.every((x) =>
+          x.path.startsWith(`BatchStudio/${run.projectId}/${run.runId}/`),
+        ),
+        'only submitted Local API graphs must route images to this Run ID',
+      );
+      assert.equal(
+        done.evidence.filter((x) => x.kind === 'CUSTOM' && x.scope === 'local-generated-file')
+          .length,
+        3,
+      );
+      const firstFile = path.join(install, 'output', mock.calls.prompts[0].path, 'prompt-1.png');
+      fs.rmSync(firstFile);
+      await assert.rejects(
+        () => verifyLocalOutputs(install, done),
+        /ENOENT|missing|modified/,
+        'a deleted Run-owned image must fail verification',
+      );
+      fs.writeFileSync(firstFile, 'png');
+      const next = await execution.startExecutionRun(root, async () => ready);
+      // Old files, even with a colliding mtime, must never count toward a new Run.
+      const legacy = path.join(install, 'output', 'BatchStudio', run.projectId, 'legacy.png');
+      fs.copyFileSync(firstFile, legacy);
+      fs.utimesSync(legacy, new Date(), new Date());
+      const oldCount = mock.calls.prompts.length;
+      service.start(root, next.runId);
+      const nextDone = await waitFor(async () => {
+        const current = await execution.getExecutionRun(root, next.runId);
+        return current?.lifecycle === 'COMPLETED' ? current : null;
+      });
+      assert.equal(nextDone.progress.overall.completed, 3);
+      assert.ok(
+        mock.calls.prompts
+          .slice(oldCount)
+          .every((x) => x.path.startsWith(`BatchStudio/${next.projectId}/${next.runId}/`)),
+      );
+      assert.equal((await verifyLocalOutputs(install, nextDone)).count, 3);
+      assert.equal((await verifyLocalOutputs(install, done)).count, 3);
       assert.ok(
         mock.calls.prompts.every((x) => String(x.runHandle).startsWith('handle-')),
         'prepared run_handle must be injected before submit',
