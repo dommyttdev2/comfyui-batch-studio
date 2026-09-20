@@ -382,10 +382,18 @@ function parseModelsArtifact(content: string | null): ModelsArtifact | null {
     const parsed: unknown = JSON.parse(content);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
     const model = parsed as Record<string, unknown>;
-    if (!Array.isArray(model.loras) || !model.loras.every((lora) =>
-      lora && typeof lora === 'object' && typeof lora.ref === 'string' &&
-      typeof lora.fileName === 'string' && Array.isArray(lora.trainedWords)
-    )) return null;
+    if (
+      !Array.isArray(model.loras) ||
+      !model.loras.every(
+        (lora) =>
+          lora &&
+          typeof lora === 'object' &&
+          typeof lora.ref === 'string' &&
+          typeof lora.fileName === 'string' &&
+          Array.isArray(lora.trainedWords),
+      )
+    )
+      return null;
     return parsed as ModelsArtifact;
   } catch {
     return null;
