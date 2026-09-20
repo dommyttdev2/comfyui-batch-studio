@@ -521,7 +521,11 @@ function startServer(install, options = {}) {
       }));
       const recovery = reopened.recover(root, run.runId);
       await new Promise((resolve) => setTimeout(resolve, 50));
-      assert.equal(mock.calls.prompts.length, 1, 'recovery must only observe the old queued prompt');
+      assert.equal(
+        mock.calls.prompts.length,
+        1,
+        'recovery must only observe the old queued prompt',
+      );
       mock.releaseFirst();
       await recovery;
       const paused = await execution.getExecutionRun(root, run.runId);
@@ -560,7 +564,11 @@ function startServer(install, options = {}) {
       const failed = await execution.getExecutionRun(root, run.runId);
       assert.equal(failed.lifecycle, 'FAILED');
       assert.equal(failed.error.code, 'EXECUTION_RECOVERY_UNCERTAIN');
-      assert.equal(mock.calls.prompts.length, 0, 'an unrecorded accepted prompt must never be replayed');
+      assert.equal(
+        mock.calls.prompts.length,
+        0,
+        'an unrecorded accepted prompt must never be replayed',
+      );
     } finally {
       mock.server.close();
     }
