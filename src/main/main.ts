@@ -2356,13 +2356,31 @@ function register() {
           Number(other.remote.instanceId) === instanceId &&
           ['RUNNING', 'PAUSED', 'INTERRUPTED'].includes(other.lifecycle),
       );
-      if (conflicting)
-        throw new Error(
+      const restoreRetryableFailure = async (reason: unknown) => {
+        await mutateExecutionRun(root, runId, (current) => {
+          current.lifecycle = 'FAILED';
+          current.phase = 'CLOUD_INSTANCE_FINALIZING';
+          current.error = previous.error ?? {
+            code: 'REMOTE_INSTANCE_FINALIZE_FAILED',
+            message: safeExecutionError(reason),
+            phase: 'CLOUD_INSTANCE_FINALIZING',
+            at: new Date().toISOString(),
+            retryable: true,
+          };
+          current.controls.scheduling = 'STOPPED';
+        });
+      };
+      if (conflicting) {
+        const error = new Error(
           `Cannot stop Vast.ai Instance ${instanceId}: Run ${conflicting.runId} is still active.`,
         );
+        await restoreRetryableFailure(error);
+        throw error;
+      }
       const ref = { projectRoot: path.resolve(root), runId };
-      void executionCoordinator
-        .startRemote(ref, 'vastai', instanceId, async () => {
+      let task: Promise<void>;
+      try {
+        task = executionCoordinator.startRemote(ref, 'vastai', instanceId, async () => {
           await finalizeRemoteInstance(root, runId);
           const finalized = await getExecutionRun(root, runId);
           if (
@@ -2377,9 +2395,12 @@ function register() {
               current.completedAt = new Date().toISOString();
               current.controls.scheduling = 'STOPPED';
             });
-        })
-        .finally(maybeQuitAfterExecution)
-        .catch(() => {});
+        });
+      } catch (error) {
+        await restoreRetryableFailure(error);
+        throw error;
+      }
+      void task.finally(maybeQuitAfterExecution).catch(() => {});
       return run;
     }
     if (run.lifecycle === 'RUNNING') await startExecutionRuntime(root, run);
