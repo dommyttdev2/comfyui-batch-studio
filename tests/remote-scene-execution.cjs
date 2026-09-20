@@ -85,8 +85,10 @@ function startMock() {
     releases: [],
     interrupts: 0,
     loseNextPrompt: false,
+    dropResponseOnce: false,
   };
   const history = new Map([['recovered-1', 'success']]);
+  const submissionIds = new Map();
   const running = new Set();
   const pending = new Set(['unrelated-pending']);
   const server = http.createServer(async (req, res) => {
@@ -129,10 +131,30 @@ function startMock() {
         index: expand.inputs.current_index,
         runHandle: expand.inputs.run_handle,
       });
+      if (body.extra_data?.batch_studio_submission_id)
+        submissionIds.set(id, body.extra_data.batch_studio_submission_id);
       if (calls.loseNextPrompt) calls.loseNextPrompt = false;
       else history.set(id, 'success');
+      if (calls.dropResponseOnce) {
+        calls.dropResponseOnce = false;
+        res.destroy();
+        return;
+      }
       return json(200, { prompt_id: id, number: calls.prompts.length, node_errors: {} });
     }
+    if (req.url === '/history')
+      return json(
+        200,
+        Object.fromEntries(
+          [...history].map(([id, state]) => [
+            id,
+            {
+              status: { status_str: state, completed: state === 'success' },
+              prompt: [0, id, {}, { batch_studio_submission_id: submissionIds.get(id) }],
+            },
+          ]),
+        ),
+      );
     if (req.url?.startsWith('/history/')) {
       const id = decodeURIComponent(req.url.slice('/history/'.length)),
         state = history.get(id);
@@ -475,6 +497,62 @@ function startMock() {
       holder.kill();
       await new Promise((resolve) => holder.once('close', resolve));
     }
+    // The POST was accepted before the HTTP response disappeared. The worker
+    // must persist its sending intent and resolve that attempt on restart.
+    const lostAckDir = path.join(runtime, 'lost-ack');
+    fs.mkdirSync(lostAckDir);
+    const countBeforeAck = mock.calls.prompts.length;
+    mock.calls.dropResponseOnce = true;
+    result = await callWorker(workerPath, lostAckDir, payload(mock.endpoint, 'lost-ack-run'));
+    assert.equal(result.code, 2, 'first worker must report lost transport response');
+    const afterLostAck = JSON.parse(fs.readFileSync(path.join(lostAckDir, 'state.json'), 'utf8'));
+    assert.equal(afterLostAck.current.submission.status, 'sending');
+    assert.equal(afterLostAck.current.promptId, null);
+    assert.equal(mock.calls.prompts.length, countBeforeAck + 1);
+    result = await callWorker(workerPath, lostAckDir, {
+      requestId: 'resolve-lost-ack',
+      op: 'reconcile_submission',
+      comfyEndpoint: mock.endpoint,
+    });
+    assert.equal(result.code, 0, result.stderr);
+    response = result.lines.at(-1).result;
+    assert.equal(response.found, true);
+    assert.equal(response.state.status, 'paused');
+    assert.equal(response.state.current.promptId, mock.calls.prompts.at(-1).id);
+    assert.equal(mock.calls.prompts.length, countBeforeAck + 1, 'reconcile does not POST');
+    result = await callWorker(workerPath, lostAckDir, {
+      ...payload(mock.endpoint, 'lost-ack-run'),
+      resume: true,
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.lines.at(-1).result.state.status, 'completed');
+    assert.equal(result.lines.at(-1).result.state.overallCompleted, 2);
+    assert.equal(mock.calls.prompts.length, countBeforeAck + 2, 'remaining index only');
+
+    // If Queue and History cannot prove the accepted ID, retrying would be unsafe.
+    const unknownDir = path.join(runtime, 'unknown-ack');
+    fs.mkdirSync(unknownDir);
+    fs.writeFileSync(
+      path.join(unknownDir, 'state.json'),
+      JSON.stringify({
+        ...afterLostAck,
+        runId: 'unknown-ack-run',
+        workerPid: 0,
+        current: {
+          ...afterLostAck.current,
+          submission: { ...afterLostAck.current.submission, attemptId: 'missing-attempt-id' },
+        },
+      }),
+    );
+    const beforeUnknown = mock.calls.prompts.length;
+    result = await callWorker(workerPath, unknownDir, {
+      ...payload(mock.endpoint, 'unknown-ack-run'),
+      resume: true,
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.lines.at(-1).result.state.status, 'failed');
+    assert.equal(result.lines.at(-1).result.state.error.code, 'REMOTE_PROMPT_ACK_UNCERTAIN');
+    assert.equal(mock.calls.prompts.length, beforeUnknown, 'unknown ACK must not be retried');
     console.log('Remote Scene Prompt execution tests passed.');
   } finally {
     mock.server.close();
