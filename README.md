@@ -1,11 +1,11 @@
 # ComfyUI Batch Studio
 
-ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、**企画入力から Story、モデル選定、Prompt Plan、ComfyUI Workflow 生成、モデル所在確認、Cloudflare R2 管理、実行前 Preflight まで**を一つの Electron デスクトップアプリで管理するためのツールです。
+ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、**企画・モデル選定・Workflow 生成から Local / Remote 実行、成果物回収、最終成果物の指定、キャプション・サムネイル・販売サイト用画像の作成まで**を一つの Electron デスクトップアプリで管理するためのツールです。
 
 意味的・創作的な判断は Grok、状態管理・検証・機械変換・保存は Batch Studio、最終決定はユーザー、という責務分担を採用しています。
 
 > [!IMPORTANT]
-> 現在の実装は **Preflight まで**です。`実行` stage、ComfyUI Queue投入、生成進捗、Stop/Interrupt、Remote Worker、生成画像回収は設計済みですが未実装です。現行Preflightの `READY` は実装済みGate範囲の判定で、最終的なoperational READYより弱い状態です。
+> Local / Remote Execution、進捗監視・停止・再開、Remote Worker、R2 経由の成果物回収、後工程はコード上実装されています。`実行前チェック` の `READY` は入力・配置など開始前条件の判定で、ComfyUI / SSH / Vast.ai / R2 の稼働状況や全工程の成功を保証しません。公開環境での一連の実機 E2E 成功を、この README は保証しません。実行と復旧の既知の課題は [Open Issues](https://github.com/dommyttdev2/comfyui-batch-studio/issues) を確認してください。
 
 ## 主な機能
 
@@ -18,8 +18,10 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - Template + Manifest からの決定論的 ComfyUI Workflow 生成
 - Local / Cloudflare R2 のモデル所在確認
 - Cloudflare R2 の bucket / object / multipart upload / download / move / delete / batch DL / 一時PUT URL管理
-- 実行前 Preflight (`READY` / `BLOCKED`、現時点ではoperational checkの一部は未実装)
-- `Window` メニューから R2 File Manager / Civit Explorer を別ウィンドウ表示
+- 実行前 Preflight (`READY` / `BLOCKED`) と Local / Vast.ai Remote Execution（Run履歴、生成進捗、停止・再開）
+- Remote環境準備、R2からのモデル配置、生成成果物ZIPのR2経由Local回収・SHA-256検証
+- 最終成果物の指定、caption.txt生成、サムネイル編集、販売サイト用画像とZIPの生成
+- `Window` メニューから R2 File Manager / Civit Explorer / vast.ai を別ウィンドウ表示
 
 旧 `civit-model-viewer` と `r2-file-manager` の主要機能は Batch Studio に統合済みです。新規フローでは、それらを別サーバーとして起動する必要はありません。
 
@@ -36,8 +38,8 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - **Grok Web アカウント**: Story / モデル選定 / Prompt Plan の作成時
 - **Civitai API Key**: 統合モデルカタログを新規同期するとき
 - **Cloudflare R2 credentials**: R2 機能を利用するとき
-- **Local ComfyUI installation**: Localモデル配置確認を利用するとき
-- **Vast.ai API Key + SSH private key path**: Remote targetのprovider/instance選択を利用するとき
+- **Local ComfyUI installation + Workflow依存custom_nodes**: Localモデル配置・Local生成を利用するとき。Local実行には起動中のComfyUI APIが必要です
+- **Vast.ai API Key + SSH private key path + Remote ComfyUIインストール先 + R2**: Vast.ai Remote実行を利用するとき。選択InstanceへのSSH接続とRemote環境準備・R2転送が必要です
 
 ## セットアップ
 
@@ -154,22 +156,32 @@ npm run dev
 
 ## 基本的な使い方
 
-現在のProject UIは次の7工程で構成されています。Civit Explorerはapp-wide toolで、独立したProject工程ではありません。
+現在のProject UIは次の工程で構成されています。Civit Explorer、R2 File Manager、vast.ai はapp-wide toolで、独立したProject工程ではありません。
 
 ```text
-1. Project Brief
+1. Project Brief / 基本設定
    ↓
-2. Story
+2. Story / ストーリー
    ↓
-3. Model Selection
+3. Model Selection / モデル選定
    ↓
-4. Prompt Planning
+4. Prompt Planning / プロンプト設計
    ↓
-5. Workflow Compile
+5. Workflow Compile / ワークフロー
    ↓
-6. Model Availability
+6. Model Availability / モデル配置
    ↓
-7. Preflight
+7. Preflight / 実行前チェック
+   ↓
+8. Execution / 実行
+   ↓
+9. Final Artifacts / 最終成果物
+   ↓
+10. Caption / キャプション
+   ↓
+11. Thumbnail / サムネイル
+   ↓
+12. Marketplace Images / 販売サイト用画像
 
 Civit Explorer / R2 File Manager / Vast.ai は app-wide service tool
 ```
@@ -185,6 +197,11 @@ Civit Explorer / R2 File Manager / Vast.ai は app-wide service tool
 ワークフロー
 モデル配置
 実行前チェック
+実行
+最終成果物
+キャプション
+サムネイル
+販売サイト用画像
 ```
 
 ### 1. Project Brief を作成する
@@ -371,9 +388,35 @@ Projectの「モデル配置」工程ではR2をread-onlyで参照します。up
 - Remote時はVast.ai provider / instance、API Key、SSH private key path等の現在実装済みGateを満たす
 - Blocking error がない
 
-すべての**現在実装済み**Gateを通過すると `READY` になります。ただしLocal ComfyUI API / Scene Prompt Tools / SSH実認証等のoperational checkはまだ未実装です。
+すべてのPreflight Gateを通過すると `READY` になります。これは開始条件の判定であり、実行先への実接続、モデルの転送、生成成功や回収の完了を保証しません。実行時の失敗は「実行」工程のRun状態・エラーを確認してください。
 
-現時点では生成された Workflow JSON を ComfyUI 側で読み込み、ComfyUI で生成を実行してください。Batch Studio自体のExecution stage / Queue API送信は未実装です。
+### 9. Local / Remote で生成する
+
+「実行」工程で実行先を確認してRunを開始します。Localは起動中のComfyUI APIにWorkflowを投入し、Run単位の画像と生成進捗を監視します。RemoteはVast.aiの選択Instanceを利用し、SSH接続・ComfyUI環境準備・R2から必要モデルの配置を行った後、Remote Workerで連続生成します。生成結果はZIPにまとめ、R2を経由してLocalへダウンロードし、サイズとSHA-256を確認します。
+
+停止・再開・Run破棄と新規実行の操作は「実行」工程で行います。再開はRun状態と残存成果物の条件に依存し、失敗済みRunの再開を無条件には保証しません。**Remote Runが正常完了した場合は、開始前から稼働していたものを含めVast.ai Instanceを停止**します。Instance停止確認に失敗した場合はRunのエラーを確認し、停止のみの再試行を行ってください。Vast.ai側でも停止状態を確認してください。
+
+Remote回収済みファイルは、成果物配置root（未設定の場合はProject root）を基点に以下のように配置します。ZIP内にはmanifestを含めません。
+
+```text
+<artifact-output-root>/remote_output/<runId>/
+├─ <yyyymmdd_hhmmss>.zip  # JSTの日時
+└─ manifest.json
+```
+
+詳細な実行・復旧仕様は [Local / Remote Execution Architecture](docs/architecture/remote-execution.md) を参照してください。
+
+### 10. 最終成果物を指定する
+
+生成画像を選定・必要に応じて編集した後、「最終成果物」工程で実際に配布する画像のディレクトリを指定します。後工程は原則この指定ディレクトリを参照します。ここでの画像枚数は指定先に存在する対象画像から数えます。
+
+### 11. キャプションを作成する
+
+「キャプション」工程で最終成果物に基づくタイトル・説明文のJSONを作成・確定し、Batch Studioが画像枚数や定型の注意書きを合成してProject直下に `caption.txt` を生成します。生成後に入力・二次創作フラグ・実ファイルが変わった場合は再生成が必要です。
+
+### 12. サムネイルと販売サイト用画像を作成する
+
+「サムネイル」工程でプレビューを見ながら画像・テキスト等を編集します。続く「販売サイト用画像」工程では、サムネイル用画像とは別に元画像とクロップ位置を選び、FANZA / DLsite向けの画像を個別に生成してZIPへまとめます。元画像・設定を変更したら販売サイト用画像を再生成してからZIPを作成してください。
 
 ## Project Settings
 
@@ -404,12 +447,16 @@ Projectの「モデル配置」工程ではR2をread-onlyで参照します。up
 ├─ models.json
 ├─ prompt_plan.json
 ├─ LoRA_<project-destination-folder>.json
+├─ LoRA_<project-destination-folder>.api.json
+├─ execution_runs/
+├─ caption.txt                 # キャプション生成後
+├─ marketplace/                # 販売サイト用画像の生成後
 └─ ._batch_studio/
    ├─ drafts/
    └─ history/
 ```
 
-`model_catalog.json` は Project ごとにはコピーせず、app-wide のデータとして管理します。
+`model_catalog.json` は Project ごとにはコピーせず、app-wide のデータとして管理します。実行先と成果物配置rootによって、生成画像・回収ZIPはProject root以外に保存されることがあります。「最終成果物」工程で指定したディレクトリは、生成元やRemote回収先と同一である必要はありません。
 
 ## Build / Test
 
@@ -472,14 +519,14 @@ Template と Manifest が対応していません。Manifest が参照する Tem
 ## Security / Responsibility Boundary
 
 - Grok は Story / LoRA選定 / Prompt Plan の意味設計を担当します。Model Familyと基盤モデルはユーザーが選択します。
-- Batch Studio は Project 状態、validation、Workflow compile、Civitai / R2 integration を担当します。
+- Batch Studio は Project 状態、validation、Workflow compile、Local / Remote Execution、Civitai / R2 integrationと後工程を担当します。
 - Grok Web のログイン・送信・添付・会話継続はユーザーが操作します。
 - Civitai API Key は Project artifact や Grok へ渡しません。
 - R2 Secret / Cloudflare API Token は Electron Main Process でのみ利用します。
 - 保存済み R2 Secret は `safeStorage` で暗号化します。
 - 確定済み Artifact を暗黙上書きせず、編集は Draft から開始し履歴を残します。
 - Grok に ComfyUI Workflow JSON を生成させません。
-- 現在の実装はPreflightまでで、ComfyUI Queue / progress / cancel / output collectionはまだ行いません。
+- ComfyUI Queue投入、生成進捗・停止・再開、R2経由のRemote成果物回収は実装されています。成功を保証するものではなく、実行時のエラーとRun履歴を確認してください。
 
 ## Documentation
 
@@ -494,3 +541,6 @@ Template と Manifest が対応していません。Manifest が参照する Tem
 - `docs/architecture/workflow-compiler.md` — Workflow Compiler
 - `docs/integrations/external-tools.md` — Civitai / R2 / ComfyUI integration
 - `docs/quality/validation-and-security.md` — Validation / Security / Preflight
+- `docs/architecture/remote-execution.md` — Local / Remote Execution、Remote Worker、R2成果物回収とRun復旧
+- `docs/integrations/service-integrations.md` — Vast.ai・接続設定・Instance管理
+- `docs/contracts/project-artifacts.md` — 最終成果物を含むProjectファイルと正本関係
