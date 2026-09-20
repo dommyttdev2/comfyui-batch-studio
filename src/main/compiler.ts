@@ -550,6 +550,7 @@ export async function compileWorkflow(root: string): Promise<CompileResult> {
     workflowIdentity = hashCanonicalJson({ uiSha256, apiSha256 });
   await saveWorkflowBuild(root, {
     compilerVersion: '2.2.0',
+    modelsSha256: hashCanonicalJson(models),
     generatedAt: new Date().toISOString(),
     template: {
       id: manifest.template.id,
