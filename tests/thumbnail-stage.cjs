@@ -228,10 +228,38 @@ matchCode(
 console.log('Thumbnail stage contract tests passed.');
 
 matchCode(stage, /useEditorAutosave\(/, 'thumbnail must use durable autosave');
-matchCode(stage, /saveStatus[\s\S]*saveError[\s\S]*retrySave/, 'save failures must remain visible and retryable');
-doesNotMatchCode(stage, /thumbnail\.save\(project\.rootPath, state\)\.catch\(\(\) => \{\}\)/, 'editor may not silently swallow save failure');
-matchCode(service, /withTemplateStoreLock\(file/, 'concurrent Main process saves must share a per-file lock');
-matchCode(service, /normalized\.saveRevision\s*<\s*lastRevision/, 'older save must not overwrite newer editor state');
-matchCode(autosave, /return \(\) => flush\(\)/, 'stage switch must flush pending autosave before unmount');
-matchCode(autosave, /window\.addEventListener\('beforeunload', flush\)/, 'window closing must dispatch pending autosave');
-matchCode(autosave, /EDITOR_SAVE_STALE/, 'out-of-order save acknowledgments must surface as conflicts');
+matchCode(
+  stage,
+  /saveStatus[\s\S]*saveError[\s\S]*retrySave/,
+  'save failures must remain visible and retryable',
+);
+doesNotMatchCode(
+  stage,
+  /thumbnail\.save\(project\.rootPath, state\)\.catch\(\(\) => \{\}\)/,
+  'editor may not silently swallow save failure',
+);
+matchCode(
+  service,
+  /withTemplateStoreLock\(file/,
+  'concurrent Main process saves must share a per-file lock',
+);
+matchCode(
+  service,
+  /normalized\.saveRevision\s*<\s*lastRevision/,
+  'older save must not overwrite newer editor state',
+);
+matchCode(
+  autosave,
+  /return \(\) => flush\(\)/,
+  'stage switch must flush pending autosave before unmount',
+);
+matchCode(
+  autosave,
+  /window\.addEventListener\('beforeunload', flush\)/,
+  'window closing must dispatch pending autosave',
+);
+matchCode(
+  autosave,
+  /EDITOR_SAVE_STALE/,
+  'out-of-order save acknowledgments must surface as conflicts',
+);
