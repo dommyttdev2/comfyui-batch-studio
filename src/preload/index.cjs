@@ -144,6 +144,10 @@ const I = {
   CODEX_SEND_TASK: 'codex:send-task',
   CODEX_EVENT: 'codex:event',
   CODEX_SAVE_RESPONSE: 'codex:save-response',
+  CODEX_RETRY_ARTIFACT: 'codex:retry-artifact',
+  CODEX_LATEST_ARTIFACT: 'codex:latest-artifact',
+  AUTO_ARTIFACT_GROK_ARM: 'auto-artifact:grok-arm',
+  AUTO_ARTIFACT_EVENT: 'auto-artifact:event',
   GROK_SET_VISIBLE: 'grok:set-visible',
   GROK_SET_CONTEXT: 'grok:set-context',
   GROK_SET_RATIO: 'grok:set-ratio',
@@ -334,6 +338,14 @@ contextBridge.exposeInMainWorld('batchStudio', {
     deleteTemplate: (id) => ipcRenderer.invoke(I.R2_DELETE_TEMPLATE, id),
     metrics: () => ipcRenderer.invoke(I.R2_METRICS),
   },
+  autoArtifact: {
+    armGrok: (root, stage) => ipcRenderer.invoke(I.AUTO_ARTIFACT_GROK_ARM, root, stage),
+    onEvent: (listener) => {
+      const handler = (_event, value) => listener(value);
+      ipcRenderer.on(I.AUTO_ARTIFACT_EVENT, handler);
+      return () => ipcRenderer.removeListener(I.AUTO_ARTIFACT_EVENT, handler);
+    },
+  },
   codex: {
     getProvider: () => ipcRenderer.invoke(I.CODEX_GET_PROVIDER),
     setProvider: (p) => ipcRenderer.invoke(I.CODEX_SET_PROVIDER, p),
@@ -359,6 +371,8 @@ contextBridge.exposeInMainWorld('batchStudio', {
       return () => ipcRenderer.removeListener(I.CODEX_EVENT, handler);
     },
     saveResponse: (text) => ipcRenderer.invoke(I.CODEX_SAVE_RESPONSE, text),
+    retryArtifact: () => ipcRenderer.invoke(I.CODEX_RETRY_ARTIFACT),
+    latestArtifact: () => ipcRenderer.invoke(I.CODEX_LATEST_ARTIFACT),
   },
   grok: {
     setVisible: (v) => ipcRenderer.invoke(I.GROK_SET_VISIBLE, v),
