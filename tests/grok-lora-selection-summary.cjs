@@ -29,13 +29,13 @@ matchCode(
 );
 matchCode(
   stages,
-  /stage="models" title="GrokでLoRAを選定"[\s\S]*?<GrokLoraHistory project=\{project\} stage="models"/,
-  'initial selection history must render directly below the initial Grok stage',
+  /stage="models" title="LoRAを選定"[\s\S]*?<GrokLoraHistory project=\{project\} stage="models"/,
+  'initial selection history must render directly below the provider-neutral initial stage',
 );
 matchCode(
   stages,
   /stage="models-fix" title="LoRAを再選定"[\s\S]*?<GrokLoraHistory project=\{project\} stage="models-fix"/,
-  'reselection history must render directly below the reselection Grok stage',
+  'reselection history must render directly below the provider-neutral reselection stage',
 );
 matchCode(
   stages,
