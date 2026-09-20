@@ -1,9 +1,9 @@
-import { updateProjectMeta } from './project-meta.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import type { ModelsArtifact } from '../shared/types.js';
 import { exists, readJson, writeJsonAtomic } from './fs-utils.js';
+import { updateProjectMeta } from './project-meta.js';
 
 export type ManualResetScope =
   | 'story'
