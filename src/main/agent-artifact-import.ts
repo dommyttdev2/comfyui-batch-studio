@@ -44,14 +44,17 @@ async function readLedger(root: string): Promise<Ledger> {
 export async function latestAutoArtifact(
   root: string,
   provider: AutoArtifactProvider,
-  stage: Stage,
+  stage: Stage | GrokContextStage,
   sourcePrefix = '',
 ): Promise<AutoArtifactEvent | null> {
   const ledger = await readLedger(root);
   const found = Object.values(ledger.records).filter(
     (record) =>
       record.provider === provider &&
-      record.stage === stage &&
+      (record.stage === stage ||
+        (stage === 'story' && record.stage.startsWith('story-')) ||
+        (stage === 'models' && record.stage.startsWith('models')) ||
+        (stage === 'prompt-plan' && record.stage.startsWith('prompt-plan'))) &&
       record.sourceId.startsWith(sourcePrefix),
   );
   return found.at(-1) ?? null;
