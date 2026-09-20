@@ -135,6 +135,8 @@ export const IPC = {
   CODEX_STATUS: 'codex:status',
   CODEX_SIGN_IN: 'codex:sign-in',
   CODEX_SNAPSHOT: 'codex:snapshot',
+  CODEX_MODELS: 'codex:models',
+  CODEX_SELECT_MODEL: 'codex:select-model',
   CODEX_NEW_CHAT: 'codex:new-chat',
   CODEX_RESTORE_CHAT: 'codex:restore-chat',
   CODEX_SEND: 'codex:send',
