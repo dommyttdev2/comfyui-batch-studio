@@ -222,7 +222,11 @@ export async function saveThumbnailState(
     const lastRevision = current?.saveRevision ?? 0;
     if (normalized.saveRevision !== undefined && normalized.saveRevision < lastRevision)
       return normalizeThumbnailState(current);
-    if (normalized.saveRevision !== undefined && normalized.saveRevision === lastRevision && current) {
+    if (
+      normalized.saveRevision !== undefined &&
+      normalized.saveRevision === lastRevision &&
+      current
+    ) {
       const proposed = { ...normalized, saveRevision: lastRevision };
       if (JSON.stringify(proposed) !== JSON.stringify(current))
         throw new Error('EDITOR_SAVE_CONFLICT: Thumbnail state was modified by another editor.');
