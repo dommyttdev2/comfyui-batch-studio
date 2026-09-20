@@ -330,7 +330,9 @@ export class LocalExecutionService {
     if (!run || run.lifecycle !== 'RUNNING' || run.executionTarget !== 'local') return;
     const promptId = run.current.promptId;
     if (!promptId || !run.current.branchId || !run.current.leafId)
-      throw new Error('No persisted prompt ID/branch/leaf; submission may have succeeded before the Run was saved.');
+      throw new Error(
+        'No persisted prompt ID/branch/leaf; submission may have succeeded before the Run was saved.',
+      );
     const settings = await this.settingsProvider(),
       { comfy } = this.clientFactory(settings.endpoint);
     await comfy.health();
@@ -343,7 +345,11 @@ export class LocalExecutionService {
       if (state === 'error') {
         await mutateExecutionRun(root, runId, (current) => {
           if (current.lifecycle !== 'RUNNING') return;
-          const failure = errorOf(current, 'LOCAL_RECOVERED_PROMPT_FAILED', `ComfyUI history confirms prompt ${promptId} failed.`);
+          const failure = errorOf(
+            current,
+            'LOCAL_RECOVERED_PROMPT_FAILED',
+            `ComfyUI history confirms prompt ${promptId} failed.`,
+          );
           current.error = failure;
           current.errorHistory.push(failure);
           current.lifecycle = 'FAILED';
@@ -357,13 +363,16 @@ export class LocalExecutionService {
       await sleep(750);
     }
     const graph = await readJson<ApiGraph>(path.join(root, run.snapshot.workflow.apiPath));
-    if (!graph) throw new Error('Saved API graph is missing; existing prompt outputs cannot be verified.');
+    if (!graph)
+      throw new Error('Saved API graph is missing; existing prompt outputs cannot be verified.');
     const binding = enumerateSceneBranches(graph, run).find(
       (item) => item.branchId === run.current.branchId,
     );
     const progress = run.progress.branches.find((item) => item.branchId === run.current.branchId);
     if (!binding || !progress || binding.leafIds[progress.completed] !== run.current.leafId)
-      throw new Error('Persisted branch/leaf does not match progress; refusing to count the prompt twice.');
+      throw new Error(
+        'Persisted branch/leaf does not match progress; refusing to count the prompt twice.',
+      );
     const sliced = sliceSceneBranchGraph(graph, binding.expandNodeId),
       saveNodeIds = isolateBranchSavePaths(sliced, run, binding.branchId);
     await recordPromptOutputs(root, run, settings.installPath, promptId, history, saveNodeIds);
@@ -372,7 +381,9 @@ export class LocalExecutionService {
         throw new Error('Run state changed while recovering the persisted prompt.');
       const branch = current.progress.branches.find((item) => item.branchId === binding.branchId);
       if (!branch || branch.completed !== progress.completed)
-        throw new Error('Branch progress changed during recovery; refusing to count the prompt twice.');
+        throw new Error(
+          'Branch progress changed during recovery; refusing to count the prompt twice.',
+        );
       branch.completed++;
       current.progress.overall.completed++;
       branch.state = branch.completed >= branch.total ? 'completed' : 'pending';
