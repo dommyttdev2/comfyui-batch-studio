@@ -452,7 +452,11 @@ function startServer(install, options = {}) {
       }, 8000);
       assert.match(failed.error.message, /COMFYUI_PROMPT_LOST/);
       assert.equal(mock.calls.prompts.length, 1, 'lost prompt must not be resubmitted');
-      assert.equal(mock.calls.releases.length, 1, 'lost prompt must release the Scene Prompt handle');
+      assert.equal(
+        mock.calls.releases.length,
+        1,
+        'lost prompt must release the Scene Prompt handle',
+      );
     } finally {
       mock.server.close();
     }
