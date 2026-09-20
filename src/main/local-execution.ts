@@ -216,13 +216,24 @@ function errorOf(
 }
 async function failRun(root: string, runId: string, code: string, error: unknown) {
   return mutateExecutionRun(root, runId, (run) => {
-    const next = errorOf(run, code, error);
+    const uncertain =
+      run.submission?.status === 'sending' || run.submission?.status === 'acknowledged';
+    const next = errorOf(
+      run,
+      uncertain ? 'EXECUTION_RECOVERY_UNCERTAIN' : code,
+      uncertain
+        ? `Existing ComfyUI submission may have been accepted. No further POST is allowed until the exact attempt is reconciled: ${error instanceof Error ? error.message : String(error)}`
+        : error,
+      !uncertain,
+    );
     run.error = next;
     run.errorHistory.push(next);
     run.lifecycle = 'FAILED';
     run.controls.scheduling = 'STOPPED';
-    run.current.promptId = null;
-    clearCurrentGenerationTiming(run);
+    if (!uncertain) {
+      run.current.promptId = null;
+      clearCurrentGenerationTiming(run);
+    }
   });
 }
 async function pauseForStop(root: string, runId: string) {
