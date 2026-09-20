@@ -277,7 +277,11 @@ export async function generateMarketplaceImages(
       target.height,
     );
     const relativePath = `${target.service}/${target.fileName}.${extension}`;
-    const outputPath = path.join(outputDirectory, target.service, `${target.fileName}.${extension}`);
+    const outputPath = path.join(
+      outputDirectory,
+      target.service,
+      `${target.fileName}.${extension}`,
+    );
     const bytes =
       state.format === 'webp'
         ? webpBuffer(webpDataUrls?.[target.id])
@@ -286,7 +290,12 @@ export async function generateMarketplaceImages(
             state.format,
           );
     staged.push({ outputPath, bytes });
-    outputs.push({ targetId: target.id, relativePath, size: bytes.length, sha256: sha256Bytes(bytes) });
+    outputs.push({
+      targetId: target.id,
+      relativePath,
+      size: bytes.length,
+      sha256: sha256Bytes(bytes),
+    });
     outputPaths.push(outputPath);
   }
 
@@ -479,7 +488,9 @@ export async function generateMarketplaceZip(
 
   // Source and generation may change while the four files are read.
   const sourceAfter = await fingerprintMarketplaceSource(sourcePath);
-  const currentManifest = await readJson<MarketplaceGenerationManifest>(generationManifestPath(root));
+  const currentManifest = await readJson<MarketplaceGenerationManifest>(
+    generationManifestPath(root),
+  );
   validateMarketplaceGeneration(currentManifest, state, targets, sourceAfter);
   if (currentManifest?.generationId !== manifest.generationId)
     throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
