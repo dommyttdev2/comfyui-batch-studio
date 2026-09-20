@@ -299,6 +299,89 @@ export class LocalExecutionService {
     this.workers.set(runId, worker);
     return worker;
   }
+  // Recovery never calls /prompt. It observes the exact persisted prompt and
+  // commits its already generated outputs before allowing a normal Resume.
+  recover(root: string, runId: string): Promise<void> {
+    const existing = this.workers.get(runId);
+    if (existing) return existing;
+    const worker = this.recoverPrompt(root, runId)
+      .catch(async (error) => {
+        await mutateExecutionRun(root, runId, (run) => {
+          if (run.lifecycle !== 'RUNNING') return;
+          const failure = errorOf(
+            run,
+            'EXECUTION_RECOVERY_UNCERTAIN',
+            `既存Promptの状態を確認できません。重複生成を防ぐため自動Resumeを禁止しました。ComfyUI Queue/Historyと保存済み画像を確認してください: ${error instanceof Error ? error.message : String(error)}`,
+            false,
+          );
+          run.error = failure;
+          run.errorHistory.push(failure);
+          run.lifecycle = 'FAILED';
+          run.controls.scheduling = 'STOPPED';
+          // A current Prompt ID is evidence: do not erase it on probe failure.
+        });
+      })
+      .finally(() => this.workers.delete(runId));
+    this.workers.set(runId, worker);
+    return worker;
+  }
+  private async recoverPrompt(root: string, runId: string) {
+    const run = await getExecutionRun(root, runId);
+    if (!run || run.lifecycle !== 'RUNNING' || run.executionTarget !== 'local') return;
+    const promptId = run.current.promptId;
+    if (!promptId || !run.current.branchId || !run.current.leafId)
+      throw new Error('No persisted prompt ID/branch/leaf; submission may have succeeded before the Run was saved.');
+    const settings = await this.settingsProvider(),
+      { comfy } = this.clientFactory(settings.endpoint);
+    await comfy.health();
+    let history: any = null;
+    let missingPolls = 0;
+    for (;;) {
+      history = await comfy.history(promptId);
+      const state = comfy.historyState(history, promptId);
+      if (state === 'success') break;
+      if (state === 'error') {
+        await mutateExecutionRun(root, runId, (current) => {
+          if (current.lifecycle !== 'RUNNING') return;
+          const failure = errorOf(current, 'LOCAL_RECOVERED_PROMPT_FAILED', `ComfyUI history confirms prompt ${promptId} failed.`);
+          current.error = failure;
+          current.errorHistory.push(failure);
+          current.lifecycle = 'FAILED';
+          current.controls.scheduling = 'STOPPED';
+        });
+        return;
+      }
+      if (await comfy.isPromptQueued(promptId)) missingPolls = 0;
+      else if (++missingPolls >= 4)
+        throw new Error(`Prompt ${promptId} is absent from ComfyUI Queue and History.`);
+      await sleep(750);
+    }
+    const graph = await readJson<ApiGraph>(path.join(root, run.snapshot.workflow.apiPath));
+    if (!graph) throw new Error('Saved API graph is missing; existing prompt outputs cannot be verified.');
+    const binding = enumerateSceneBranches(graph, run).find(
+      (item) => item.branchId === run.current.branchId,
+    );
+    const progress = run.progress.branches.find((item) => item.branchId === run.current.branchId);
+    if (!binding || !progress || binding.leafIds[progress.completed] !== run.current.leafId)
+      throw new Error('Persisted branch/leaf does not match progress; refusing to count the prompt twice.');
+    const sliced = sliceSceneBranchGraph(graph, binding.expandNodeId),
+      saveNodeIds = isolateBranchSavePaths(sliced, run, binding.branchId);
+    await recordPromptOutputs(root, run, settings.installPath, promptId, history, saveNodeIds);
+    await mutateExecutionRun(root, runId, (current) => {
+      if (current.lifecycle !== 'RUNNING' || current.current.promptId !== promptId)
+        throw new Error('Run state changed while recovering the persisted prompt.');
+      const branch = current.progress.branches.find((item) => item.branchId === binding.branchId);
+      if (!branch || branch.completed !== progress.completed)
+        throw new Error('Branch progress changed during recovery; refusing to count the prompt twice.');
+      branch.completed++;
+      current.progress.overall.completed++;
+      branch.state = branch.completed >= branch.total ? 'completed' : 'pending';
+      markGenerationCompleted(current);
+      current.current = { branchId: null, leafId: null, promptId: null };
+      current.lifecycle = 'PAUSED';
+      current.controls.scheduling = 'STOPPED';
+    });
+  }
   async waitForSettled(runId: string) {
     const task = this.workers.get(runId);
     if (task) await task.catch(() => {});
