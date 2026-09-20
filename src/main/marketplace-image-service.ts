@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nativeImage } from 'electron';
@@ -12,6 +12,16 @@ import type {
 } from '../shared/types.js';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
 import { assertFinalArtifactImage } from './final-artifact-image-service.js';
+import {
+  fingerprintMarketplaceSource,
+  marketplaceInputSignature,
+  MARKETPLACE_REGENERATION_REQUIRED,
+  sha256Bytes,
+  validateMarketplaceGeneration,
+  verifiedMarketplaceOutput,
+  type MarketplaceGenerationManifest,
+  type MarketplaceGeneratedOutput,
+} from './marketplace-generation-manifest.js';
 import {
   encodeLanczosImage,
   readOrientedNativeImage,
@@ -32,8 +42,6 @@ interface MarketplaceTargetCatalog {
   schemaVersion: 1;
   targets: MarketplaceImageTarget[];
 }
-
-let targetCache: MarketplaceImageTarget[] | null = null;
 
 function finite(value: unknown, fallback: number, min: number, max: number) {
   return typeof value === 'number' && Number.isFinite(value)
@@ -66,7 +74,6 @@ function cropFromUnknown(value: unknown): MarketplaceCropRect | null {
 }
 
 export async function getMarketplaceImageTargets(): Promise<MarketplaceImageTarget[]> {
-  if (targetCache) return targetCache.map((target) => ({ ...target }));
   const raw = JSON.parse(await readFile(TARGETS_PATH, 'utf8')) as MarketplaceTargetCatalog;
   if (
     raw?.schemaVersion !== 1 ||
@@ -87,8 +94,8 @@ export async function getMarketplaceImageTargets(): Promise<MarketplaceImageTarg
     )
   )
     throw new Error('販売サイト用画像のターゲット定義が不正です。');
-  targetCache = raw.targets.map((target) => ({ ...target }));
-  return targetCache.map((target) => ({ ...target }));
+  // Read the current catalog when generating or exporting: target dimensions may change.
+  return raw.targets.map((target) => ({ ...target }));
 }
 
 function statePath(root: string) {
@@ -238,6 +245,10 @@ async function writeAtomic(outputPath: string, bytes: Buffer) {
   await rename(temp, outputPath);
 }
 
+function generationManifestPath(root: string) {
+  return path.join(root, 'marketplace', '._generation-manifest.json');
+}
+
 export async function generateMarketplaceImages(
   root: string,
   value: unknown,
@@ -246,10 +257,17 @@ export async function generateMarketplaceImages(
 ): Promise<MarketplaceGenerationResult> {
   const state = await saveMarketplaceImageState(root, value);
   const targets = await getMarketplaceImageTargets();
-  const { image, size } = await loadSource(root, state.sourceImagePath, sourcePngDataUrl);
+  const { resolved, image, size } = await loadSource(root, state.sourceImagePath, sourcePngDataUrl);
+  const source = await fingerprintMarketplaceSource(resolved);
+  const inputSignature = marketplaceInputSignature(state, targets);
   const outputDirectory = path.join(root, 'marketplace');
   const extension = FORMAT_EXTENSIONS[state.format];
   const outputPaths: string[] = [];
+  const staged: Array<{ outputPath: string; bytes: Buffer }> = [];
+  const outputs: MarketplaceGeneratedOutput[] = [];
+
+  // A previous successful manifest must never certify a partial new generation.
+  await rm(generationManifestPath(root), { force: true });
   for (const target of targets) {
     const crop = clampCrop(
       state.targets[target.id]?.crop ?? null,
@@ -258,11 +276,8 @@ export async function generateMarketplaceImages(
       target.width,
       target.height,
     );
-    const outputPath = path.join(
-      outputDirectory,
-      target.service,
-      `${target.fileName}.${extension}`,
-    );
+    const relativePath = `${target.service}/${target.fileName}.${extension}`;
+    const outputPath = path.join(outputDirectory, target.service, `${target.fileName}.${extension}`);
     const bytes =
       state.format === 'webp'
         ? webpBuffer(webpDataUrls?.[target.id])
@@ -270,9 +285,33 @@ export async function generateMarketplaceImages(
             renderLanczosCrop(image, crop, target.width, target.height),
             state.format,
           );
-    await writeAtomic(outputPath, bytes);
+    staged.push({ outputPath, bytes });
+    outputs.push({ targetId: target.id, relativePath, size: bytes.length, sha256: sha256Bytes(bytes) });
     outputPaths.push(outputPath);
   }
+
+  // Revalidate after rendering; edits or source replacement during processing cannot
+  // turn four images from an old input into a newly certified generation.
+  const sourceAfter = await fingerprintMarketplaceSource(resolved);
+  const persisted = await loadMarketplaceImageState(root);
+  if (
+    JSON.stringify(source) !== JSON.stringify(sourceAfter) ||
+    marketplaceInputSignature(persisted, targets) !== inputSignature
+  )
+    throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
+  for (const { outputPath, bytes } of staged) await writeAtomic(outputPath, bytes);
+  const manifest: MarketplaceGenerationManifest = {
+    schemaVersion: 1,
+    generationId: randomUUID(),
+    generatedAt: new Date().toISOString(),
+    source,
+    format: state.format,
+    inputSignature,
+    outputs,
+  };
+  // The manifest is the commit marker. ZIP generation accepts only a complete,
+  // content-verified set of outputs with the same generation identity.
+  await writeJsonAtomic(generationManifestPath(root), manifest);
   return { outputDirectory, outputPaths, zipPath: null };
 }
 
@@ -403,31 +442,47 @@ export async function renderMarketplacePng(
 export async function generateMarketplaceZip(
   root: string,
   format: unknown,
+  currentEditorState?: unknown,
 ): Promise<MarketplaceGenerationResult> {
   const normalizedFormat: MarketplaceOutputFormat =
     format === 'png' || format === 'webp' || format === 'jpeg' ? format : 'jpeg';
+  const state =
+    currentEditorState === undefined
+      ? await loadMarketplaceImageState(root)
+      : await normalizeMarketplaceImageState(currentEditorState);
   const targets = await getMarketplaceImageTargets();
   const extension = FORMAT_EXTENSIONS[normalizedFormat];
   const outputDirectory = path.join(root, 'marketplace');
+  const manifest = await readJson<MarketplaceGenerationManifest>(generationManifestPath(root));
+  if (state.format !== normalizedFormat || !manifest)
+    throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
+  const sourcePath = await assertFinalArtifactImage(root, state.sourceImagePath).catch(() => {
+    throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
+  });
+  const source = await fingerprintMarketplaceSource(sourcePath).catch(() => {
+    throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
+  });
+  validateMarketplaceGeneration(manifest, state, targets, source);
+
   const entries: Array<{ name: string; bytes: Buffer }> = [];
   const outputPaths: string[] = [];
-  for (const target of targets) {
-    const outputPath = path.join(
+  for (const [index, target] of targets.entries()) {
+    const verified = await verifiedMarketplaceOutput(
       outputDirectory,
-      target.service,
-      `${target.fileName}.${extension}`,
+      manifest.outputs[index],
+      target,
+      extension,
     );
-    const bytes = await readFile(outputPath).catch(() => null);
-    if (!bytes)
-      throw new Error(
-        `${target.service}/${target.fileName}.${extension} がありません。先に4種類を生成してください。`,
-      );
-    entries.push({
-      name: `${target.service}/${target.fileName}.${extension}`,
-      bytes,
-    });
-    outputPaths.push(outputPath);
+    entries.push({ name: verified.relativePath, bytes: verified.bytes });
+    outputPaths.push(verified.targetPath);
   }
+
+  // Source and generation may change while the four files are read.
+  const sourceAfter = await fingerprintMarketplaceSource(sourcePath);
+  const currentManifest = await readJson<MarketplaceGenerationManifest>(generationManifestPath(root));
+  validateMarketplaceGeneration(currentManifest, state, targets, sourceAfter);
+  if (currentManifest?.generationId !== manifest.generationId)
+    throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
   const zipPath = path.join(outputDirectory, 'marketplace-images.zip');
   await writeAtomic(zipPath, storedZip(entries));
   return { outputDirectory, outputPaths, zipPath };
