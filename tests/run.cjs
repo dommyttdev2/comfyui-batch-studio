@@ -361,6 +361,33 @@ function plan() {
   assert.equal(summary.artifacts.find((a) => a.key === 'workflow').state, 'generated');
   let pf = await preflight.runPreflight(root);
   assert.equal(pf.state, 'READY', 'all local model files should be READY');
+  const modelsPath = path.join(root, 'models.json');
+  const originalModelsRaw = fs.readFileSync(modelsPath, 'utf8');
+  const originalModelsStat = fs.statSync(modelsPath);
+  const modifiedModelsRaw = originalModelsRaw.replace(
+    'checkpoint.safetensors',
+    'checkpoinu.safetensors',
+  );
+  assert.equal(modifiedModelsRaw.length, originalModelsRaw.length);
+  assert.notEqual(modifiedModelsRaw, originalModelsRaw);
+  fs.writeFileSync(modelsPath, modifiedModelsRaw);
+  fs.utimesSync(modelsPath, originalModelsStat.atime, originalModelsStat.mtime);
+  summary = await scan.scanProject(root);
+  assert.equal(
+    summary.artifacts.find((a) => a.key === 'workflow').state,
+    'stale',
+    'Workflow must become stale after a same-size, same-mtime external model change',
+  );
+  pf = await preflight.runPreflight(root);
+  assert.equal(pf.state, 'BLOCKED');
+  assert.ok(pf.blocking.some((issue) => issue.code === 'WORKFLOW_MODEL_STALE'));
+  fs.writeFileSync(modelsPath, originalModelsRaw);
+  fs.utimesSync(modelsPath, originalModelsStat.atime, originalModelsStat.mtime);
+  summary = await scan.scanProject(root);
+  assert.equal(summary.artifacts.find((a) => a.key === 'workflow').state, 'generated');
+  pf = await preflight.runPreflight(root);
+  assert.equal(pf.state, 'READY');
+
   fs.unlinkSync(path.join(modelRoot, 'character.safetensors'));
   const r2Index = path.join(root, 'r2-index.json');
   writeJson(r2Index, ['models/character.safetensors']);

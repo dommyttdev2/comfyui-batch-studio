@@ -4,6 +4,7 @@ import path from 'node:path';
 import type {
   ExecutionEvidence,
   ExecutionEvidenceKind,
+  ModelsArtifact,
   ExecutionPhase,
   ExecutionRun,
   ExecutionRunLifecycle,
@@ -13,7 +14,11 @@ import type {
 } from '../shared/types.js';
 import { exists, readJson, writeJsonAtomic } from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
-import { hashCanonicalJson, validateApiGraphStructure } from './workflow-api.js';
+import {
+  hashCanonicalJson,
+  hashWorkflowModelInputs,
+  validateApiGraphStructure,
+} from './workflow-api.js';
 
 const RUNS_DIR = 'execution_runs';
 const CURRENT_FILE = 'current.json';
@@ -162,6 +167,7 @@ async function captureSnapshot(
   const expectedUiSha = String(build?.outputs?.ui?.sha256 ?? '');
   const expectedApiSha = String(build?.outputs?.api?.sha256 ?? '');
   const expectedIdentity = String(build?.workflowIdentity ?? '');
+  const expectedModelsSha = String(build?.modelsSha256 ?? '');
   if (!uiPath || !apiPath || !expectedUiSha || !expectedApiSha || !expectedIdentity)
     throw new Error('Execution cannot start: Workflow/API graph provenance is missing.');
   const ui = await readJson<unknown>(path.join(root, uiPath)),
@@ -181,6 +187,13 @@ async function captureSnapshot(
     workflowIdentity !== expectedIdentity
   )
     throw new Error('Execution cannot start/resume: Workflow/API graph is stale.');
+  const models = await readJson<unknown>(path.join(root, 'models.json'));
+  if (
+    !models ||
+    !expectedModelsSha ||
+    hashWorkflowModelInputs(models as ModelsArtifact) !== expectedModelsSha
+  )
+    throw new Error('Execution cannot start/resume: WORKFLOW_MODEL_STALE (models.json changed).');
   const brief = await readJson<any>(path.join(root, 'project_brief.json'));
   if (!brief?.project?.id) throw new Error('Execution cannot start: project.id is missing.');
   const plan = await readJson<PromptPlanArtifact>(path.join(root, 'prompt_plan.json'));
@@ -207,13 +220,21 @@ async function captureSnapshot(
     workflowIdentity,
     apiSha256,
     promptPlanSha256,
+    modelsSha256: expectedModelsSha,
   });
   return {
     projectId: String(brief.project.id),
     target,
     remote,
     preflight: clone(preflight),
-    workflow: { uiPath, apiPath, uiSha256, apiSha256, workflowIdentity },
+    workflow: {
+      uiPath,
+      apiPath,
+      uiSha256,
+      apiSha256,
+      workflowIdentity,
+      modelsSha256: expectedModelsSha,
+    },
     plan: planSnapshot,
     runIdentity,
   };
@@ -224,6 +245,7 @@ function sameSnapshot(a: ExecutionRunSnapshot, b: ExecutionRunSnapshot) {
     a.runIdentity === b.runIdentity &&
     a.workflow.workflowIdentity === b.workflow.workflowIdentity &&
     a.workflow.apiSha256 === b.workflow.apiSha256 &&
+    a.workflow.modelsSha256 === b.workflow.modelsSha256 &&
     a.plan.sha256 === b.plan.sha256
   );
 }

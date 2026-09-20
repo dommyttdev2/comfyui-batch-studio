@@ -917,6 +917,7 @@ export interface ExecutionRunSnapshot {
     uiSha256: string;
     apiSha256: string;
     workflowIdentity: string;
+    modelsSha256?: string;
   };
   plan: { sha256: string; branches: Array<{ branchId: string; leafIds: string[] }> };
   runIdentity: string;

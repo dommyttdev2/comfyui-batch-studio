@@ -22,7 +22,7 @@ const writeJson = (file, value) => {
 (async () => {
   const execution = await load('execution-run.js');
   const progress = await load('../shared/execution-progress.js');
-  const { hashCanonicalJson } = await load('workflow-api.js');
+  const { hashCanonicalJson, hashWorkflowModelInputs } = await load('workflow-api.js');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-execution-project-'));
   const ui = { nodes: [{ id: 1, type: 'TestNode' }], links: [] };
   const api = { 1: { class_type: 'TestNode', inputs: {} } };
@@ -58,6 +58,11 @@ const writeJson = (file, value) => {
       },
     ],
   });
+  const initialModels = {
+    schemaVersion: 1,
+    checkpoint: { ref: 'checkpoint.main', fileName: 'model-a.safetensors' },
+  };
+  writeJson(path.join(root, 'models.json'), initialModels);
   writeJson(path.join(root, 'project_meta.json'), {
     schemaVersion: 1,
     createdAt: '2026-09-11T00:00:00.000Z',
@@ -71,6 +76,7 @@ const writeJson = (file, value) => {
         api: { path: 'LoRA_project.api.json', sha256: apiSha256 },
       },
       workflowIdentity,
+      modelsSha256: hashWorkflowModelInputs(initialModels),
     },
   });
 
@@ -170,6 +176,21 @@ const writeJson = (file, value) => {
     run.controls.scheduling = 'STOPPED';
     run.controls.interrupt = 'INTERRUPTED';
   });
+
+  const modelsPath = path.join(root, 'models.json');
+  const modelsTime = fs.statSync(modelsPath);
+  writeJson(modelsPath, {
+    ...initialModels,
+    checkpoint: { ...initialModels.checkpoint, fileName: 'model-b.safetensors' },
+  });
+  fs.utimesSync(modelsPath, modelsTime.atime, modelsTime.mtime);
+  await assert.rejects(
+    () => execution.resumeExecutionRun(root, started.runId, async () => ready),
+    /WORKFLOW_MODEL_STALE/,
+    'Resume must reject a changed model selection even with the original file timestamp',
+  );
+  writeJson(modelsPath, initialModels);
+  fs.utimesSync(modelsPath, modelsTime.atime, modelsTime.mtime);
 
   writeJson(path.join(root, 'LoRA_project.api.json'), {
     1: { class_type: 'ChangedNode', inputs: {} },
