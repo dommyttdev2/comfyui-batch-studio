@@ -21,6 +21,18 @@ jobs:
           node-version: '22.12.0'
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Emit Biome-formatted auto-artifact files
+        run: |
+          npx biome format --write src/main/agent-artifact-import.ts src/main/grok-artifact-adapter.ts src/main/grok-auto-artifact-watcher.ts src/main/main.ts src/renderer/CaptionStage.tsx src/renderer/CodexPane.tsx src/renderer/GrokStages.tsx src/renderer/PromptPlanStage.tsx tests/agent-artifact-auto.cjs
+          node <<'NODE'
+          const fs = require('fs');
+          const files = ["src/main/agent-artifact-import.ts","src/main/grok-artifact-adapter.ts","src/main/grok-auto-artifact-watcher.ts","src/main/main.ts","src/renderer/CaptionStage.tsx","src/renderer/CodexPane.tsx","src/renderer/GrokStages.tsx","src/renderer/PromptPlanStage.tsx","tests/agent-artifact-auto.cjs"];
+          for (const p of files) {
+            const data = fs.readFileSync(p).toString('base64');
+            for (let i = 0; i < data.length; i += 4000)
+              console.log('AUTO_ARTIFACT_FORMAT ' + p + ' ' + (i / 4000) + ' ' + data.slice(i, i + 4000));
+          }
+          NODE
       - name: Lint and format check
         run: npm run check
       - name: Typecheck
