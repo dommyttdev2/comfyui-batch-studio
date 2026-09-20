@@ -264,8 +264,8 @@ export function GrokBridge({
               <summary>自動取り込みできない場合（手動でファイルを選択）</summary>
               <h4>Grok返却ファイルを添付</h4>
               <p className="grok-return-note">
-                自動取り込みできない場合のみ、Grokからダウンロードした <code>{returnFile.name}</code>{' '}
-                を添付してください。検証後、下書きへ取り込みます。
+                自動取り込みできない場合のみ、Grokからダウンロードした{' '}
+                <code>{returnFile.name}</code> を添付してください。検証後、下書きへ取り込みます。
               </p>
               <div
                 className={`grok-file-dropzone ${dragging ? 'dragging' : ''}`}
@@ -301,7 +301,9 @@ export function GrokBridge({
                   }}
                 />
                 <strong>
-                  {selectedFile ? selectedFile.name : `${returnFile.name} をここにドラッグ＆ドロップ`}
+                  {selectedFile
+                    ? selectedFile.name
+                    : `${returnFile.name} をここにドラッグ＆ドロップ`}
                 </strong>
                 <span>
                   {selectedFile
@@ -975,9 +977,7 @@ export function ModelsStage({
             基盤モデルを保存
           </button>
           {baseConfigured ? (
-            <span className="model-base-ready">
-              ✓ 基盤モデル確定済み — AIはLoRAのみ選定します
-            </span>
+            <span className="model-base-ready">✓ 基盤モデル確定済み — AIはLoRAのみ選定します</span>
           ) : (
             family && (
               <span className="model-base-warning">基盤モデルを保存するとLoRA選定へ進めます</span>
