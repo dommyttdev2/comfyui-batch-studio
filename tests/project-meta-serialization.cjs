@@ -72,7 +72,9 @@ execFileSync(
 
   // A malformed file is not silently treated as a missing project and reset.
   fs.writeFileSync(path.join(root, 'project_meta.json'), '{damaged');
-  await assert.rejects(() => metaApi.saveProjectSettings(root, { r2Bucket: 'new' }), /invalid/);
+  await assert.rejects(() => metaApi.saveProjectSettings(root, { r2Bucket: 'new' }), {
+    code: 'PERSISTED_JSON_CORRUPT',
+  });
   assert.equal(fs.readFileSync(path.join(root, 'project_meta.json'), 'utf8'), '{damaged');
   console.log('Project metadata serialization tests passed.');
 })().catch((error) => {
