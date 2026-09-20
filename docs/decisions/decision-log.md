@@ -1393,6 +1393,35 @@ Schema v1を削除しない。
 
 ---
 
+## DEC-026: Completed Vast.ai Run must stop its Instance regardless of initial state
+
+Date: 2026-09-20
+Status: Accepted
+
+### Decision
+
+Vast.ai Remote Runが生成と成果物回収（Remote package/R2/Local SHA-256照合）と一時成果物cleanupを正常に終えたときは、`initialStatus=running` を含め**必ず同一Instanceを停止する**。停止要求のAPI応答だけを完了証拠とせず、Vast.aiのcurrent statusが `stopped` になったことを確認してfinalizationを確定する。回収済みLocal成果物は保持する。
+
+`restore-if-started` は**非成功終端化**だけに適用する。Batch Studioが開始前 `stopped` のInstanceを起動したRunが失敗/破棄/中断によって終端化した場合には停止・確認する。開始前から `running` のInstanceは非成功終了時には維持する。単なる `PAUSED` やfinalization以外の `RUNNING` ではstopしない。未確認の既存Worker/Promptを重複投入したり、確認前に停止したりしない。
+
+停止確認が失敗した場合、Runは `REMOTE_INSTANCE_FINALIZE_FAILED` で `FAILED` とし、回収・cleanupまでの検証済み工程を繰り返さず**停止確認のみ**再試行する（#122）。同一Instanceのresource lockはRun処理中から成果物cleanupとfinalizationまで維持し、別Runと共有しない。
+
+### Rationale
+
+- 成功完了時の自動停止により、もともとrunningだったInstanceであっても完了後の意図しない課金継続を防ぐ。
+- 非成功Runの未確定Remote Worker/Promptを無断停止せず、開始前のInstanceを尊重する。
+- stop要求の受理と実際のstopped遷移を区別し、成果物回収済みRunのfinalization失敗を非破壊的に復旧する。
+- 同一Instanceの共有による生成・停止操作の衝突を防ぐ。
+
+### Supersedes / Resolves
+
+- `docs/architecture/remote-execution.md` の「Run開始前からrunningならRun終了後もrunning」を**成功完了にも適用する**旧policyを置き換える。非成功終了時に限るinitial-state preservationを残す。
+- `REQ-EXEC-009` のinitial-state policyを限定し、`REQ-EXEC-015` を成立させる。 `DEC-024` の同一Instance排他は継承する。
+
+詳細は `../architecture/remote-execution.md` のVast.ai Instance lifecycle、および `../architecture/project-window-execution-runtime.md` のresource lockを参照する。
+
+---
+
 ## OPEN-001: prompt_tree.md source-of-truth relationship
 
 Date: 2026-09-07
