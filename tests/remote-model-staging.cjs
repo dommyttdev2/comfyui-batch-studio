@@ -262,6 +262,97 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
     metadata = { ...metadata, etag: 'etag-v2' };
     await assert.rejects(() => stager.stage(project, runId), /R2_MODEL_CHANGED_DURING_RUN/);
 
+    // Without R2 checksum metadata, size alone must never authorize a Remote reuse.
+    // A multipart ETag is an object version marker, not a model SHA-256.
+    const unverifiedProject = path.join(runtime, 'unverified-source');
+    fs.mkdirSync(unverifiedProject, { recursive: true });
+    fs.copyFileSync(
+      path.join(project, 'models.json'),
+      path.join(unverifiedProject, 'models.json'),
+    );
+    fs.copyFileSync(
+      path.join(project, 'project_meta.json'),
+      path.join(unverifiedProject, 'project_meta.json'),
+    );
+    const unverifiedRun = {
+      ...run,
+      evidence: [],
+      phase: 'REMOTE_ENVIRONMENT_CHECKING',
+      progress: { ...run.progress, models: [] },
+      snapshot: { ...run.snapshot, runIdentity: 'unverified-source-run' },
+    };
+    writeJson(
+      path.join(unverifiedProject, 'execution_runs', runId + '.json'),
+      unverifiedRun,
+    );
+    const mismatchedSha = sha(Buffer.alloc(payload.length, 42));
+    assert.notEqual(mismatchedSha, expectedSha);
+    let sourceMetadata = { ...metadata, sha256: null, etag: 'multipart-etag-4' };
+    let sourceInspectSha = mismatchedSha;
+    let sourceInspectCalls = 0;
+    let sourceStageCalls = 0;
+    const sourceR2 = {
+      syncObjectIndex: async () => {},
+      resolveModelObjectKey: async () => 'models/checkpoints/base.safetensors',
+      objectMetadata: async () => ({ ...sourceMetadata }),
+      downloadInfo: async () => ({
+        key: 'models/checkpoints/base.safetensors',
+        url: 'https://r2.invalid/source?X-Amz-Signature=SOURCE',
+      }),
+    };
+    const sourceRemote = {
+      requestWorker: async (_root, _run, op, payloadReq = {}) => {
+        if (op === 'model_environment') return { response: { ok: true }, events: [] };
+        if (op === 'inspect_model') {
+          sourceInspectCalls++;
+          return {
+            response: {
+              exists: true,
+              valid: !payloadReq.expectedSha256 || payloadReq.expectedSha256 === sourceInspectSha,
+              size: payload.length,
+              sha256: sourceInspectSha,
+              reason: 'valid',
+            },
+            events: [],
+          };
+        }
+        if (op === 'stage_model') {
+          sourceStageCalls++;
+          assert.equal(payloadReq.forceDownload, true, 'missing source hash requires R2 download');
+          assert.equal(payloadReq.expectedSha256, null);
+          sourceInspectSha = expectedSha;
+          return {
+            response: {
+              exists: true,
+              valid: true,
+              reused: false,
+              size: payload.length,
+              sha256: expectedSha,
+              reason: 'downloaded',
+            },
+            events: [],
+          };
+        }
+        throw new Error('unexpected source op ' + op);
+      },
+    };
+    const sourceStager = new RemoteModelStager(sourceR2, sourceRemote);
+    await sourceStager.stage(unverifiedProject, runId);
+    assert.equal(sourceStageCalls, 1, 'wrong same-size Remote file must not be reused');
+    let sourceRun = JSON.parse(
+      fs.readFileSync(path.join(unverifiedProject, 'execution_runs', runId + '.json'), 'utf8'),
+    );
+    assert.equal(sourceRun.progress.models[0].sha256, expectedSha);
+    assert.equal(sourceRun.evidence.find((e) => e.kind === 'MODEL_VERIFIED').data.sourceVerified, true);
+    await sourceStager.stage(unverifiedProject, runId);
+    assert.equal(sourceStageCalls, 1, 'matching source-bound evidence may reuse verified Remote model');
+    assert.ok(sourceInspectCalls >= 2);
+    sourceMetadata = { ...sourceMetadata, etag: 'changed-multipart-etag-5' };
+    await assert.rejects(
+      () => sourceStager.stage(unverifiedProject, runId),
+      /R2_MODEL_CHANGED_DURING_RUN/,
+    );
+
     const parallelProject = path.join(runtime, 'parallel-project');
     fs.mkdirSync(parallelProject, { recursive: true });
     const parallelLoras = Array.from({ length: 5 }, (_, index) => ({
@@ -456,6 +547,9 @@ expected=hashlib.sha256(payload).hexdigest()
 url="https://example.invalid/model?X-Amz-Signature=SECRET"
 result=w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"expectedSha256":expected})
 assert result["valid"] and open(target,"rb").read()==payload and not os.path.exists(target+".part")
+open(target,"wb").write(b"x"*len(payload))
+result=w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"forceDownload":True})
+assert result["valid"] and not result["reused"] and open(target,"rb").read()==payload
 os.unlink(target)
 try:
  w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"expectedSha256":"0"*64})
