@@ -1,3 +1,4 @@
+import { updateProjectMeta } from './project-meta.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
@@ -143,9 +144,12 @@ async function archiveWorkflow(ctx: ResetContext) {
       await archiveIfExists(ctx, path.join(ctx.root, name), `workflow/${name}`);
   }
   if (meta && Object.prototype.hasOwnProperty.call(meta, 'workflowBuild')) {
-    delete meta.workflowBuild;
-    meta.updatedAt = new Date().toISOString();
-    await writeJsonAtomic(metaPath, meta);
+    await updateProjectMeta(ctx.root, (latest) => {
+      // A concurrent workflow compile may have written a newer build.
+      if (JSON.stringify(latest.workflowBuild) === JSON.stringify(meta.workflowBuild))
+        delete latest.workflowBuild;
+      return latest;
+    });
   }
 }
 async function archiveModelState(
