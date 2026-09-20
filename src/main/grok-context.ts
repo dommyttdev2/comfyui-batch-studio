@@ -406,8 +406,7 @@ export async function buildGrokTask(
   for (const issue of issues) {
     const entry = issueCounts.get(issue.code) ?? { count: 0, examples: [] };
     entry.count++;
-    if (entry.examples.length < 2)
-      entry.examples.push(`${issue.path ?? 'root'}: ${issue.message}`);
+    if (entry.examples.length < 2) entry.examples.push(`${issue.path ?? 'root'}: ${issue.message}`);
     issueCounts.set(issue.code, entry);
   }
   const fixContext =
@@ -427,7 +426,9 @@ ${[...issueCounts].map(([code, item]) => `- ${code}: ${item.count}件。例: ${i
       await attachment('project_brief.json', brief, '画像枚数などの計画条件'),
       await attachment('story.md', story, '確定ストーリー'),
       await attachment('models.json', models, '確定モデル・trainedWords（トリガーワード）'),
-      ...(currentPlan ? [await attachment('prompt_plan.json', currentPlan, '現在のPrompt Plan（修正対象）')] : []),
+      ...(currentPlan
+        ? [await attachment('prompt_plan.json', currentPlan, '現在のPrompt Plan（修正対象）')]
+        : []),
       ...((await exists(promptFallbacks))
         ? [
             await attachment(
