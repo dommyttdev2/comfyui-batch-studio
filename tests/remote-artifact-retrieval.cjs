@@ -158,6 +158,59 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
   assert.equal(fs.existsSync(path.join(runDir, 'artifacts')), false);
   assert.equal(fs.existsSync(outputDir), false);
 
+  // Regression: Scene Prompt Tools stores .state and .lock sidecars alongside
+  // generated images. They must not affect image counts, ZIP entries or manifest.
+  const sidecarRunId = '22222222-2222-4222-8222-222222222222';
+  const sidecarRunDir = path.join(runtime, 'sidecar-run');
+  const sidecarOutputPrefix = 'BatchStudio/test/' + sidecarRunId;
+  const sidecarOutputDir = path.join(comfyRoot, 'output', ...sidecarOutputPrefix.split('/'));
+  const sidecarImageDir = path.join(sidecarOutputDir, 'branch-b', 'generated');
+  fs.mkdirSync(sidecarImageDir, { recursive: true });
+  fs.mkdirSync(sidecarRunDir, { recursive: true });
+  for (let i = 0; i < 500; i++) {
+    fs.writeFileSync(path.join(sidecarImageDir, String(i).padStart(3, '0') + '.png'), 'image');
+  }
+  for (let i = 0; i < 20; i++) {
+    fs.writeFileSync(path.join(sidecarImageDir, i + '.state'), 'state');
+    fs.writeFileSync(path.join(sidecarImageDir, i + '.lock'), 'lock');
+  }
+  fs.writeFileSync(
+    path.join(sidecarRunDir, 'state.json'),
+    JSON.stringify({
+      version: 1,
+      runId: sidecarRunId,
+      status: 'completed',
+      artifact: { outputPrefix: sidecarOutputPrefix },
+    }),
+  );
+  const sidecarResult = await callWorker(workerPath, sidecarRunDir, comfyRoot, {
+    requestId: 'sidecars',
+    op: 'package_artifacts',
+    runId: sidecarRunId,
+    expectedCount: 500,
+    archiveFileName: '20260912_234513.zip',
+  });
+  assert.equal(sidecarResult.code, 0, sidecarResult.stderr);
+  const sidecarPackage = sidecarResult.lines.at(-1).result;
+  assert.equal(sidecarPackage.artifactCount, 500);
+  assert.equal(JSON.parse(sidecarPackage.manifestJson).artifacts.length, 500);
+  const sidecarZip = path.join(sidecarRunDir, 'artifacts', sidecarRunId + '.zip');
+  const sidecarZipEntries = JSON.parse(
+    execFileSync(
+      'python',
+      [
+        '-c',
+        'import json,sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); print(json.dumps(z.namelist()))',
+        sidecarZip,
+      ],
+      { encoding: 'utf8' },
+    ),
+  );
+  assert.equal(sidecarZipEntries.length, 500);
+  assert.ok(sidecarZipEntries.every((entry) => entry.endsWith('.png')));
+  assert.equal(fs.existsSync(path.join(sidecarImageDir, '0.state')), true);
+  assert.equal(fs.existsSync(path.join(sidecarImageDir, '0.lock')), true);
+
   const managerSource = fs.readFileSync(path.join(repo, 'src/main/r2-manager.ts'), 'utf8');
   const executionSource = fs.readFileSync(path.join(repo, 'src/main/remote-execution.ts'), 'utf8');
   const executionOutput = await load('execution-output.js');
