@@ -97,6 +97,7 @@ import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { CodexTurnMonitor } from './codex-turn-monitor.js';
 import { expectedArtifact, importAutoArtifact, latestAutoArtifact } from './agent-artifact-import.js';
+import { GrokAutoArtifactWatcher } from './grok-auto-artifact-watcher.js';
 import { CodexModelSelectionStore } from './codex-model-selection.js';
 import { R2ConfigStore } from './r2-config.js';
 import { R2Manager } from './r2-manager.js';
@@ -218,6 +219,7 @@ type ProjectWindowState = {
   localRatio: number;
   activeGrokContext: { root: string; stage: GrokContextStage } | null;
   restoringGrokContext: boolean;
+  grokArtifactWatcher: GrokAutoArtifactWatcher | null;
   grokNavigationQueue: GrokNavigationQueue;
   grokContextQueue: LatestGrokContextQueue<GrokPaneState>;
   lastFocusedAt: number;
@@ -460,6 +462,7 @@ function createProjectWindow(
       localRatio: 0.45,
       activeGrokContext: null,
       restoringGrokContext: false,
+      grokArtifactWatcher: null,
       grokNavigationQueue: new GrokNavigationQueue(),
       grokContextQueue: new LatestGrokContextQueue<GrokPaneState>(),
       lastFocusedAt: ++projectWindowFocusSequence,
@@ -476,6 +479,7 @@ function createProjectWindow(
     .catch((error) => console.warn('Grok loading placeholder failed:', error));
   configureGrokContents(grokView.webContents);
   attachGrokHistoryTracking(state);
+  state.grokArtifactWatcher = new GrokAutoArtifactWatcher(grokView.webContents, notifyAutoArtifact);
   window.on('focus', () => {
     state.lastFocusedAt = ++projectWindowFocusSequence;
     lastFocusedProjectWindowId = windowId;
@@ -489,6 +493,7 @@ function createProjectWindow(
     for (const picker of marketplacePickerWindows.values()) {
       if (picker.opener.id === localView.webContents.id) picker.window.close();
     }
+    state.grokArtifactWatcher?.dispose();
     localView.webContents.close();
     grokView.webContents.close();
     grokLoadingView.webContents.close();
@@ -1970,6 +1975,16 @@ function register() {
   ipcMain.handle(IPC.PROMPT_PLAN_SAVE, (_e, root: unknown, plan: PromptPlanArtifact) => {
     validRoot(root);
     return savePromptPlan(root, plan);
+  });
+  ipcMain.handle(IPC.AUTO_ARTIFACT_GROK_ARM, (event, root: unknown, stage: unknown) => {
+    validRoot(root);
+    const state = projectWindowForSender(event.sender);
+    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
+      throw new Error('選択中のプロジェクトと自動取り込み対象が一致しません。');
+    if (!Object.values(codexTaskContexts).flat().includes(stage as GrokTask['stage']))
+      throw new Error('Invalid Grok artifact stage.');
+    if (!state.grokArtifactWatcher) throw new Error('Grokの監視が初期化されていません。');
+    return state.grokArtifactWatcher.arm(state.projectRoot, stage as GrokTask['stage']);
   });
   ipcMain.handle(
     IPC.GROK_TASK_BUILD,
