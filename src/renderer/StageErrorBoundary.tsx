@@ -28,9 +28,13 @@ export class StageErrorBoundary extends Component<Props, State> {
     return (
       <section className="panel" role="alert">
         <h3>{this.props.stage} の表示に失敗しました</h3>
-        <p>読み込んだデータの形式や画面描画で問題が発生しました。ほかの工程は引き続き操作できます。</p>
+        <p>
+          読み込んだデータの形式や画面描画で問題が発生しました。ほかの工程は引き続き操作できます。
+        </p>
         <div className="issue error">{this.state.error.message || '不明な描画エラー'}</div>
-        <button type="button" onClick={this.props.onRetry}>工程を再読み込み</button>
+        <button type="button" onClick={this.props.onRetry}>
+          工程を再読み込み
+        </button>
       </section>
     );
   }
