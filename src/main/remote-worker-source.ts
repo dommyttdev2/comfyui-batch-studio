@@ -787,11 +787,22 @@ def cleanup_artifacts(root,comfy_root):
  emit("progress",stage="artifact_cleanup",outputsRemoved=outputs_removed,packageRemoved=package_removed)
  return {"ok":True,"outputsRemoved":outputs_removed,"packageRemoved":package_removed}
 
+def sequence_running(root):
+ lock=os.open(contained(root,"scene-sequence.lock"),os.O_RDWR|os.O_CREAT,0o600)
+ try:
+  try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+  except BlockingIOError:return True
+  finally:
+   try:fcntl.flock(lock,fcntl.LOCK_UN)
+   except Exception:pass
+  return False
+ finally:os.close(lock)
+
 def handle(req,root,model_root,comfy_root):
  op=req.get("op")
  if op=="health": return {"ok":True,"version":VERSION,"pid":os.getpid()}
  if op=="status":
-  return {"ok":True,"state":read_state(root)}
+  return {"ok":True,"state":read_state(root),"sequenceRunning":sequence_running(root)}
  if op=="run_scene_sequence":
   lock=os.open(contained(root,"scene-sequence.lock"),os.O_RDWR|os.O_CREAT,0o600)
   try:
