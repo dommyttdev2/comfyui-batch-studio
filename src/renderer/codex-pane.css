@@ -249,3 +249,17 @@
 .codex-artifact-result button {
   max-width: 100%;
 }
+
+.codex-manual-fallback {
+  padding: 8px 0;
+  border-top: 1px solid #34404d;
+}
+.codex-manual-fallback summary {
+  cursor: pointer;
+}
+.codex-manual-fallback p,
+.codex-auto-import-note {
+  color: #aebacb;
+  line-height: 1.5;
+  font-size: 12px;
+}
