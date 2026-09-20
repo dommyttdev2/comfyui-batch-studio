@@ -168,6 +168,7 @@ function startServer(install, options = {}) {
       interrupts: 0,
     },
     history = new Map(),
+    submissionIds = new Map(),
     outputs = new Map(),
     running = new Set(),
     claimedHandles = new Map();
@@ -211,6 +212,8 @@ function startServer(install, options = {}) {
         runHandle: expand[1].inputs.run_handle,
       };
       calls.prompts.push(record);
+      if (body.extra_data?.batch_studio_submission_id)
+        submissionIds.set(promptId, body.extra_data.batch_studio_submission_id);
       running.add(promptId);
       history.set(promptId, 'pending');
       outputs.set(promptId, {
@@ -224,6 +227,10 @@ function startServer(install, options = {}) {
       if (!(holdFirst && calls.prompts.length === 1)) {
         history.set(promptId, 'success');
         running.delete(promptId);
+      }
+      if (options.dropResponseOnce && calls.prompts.length === 1) {
+        res.destroy();
+        return;
       }
       return json(200, { prompt_id: promptId, number: calls.prompts.length, node_errors: {} });
     }
@@ -244,7 +251,12 @@ function startServer(install, options = {}) {
     }
     if (req.url === '/queue')
       return json(200, {
-        queue_running: [...running].map((id, i) => [i, id, {}]),
+        queue_running: [...running].map((id, i) => [
+          i,
+          id,
+          {},
+          { batch_studio_submission_id: submissionIds.get(id) },
+        ]),
         queue_pending: [],
       });
     if (req.url === '/interrupt') {
@@ -255,6 +267,20 @@ function startServer(install, options = {}) {
       running.clear();
       return json(200, {});
     }
+    if (req.url === '/history')
+      return json(
+        200,
+        Object.fromEntries(
+          [...history].map(([id, state]) => [
+            id,
+            {
+              status: { status_str: state, completed: state !== 'pending' },
+              prompt: [0, id, {}, { batch_studio_submission_id: submissionIds.get(id) }],
+              outputs: outputs.get(id),
+            },
+          ]),
+        ),
+      );
     if (req.url?.startsWith('/history/')) {
       const id = decodeURIComponent(req.url.slice('/history/'.length)),
         state = history.get(id);
@@ -569,6 +595,48 @@ function startServer(install, options = {}) {
         0,
         'an unrecorded accepted prompt must never be replayed',
       );
+    } finally {
+      mock.server.close();
+    }
+  }
+  {
+    // ComfyUI accepted the first POST and generated an image, but the response
+    // was lost before the Main Process could persist its prompt_id.
+    const { root, install, run, ready } = await makeProject(
+        execution,
+        hashCanonicalJson,
+        'lost-ack-local-project',
+      ),
+      mock = await startServer(install, { dropResponseOnce: true });
+    try {
+      const service = new LocalExecutionService(async () => ({
+        endpoint: mock.endpoint,
+        installPath: install,
+      }));
+      await service.start(root, run.runId);
+      const uncertain = await execution.getExecutionRun(root, run.runId);
+      assert.equal(uncertain.lifecycle, 'FAILED');
+      assert.equal(uncertain.error.code, 'EXECUTION_RECOVERY_UNCERTAIN');
+      assert.equal(uncertain.current.promptId, null);
+      assert.equal(uncertain.submission.status, 'sending');
+      assert.equal(mock.calls.prompts.length, 1);
+      await execution.mutateExecutionRun(root, run.runId, (value) => {
+        value.lifecycle = 'RUNNING';
+        value.error = null;
+      });
+      await service.recover(root, run.runId);
+      const recovered = await execution.getExecutionRun(root, run.runId);
+      assert.equal(recovered.lifecycle, 'PAUSED');
+      assert.equal(recovered.progress.overall.completed, 1);
+      assert.equal(recovered.submission.status, 'completed');
+      assert.equal(mock.calls.prompts.length, 1, 'lost ACK may only resolve, never resubmit');
+      const resumed = await execution.resumeExecutionRun(root, run.runId, async () => ready);
+      assert.equal(resumed.lifecycle, 'RUNNING');
+      await service.start(root, run.runId);
+      const done = await execution.getExecutionRun(root, run.runId);
+      assert.equal(done.lifecycle, 'COMPLETED');
+      assert.equal(done.progress.overall.completed, 3);
+      assert.equal(mock.calls.prompts.length, 3, 'each leaf must be accepted exactly once');
     } finally {
       mock.server.close();
     }
