@@ -18,6 +18,11 @@ const service = fs.readFileSync(
   path.join(repo, 'src', 'main', 'marketplace-image-service.ts'),
   'utf8',
 );
+const autosave = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'use-editor-autosave.ts'),
+  'utf8',
+);
+
 const imagePipeline = fs.readFileSync(path.join(repo, 'src', 'main', 'image-pipeline.ts'), 'utf8');
 const imagePipelineCore = fs.readFileSync(
   path.join(repo, 'src', 'main', 'image-pipeline-core.ts'),
@@ -172,3 +177,40 @@ assert.equal(
 );
 
 console.log('Marketplace image stage source contract tests passed.');
+
+matchCode(stage, /useEditorAutosave\(/, 'marketplace must use durable autosave');
+matchCode(
+  stage,
+  /saveStatus[\s\S]*saveError[\s\S]*retrySave/,
+  'save failures must remain visible and retryable',
+);
+doesNotMatchCode(
+  stage,
+  /marketplace\.save\(project\.rootPath, state\)\.catch\(\(\) => \{\}\)/,
+  'editor may not silently swallow save failure',
+);
+matchCode(
+  service,
+  /withTemplateStoreLock\(file/,
+  'concurrent Main process saves must share a per-file lock',
+);
+matchCode(
+  service,
+  /normalized\.saveRevision\s*<\s*lastRevision/,
+  'older save must not overwrite newer editor state',
+);
+matchCode(
+  autosave,
+  /return \(\) => flush\(\)/,
+  'stage switch must flush pending autosave before unmount',
+);
+matchCode(
+  autosave,
+  /window\.addEventListener\('beforeunload', flush\)/,
+  'window closing must dispatch pending autosave',
+);
+matchCode(
+  autosave,
+  /EDITOR_SAVE_STALE/,
+  'out-of-order save acknowledgments must surface as conflicts',
+);

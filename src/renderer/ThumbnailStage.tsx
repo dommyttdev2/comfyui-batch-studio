@@ -9,6 +9,7 @@ import type {
   ThumbnailSlotKey,
   ThumbnailTextState,
 } from '../shared/types';
+import { useEditorAutosave } from './use-editor-autosave';
 import type { Runner } from './ui';
 import './thumbnail-stage.css';
 
@@ -330,6 +331,14 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
     moved: boolean;
   } | null>(null);
   const loadedStateRef = useRef(false);
+  const { saveStatus, saveError, saveNow, retrySave } = useEditorAutosave(
+    project.rootPath,
+    'thumbnail',
+    state,
+    loadedStateRef.current,
+    false,
+    500,
+  );
 
   const active = useMemo(
     () => state?.documents.find((item) => item.id === state.activeDocumentId) ?? null,
@@ -416,14 +425,6 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
       cancelled = true;
     };
   }, [active?.pattern]);
-
-  useEffect(() => {
-    if (!state || !loadedStateRef.current) return;
-    const timer = window.setTimeout(() => {
-      void window.batchStudio.thumbnail.save(project.rootPath, state).catch(() => {});
-    }, 500);
-    return () => window.clearTimeout(timer);
-  }, [project.rootPath, state]);
 
   useEffect(() => {
     if (active && !visibleSlots.includes(selectedSlot)) setSelectedSlot('CENTER_MAIN');
@@ -563,7 +564,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   const exportImage = () =>
     void run(async () => {
       if (!active || !state) return;
-      await window.batchStudio.thumbnail.save(project.rootPath, state);
+      await saveNow(state);
       const overlay = templates[active.pattern] ?? (await loadPsdOverlay(active.pattern));
       if (!templates[active.pattern])
         setTemplates((current) => ({ ...current, [active.pattern]: overlay }));
@@ -586,7 +587,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
     void run(async () => {
       const currentState = state;
       if (!currentState) return;
-      await window.batchStudio.thumbnail.save(project.rootPath, currentState);
+      await saveNow(currentState);
       const nextTemplates = { ...templates };
       let lastPath = '';
       for (const thumbnail of currentState.documents) {
@@ -712,6 +713,21 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
             }}
           />
           {notice && <p className="thumbnail-notice">{notice}</p>}
+          <p className="thumbnail-notice" role="status">
+            {saveStatus === 'editing'
+              ? '編集中（保存待ち）'
+              : saveStatus === 'saving'
+                ? '保存中…'
+                : saveStatus === 'error'
+                  ? '保存失敗'
+                  : '保存済み'}
+          </p>
+          {saveError && (
+            <div className="issue warning" role="alert">
+              編集内容を保存できませんでした: {saveError}
+              <button onClick={retrySave}>保存を再試行</button>
+            </div>
+          )}
         </section>
         <aside className="thumbnail-inspector">
           <section className="panel">

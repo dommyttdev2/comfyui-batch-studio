@@ -594,6 +594,7 @@ export interface ThumbnailDocument {
 
 export interface ThumbnailEditorState {
   schemaVersion: 1;
+  saveRevision?: number;
   activeDocumentId: number;
   documents: ThumbnailDocument[];
 }
@@ -669,6 +670,7 @@ export interface MarketplaceCustomState {
 
 export interface MarketplaceImageEditorState {
   schemaVersion: 1;
+  saveRevision?: number;
   sourceImagePath: string;
   mode: MarketplaceEditorMode;
   activeTargetId: string;

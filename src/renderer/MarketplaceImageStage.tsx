@@ -8,6 +8,7 @@ import type {
   ProjectSummary,
 } from '../shared/types';
 import { MarketplacePickerGeneration } from '../shared/marketplace-picker-generation';
+import { useEditorAutosave } from './use-editor-autosave';
 import type { Runner } from './ui';
 import './marketplace-image-stage.css';
 
@@ -146,6 +147,15 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   const pickerGenerationRef = useRef(new MarketplacePickerGeneration());
   const pickerOpeningRef = useRef(false);
   const pickerCommitPendingRef = useRef(false);
+  const loadedStateRef = useRef(false);
+  const { saveStatus, saveError, saveNow, retrySave } = useEditorAutosave(
+    project.rootPath,
+    'marketplace',
+    state,
+    loadedStateRef.current,
+    Boolean(pickerSessionRef.current || pickerOpeningRef.current || pickerCommitPendingRef.current),
+    250,
+  );
 
   const activeTarget = useMemo(
     () => targets.find((target) => target.id === state?.activeTargetId) ?? targets[0] ?? null,
@@ -224,6 +234,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
 
   useEffect(() => {
     let cancelled = false;
+    loadedStateRef.current = false;
     const loadToken = pickerGenerationRef.current.invalidate();
     const isCurrent = () => !cancelled && pickerGenerationRef.current.isCurrent(loadToken);
     void run(async () => {
@@ -235,6 +246,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       if (!isCurrent()) return;
       setTargets(nextTargets);
       setFinalArtifact(nextFinalArtifact);
+      loadedStateRef.current = true;
       setState(nextState);
       if (!nextState.sourceImagePath) return;
       try {
@@ -286,22 +298,6 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   }, [project.rootPath]);
 
   useEffect(() => {
-    if (
-      !state ||
-      pickerSessionRef.current ||
-      pickerOpeningRef.current ||
-      pickerCommitPendingRef.current
-    )
-      return;
-    const timer = window.setTimeout(() => {
-      if (pickerSessionRef.current || pickerOpeningRef.current || pickerCommitPendingRef.current)
-        return;
-      void window.batchStudio.marketplace.save(project.rootPath, state).catch(() => {});
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [project.rootPath, state]);
-
-  useEffect(() => {
     const removePreview = window.batchStudio.marketplace.onPickerPreview((selection) => {
       const token = pickerGenerationRef.current.preview(selection.sessionId);
       const base = pickerBeforeStateRef.current ?? state;
@@ -339,7 +335,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
                 : ready.state
               : await applySource(selection.imagePath, base, targets, false, isCurrent);
           if (!nextState || !isCurrent()) return;
-          await window.batchStudio.marketplace.save(project.rootPath, nextState);
+          await saveNow(nextState);
           if (!isCurrent()) return;
           setNotice(
             '入力画像を確定しました。4種類のクロップは新しい画像に合わせてリセットしました。',
@@ -748,6 +744,21 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
           </span>
         </div>
         {notice && <p className="marketplace-notice">{notice}</p>}
+        <p className="marketplace-notice" role="status">
+          {saveStatus === 'editing'
+            ? '編集中（保存待ち）'
+            : saveStatus === 'saving'
+              ? '保存中…'
+              : saveStatus === 'error'
+                ? '保存失敗'
+                : '保存済み'}
+        </p>
+        {saveError && (
+          <div className="issue warning" role="alert">
+            編集内容を保存できませんでした: {saveError}
+            <button onClick={retrySave}>保存を再試行</button>
+          </div>
+        )}
       </section>
 
       <aside className="marketplace-inspector">

@@ -12,7 +12,7 @@ import type {
   ThumbnailTextState,
   ThumbnailTemplateSource,
 } from '../shared/types.js';
-import { readJson, writeJsonAtomic } from './fs-utils.js';
+import { readJson, withTemplateStoreLock, writeJsonAtomic } from './fs-utils.js';
 import {
   listImageFiles,
   readImagePreview,
@@ -194,6 +194,11 @@ export function normalizeThumbnailState(
     schemaVersion: 1,
     activeDocumentId: Math.round(finite(input.activeDocumentId, 1, 1, 6)),
     documents,
+    ...(typeof input.saveRevision === 'number' &&
+    Number.isSafeInteger(input.saveRevision) &&
+    input.saveRevision >= 0
+      ? { saveRevision: input.saveRevision }
+      : {}),
   };
 }
 
@@ -211,8 +216,29 @@ export async function saveThumbnailState(
   state: unknown,
 ): Promise<ThumbnailEditorState> {
   const normalized = normalizeThumbnailState(state);
-  await writeJsonAtomic(statePath(root), normalized);
-  return normalized;
+  const file = statePath(root);
+  return withTemplateStoreLock(file, async () => {
+    const current = await readJson<ThumbnailEditorState>(file);
+    const lastRevision = current?.saveRevision ?? 0;
+    if (normalized.saveRevision !== undefined && normalized.saveRevision < lastRevision)
+      return normalizeThumbnailState(current);
+    if (
+      normalized.saveRevision !== undefined &&
+      normalized.saveRevision === lastRevision &&
+      current
+    ) {
+      const proposed = { ...normalized, saveRevision: lastRevision };
+      if (JSON.stringify(proposed) !== JSON.stringify(current))
+        throw new Error('EDITOR_SAVE_CONFLICT: Thumbnail state was modified by another editor.');
+      return normalizeThumbnailState(current);
+    }
+    const committed = {
+      ...normalized,
+      saveRevision: normalized.saveRevision ?? Math.max(lastRevision + 1, Date.now() * 1000),
+    };
+    await writeJsonAtomic(file, committed);
+    return committed;
+  });
 }
 
 export async function listThumbnailImages(directory: string): Promise<ThumbnailImageItem[]> {

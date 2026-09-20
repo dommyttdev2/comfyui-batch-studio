@@ -10,7 +10,7 @@ import type {
   MarketplaceImageTarget,
   MarketplaceOutputFormat,
 } from '../shared/types.js';
-import { readJson, writeJsonAtomic } from './fs-utils.js';
+import { readJson, withTemplateStoreLock, writeJsonAtomic } from './fs-utils.js';
 import { assertFinalArtifactImage } from './final-artifact-image-service.js';
 import {
   fingerprintMarketplaceSource,
@@ -149,6 +149,11 @@ export async function normalizeMarketplaceImageState(
     candidate.custom && typeof candidate.custom === 'object' ? candidate.custom : defaults.custom;
   return {
     schemaVersion: 1,
+    ...(typeof candidate.saveRevision === 'number' &&
+    Number.isSafeInteger(candidate.saveRevision) &&
+    candidate.saveRevision >= 0
+      ? { saveRevision: candidate.saveRevision }
+      : {}),
     sourceImagePath: typeof candidate.sourceImagePath === 'string' ? candidate.sourceImagePath : '',
     mode: candidate.mode === 'custom' ? 'custom' : 'marketplace',
     activeTargetId,
@@ -169,8 +174,29 @@ export async function loadMarketplaceImageState(root: string) {
 
 export async function saveMarketplaceImageState(root: string, value: unknown) {
   const normalized = await normalizeMarketplaceImageState(value);
-  await writeJsonAtomic(statePath(root), normalized);
-  return normalized;
+  const file = statePath(root);
+  return withTemplateStoreLock(file, async () => {
+    const current = await readJson<MarketplaceImageEditorState>(file);
+    const lastRevision = current?.saveRevision ?? 0;
+    if (normalized.saveRevision !== undefined && normalized.saveRevision < lastRevision)
+      return normalizeMarketplaceImageState(current);
+    if (
+      normalized.saveRevision !== undefined &&
+      normalized.saveRevision === lastRevision &&
+      current
+    ) {
+      const proposed = { ...normalized, saveRevision: lastRevision };
+      if (JSON.stringify(proposed) !== JSON.stringify(current))
+        throw new Error('EDITOR_SAVE_CONFLICT: Marketplace state was modified by another editor.');
+      return normalizeMarketplaceImageState(current);
+    }
+    const committed = {
+      ...normalized,
+      saveRevision: normalized.saveRevision ?? Math.max(lastRevision + 1, Date.now() * 1000),
+    };
+    await writeJsonAtomic(file, committed);
+    return committed;
+  });
 }
 
 function clampCrop(
