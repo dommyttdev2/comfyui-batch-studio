@@ -77,7 +77,9 @@ function sameSourceStat(
   );
 }
 function sourceChanged(reason: string): Error {
-  return new Error(`${SOURCE_CHANGED}: ${reason}。既存Partを再利用せず、新しいアップロードを開始してください。`);
+  return new Error(
+    `${SOURCE_CHANGED}: ${reason}。既存Partを再利用せず、新しいアップロードを開始してください。`,
+  );
 }
 async function fingerprintUploadSource(
   filePath: string,
@@ -136,7 +138,8 @@ async function verifiedUploadPart(
   partNumber: number,
 ): Promise<Buffer> {
   const before = sourceStat(await stat(filePath));
-  if (!sameSourceStat(baseline, before)) throw sourceChanged('Part読み込み前に元ファイルが変更されました');
+  if (!sameSourceStat(baseline, before))
+    throw sourceChanged('Part読み込み前に元ファイルが変更されました');
   const handle = await open(filePath, 'r');
   try {
     const opened = sourceStat(await handle.stat());
@@ -868,7 +871,9 @@ export class R2Manager {
       if (!(await exists(job.filePath))) throw new Error('元ファイルが見つかりません。');
       if (!job.sourceFingerprint) {
         if (Object.keys(job.completedParts).length)
-          throw sourceChanged('旧形式のジョブには完了済みPartの内容ハッシュがないため再開できません');
+          throw sourceChanged(
+            '旧形式のジョブには完了済みPartの内容ハッシュがないため再開できません',
+          );
         job.sourceFingerprint = await fingerprintUploadSource(job.filePath, job.partSize);
         job.hashProgressBytes = job.size;
         await this.saveUpload(job);
