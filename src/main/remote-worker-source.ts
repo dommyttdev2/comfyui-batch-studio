@@ -1,7 +1,7 @@
-export const REMOTE_WORKER_VERSION = '10';
+export const REMOTE_WORKER_VERSION = '11';
 export const REMOTE_WORKER_FILE = `#!/usr/bin/env python3
-import base64,copy,hashlib,http.client,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,zipfile
-VERSION="10"
+import base64,copy,hashlib,http.client,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,zipfile,uuid
+VERSION="11"
 import fcntl
 CHUNK_SIZE=8*1024*1024
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".webp"}
@@ -478,6 +478,47 @@ def prompt_queue_state(endpoint,prompt_id):
  if queue_contains(queue.get("queue_pending"),prompt_id):return "pending"
  return "absent"
 
+def submission_id_in_prompt(value,attempt_id):
+ if not isinstance(value,dict):return False
+ return value.get("batch_studio_submission_id")==attempt_id
+
+def find_submission_prompt(endpoint,attempt_id):
+ if not attempt_id:raise WorkerError("REMOTE_SUBMISSION_ID_REQUIRED")
+ queue=require_api(endpoint,"/queue");history=require_api(endpoint,"/history")
+ matched=set()
+ for key in ("queue_running","queue_pending"):
+  for item in queue.get(key) or []:
+   if isinstance(item,list) and len(item)>3 and submission_id_in_prompt(item[3],attempt_id):
+    matched.add(str(item[1]))
+ for prompt_id,entry in (history or {}).items():
+  if not isinstance(entry,dict):continue
+  prior=entry.get("prompt")
+  extra=prior[3] if isinstance(prior,list) and len(prior)>3 else entry.get("extra_data")
+  if submission_id_in_prompt(extra,attempt_id):matched.add(str(prompt_id))
+ if len(matched)>1:raise WorkerError("REMOTE_SUBMISSION_DUPLICATE","Multiple ComfyUI prompts use the same submission attempt.")
+ return next(iter(matched),None)
+
+def reconcile_submission(root,state,endpoint):
+ current=state.get("current") or {};intent=current.get("submission") or {}
+ if current.get("promptId") or intent.get("status") not in ("sending","acknowledged"):
+  return bool(current.get("promptId"))
+ attempt_id=str(intent.get("attemptId") or "")
+ prompt_id=find_submission_prompt(endpoint,attempt_id)
+ if not prompt_id:
+  state["status"]="failed";state["workerPid"]=0
+  state["error"]={"code":"REMOTE_PROMPT_ACK_UNCERTAIN","message":"Prompt POST may have been accepted, but Queue/History contain no matching submission ID. No retry was sent."}
+  save_state(root,state);return False
+ current["promptId"]=prompt_id;intent["status"]="acknowledged";intent["promptId"]=prompt_id
+ if prompt_id not in state.setdefault("promptIds",[]):state["promptIds"].append(prompt_id)
+ branch_id=current.get("branchId")
+ meta=(state.get("branchRuns") or {}).get(branch_id)
+ if isinstance(meta,dict):meta["lastPromptId"]=prompt_id
+ state["current"]=current;state["error"]=None
+ if state.get("status") in ("failed","running") and not sequence_running(root):
+  state["status"]="paused";state["workerPid"]=0
+ save_state(root,state)
+ return True
+
 def set_run_handle(graph,run_handle):
  for node in graph.values():
   if isinstance(node,dict) and node.get("class_type") in ("ScenePrompter","SceneMatrix","ScenePresetReference","ScenePrompterExpand"):
@@ -612,7 +653,7 @@ def run_scene_sequence(root,req):
  if state.get("status") in ("paused","interrupted","failed"):
   if not req.get("resume"):return {"state":state}
   error=(state.get("error") or {})
-  if state.get("status")=="failed" and error.get("code") not in (None,"REMOTE_PROMPT_FAILED"):
+  if state.get("status")=="failed" and error.get("code") not in (None,"REMOTE_PROMPT_FAILED","REMOTE_PROMPT_ACK_UNCERTAIN"):
    raise WorkerError("REMOTE_RESUME_UNSAFE","The failed worker state requires a separate recovery action: "+str(error.get("code")))
   current=state.get("current") or {}
   prompt_id=str(current.get("promptId") or "")
@@ -623,6 +664,9 @@ def run_scene_sequence(root,req):
   write_control(root,{"stopRequested":False,"interruptRequested":False})
   state["status"]="running";state["error"]=None;save_state(root,state)
  state["workerPid"]=os.getpid();state["status"]="running";save_state(root,state)
+ intent=((state.get("current") or {}).get("submission") or {})
+ if intent.get("status") in ("sending","acknowledged") and not (state.get("current") or {}).get("promptId"):
+  if not reconcile_submission(root,state,endpoint):return {"state":read_state(root)}
  if not reconcile_current_prompt(root,state,branches,endpoint):return {"state":read_state(root)}
  for branch in branches:
   branch_id=str(branch.get("branchId") or "");leaf_ids=branch.get("leafIds") or [];expand_id=str(branch.get("expandNodeId") or "")
@@ -646,10 +690,13 @@ def run_scene_sequence(root,req):
     if read_control(root).get("stopRequested"):
      state["status"]="paused";state["workerPid"]=0;save_state(root,state);sequence_progress(state,"scheduling_stopped");return {"state":state}
     set_expand(graph,expand_id,continuous_id,index)
-    state["current"]={"branchId":branch_id,"leafId":leaf_ids[index],"index":index,"promptId":None};save_state(root,state);sequence_progress(state,"prompt_submitting")
-    submitted=require_api(endpoint,"/prompt","POST",{"prompt":graph,"client_id":run_id});prompt_id=str(submitted.get("prompt_id") or "")
+    attempt_id=str(uuid.uuid4());graph_sha=hashlib.sha256(json.dumps(graph,sort_keys=True,separators=(",",":")).encode("utf-8")).hexdigest()
+    intent={"attemptId":attempt_id,"branchId":branch_id,"leafId":leaf_ids[index],"index":index,"graphSha256":graph_sha,"status":"prepared","promptId":None}
+    state["current"]={"branchId":branch_id,"leafId":leaf_ids[index],"index":index,"promptId":None,"submission":intent};save_state(root,state)
+    intent["status"]="sending";save_state(root,state);sequence_progress(state,"prompt_submitting")
+    submitted=require_api(endpoint,"/prompt","POST",{"prompt":graph,"client_id":run_id,"extra_data":{"batch_studio_submission_id":attempt_id}});prompt_id=str(submitted.get("prompt_id") or "")
     if not prompt_id:raise WorkerError("REMOTE_PROMPT_SUBMIT_FAILED")
-    state["current"]["promptId"]=prompt_id
+    state["current"]["promptId"]=prompt_id;intent["status"]="acknowledged";intent["promptId"]=prompt_id
     if prompt_id not in state["promptIds"]:state["promptIds"].append(prompt_id)
     meta["lastPromptId"]=prompt_id;save_state(root,state);sequence_progress(state,"prompt_submitted",promptId=prompt_id)
     if not meta.get("claimed"):
@@ -803,6 +850,12 @@ def handle(req,root,model_root,comfy_root):
  if op=="health": return {"ok":True,"version":VERSION,"pid":os.getpid()}
  if op=="status":
   return {"ok":True,"state":read_state(root),"sequenceRunning":sequence_running(root)}
+ if op=="reconcile_submission":
+  state=read_state(root)
+  if not isinstance(state,dict):raise WorkerError("REMOTE_STATE_INVALID")
+  endpoint=resolve_comfy_endpoint(req.get("comfyEndpoint"))
+  found=reconcile_submission(root,state,endpoint)
+  return {"ok":True,"state":read_state(root),"found":found}
  if op=="run_scene_sequence":
   lock=os.open(contained(root,"scene-sequence.lock"),os.O_RDWR|os.O_CREAT,0o600)
   try:

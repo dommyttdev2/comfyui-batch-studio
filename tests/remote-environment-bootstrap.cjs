@@ -236,7 +236,7 @@ const writeJson = (file, value) => {
     );
     assert.equal(
       worker.REMOTE_WORKER_VERSION,
-      '10',
+      '11',
       'worker version must advance when remote worker behavior changes',
     );
     assert.match(

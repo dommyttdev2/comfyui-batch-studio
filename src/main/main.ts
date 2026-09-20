@@ -1120,7 +1120,7 @@ async function reconcilePersistedExecutionRuns(root: string) {
       try {
         if (run.executionTarget === 'local') {
           const endpoint = settings.comfyUiApiEndpoint;
-          if (run.current.promptId) {
+          if (run.current.promptId || run.submission?.status === 'sending') {
             void executionCoordinator
               .startLocal(ref, endpoint, async () => {
                 await localExecutor().recover(root, run.runId);
@@ -1129,6 +1129,15 @@ async function reconcilePersistedExecutionRuns(root: string) {
                   executionCoordinator.retain(ref);
               })
               .finally(maybeQuitAfterExecution);
+          } else if (run.submission?.status === 'prepared') {
+            // A prepared intent is durably marked before sending; no POST can
+            // have occurred unless the sending transition also persisted.
+            await mutateExecutionRun(root, run.runId, (current) => {
+              if (current.lifecycle !== 'RUNNING' || current.submission?.status !== 'prepared')
+                return;
+              current.lifecycle = 'PAUSED';
+              current.controls.scheduling = 'STOPPED';
+            });
           } else if (
             run.phase === 'LOCAL_COMFYUI_CONNECTING' ||
             run.phase === 'LOCAL_CAPABILITY_CHECKING' ||

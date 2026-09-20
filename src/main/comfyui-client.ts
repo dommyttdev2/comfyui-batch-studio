@@ -65,15 +65,56 @@ export class ComfyUiClient {
     const response = await this.request('/object_info');
     return readJson(response, 'ComfyUI object_info failed');
   }
-  async prompt(graph: Record<string, unknown>, clientId: string): Promise<ComfyUiPromptResult> {
+  async prompt(
+    graph: Record<string, unknown>,
+    clientId: string,
+    submissionId?: string,
+  ): Promise<ComfyUiPromptResult> {
     const response = await this.request('/prompt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: graph, client_id: clientId }),
+      body: JSON.stringify({
+        prompt: graph,
+        client_id: clientId,
+        ...(submissionId ? { extra_data: { batch_studio_submission_id: submissionId } } : {}),
+      }),
     });
     const data = await readJson(response, 'ComfyUI prompt submission failed');
     if (!data?.prompt_id) throw new Error('ComfyUI prompt submission returned no prompt_id.');
     return data as ComfyUiPromptResult;
+  }
+  // A response may be lost after ComfyUI accepts POST /prompt. Its Queue and
+  // History retain extra_data, allowing an exact attempt ID to be recovered
+  // without issuing another POST. A missing match remains uncertain.
+  async findPromptBySubmissionId(submissionId: string): Promise<string | null> {
+    const [queue, history] = await Promise.all([
+      this.queue(),
+      this.request('/history').then((response) =>
+        readJson(response, 'ComfyUI history listing failed'),
+      ),
+    ]);
+    const ids = new Set<string>();
+    for (const item of [...(queue?.queue_running ?? []), ...(queue?.queue_pending ?? [])]) {
+      if (
+        Array.isArray(item) &&
+        typeof item[1] === 'string' &&
+        item[3]?.batch_studio_submission_id === submissionId
+      )
+        ids.add(item[1]);
+    }
+    for (const [key, value] of Object.entries(history ?? {})) {
+      const entry = value as any;
+      if (
+        entry?.prompt?.[3]?.batch_studio_submission_id === submissionId ||
+        entry?.extra_data?.batch_studio_submission_id === submissionId
+      )
+        ids.add(String(key));
+    }
+    if (ids.size > 1)
+      throw new Error(
+        'Multiple ComfyUI prompts share a submission ID; automatic recovery is unsafe.',
+      );
+    return [...ids][0] ?? null;
   }
   async history(promptId: string) {
     const response = await this.request(`/history/${encodeURIComponent(promptId)}`);
