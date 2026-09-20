@@ -6,7 +6,11 @@ import type {
   ValidationIssue,
 } from '../shared/types.js';
 import { exists, readJson } from './fs-utils.js';
-import { hashCanonicalJson, validateApiGraphStructure } from './workflow-api.js';
+import {
+  hashCanonicalJson,
+  hashWorkflowModelInputs,
+  validateApiGraphStructure,
+} from './workflow-api.js';
 import { scanProject } from './project-scan.js';
 import { validateModels, validatePromptPlan } from './validation.js';
 import { validateModelsAgainstCatalog } from './model-catalog.js';
@@ -79,7 +83,7 @@ export async function runPreflight(
   const build = project.meta?.workflowBuild as any;
   const apiRelativePath = build?.apiOutputPath ?? build?.outputs?.api?.path;
   const apiIssues: ValidationIssue[] = [];
-  if (models && (!build?.modelsSha256 || build.modelsSha256 !== hashCanonicalJson(models)))
+  if (models && (!build?.modelsSha256 || build.modelsSha256 !== hashWorkflowModelInputs(models)))
     apiIssues.push({
       severity: 'error',
       code: 'WORKFLOW_MODEL_STALE',
