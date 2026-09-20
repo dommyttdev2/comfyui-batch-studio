@@ -12,7 +12,7 @@ Batch Studio と生成アシスタントの責務境界を守ってください�
 - あなたは意味・創作上の判断を担当します。
 - ComfyUI Workflow JSON、node ID、link ID、group ID、node position、widgets_values は生成しません。
 - 添付ファイルに存在しない Model / Version / File identity を捏造しません。`;
-const artifactFileOutputRules = (fileName: string) => `## 出力契約
+export const artifactFileOutputRules = (fileName: string) => `## 出力契約
 - 最終成果物はチャット本文へ展開せず、\`${fileName}\` という名前のダウンロード可能なファイルとして生成・添付してください。
 - ファイル内容をチャット本文、code block、引用、要約へ再掲しません。
 - チャット本文には説明、挨拶、注釈、要約、注意書き、「以下です」「補足」等の成果物外テキストを付けません。
@@ -139,6 +139,8 @@ model_loras.json は次の形だけにしてください。
 - 不足が無い場合は missingRequirements を出力しません。
 - 定義されていない追加フィールドを出力しません。`;
 const planShape = `${artifactFileOutputRules('prompt_plan.json')}
+
+## Schema v2 JSON構造
 prompt_plan.json は Schema v2 の構造化Promptとして出力してください。
 {
   "schemaVersion": 2,
