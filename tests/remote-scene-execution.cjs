@@ -257,7 +257,10 @@ function startMock() {
     // Stopping is durable: only an explicit resume may clear the persisted stop flags.
     const pausedState = JSON.parse(fs.readFileSync(path.join(stopDir, 'state.json'), 'utf8'));
     assert.equal(pausedState.status, 'paused');
-    assert.equal(JSON.parse(fs.readFileSync(path.join(stopDir, 'control.json'), 'utf8')).stopRequested, true);
+    assert.equal(
+      JSON.parse(fs.readFileSync(path.join(stopDir, 'control.json'), 'utf8')).stopRequested,
+      true,
+    );
     result = await callWorker(workerPath, stopDir, {
       ...payload(mock.endpoint, 'stop-run'),
       resume: true,
@@ -270,7 +273,10 @@ function startMock() {
       [0, 1],
       'explicit Resume must execute all remaining leaves after Stop Scheduling',
     );
-    assert.equal(JSON.parse(fs.readFileSync(path.join(stopDir, 'control.json'), 'utf8')).stopRequested, false);
+    assert.equal(
+      JSON.parse(fs.readFileSync(path.join(stopDir, 'control.json'), 'utf8')).stopRequested,
+      false,
+    );
 
     const partialDir = path.join(runtime, 'partial');
     fs.mkdirSync(partialDir);
@@ -307,10 +313,10 @@ function startMock() {
       [1],
       'previously completed leaves must never be submitted again',
     );
-    assert.deepEqual(
-      JSON.parse(fs.readFileSync(path.join(partialDir, 'control.json'), 'utf8')),
-      { stopRequested: false, interruptRequested: false },
-    );
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(partialDir, 'control.json'), 'utf8')), {
+      stopRequested: false,
+      interruptRequested: false,
+    });
 
     for (const priorStatus of ['interrupted', 'failed']) {
       const recoveredDir = path.join(runtime, 'recover-' + priorStatus);
@@ -341,7 +347,10 @@ function startMock() {
       assert.equal(result.code, 0, result.stderr);
       response = result.lines.at(-1).result;
       assert.equal(response.state.status, 'completed');
-      assert.deepEqual(mock.calls.prompts.slice(recoveredBefore).map((x) => x.index), [1]);
+      assert.deepEqual(
+        mock.calls.prompts.slice(recoveredBefore).map((x) => x.index),
+        [1],
+      );
     }
 
     const unsafeDir = path.join(runtime, 'unsafe-failure');
