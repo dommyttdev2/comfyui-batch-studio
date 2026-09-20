@@ -3,6 +3,7 @@ export const REMOTE_WORKER_FILE = `#!/usr/bin/env python3
 import base64,copy,hashlib,http.client,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,zipfile
 VERSION="10"
 CHUNK_SIZE=8*1024*1024
+IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".webp"}
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 class WorkerError(Exception):
@@ -76,6 +77,7 @@ def list_artifact_files(output_dir):
  for base,dirs,names in os.walk(output_dir,followlinks=False):
   dirs[:]=[name for name in dirs if not os.path.islink(os.path.join(base,name))]
   for name in names:
+   if os.path.splitext(name)[1].lower() not in IMAGE_EXTENSIONS:continue
    target=os.path.join(base,name)
    if os.path.islink(target) or not os.path.isfile(target):continue
    rel=os.path.relpath(target,output_dir).replace(os.sep,"/")
