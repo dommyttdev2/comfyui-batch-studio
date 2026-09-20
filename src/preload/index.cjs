@@ -128,6 +128,20 @@ const I = {
   R2_DELETE_TEMPLATE: 'r2:delete-template',
   R2_METRICS: 'r2:metrics',
   CLIPBOARD_WRITE_TEXT: 'clipboard:write-text',
+  CODEX_GET_PROVIDER: 'codex:get-provider',
+  CODEX_SET_PROVIDER: 'codex:set-provider',
+  CODEX_SET_CONTEXT: 'codex:set-context',
+  CODEX_CONTEXT: 'codex:context',
+  CODEX_CONTEXT_CHANGED: 'codex:context-changed',
+  CODEX_STATUS: 'codex:status',
+  CODEX_SIGN_IN: 'codex:sign-in',
+  CODEX_SNAPSHOT: 'codex:snapshot',
+  CODEX_NEW_CHAT: 'codex:new-chat',
+  CODEX_RESTORE_CHAT: 'codex:restore-chat',
+  CODEX_SEND: 'codex:send',
+  CODEX_SEND_TASK: 'codex:send-task',
+  CODEX_EVENT: 'codex:event',
+  CODEX_SAVE_RESPONSE: 'codex:save-response',
   GROK_SET_VISIBLE: 'grok:set-visible',
   GROK_SET_CONTEXT: 'grok:set-context',
   GROK_SET_RATIO: 'grok:set-ratio',
@@ -317,6 +331,30 @@ contextBridge.exposeInMainWorld('batchStudio', {
     saveTemplate: (i) => ipcRenderer.invoke(I.R2_SAVE_TEMPLATE, i),
     deleteTemplate: (id) => ipcRenderer.invoke(I.R2_DELETE_TEMPLATE, id),
     metrics: () => ipcRenderer.invoke(I.R2_METRICS),
+  },
+  codex: {
+    getProvider: () => ipcRenderer.invoke(I.CODEX_GET_PROVIDER),
+    setProvider: (p) => ipcRenderer.invoke(I.CODEX_SET_PROVIDER, p),
+    setContext: (r, s) => ipcRenderer.invoke(I.CODEX_SET_CONTEXT, r, s),
+    context: () => ipcRenderer.invoke(I.CODEX_CONTEXT),
+    onContext: (listener) => {
+      const handler = (_event, context) => listener(context);
+      ipcRenderer.on(I.CODEX_CONTEXT_CHANGED, handler);
+      return () => ipcRenderer.removeListener(I.CODEX_CONTEXT_CHANGED, handler);
+    },
+    status: () => ipcRenderer.invoke(I.CODEX_STATUS),
+    signIn: () => ipcRenderer.invoke(I.CODEX_SIGN_IN),
+    snapshot: () => ipcRenderer.invoke(I.CODEX_SNAPSHOT),
+    newChat: () => ipcRenderer.invoke(I.CODEX_NEW_CHAT),
+    restoreChat: (id) => ipcRenderer.invoke(I.CODEX_RESTORE_CHAT, id),
+    send: (text) => ipcRenderer.invoke(I.CODEX_SEND, text),
+    sendTask: (stage, extra) => ipcRenderer.invoke(I.CODEX_SEND_TASK, stage, extra),
+    onEvent: (listener) => {
+      const handler = (_event, codexEvent) => listener(codexEvent);
+      ipcRenderer.on(I.CODEX_EVENT, handler);
+      return () => ipcRenderer.removeListener(I.CODEX_EVENT, handler);
+    },
+    saveResponse: (text) => ipcRenderer.invoke(I.CODEX_SAVE_RESPONSE, text),
   },
   grok: {
     setVisible: (v) => ipcRenderer.invoke(I.GROK_SET_VISIBLE, v),

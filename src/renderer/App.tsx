@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ProjectBriefInput, ProjectSummary } from '../shared/types';
+import type { AssistantPaneProvider, ProjectBriefInput, ProjectSummary } from '../shared/types';
 import { grokContextStage, stages, shouldShowGrok, statusDot, type Runner, type Stage } from './ui';
 import { Overview, Settings } from './ProjectStages';
 import { StoryStage, ModelsStage } from './GrokStages';
@@ -66,6 +66,9 @@ function App() {
     [stage, setStage] = useState<Stage>('概要'),
     [error, setError] = useState(''),
     [grok, setGrok] = useState(false),
+    [paneProvider, setPaneProvider] = useState<AssistantPaneProvider>('grok'),
+    [paneProviderRoot, setPaneProviderRoot] = useState<string | null>(null),
+    [switchingProvider, setSwitchingProvider] = useState(false),
     [ratio, setRatio] = useState(0.45),
     [createOpen, setCreateOpen] = useState(false),
     [environmentOpen, setEnvironmentOpen] = useState(false),
@@ -180,14 +183,58 @@ function App() {
   }, []);
   useEffect(() => {
     let cancelled = false;
+    const root = project?.rootPath ?? null;
+    setPaneProviderRoot(null);
+    if (root) {
+      void window.batchStudio.codex
+        .getProvider()
+        .then((provider) => {
+          if (cancelled) return;
+          setPaneProvider(provider);
+          setPaneProviderRoot(root);
+        })
+        .catch((e) => {
+          if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [project?.rootPath]);
+  const changeProvider = async (provider: AssistantPaneProvider) => {
+    if (!project || paneProviderRoot !== project.rootPath || switchingProvider) return;
+    setSwitchingProvider(true);
+    setError('');
+    try {
+      await window.batchStudio.codex.setProvider(provider);
+      setPaneProvider(provider);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSwitchingProvider(false);
+    }
+  };
+  useEffect(() => {
+    let cancelled = false;
     void (async () => {
+      if (project && paneProviderRoot !== project.rootPath) {
+        const state = await window.batchStudio.grok.setVisible(false);
+        if (!cancelled) {
+          setGrok(state.visible);
+          setRatio(state.ratio);
+        }
+        return;
+      }
       const visible = Boolean(project && !tool && shouldShowGrok(stage)),
         context = grokContextStage(stage);
       if (visible && context && project) {
         setGrok(true);
-        const contextLoad = window.batchStudio.grok.setContext(project.rootPath, context),
-          visibility = window.batchStudio.grok.setVisible(true),
-          [s] = await Promise.all([visibility, contextLoad]);
+        const contextLoad =
+          paneProvider === 'codex'
+            ? window.batchStudio.codex.setContext(project.rootPath, context)
+            : window.batchStudio.grok.setContext(project.rootPath, context);
+        const visibility = window.batchStudio.grok.setVisible(true);
+        const [s] = await Promise.all([visibility, contextLoad]);
         if (!cancelled) {
           setGrok(s.visible);
           setRatio(s.ratio);
@@ -205,7 +252,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [stage, project?.rootPath, tool]);
+  }, [stage, project?.rootPath, tool, paneProvider, paneProviderRoot]);
   const title =
       project?.title ??
       (tool === 'services'
@@ -232,6 +279,17 @@ function App() {
         </div>
         <div className="actions">
           {project && !tool && shouldShowGrok(stage) && (
+            <select
+              aria-label="AIアシスタント"
+              value={paneProvider}
+              disabled={paneProviderRoot !== project.rootPath || switchingProvider}
+              onChange={(event) => void changeProvider(event.target.value as AssistantPaneProvider)}
+            >
+              <option value="grok">Grok</option>
+              <option value="codex">Codex</option>
+            </select>
+          )}
+          {project && !tool && shouldShowGrok(stage) && (
             <button
               onClick={async () => {
                 const s = await window.batchStudio.grok.setVisible(!grok);
@@ -239,7 +297,7 @@ function App() {
                 setRatio(s.ratio);
               }}
             >
-              {grok ? 'Grokを隠す' : 'Grokを表示'}
+              {grok ? 'AI Paneを隠す' : 'AI Paneを表示'}
             </button>
           )}
         </div>
@@ -327,7 +385,7 @@ function App() {
           )}
         </section>
       </div>
-      {grok && <PaneDivider ratio={ratio} onRatio={setRatio} />}{' '}
+      {grok && <PaneDivider ratio={ratio} onRatio={setRatio} provider={paneProvider} />}{' '}
       {createOpen && (
         <CreateProject
           onClose={() => setCreateOpen(false)}
@@ -346,7 +404,15 @@ function App() {
     </main>
   );
 }
-function PaneDivider({ ratio, onRatio }: { ratio: number; onRatio: (ratio: number) => void }) {
+function PaneDivider({
+  ratio,
+  onRatio,
+  provider,
+}: {
+  ratio: number;
+  onRatio: (ratio: number) => void;
+  provider: AssistantPaneProvider;
+}) {
   const raf = useRef<number | null>(null),
     pending = useRef<number | null>(null);
   const flush = () => {
@@ -369,7 +435,7 @@ function PaneDivider({ ratio, onRatio }: { ratio: number; onRatio: (ratio: numbe
       className="pane-divider"
       role="separator"
       aria-orientation="vertical"
-      aria-label={`Local ${Math.round(ratio * 100)}% / Grok ${100 - Math.round(ratio * 100)}%`}
+      aria-label={`Local ${Math.round(ratio * 100)}% / ${provider} ${100 - Math.round(ratio * 100)}%`}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
         pending.current = e.screenX;

@@ -11,6 +11,7 @@ import {
 import type { MenuItemConstructorOptions, WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { IPC } from '../shared/ipc.js';
 import type {
@@ -25,6 +26,11 @@ import type {
   ProjectSettings,
   PromptPlanArtifact,
   GrokTask,
+  AssistantPaneProvider,
+  CodexContext,
+  CodexMessage,
+  CodexSnapshot,
+  CodexAccountStatus,
   ThumbnailSlotKey,
   R2ConnectionInput,
   ValidationIssue,
@@ -80,6 +86,9 @@ import { CivitaiRequestPolicy } from './civitai-request-policy.js';
 import { CivitaiConfigStore } from './civitai-config.js';
 import { UiStateStore } from './ui-state.js';
 import { GrokChatStateStore } from './grok-chat-state.js';
+import { CodexChatStateStore } from './codex-chat-state.js';
+import { AssistantProviderStore } from './assistant-provider-state.js';
+import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { R2ConfigStore } from './r2-config.js';
 import { R2Manager } from './r2-manager.js';
 import { R2ObjectIndex } from './r2-object-index.js';
@@ -150,7 +159,11 @@ body{display:grid;place-items:center}
 </body>
 </html>`;
 type StandaloneWindowTool = 'r2' | 'civit' | 'vastai';
-type RendererWindowTool = StandaloneWindowTool | 'thumbnail-picker' | 'marketplace-picker';
+type RendererWindowTool =
+  | StandaloneWindowTool
+  | 'thumbnail-picker'
+  | 'marketplace-picker'
+  | 'codex-pane';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
   window: BaseWindow;
@@ -184,6 +197,9 @@ type ProjectWindowState = {
   window: BaseWindow;
   localView: WebContentsView;
   grokView: WebContentsView;
+  codexView: WebContentsView;
+  paneProvider: AssistantPaneProvider;
+  codexContext: CodexContext | null;
   grokLoadingView: WebContentsView;
   projectRoot: string | null;
   restoreLastProject: boolean;
@@ -207,6 +223,10 @@ let lastFocusedProjectWindowId: number | null = null,
   civitaiConfig: CivitaiConfigStore | null = null,
   uiState: UiStateStore | null = null,
   grokChatState: GrokChatStateStore | null = null,
+  codexChatState: CodexChatStateStore | null = null,
+  assistantProviderState: AssistantProviderStore | null = null,
+  codexAppServer: CodexAppServer | null = null,
+  codexBusy = new Set<string>(),
   r2Manager: R2Manager | null = null,
   r2ObjectIndex: R2ObjectIndex | null = null,
   appSettingsStore: AppSettingsStore | null = null,
@@ -232,21 +252,25 @@ function layoutProjectWindow(state: ProjectWindowState) {
     state.localView.setBounds({ x: 0, y: 0, width, height });
     state.grokView.setBounds({ x: width, y: 0, width: 0, height });
     state.grokLoadingView.setBounds({ x: width, y: 0, width: 0, height });
+    state.codexView.setBounds({ x: width, y: 0, width: 0, height });
     return;
   }
   const lw = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio))),
     grokBounds = { x: lw, y: 0, width: width - lw, height };
   state.localView.setBounds({ x: 0, y: 0, width: lw, height });
-  state.grokView.setBounds(grokBounds);
+  const hidden = { x: width, y: 0, width: 0, height };
+  state.grokView.setBounds(state.paneProvider === 'grok' ? grokBounds : hidden);
   state.grokLoadingView.setBounds(
-    state.grokLoading ? grokBounds : { x: width, y: 0, width: 0, height },
+    state.paneProvider === 'grok' && state.grokLoading ? grokBounds : hidden,
   );
+  state.codexView.setBounds(state.paneProvider === 'codex' ? grokBounds : hidden);
 }
 function projectWindowForSender(contents: WebContents) {
   for (const state of projectWindows.values())
     if (
       state.localView.webContents.id === contents.id ||
-      state.grokView.webContents.id === contents.id
+      state.grokView.webContents.id === contents.id ||
+      state.codexView.webContents.id === contents.id
     )
       return state;
   throw new Error('Project Window was not found for IPC sender.');
@@ -288,12 +312,17 @@ async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
   const dev = process.env.VITE_DEV_SERVER_URL;
   if (dev) {
     const url = new URL(dev);
-    if (tool) url.searchParams.set('tool', tool);
+    if (tool === 'codex-pane') url.searchParams.set('codex-pane', '1');
+    else if (tool) url.searchParams.set('tool', tool);
     await v.webContents.loadURL(url.toString());
   } else
     await v.webContents.loadFile(
       path.resolve(__dirname, '../../dist-renderer/index.html'),
-      tool ? { query: { tool } } : undefined,
+      tool === 'codex-pane'
+        ? { query: { 'codex-pane': '1' } }
+        : tool
+          ? { query: { tool } }
+          : undefined,
     );
 }
 function configureGrokContents(contents: WebContents, oauthFlow = false) {
@@ -380,6 +409,14 @@ function createProjectWindow(
         sandbox: true,
       },
     }),
+    codexView = new WebContentsView({
+      webPreferences: {
+        preload: path.resolve(__dirname, '../preload/index.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
     grokView = new WebContentsView({
       webPreferences: {
         partition: GROK_PARTITION,
@@ -399,6 +436,9 @@ function createProjectWindow(
       window,
       localView,
       grokView,
+      codexView,
+      paneProvider: 'grok',
+      codexContext: null,
       grokLoadingView,
       projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
       restoreLastProject: Boolean(options.restoreLastProject),
@@ -418,6 +458,7 @@ function createProjectWindow(
   window.contentView.addChildView(localView);
   window.contentView.addChildView(grokView);
   window.contentView.addChildView(grokLoadingView);
+  window.contentView.addChildView(codexView);
   void grokLoadingView.webContents
     .loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(GROK_LOADING_HTML)}`)
     .catch((error) => console.warn('Grok loading placeholder failed:', error));
@@ -439,6 +480,7 @@ function createProjectWindow(
     localView.webContents.close();
     grokView.webContents.close();
     grokLoadingView.webContents.close();
+    codexView.webContents.close();
     projectWindows.delete(windowId);
     if (lastFocusedProjectWindowId === windowId) lastFocusedProjectWindowId = null;
     void rememberMostRecentOpenProject(false);
@@ -449,6 +491,7 @@ function createProjectWindow(
       localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
     });
   void loadRenderer(localView);
+  void loadRenderer(codexView, 'codex-pane');
   void state.grokNavigationQueue
     .navigate(grokView.webContents, GROK_URL)
     .catch((error) => console.warn('Initial Grok navigation failed:', error));
@@ -1120,6 +1163,193 @@ async function setGrokContext(state: ProjectWindowState, root: string, stage: Gr
     }
   }
 }
+function codexService() {
+  if (!codexAppServer || !codexChatState) throw new Error('Codexが初期化されていません。');
+  return { server: codexAppServer, store: codexChatState };
+}
+function codexContextFor(state: ProjectWindowState): CodexContext {
+  const context = state.codexContext;
+  if (
+    !context ||
+    !state.projectRoot ||
+    projectRootKey(context.root) !== projectRootKey(state.projectRoot)
+  )
+    throw new Error('Codexを利用するプロジェクトと工程を選択してください。');
+  return context;
+}
+function forwardCodexNotification(notification: CodexNotification) {
+  const threadId = notification.params.threadId;
+  if (notification.method === 'turn/completed' && typeof threadId === 'string')
+    codexBusy.delete(threadId);
+  for (const state of projectWindows.values()) {
+    const context = state.codexContext;
+    if (!context) continue;
+    // Account notifications are global; turn notifications belong only to the active stage thread.
+    if (!notification.method.startsWith('account/')) {
+      if (typeof threadId !== 'string' || threadId !== stateCodexActiveThread.get(state.window.id))
+        continue;
+    }
+    state.codexView.webContents.send(IPC.CODEX_EVENT, notification);
+  }
+}
+const stateCodexActiveThread = new Map<number, string | null>();
+function messageText(item: Record<string, unknown>): string {
+  if (typeof item.text === 'string') return item.text;
+  if (!Array.isArray(item.content)) return '';
+  return item.content
+    .filter(
+      (content): content is { text: string } =>
+        typeof content === 'object' &&
+        content !== null &&
+        typeof (content as { text?: unknown }).text === 'string',
+    )
+    .map((content) => content.text)
+    .join('\n');
+}
+function codexMessages(result: unknown): CodexMessage[] {
+  const thread = (result as { thread?: { turns?: unknown[] } } | null)?.thread;
+  if (!Array.isArray(thread?.turns)) return [];
+  const messages: CodexMessage[] = [];
+  for (const turn of thread.turns) {
+    const items = (turn as { items?: unknown[] } | null)?.items;
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      const record = item as Record<string, unknown>;
+      const role =
+        record.type === 'userMessage'
+          ? 'user'
+          : record.type === 'agentMessage'
+            ? 'assistant'
+            : null;
+      const text = messageText(record);
+      if (role && text) messages.push({ id: String(record.id ?? messages.length), role, text });
+    }
+  }
+  return messages;
+}
+async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> {
+  const context = codexContextFor(state);
+  const { server, store } = codexService();
+  const saved = await store.get(context.root, context.stage);
+  stateCodexActiveThread.set(state.window.id, saved.activeThreadId);
+  let messages: CodexMessage[] = [];
+  if (saved.activeThreadId) {
+    await server.request('thread/resume', {
+      threadId: saved.activeThreadId,
+      cwd: context.root,
+      sandbox: 'read-only',
+      approvalPolicy: 'never',
+    });
+    const read = await server.request<unknown>('thread/read', {
+      threadId: saved.activeThreadId,
+      includeTurns: true,
+    });
+    messages = codexMessages(read);
+  }
+  return { ...context, ...saved, messages };
+}
+async function codexAccount(): Promise<CodexAccountStatus> {
+  const { server } = codexService();
+  const result = await server.request<{
+    account?: { type?: string; planType?: string } | null;
+  }>('account/read', {});
+  return {
+    authenticated: result.account?.type === 'chatgpt',
+    authMode: result.account?.type ?? null,
+    planType: result.account?.planType ?? null,
+  };
+}
+async function codexSend(state: ProjectWindowState, message: string): Promise<void> {
+  const context = codexContextFor(state);
+  const input = message.trim();
+  if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
+  const account = await codexAccount();
+  if (!account.authenticated)
+    throw new Error(
+      'ChatGPTアカウントでCodexにサインインしてください。APIキー認証では送信しません。',
+    );
+  const { server, store } = codexService();
+  const saved = await store.get(context.root, context.stage);
+  let threadId = saved.activeThreadId;
+  if (!threadId) {
+    const started = await server.request<{ thread: { id: string } }>('thread/start', {
+      cwd: context.root,
+      approvalPolicy: 'never',
+      sandbox: 'read-only',
+      serviceName: 'comfyui_batch_studio',
+      ephemeral: false,
+    });
+    threadId = started.thread.id;
+    await store.remember(context.root, context.stage, threadId);
+  } else {
+    await server.request('thread/resume', {
+      threadId,
+      cwd: context.root,
+      approvalPolicy: 'never',
+      sandbox: 'read-only',
+    });
+  }
+  if (codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
+  stateCodexActiveThread.set(state.window.id, threadId);
+  codexBusy.add(threadId);
+  try {
+    await server.request('turn/start', {
+      threadId,
+      input: [{ type: 'text', text: input, text_elements: [] }],
+    });
+  } catch (error) {
+    codexBusy.delete(threadId);
+    throw error;
+  }
+}
+const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
+  story: ['story-initial', 'story-finalize', 'story-fix'],
+  models: ['models', 'models-fix'],
+  'prompt-plan': ['prompt-plan', 'prompt-plan-fix'],
+  caption: ['caption'],
+};
+const codexReturnFile: Record<GrokContextStage, string> = {
+  story: 'story.md',
+  models: 'model_loras.json',
+  'prompt-plan': 'prompt_plan.json',
+  caption: 'caption_content.json',
+};
+async function codexSendTask(
+  state: ProjectWindowState,
+  stage: GrokTask['stage'],
+  extra: string,
+): Promise<void> {
+  const context = codexContextFor(state);
+  if (!codexTaskContexts[context.stage].includes(stage))
+    throw new Error('選択した工程に対応しない依頼です。');
+  const task = await buildGrokTask(context.root, stage, extra);
+  // Grok's file-attachment output contract cannot be used in the App Server chat.
+  const prompt = task.prompt
+    .replaceAll('Grok', 'Codex')
+    .replace(/## 出力契約[\s\S]*?(?=\n## [^\n]+|$)/g, '');
+  const files: string[] = [];
+  let combinedSize = prompt.length;
+  for (const attachment of task.attachments) {
+    if (!attachment.exists) continue;
+    const data = await readFile(attachment.path, 'utf8');
+    combinedSize += data.length;
+    if (combinedSize > 750_000)
+      throw new Error('参照ファイルが大きすぎるため送信できません。添付内容を整理してください。');
+    files.push('### ' + attachment.name + ' (' + attachment.purpose + ')\n' + data);
+  }
+  await codexSend(
+    state,
+    prompt +
+      '\n\n## Codex向け出力契約\n' +
+      'ファイルを変更しないでください。回答の最後に ' +
+      codexReturnFile[context.stage] +
+      ' の内容だけをMarkdownコードブロックなしで出力してください。' +
+      '添付ファイルとして生成する指示は適用しません。\n\n' +
+      (files.length ? '## 参照ファイル\n' + files.join('\n\n') : ''),
+  );
+}
+
 function validCivitaiUrl(value: unknown) {
   if (typeof value !== 'string') return false;
   try {
@@ -1335,6 +1565,8 @@ function register() {
     const state = projectWindowForSender(event.sender);
     state.projectRoot = null;
     state.activeGrokContext = null;
+    state.codexContext = null;
+    state.codexView.webContents.send(IPC.CODEX_CONTEXT_CHANGED, null);
     state.grokVisible = false;
     layoutProjectWindow(state);
     await rememberMostRecentOpenProject();
@@ -2219,6 +2451,136 @@ function register() {
     if (typeof text !== 'string') throw new Error('Clipboard text must be string');
     clipboard.writeText(text);
   });
+  ipcMain.handle(IPC.CODEX_GET_PROVIDER, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    if (event.sender.id !== state.localView.webContents.id)
+      throw new Error('Only the project window may select the assistant.');
+    if (!state.projectRoot || !assistantProviderState) throw new Error('No active project.');
+    const root = state.projectRoot;
+    const defaultProvider = (await settingsStore().values()).assistantProvider;
+    const provider = await assistantProviderState.resolve(root, defaultProvider, async () => {
+      const stages: GrokContextStage[] = ['story', 'models', 'prompt-plan', 'caption'];
+      // Existing projects created before this preference was introduced may
+      // already have a history in one provider. Preserve that provider.
+      const grokHistory = grokChatState
+        ? (await Promise.all(stages.map((stage) => grokChatState!.get(root, stage)))).some(Boolean)
+        : false;
+      const codexHistory = codexChatState
+        ? (await Promise.all(stages.map((stage) => codexChatState!.get(root, stage)))).some(
+            (chats) => chats.threadIds.length > 0,
+          )
+        : false;
+      if (grokHistory && !codexHistory) return 'grok';
+      if (codexHistory && !grokHistory) return 'codex';
+      return null;
+    });
+    if (state.projectRoot !== root) throw new Error('Project changed during agent restore.');
+    state.paneProvider = provider;
+    layoutProjectWindow(state);
+    return provider;
+  });
+  ipcMain.handle(IPC.CODEX_SET_PROVIDER, async (event, provider: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    if (event.sender.id !== state.localView.webContents.id)
+      throw new Error('Codex pane cannot change its parent window.');
+    if (provider !== 'grok' && provider !== 'codex') throw new Error('Invalid AI provider.');
+    if (!state.projectRoot || !assistantProviderState) throw new Error('No active project.');
+    const root = state.projectRoot;
+    await assistantProviderState.remember(root, provider);
+    if (state.projectRoot !== root) throw new Error('Project changed during agent switch.');
+    state.paneProvider = provider;
+    layoutProjectWindow(state);
+    return paneState(state);
+  });
+  ipcMain.handle(IPC.CODEX_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    if (event.sender.id !== state.localView.webContents.id)
+      throw new Error('Only the project window can select an AI context.');
+    validRoot(root);
+    validGrokContextStage(stage);
+    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
+      throw new Error('This project is not active in the current window.');
+    state.codexContext = { root: path.resolve(root), stage };
+    stateCodexActiveThread.set(state.window.id, null);
+    state.codexView.webContents.send(IPC.CODEX_CONTEXT_CHANGED, state.codexContext);
+  });
+  ipcMain.handle(IPC.CODEX_CONTEXT, (event) => {
+    const state = projectWindowForSender(event.sender);
+    return state.codexContext;
+  });
+  ipcMain.handle(IPC.CODEX_STATUS, () => codexAccount());
+  ipcMain.handle(IPC.CODEX_SIGN_IN, async () => {
+    const { server } = codexService();
+    const response = await server.request<{ type: string; authUrl?: string }>(
+      'account/login/start',
+      { type: 'chatgpt', useHostedLoginSuccessPage: true, appBrand: 'chatgpt' },
+    );
+    if (response.type !== 'chatgpt' || !response.authUrl)
+      throw new Error('CodexのサインインURLを取得できません。');
+    const url = new URL(response.authUrl);
+    if (
+      url.protocol !== 'https:' ||
+      !['chatgpt.com', 'auth.openai.com'].includes(url.hostname.toLowerCase())
+    )
+      throw new Error('Codexが予期しないサインインURLを返しました。');
+    await shell.openExternal(url.toString());
+  });
+  ipcMain.handle(IPC.CODEX_SNAPSHOT, (event) =>
+    codexSnapshot(projectWindowForSender(event.sender)),
+  );
+  ipcMain.handle(IPC.CODEX_NEW_CHAT, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    const context = codexContextFor(state);
+    const { store } = codexService();
+    await store.clearActive(context.root, context.stage);
+    stateCodexActiveThread.set(state.window.id, null);
+    return codexSnapshot(state);
+  });
+  ipcMain.handle(IPC.CODEX_RESTORE_CHAT, async (event, id: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    const context = codexContextFor(state);
+    if (typeof id !== 'string' || !id) throw new Error('Invalid Codex thread ID.');
+    const { store } = codexService();
+    const saved = await store.get(context.root, context.stage);
+    if (!saved.threadIds.includes(id)) throw new Error('Chat is not part of this stage.');
+    await store.remember(context.root, context.stage, id);
+    stateCodexActiveThread.set(state.window.id, id);
+    return codexSnapshot(state);
+  });
+  ipcMain.handle(IPC.CODEX_SEND, (event, input: unknown) => {
+    if (typeof input !== 'string') throw new Error('Invalid Codex prompt.');
+    return codexSend(projectWindowForSender(event.sender), input);
+  });
+  ipcMain.handle(IPC.CODEX_SEND_TASK, (event, stage: unknown, extra: unknown) => {
+    const validStages = Object.values(codexTaskContexts).flat();
+    if (!validStages.includes(stage as GrokTask['stage'])) throw new Error('Invalid task stage.');
+    if (extra != null && (typeof extra !== 'string' || extra.length > 30_000))
+      throw new Error('Invalid additional instructions.');
+    return codexSendTask(
+      projectWindowForSender(event.sender),
+      stage as GrokTask['stage'],
+      typeof extra === 'string' ? extra : '',
+    );
+  });
+  ipcMain.handle(IPC.CODEX_SAVE_RESPONSE, async (event, response: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    const context = codexContextFor(state);
+    if (typeof response !== 'string' || response.length > 10_000_000)
+      throw new Error('Invalid Codex response.');
+    const selected = await dialog.showSaveDialog(state.window, {
+      title: 'Codexの回答をファイルとして保存',
+      defaultPath: path.join(app.getPath('downloads'), codexReturnFile[context.stage]),
+      filters: [
+        {
+          name: '工程の成果物',
+          extensions: [path.extname(codexReturnFile[context.stage]).slice(1)],
+        },
+      ],
+    });
+    if (selected.canceled || !selected.filePath) return null;
+    await writeFile(selected.filePath, response, 'utf8');
+    return selected.filePath;
+  });
   ipcMain.handle(IPC.GROK_SET_VISIBLE, (event, v: unknown) => {
     const state = projectWindowForSender(event.sender);
     state.grokVisible = v === true;
@@ -2329,6 +2691,18 @@ async function initializeApplication() {
   civitaiCatalog = new CivitaiCatalogService(path.join(userData, 'civitai'));
   ensureCatalogRuntimePath();
   grokChatState = new GrokChatStateStore(userData);
+  codexChatState = new CodexChatStateStore(userData);
+  assistantProviderState = new AssistantProviderStore(userData);
+  codexAppServer = new CodexAppServer();
+  codexAppServer.on('notification', forwardCodexNotification);
+  codexAppServer.on('disconnected', (message: string) => {
+    codexBusy.clear();
+    for (const state of projectWindows.values())
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: 'disconnected',
+        params: { message },
+      });
+  });
   const r2Config = new R2ConfigStore(userData);
   r2Manager = new R2Manager(r2Config, userData);
   r2ObjectIndex = new R2ObjectIndex(r2Config, userData);
@@ -2348,6 +2722,7 @@ async function initializeApplication() {
   });
 }
 if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
+app.on('will-quit', () => codexAppServer?.stop());
 app.on('window-all-closed', () => {
   if (!executionCoordinator.hasActiveRuns() && process.platform !== 'darwin') app.quit();
 });

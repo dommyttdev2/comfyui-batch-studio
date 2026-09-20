@@ -6,6 +6,7 @@ import type {
   AppSettings,
   AppSettingsSaveInput,
   AppSettingsStatus,
+  AssistantPaneProvider,
   RemoteCustomNodeRepository,
 } from '../shared/types.js';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
@@ -94,6 +95,10 @@ interface StoredAppSettingsV7 {
   templatePath: string;
   manifestPath: string;
 }
+interface StoredAppSettingsV8 extends Omit<StoredAppSettingsV7, 'schemaVersion'> {
+  schemaVersion: 8;
+  assistantProvider: AssistantPaneProvider;
+}
 interface StoredGithubAuthConfig {
   schemaVersion: 1;
   encryptedPat: string;
@@ -105,12 +110,14 @@ type StoredAppSettings =
   | StoredAppSettingsV4
   | StoredAppSettingsV5
   | StoredAppSettingsV6
-  | StoredAppSettingsV7;
+  | StoredAppSettingsV7
+  | StoredAppSettingsV8;
 type NormalizedAppSettings = Required<AppSettings>;
 function defaultRemoteCustomNodes(): RemoteCustomNodeRepository[] {
   return normalizeRemoteCustomNodes(workflowCustomNodes.repositories);
 }
 const EMPTY: NormalizedAppSettings = {
+  assistantProvider: 'grok',
   comfyUiInstallPath: '',
   remoteComfyUiInstallPath: '',
   comfyUiApiEndpoint: 'http://127.0.0.1:8188',
@@ -312,10 +319,12 @@ function normalize(raw: StoredAppSettings | null): NormalizedAppSettings {
       templatePath: text(raw.templatePath),
       manifestPath: text(raw.manifestPath),
     };
-  if (raw?.schemaVersion === 7)
+  if (raw?.schemaVersion === 7 || raw?.schemaVersion === 8)
     return {
       ...EMPTY,
       ...raw,
+      assistantProvider:
+        raw.schemaVersion === 8 && raw.assistantProvider === 'codex' ? 'codex' : 'grok',
       comfyUiInstallPath: text(raw.comfyUiInstallPath),
       remoteComfyUiInstallPath: text(raw.remoteComfyUiInstallPath),
       comfyUiApiEndpoint: endpoint(raw.comfyUiApiEndpoint),
@@ -431,7 +440,11 @@ export class AppSettingsStore {
       normalizeRootDirectory('Project root', input?.projectRoot),
       normalizeRootDirectory('成果物配置 root', input?.artifactRoot),
     ]);
+    const assistantProvider = input?.assistantProvider ?? (await this.read()).assistantProvider;
+    if (assistantProvider !== 'grok' && assistantProvider !== 'codex')
+      throw new Error('使用するチャットエージェントはGrokまたはCodexを選択してください。');
     const value: NormalizedAppSettings = {
+      assistantProvider,
       comfyUiInstallPath,
       remoteComfyUiInstallPath: normalizeRemoteComfyUiDirectory(input?.remoteComfyUiInstallPath),
       comfyUiApiEndpoint: endpoint(input?.comfyUiApiEndpoint),
@@ -446,9 +459,9 @@ export class AppSettingsStore {
       manifestPath: text(input?.manifestPath),
     };
     await writeJsonAtomic(this.filePath, {
-      schemaVersion: 7,
+      schemaVersion: 8,
       ...value,
-    } satisfies StoredAppSettingsV7);
+    } satisfies StoredAppSettingsV8);
     const githubPat = text(input?.githubPat);
     if (githubPat)
       await writeJsonAtomic(this.githubAuthPath, {
