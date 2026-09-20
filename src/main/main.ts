@@ -1287,13 +1287,31 @@ function codexTurnStatus(threadId: string | null): CodexTurnStatus {
       })
     : { phase: 'idle', startedAt: null, updatedAt: null, finishedAt: null, error: null };
 }
+async function codexArtifactFor(
+  context: CodexContext,
+  threadId: string | null,
+): Promise<AutoArtifactEvent | null> {
+  if (!threadId) return null;
+  const pending = codexPendingArtifacts.get(threadId);
+  if (pending && projectRootKey(pending.root) === projectRootKey(context.root))
+    return {
+      provider: 'codex',
+      root: pending.root,
+      stage: pending.stage,
+      fileName: pending.fileName,
+      sourceId: threadId,
+      phase: 'waiting',
+    };
+  return latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/');
+}
 async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> {
   const context = codexContextFor(state);
   const { server, store } = codexService();
   const saved = await store.get(context.root, context.stage);
+  const artifact = await codexArtifactFor(context, saved.activeThreadId);
   stateCodexActiveThread.set(state.window.id, saved.activeThreadId);
   if (!saved.activeThreadId)
-    return { ...context, ...saved, messages: [], busy: false, status: codexTurnStatus(null) };
+    return { ...context, ...saved, messages: [], busy: false, status: codexTurnStatus(null), artifact };
 
   // A thread/start ID exists before its first rollout is persisted. Reading or
   // resuming it while the first turn is running fails with "no rollout found".
@@ -1305,6 +1323,7 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
       messages: [],
       busy: true,
       status: codexTurnStatus(saved.activeThreadId),
+      artifact,
     };
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
@@ -1319,6 +1338,7 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
         messages: codexMessages(read),
         busy: false,
         status: codexTurnMonitor.fromRead(saved.activeThreadId, read),
+        artifact,
       };
     } catch (error) {
       if (!(error instanceof Error) || !/no rollout found for thread id/i.test(error.message))
@@ -1336,6 +1356,7 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
         busy: false,
         historyUnavailable: true,
         status: codexTurnStatus(saved.activeThreadId),
+        artifact,
       };
     }
   }
@@ -2858,6 +2879,41 @@ function register() {
       projectWindowForSender(event.sender),
       stage as GrokTask['stage'],
       typeof extra === 'string' ? extra : '',
+    );
+  });
+  ipcMain.handle(IPC.CODEX_LATEST_ARTIFACT, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    const context = codexContextFor(state);
+    const saved = await codexService().store.get(context.root, context.stage);
+    return codexArtifactFor(context, saved.activeThreadId);
+  });
+  ipcMain.handle(IPC.CODEX_RETRY_ARTIFACT, async (event) => {
+    const context = codexContextFor(projectWindowForSender(event.sender));
+    const saved = await codexService().store.get(context.root, context.stage);
+    const threadId = saved.activeThreadId;
+    if (!threadId || codexBusy.has(threadId))
+      throw new Error('再取得できる完了済みのCodex会話がありません。');
+    const read = await codexService().server.request<{
+      thread?: { turns?: Array<{ id?: unknown; status?: string; items?: unknown[] }> };
+    }>('thread/read', { threadId, includeTurns: true });
+    const turn = read.thread?.turns?.at(-1);
+    const expected = turn ? codexTaskFileForTurn(turn) : null;
+    const fileName = turn && expectedArtifact(context.stage);
+    if (!turn || turn.status !== 'completed' || !fileName || expected !== fileName)
+      throw new Error('この工程の完了済みArtifact依頼が見つかりません。');
+    const reply = [...(turn.items ?? [])].reverse().find(
+      (item) => (item as { type?: string } | null)?.type === 'agentMessage',
+    );
+    const raw = reply && typeof reply === 'object'
+      ? messageText(reply as Record<string, unknown>)
+      : '';
+    if (!raw.trim()) throw new Error('Codexの回答から成果物本文を取得できません。');
+    const taskStage = context.stage === 'story' ? 'story-finalize'
+      : context.stage === 'models' ? 'models'
+      : context.stage === 'prompt-plan' ? 'prompt-plan' : 'caption';
+    return importAutoArtifact(
+      context.root, 'codex', taskStage, threadId + '/' + String(turn.id ?? 'last'),
+      raw, notifyAutoArtifact,
     );
   });
   ipcMain.handle(IPC.CODEX_SAVE_RESPONSE, async (event, response: unknown) => {
