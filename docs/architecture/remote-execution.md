@@ -304,19 +304,20 @@ Start APIのHTTP successだけでRUNNING完了としない。current stateとSSH
 
 `scheduling`、`offline`、`error`等は`running`と同一視しない。
 
-### Initial-state preservation
+### Vast.ai Instanceの完了時停止と非成功終了時のinitial-state policy（REQ-EXEC-015 / DEC-026）
 
-既定思想:
+`initialStatus` と `startedByBatchStudio` はRun開始時のInstance状態を記録するが、**正常完了時の停止義務を上書きしない**。生成だけでなく成果物回収・SHA-256検証・Remote/R2一時成果物cleanupが完了した後、同一Instanceに対する排他lockを維持したまま停止・確認する。
 
-```text
-Run開始前からrunning
-  -> Run終了後もrunningを維持
+| Runの状態 | Instance停止/keepの契約 |
+| --- | --- |
+| `COMPLETED` または回収・cleanup済みの `CLOUD_INSTANCE_FINALIZING` | 開始前から `running` だった場合も、Batch Studioが `stopped` から起動した場合も **必ず `stopped` を確認**する。 |
+| `FAILED` / `DISCARDED` / generation中断後の終端状態（成功完了のfinalize失敗を除く） | `restore-if-started` を適用する。Batch Studioが開始前 `stopped` のInstanceを起動した場合は停止・確認する。開始前から `running` だったInstanceは稼働状態を維持し、無条件停止しない。 |
+| `PAUSED` またはfinalization以外の `RUNNING` | 自動finalize/stopを開始しない。Worker・Promptの状態が未確定な場合も、既存処理の確認前にInstanceを停止しない。 |
+| `FAILED` かつ `REMOTE_INSTANCE_FINALIZE_FAILED` | 成果物回収/cleanup済みの停止確認だけが残る。既存Instanceを再確認して停止のみを再試行し、initial-state restorationに切り替えたり、生成・Upload・cleanupを再実行したりしない（#122）。 |
 
-Batch Studioがstoppedから起動
-  -> Run終了後にstoppedへ戻す
-```
+Vast.ai `stopInstance` APIの成功は**停止要求の受理**であり、Instanceが実際に `stopped` に遷移した証拠ではない。Providerのcurrent statusを再取得して `stopped` を確認した後に `remoteLifecycle.finalizedAt` を記録する。停止/確認に失敗した場合は `REMOTE_INSTANCE_FINALIZE_FAILED` を保持してRunを `FAILED` にし、未確認のまま `COMPLETED` と扱わない。Run単位のRemote資源lockはcleanupとInstance finalizationの間保持し、別Runによる同一Instance利用を防ぐ。
 
-将来は成功時/失敗時それぞれ `preserve-initial | stop | keep` をユーザー設定可能にできる。
+既存の `restore-if-started` は非成功終了のためのpolicy名であり、成功完了時のkeep設定ではない。成功時にInstanceをrunningのまま維持する旧方針は適用しない。
 
 ### Instance replacement before generation
 
@@ -865,9 +866,9 @@ current Runが所有するpending promptだけを削除し、他Runのqueueを�
 
 ### Cloud Instance
 
-CancelしただけでVast.ai Instanceを無条件destroyしない。
+CancelしただけでVast.ai Instanceを無条件destroyしない。Stop SchedulingとForce Interruptは、直ちにInstance停止を実行する操作ではない。
 
-Stop/keepはinitial-state policyとRunのcleanup状態に従う。
+`PAUSED` / `RUNNING` では自動stopしない。非成功終端化したRunだけに `restore-if-started` を適用し、成果物回収・cleanupまで正常完了したRunには、初期状態を問わず必須停止を適用する。停止要求と `stopped` 確認、停止失敗時のfinalize-only Resumeは[REQ-EXEC-015 / DEC-026](#vastai-instanceの完了時停止と非成功終了時のinitial-state-policyreq-exec-015--dec-026)に従う。
 
 ---
 
