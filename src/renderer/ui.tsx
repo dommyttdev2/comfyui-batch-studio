@@ -70,11 +70,11 @@ async function writeClipboardText(text: string) {
   textarea.remove();
   if (!copied) throw new Error('Clipboard copy failed');
 }
-function WarningCopyButton({ warnings }: { warnings: ValidationIssue[] }) {
+function IssueCopyButton({ issues }: { issues: ValidationIssue[] }) {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const copyWarnings = async () => {
+  const copyIssues = async () => {
     try {
-      await writeClipboardText(warnings.map(formatValidationIssue).join('\n'));
+      await writeClipboardText(issues.map(formatValidationIssue).join('\n'));
       setCopyState('copied');
     } catch {
       setCopyState('failed');
@@ -82,22 +82,21 @@ function WarningCopyButton({ warnings }: { warnings: ValidationIssue[] }) {
     window.setTimeout(() => setCopyState('idle'), 1600);
   };
   return (
-    <button type="button" onClick={() => void copyWarnings()}>
+    <button type="button" onClick={() => void copyIssues()}>
       {copyState === 'copied'
         ? 'コピーしました'
         : copyState === 'failed'
           ? 'コピーに失敗しました'
-          : `Warningを一括コピー (${warnings.length})`}
+          : `検証結果を一括コピー (${issues.length})`}
     </button>
   );
 }
 function IssuesView({ issues }: { issues: ValidationIssue[] }) {
-  const warnings = issues.filter((issue) => issue.severity === 'warning');
   return (
     <div className="issues">
-      {warnings.length > 0 && (
+      {issues.length > 0 && (
         <div className="actions">
-          <WarningCopyButton warnings={warnings} />
+          <IssueCopyButton issues={issues} />
         </div>
       )}
       {issues.map((i, n) => (
