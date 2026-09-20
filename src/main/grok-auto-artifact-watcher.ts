@@ -143,9 +143,16 @@ export class GrokAutoArtifactWatcher {
     if (this.expected !== expected || !observation.conversation) return;
     if (expected.conversation !== observation.conversation) {
       expected.conversation = observation.conversation;
-      expected.baseline.clear();
+      // Navigating to an existing conversation must not import old artifacts
+      // merely because they were absent from the previously viewed page.
+      expected.baseline = new Set(
+        observation.candidates.map((candidate) =>
+          hash(candidate.kind + '\0' + candidate.url + '\0' + candidate.text),
+        ),
+      );
       expected.stable.clear();
       expected.attempted.clear();
+      return;
     }
     for (const candidate of observation.candidates) {
       if (this.expected !== expected || expected.processing) return;
