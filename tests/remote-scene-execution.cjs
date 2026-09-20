@@ -431,6 +431,50 @@ function startMock() {
       'unrelated pending queue must remain untouched',
     );
 
+    // A persisted status field alone is not proof that a worker survived an
+    // Electron restart. Recovery must inspect the actual sequence file lock.
+    const orphanDir = path.join(runtime, 'orphan-probe');
+    fs.mkdirSync(orphanDir);
+    fs.writeFileSync(
+      path.join(orphanDir, 'state.json'),
+      JSON.stringify({
+        ...pausedState,
+        runId: 'orphan-probe',
+        status: 'running',
+        workerPid: 0,
+        current: { branchId: 'branch-a', leafId: 'a1', index: 0, promptId: 'accepted-unknown' },
+      }),
+    );
+    const orphanPromptCount = mock.calls.prompts.length;
+    result = await callWorker(workerPath, orphanDir, { requestId: 'orphan-status', op: 'status' });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.lines.at(-1).result.state.status, 'running');
+    assert.equal(result.lines.at(-1).result.sequenceRunning, false);
+    assert.equal(mock.calls.prompts.length, orphanPromptCount, 'status must never POST a prompt');
+
+    const holder = spawn(
+      'python',
+      [
+        '-c',
+        'import fcntl,sys,time;f=open(sys.argv[1],"a+");fcntl.flock(f,fcntl.LOCK_EX);print("ready",flush=True);time.sleep(10)',
+        path.join(orphanDir, 'scene-sequence.lock'),
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    try {
+      await new Promise((resolve, reject) => {
+        holder.stdout.once('data', resolve);
+        holder.once('error', reject);
+        holder.once('exit', () => reject(new Error('sequence lock holder exited early')));
+      });
+      result = await callWorker(workerPath, orphanDir, { requestId: 'live-status', op: 'status' });
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(result.lines.at(-1).result.sequenceRunning, true);
+      assert.equal(mock.calls.prompts.length, orphanPromptCount);
+    } finally {
+      holder.kill();
+      await new Promise((resolve) => holder.once('close', resolve));
+    }
     console.log('Remote Scene Prompt execution tests passed.');
   } finally {
     mock.server.close();
