@@ -516,7 +516,9 @@ export async function resumeExecutionRunFinalization(
     const verified = validatedExecutionEvidence(run);
     const kinds = new Set(verified.valid.map((item) => item.kind));
     if (!kinds.has('LOCAL_FILE_VERIFIED') || !kinds.has('CLEANUP_COMPLETED'))
-      throw new Error('Cannot retry only finalization before artifacts were delivered and cleaned.');
+      throw new Error(
+        'Cannot retry only finalization before artifacts were delivered and cleaned.',
+      );
     const now = new Date().toISOString();
     const next: ExecutionRun = {
       ...run,
