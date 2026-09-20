@@ -1189,9 +1189,7 @@ function codexContextFor(state: ProjectWindowState): CodexContext {
 function forwardCodexNotification(notification: CodexNotification) {
   const threadId = notification.params.threadId;
   const status =
-    typeof threadId === 'string'
-      ? codexTurnMonitor.notification(threadId, notification)
-      : null;
+    typeof threadId === 'string' ? codexTurnMonitor.notification(threadId, notification) : null;
   if (notification.method === 'turn/completed' && typeof threadId === 'string')
     codexBusy.delete(threadId);
   for (const state of projectWindows.values()) {
@@ -1269,7 +1267,13 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
   // resuming it while the first turn is running fails with "no rollout found".
   const busy = codexBusy.has(saved.activeThreadId);
   if (busy)
-    return { ...context, ...saved, messages: [], busy: true, status: codexTurnStatus(saved.activeThreadId) };
+    return {
+      ...context,
+      ...saved,
+      messages: [],
+      busy: true,
+      status: codexTurnStatus(saved.activeThreadId),
+    };
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       // Reading history must never resume a thread; resume belongs to send only.
@@ -1339,17 +1343,28 @@ async function codexAvailableModels(): Promise<CodexModelOption[]> {
     } = await server.request('model/list', { limit: 100, includeHidden: false, cursor });
     if (!Array.isArray(response.data)) throw new Error('Codexからモデル一覧を取得できません。');
     for (const item of response.data) {
-      const id = typeof item.model === 'string' && item.model ? item.model
-        : typeof item.id === 'string' ? item.id : '';
+      const id =
+        typeof item.model === 'string' && item.model
+          ? item.model
+          : typeof item.id === 'string'
+            ? item.id
+            : '';
       const efforts = Array.isArray(item.supportedReasoningEfforts)
         ? item.supportedReasoningEfforts
-            .filter((effort) => typeof effort.reasoningEffort === 'string' && effort.reasoningEffort)
+            .filter(
+              (effort) => typeof effort.reasoningEffort === 'string' && effort.reasoningEffort,
+            )
             .map((effort) => ({
               reasoningEffort: effort.reasoningEffort as string,
               description: typeof effort.description === 'string' ? effort.description : '',
             }))
         : [];
-      if (!id || item.hidden === true || efforts.length === 0 || models.some((model) => model.id === id))
+      if (
+        !id ||
+        item.hidden === true ||
+        efforts.length === 0 ||
+        models.some((model) => model.id === id)
+      )
         continue;
       const defaultEffort =
         typeof item.defaultReasoningEffort === 'string' &&
@@ -1365,7 +1380,8 @@ async function codexAvailableModels(): Promise<CodexModelOption[]> {
       });
     }
     if (!response.nextCursor) break;
-    if (response.nextCursor === cursor) throw new Error('Codexのモデル一覧のページ送りに失敗しました。');
+    if (response.nextCursor === cursor)
+      throw new Error('Codexのモデル一覧のページ送りに失敗しました。');
     cursor = response.nextCursor;
     if (page === 9) throw new Error('Codexのモデル一覧が多すぎます。');
   }
@@ -1381,7 +1397,8 @@ async function codexModelSettings(context: CodexContext): Promise<CodexModelSett
   const requested = models.find((model) => model.id === saved?.model);
   const model = requested ?? models.find((entry) => entry.isDefault) ?? models[0];
   const effort =
-    requested && model.supportedReasoningEfforts.some((item) => item.reasoningEffort === saved?.effort)
+    requested &&
+    model.supportedReasoningEfforts.some((item) => item.reasoningEffort === saved?.effort)
       ? saved!.effort
       : model.defaultReasoningEffort;
   return { models, selection: { model: model.id, effort } };
@@ -1392,17 +1409,22 @@ async function codexChooseModel(
 ): Promise<CodexModelSelection> {
   const context = codexContextFor(state);
   if (
-    !selection || typeof selection !== 'object' ||
+    !selection ||
+    typeof selection !== 'object' ||
     typeof (selection as CodexModelSelection).model !== 'string' ||
     typeof (selection as CodexModelSelection).effort !== 'string'
-  ) throw new Error('Codexモデルと推論強度を選択してください。');
+  )
+    throw new Error('Codexモデルと推論強度を選択してください。');
   const requested = selection as CodexModelSelection;
   const saved = await codexService().store.get(context.root, context.stage);
   if (saved.activeThreadId && codexBusy.has(saved.activeThreadId))
     throw new Error('回答生成中はモデルと推論強度を変更できません。');
   const models = await codexAvailableModels();
   const model = models.find((item) => item.id === requested.model);
-  if (!model || !model.supportedReasoningEfforts.some((item) => item.reasoningEffort === requested.effort))
+  if (
+    !model ||
+    !model.supportedReasoningEfforts.some((item) => item.reasoningEffort === requested.effort)
+  )
     throw new Error('このモデルと推論強度の組み合わせはCodexで利用できません。');
   if (!codexModelSelections) throw new Error('Codexモデル設定が初期化されていません。');
   await codexModelSelections.remember(context.root, context.stage, requested);
@@ -1453,10 +1475,7 @@ async function codexSend(state: ProjectWindowState, message: string): Promise<Co
     });
   } catch (error) {
     codexBusy.delete(threadId);
-    codexTurnMonitor.failedToSend(
-      threadId,
-      error instanceof Error ? error.message : String(error),
-    );
+    codexTurnMonitor.failedToSend(threadId, error instanceof Error ? error.message : String(error));
     throw error;
   }
   // Return metadata without reading a rollout that may not yet be persisted.
