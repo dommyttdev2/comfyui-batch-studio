@@ -1312,6 +1312,7 @@ function codexTurnStatus(threadId: string | null): CodexTurnStatus {
 async function codexArtifactFor(
   context: CodexContext,
   threadId: string | null,
+  lastTurnId?: string,
 ): Promise<AutoArtifactEvent | null> {
   if (!threadId) return null;
   const pending = codexPendingArtifacts.get(threadId);
@@ -1324,7 +1325,9 @@ async function codexArtifactFor(
       sourceId: threadId,
       phase: 'waiting',
     };
-  return latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/');
+  return lastTurnId
+    ? latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/' + lastTurnId)
+    : null;
 }
 async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> {
   const context = codexContextFor(state);
@@ -1361,13 +1364,18 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
         threadId: saved.activeThreadId,
         includeTurns: true,
       });
+      const turns = (read as { thread?: { turns?: Array<{ id?: unknown }> } } | null)?.thread?.turns;
+      const lastTurn = turns?.at(-1);
+      const lastTurnId = typeof lastTurn?.id === 'string' ? lastTurn.id : null;
       return {
         ...context,
         ...saved,
         messages: codexMessages(read),
         busy: false,
         status: codexTurnMonitor.fromRead(saved.activeThreadId, read),
-        artifact,
+        artifact: lastTurnId && codexTaskFileForTurn(lastTurn)
+          ? await codexArtifactFor(context, saved.activeThreadId, lastTurnId)
+          : null,
       };
     } catch (error) {
       if (!(error instanceof Error) || !/no rollout found for thread id/i.test(error.message))
