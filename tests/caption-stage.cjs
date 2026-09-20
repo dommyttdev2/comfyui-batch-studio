@@ -32,8 +32,16 @@ matchCode(
   /build\.contentSha256 !== contentHash\(draft\.content\)/,
   'caption status must become stale when Grok semantic content changes',
 );
-matchCode(service, /build\.renderInputSha256 !== expectedInputHash/, 'caption render inputs include the fan-work flag');
-matchCode(service, /build\.outputSha256 !== sha256\(actualCaption \?\? ''\)/, 'caption external modifications must be detected');
+matchCode(
+  service,
+  /build\.renderInputSha256 !== expectedInputHash/,
+  'caption render inputs include the fan-work flag',
+);
+matchCode(
+  service,
+  /build\.outputSha256 !== sha256\(actualCaption \?\? ''\)/,
+  'caption external modifications must be detected',
+);
 matchCode(service, /!captionExists/, 'a missing previously built caption must be stale');
 
 matchCode(
