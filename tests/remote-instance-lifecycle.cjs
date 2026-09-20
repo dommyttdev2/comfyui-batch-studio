@@ -425,6 +425,29 @@ async function scenario(lifecycle, states) {
     assert.equal(after.remoteLifecycle.finalizedAt, null);
   }
 
+  {
+    // Keep code, requirement, decision and user documentation aligned: a
+    // successful Run stops even an Instance that was running before the Run.
+    const readDoc = (name) => fs.readFileSync(path.join(repo, name), 'utf8');
+    const architecture = readDoc('docs/architecture/remote-execution.md');
+    const requirements = readDoc('docs/requirements/requirements.md');
+    const runtimeDoc = readDoc('docs/architecture/project-window-execution-runtime.md');
+    const decisions = readDoc('docs/decisions/decision-log.md');
+    const readme = readDoc('README.md');
+    assert.match(architecture, /REQ-EXEC-015 \/ DEC-026/);
+    assert.match(architecture, /正常完了[\s\S]*初期状態を問わず必須停止/);
+    assert.doesNotMatch(architecture, /Run開始前からrunning\s*\n\s*-> Run終了後もrunningを維持/);
+    assert.match(architecture, /stopInstance[^\n]*API[^\n]*停止要求の受理/);
+    assert.match(architecture, /REMOTE_INSTANCE_FINALIZE_FAILED/);
+    assert.match(requirements, /REQ-EXEC-015[^\n]*開始前からrunningだったか否かを問わず必ず停止/);
+    assert.match(decisions, /DEC-026: Completed Vast\.ai Run must stop its Instance/);
+    assert.match(
+      runtimeDoc,
+      /成功したRun: mandatory stopped confirmation|successful Run: mandatory stopped confirmation/,
+    );
+    assert.match(readme, /開始前から稼働していたものを含めVast\.ai Instanceを停止/);
+  }
+
   console.log('Remote Vast instance lifecycle tests passed.');
 })()
   .catch((error) => {
