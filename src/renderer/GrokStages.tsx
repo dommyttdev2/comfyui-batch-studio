@@ -20,6 +20,7 @@ import { issuesView } from './ui';
 import { ModelPicker } from './ModelPicker';
 import { ModelFilePicker } from './ModelFilePicker';
 import { GrokLoraHistory } from './GrokLoraHistory';
+import { SelectedModelCards } from './SelectedModelCards';
 import { StageResetMenu, type ResetScope } from './StageResetMenu';
 import './model-selection.css';
 
@@ -675,6 +676,53 @@ export function ModelsStage({
     setBaseDirty(false);
     setMigrationNeeded(false);
   };
+  const saveManualSelection = async (selected: ModelSelectionBase, next: ModelSelectionBase) => {
+    const saved = await run(async () => {
+      const draft = await window.batchStudio.artifact.read(project.rootPath, 'models', 'draft');
+      const source = draft.exists
+        ? draft
+        : await window.batchStudio.artifact.read(project.rootPath, 'models', 'confirmed');
+      const models = parseModelsArtifact(source.content);
+      if (!models || models.schemaVersion === 1)
+        throw new Error('models.jsonを読み込めません。');
+      const existing =
+        selected.ref === 'checkpoint.main'
+          ? models.checkpoint
+          : selected.ref === 'diffusion_model.main'
+            ? models.diffusionModel
+            : models.loras.find((lora) => lora.ref === selected.ref);
+      if (
+        !existing ||
+        existing.modelId !== selected.modelId ||
+        existing.versionId !== selected.versionId ||
+        existing.fileId !== selected.fileId
+      )
+        throw new Error('モデル選定が他の操作で更新されました。画面を再読み込みしてください。');
+      const updated: ModelsArtifact =
+        selected.ref === 'checkpoint.main'
+          ? { ...models, checkpoint: next as CheckpointSelection }
+          : selected.ref === 'diffusion_model.main'
+            ? { ...models, diffusionModel: next as DiffusionModelSelection }
+            : {
+                ...models,
+                loras: models.loras.map((lora) =>
+                  lora.ref === selected.ref ? { ...next, ref: lora.ref } : lora,
+                ),
+              };
+      const result = await window.batchStudio.artifact.saveDraft(
+        project.rootPath,
+        'models',
+        JSON.stringify(updated, null, 2),
+      );
+      setDoc(result);
+      setEditing(true);
+      hydrate(result.content);
+      if (!result.validation.valid)
+        throw new Error('変更したmodels.jsonに検証エラーがあります。下書きの内容を確認してください。');
+      return result;
+    });
+    if (!saved) throw new Error('保存に失敗しました。画面上部のエラーを確認してください。');
+  };
   const importModels = async (raw: string, stage: 'models' | 'models-fix') => {
     const r = await window.batchStudio.artifact.importGrok(project.rootPath, 'models', raw, stage);
     setEditing(true);
@@ -803,6 +851,13 @@ export function ModelsStage({
           )}
         </div>
       </section>
+      {catalog && current && current.schemaVersion >= 2 && (
+        <SelectedModelCards
+          models={current}
+          catalog={catalog}
+          onSave={saveManualSelection}
+        />
+      )}
       {baseConfigured && (
         <>
           <GrokBridge
