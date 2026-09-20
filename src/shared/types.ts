@@ -1227,6 +1227,7 @@ export interface BatchStudioApi {
   execution: {
     start: (root: string) => Promise<ExecutionRun>;
     status: (root: string) => Promise<ExecutionRun | null>;
+    reconcile: (root: string, runId: string) => Promise<ExecutionRun>;
     get: (root: string, runId: string) => Promise<ExecutionRun | null>;
     stopScheduling: (root: string, runId: string) => Promise<ExecutionRun>;
     forceInterrupt: (root: string, runId: string) => Promise<ExecutionRun>;
