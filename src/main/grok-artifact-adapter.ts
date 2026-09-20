@@ -39,10 +39,12 @@ export async function observeGrokArtifact(
         candidates.push({ kind: 'code', text, url: '', name: filename });
     }
     for (const anchor of [...document.querySelectorAll('a[href]')].slice(-300)) {
-      const name = anchor.getAttribute('download') ||
-        anchor.getAttribute('aria-label') || anchor.textContent || '';
-      if (name.trim().includes(filename))
-        candidates.push({ kind: 'link', text: '', url: anchor.href || '', name: name.trim().slice(0, 256) });
+      const download = anchor.getAttribute('download') || '';
+      const label = anchor.getAttribute('aria-label') || '';
+      const eligible = download === filename ||
+        (label.includes(filename) && /download|ダウンロード/i.test(label));
+      if (eligible)
+        candidates.push({ kind: 'link', text: '', url: anchor.href || '', name: filename });
     }
     return { conversation: location.href, revision: window[key].state.revision, candidates: candidates.slice(-16) };
   })()`,
