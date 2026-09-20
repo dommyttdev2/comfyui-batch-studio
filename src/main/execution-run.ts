@@ -18,6 +18,7 @@ import {
   hashCanonicalJson,
   hashWorkflowModelInputs,
   validateApiGraphStructure,
+  type ApiGraph,
 } from './workflow-api.js';
 
 const RUNS_DIR = 'execution_runs';
@@ -293,7 +294,7 @@ export async function readExecutionWorkflow(root: string, run: ExecutionRun) {
     )
       throw new Error('EXECUTION_SNAPSHOT_HASH_MISMATCH: saved Run Prompt Plan or model identity is absent or modified.');
   }
-  return { ui, api };
+  return { ui, api: api as ApiGraph };
 }
 
 // Capture the validated graph and its semantic inputs into a Run-owned
@@ -447,8 +448,10 @@ export async function startExecutionRun(
     // Compilers and reset operations may not share this project's Run lock.
     // A second provenance capture catches changes during the copy phase.
     const postCopy = await captureSnapshot(root, preflight);
-    if (!sameSnapshot(snapshot, postCopy))
+    if (!sameSnapshot(snapshot, postCopy)) {
+      await rm(path.join(root, RUNS_DIR, runId), { recursive: true, force: true });
       throw new Error('EXECUTION_SNAPSHOT_SOURCE_CHANGED: Project workflow changed during Run creation.');
+    }
     const branches = stable.plan.branches.map((branch) => ({
       branchId: branch.branchId,
       completed: 0,
