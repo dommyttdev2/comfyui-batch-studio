@@ -20,7 +20,11 @@ interface RemoteHandle {
   endpoint: VastAiSshEndpoint;
 }
 type EndpointResolver = (instanceId: number) => Promise<VastAiSshEndpoint>;
-const LOCAL_COMFY_OPS = new Set(['run_scene_sequence', 'force_interrupt_sequence']);
+const LOCAL_COMFY_OPS = new Set([
+  'run_scene_sequence',
+  'force_interrupt_sequence',
+  'reconcile_submission',
+]);
 export function remoteWorkerPayload(
   endpoint: VastAiSshEndpoint,
   op: string,
