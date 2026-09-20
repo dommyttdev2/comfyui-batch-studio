@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { AutoArtifactEvent, AutoArtifactProvider, GrokTask } from '../shared/types.js';
+import type { AutoArtifactEvent, AutoArtifactProvider, GrokContextStage, GrokTask } from '../shared/types.js';
 import { importGrok, internalDir } from './artifact-service.js';
 import { importCaptionGrok } from './caption-service.js';
 import { readJson, writeJsonAtomic, writeTextAtomic } from './fs-utils.js';
