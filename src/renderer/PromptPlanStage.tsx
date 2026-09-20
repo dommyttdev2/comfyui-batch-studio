@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
+  AssistantPaneProvider,
   LoraUsage,
   ModelsArtifact,
   NegativePromptGroups,
@@ -84,10 +85,12 @@ export function PromptPlanStage({
   project,
   setProject,
   run,
+  provider,
 }: {
   project: ProjectSummary;
   setProject: (p: ProjectSummary) => void;
   run: Runner;
+  provider: AssistantPaneProvider;
 }) {
   const [plan, setPlan] = useState<PromptPlanArtifact | null>(null),
     [models, setModels] = useState<ModelsArtifact | null>(null),
@@ -152,7 +155,8 @@ export function PromptPlanStage({
       <GrokBridge
         project={project}
         stage="prompt-plan"
-        title="GrokでPrompt Planを作成"
+        provider={provider}
+        title="Prompt Planを作成"
         run={run}
         onImport={importPlan}
         onAutoImported={async () => {
@@ -164,6 +168,7 @@ export function PromptPlanStage({
         <GrokBridge
           project={project}
           stage="prompt-plan-fix"
+          provider={provider}
           title="Prompt Planの修正依頼"
           run={run}
           onImport={importPlan}
@@ -246,7 +251,7 @@ export function PromptPlanStage({
           <p>
             {loadError
               ? '不正な下書きは保持されています。修正済みJSONを再取り込みしてください。'
-              : 'Prompt Planはまだありません。Grokの結果を取り込んでください。'}
+              : 'Prompt Planはまだありません。AIで生成した成果物を取り込んでください。'}
           </p>
         ) : (
           <div className="flow">

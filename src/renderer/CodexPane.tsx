@@ -590,20 +590,29 @@ export function CodexPane() {
             >
               送信
             </button>
-            <button
-              disabled={!output || busy || Boolean(autoArtifact)}
-              onClick={() =>
-                void window.batchStudio.codex
-                  .saveResponse(output)
-                  .catch((err) => setError(errorText(err)))
-              }
-            >
-              回答をファイル保存して取り込む
-            </button>
           </div>
-          <small>
-            保存したファイルは左側の工程画面で検証し、下書きへ取り込んでください。確定済みファイルはCodexから変更できません。
-          </small>
+          {!autoArtifact && Boolean(output) && (
+            <details className="codex-manual-fallback">
+              <summary>通常の回答をファイルとして保存（手動）</summary>
+              <p>
+                工程用の依頼は自動的に検証・取り込まれます。この操作は通常の回答を保存するだけで、
+                下書きへの取り込みは行いません。
+              </p>
+              <button
+                disabled={!output || busy}
+                onClick={() =>
+                  void window.batchStudio.codex
+                    .saveResponse(output)
+                    .catch((err) => setError(errorText(err)))
+                }
+              >
+                回答をファイル保存
+              </button>
+            </details>
+          )}
+          <div className="codex-auto-import-note">
+            工程用の依頼は回答完了後に自動で検証・保存され、左側の工程の下書きに反映されます。確定操作は別途必要です。
+          </div>
         </section>
       )}
     </main>

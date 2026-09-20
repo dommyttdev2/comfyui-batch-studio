@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { CaptionStatus, ImportResult, ProjectSummary } from '../shared/types';
+import type {
+  AssistantPaneProvider,
+  CaptionStatus,
+  ImportResult,
+  ProjectSummary,
+} from '../shared/types';
 import { GrokBridge } from './GrokStages';
 import type { Runner } from './ui';
 import { issuesView } from './ui';
@@ -7,14 +12,22 @@ import { issuesView } from './ui';
 const CAPTION_STATE_LABELS: Record<CaptionStatus['state'], string> = {
   unconfigured: '最終成果物工程でディレクトリを指定してください',
   'source-missing': '最終成果物ディレクトリが見つかりません',
-  'missing-content': 'Grok本文未生成',
-  'invalid-content': 'Grok本文に検証エラーがあります',
+  'missing-content': 'タイトル・説明文が未生成',
+  'invalid-content': 'タイトル・説明文に検証エラーがあります',
   ready: 'caption.txt を生成できます',
   generated: '生成済み',
   stale: '更新必要',
 };
 
-export function CaptionStage({ project, run }: { project: ProjectSummary; run: Runner }) {
+export function CaptionStage({
+  project,
+  run,
+  provider,
+}: {
+  project: ProjectSummary;
+  run: Runner;
+  provider: AssistantPaneProvider;
+}) {
   const [status, setStatus] = useState<CaptionStatus | null>(null);
 
   const load = () =>
@@ -43,7 +56,8 @@ export function CaptionStage({ project, run }: { project: ProjectSummary; run: R
       <GrokBridge
         project={project}
         stage="caption"
-        title="1. Grokでタイトル・説明文を生成"
+        provider={provider}
+        title="1. タイトル・説明文を生成"
         run={run}
         onImport={importCaption}
         onAutoImported={async () =>
@@ -56,7 +70,7 @@ export function CaptionStage({ project, run }: { project: ProjectSummary; run: R
           <div>
             <h3>2. caption.txt</h3>
             <p>
-              最終成果物工程で指定したディレクトリを参照し、Grokの意味情報に実測した収録枚数と定型注意書きを組み合わせます。
+              最終成果物工程で指定したディレクトリを参照し、取り込んだタイトル・説明文に実測した収録枚数と定型注意書きを組み合わせます。
             </p>
           </div>
           <div className="actions">
@@ -130,7 +144,7 @@ export function CaptionStage({ project, run }: { project: ProjectSummary; run: R
             className="editor"
             readOnly
             value={status?.preview ?? ''}
-            placeholder="Grok本文・最終成果物ディレクトリ・画像が揃うとプレビューを表示します。"
+            placeholder="タイトル・説明文・最終成果物ディレクトリ・画像が揃うとプレビューを表示します。"
           />
         </label>
 

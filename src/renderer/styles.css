@@ -945,3 +945,44 @@ input[readonly] {
     flex-direction: column;
   }
 }
+
+/* AI generation stages: status-first layout, with manual return-file import as a fallback. */
+.assistant-stage-hint {
+  margin: 6px 0 0;
+  color: #aab5c5;
+  line-height: 1.5;
+}
+.assistant-stage-guide,
+.assistant-artifact-status {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid #344558;
+  border-radius: 10px;
+  background: #1d2938;
+  line-height: 1.5;
+}
+.assistant-stage-guide p,
+.assistant-artifact-status p {
+  margin: 0;
+}
+.assistant-artifact-status strong {
+  color: #c8ddff;
+}
+.assistant-artifact-status button {
+  justify-self: start;
+}
+.assistant-manual-fallback {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #34404d;
+  border-radius: 10px;
+}
+.assistant-manual-fallback summary {
+  cursor: pointer;
+  color: #c0cad7;
+}
+.assistant-manual-fallback[open] summary {
+  margin-bottom: 12px;
+}
