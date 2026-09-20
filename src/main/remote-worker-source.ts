@@ -2,6 +2,7 @@ export const REMOTE_WORKER_VERSION = '10';
 export const REMOTE_WORKER_FILE = `#!/usr/bin/env python3
 import base64,copy,hashlib,http.client,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,zipfile
 VERSION="10"
+import fcntl
 CHUNK_SIZE=8*1024*1024
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".webp"}
 REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -581,9 +582,22 @@ def run_scene_sequence(root,req):
  endpoint=resolve_comfy_endpoint(req.get("comfyEndpoint"))
  branches=req.get("branches") or [];workflow=req.get("workflow");run_id=str(req.get("runId") or "")
  state=initialize_sequence(root,req)
- if state.get("status") in ("completed","paused","interrupted","failed"):return {"state":state}
+ if state.get("status")=="completed":return {"state":state}
  owner_pid=int(state.get("workerPid") or 0)
  if owner_pid and owner_pid!=os.getpid() and process_alive(owner_pid):return {"state":state,"alreadyRunning":True}
+ if state.get("status") in ("paused","interrupted","failed"):
+  if not req.get("resume"):return {"state":state}
+  error=(state.get("error") or {})
+  if state.get("status")=="failed" and error.get("code") not in (None,"REMOTE_PROMPT_FAILED"):
+   raise WorkerError("REMOTE_RESUME_UNSAFE","The failed worker state requires a separate recovery action: "+str(error.get("code")))
+  current=state.get("current") or {}
+  prompt_id=str(current.get("promptId") or "")
+  if prompt_id and prompt_history_state(endpoint,prompt_id)=="error":
+   current["promptId"]=None
+  elif prompt_id and prompt_queue_state(endpoint,prompt_id)=="absent" and prompt_history_state(endpoint,prompt_id)!="success":
+   raise WorkerError("REMOTE_RESUME_PROMPT_UNCERTAIN","The last submitted prompt is absent from both history and queue. A duplicate submission was prevented.")
+  write_control(root,{"stopRequested":False,"interruptRequested":False})
+  state["status"]="running";state["error"]=None;save_state(root,state)
  state["workerPid"]=os.getpid();state["status"]="running";save_state(root,state)
  if not reconcile_current_prompt(root,state,branches,endpoint):return {"state":read_state(root)}
  for branch in branches:
@@ -754,7 +768,14 @@ def handle(req,root,model_root,comfy_root):
  if op=="health": return {"ok":True,"version":VERSION,"pid":os.getpid()}
  if op=="status":
   return {"ok":True,"state":read_state(root)}
- if op=="run_scene_sequence": return run_scene_sequence(root,req)
+ if op=="run_scene_sequence":
+  lock=os.open(contained(root,"scene-sequence.lock"),os.O_RDWR|os.O_CREAT,0o600)
+  try:
+   try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+   except BlockingIOError:return {"state":read_state(root),"alreadyRunning":True}
+   return run_scene_sequence(root,req)
+  finally:
+   os.close(lock)
  if op=="stop_scene_sequence": return stop_scene_sequence(root)
  if op=="force_interrupt_sequence": return force_interrupt_sequence(root,str(req.get("comfyEndpoint") or "http://127.0.0.1:8188"))
  if op=="package_artifacts": return package_artifacts(root,comfy_root,req)
