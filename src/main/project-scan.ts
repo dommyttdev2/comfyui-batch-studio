@@ -155,7 +155,7 @@ export async function scanProject(root: string): Promise<ProjectSummary> {
     const wt = await mtime(path.join(root, workflow));
     if (
       planT > wt ||
-       artifacts.some(
+      artifacts.some(
         (a) => ['story', 'models', 'promptPlan'].includes(a.key) && a.state === 'stale',
       ) ||
       (await workflowInputsChanged(root, meta))
