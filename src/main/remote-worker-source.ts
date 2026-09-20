@@ -114,8 +114,8 @@ def download_model(model_root,req):
   for leftover in (part,control):
    if os.path.lexists(leftover) and os.path.isfile(leftover):os.unlink(leftover)
  if os.path.lexists(part) and os.path.isdir(part): raise WorkerError("MODEL_PART_IS_DIRECTORY")
- args=["aria2c","--input-file=-","--allow-overwrite=true","--auto-file-renaming=false","--continue=true","--file-allocation=none","--max-connection-per-server=8","--split=8","--min-split-size=16M","--summary-interval=0","--console-log-level=warn","--dir="+parent,"--out="+os.path.basename(part)]
- result=run_cmd(args,input_text=url+"\\n",error_code="MODEL_DOWNLOAD_NETWORK",allow_failure=True)
+ args=["aria2c","--input-file=-","--allow-overwrite=true","--auto-file-renaming=false","--continue=true","--file-allocation=none","--max-connection-per-server=8","--split=8","--min-split-size=16M","--summary-interval=0","--console-log-level=warn","--dir="+parent]
+ result=run_cmd(args,input_text=url+"\\n"+" out="+os.path.basename(part)+"\\n",error_code="MODEL_DOWNLOAD_NETWORK",allow_failure=True)
  if result is None: raise WorkerError("MODEL_DOWNLOAD_NETWORK")
  if result.returncode!=0:
   detail=(result.stderr or result.stdout or "").strip()

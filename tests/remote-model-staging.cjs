@@ -537,7 +537,12 @@ def successful_run(args,cwd=None,env=None,input=None,text=True,capture_output=Tr
  assert args[0]=="aria2c"
  assert all("X-Amz-Signature" not in a for a in args), "signed URL must not appear in process argv"
  assert input and "X-Amz-Signature=" in input, "signed URL must be supplied through stdin"
- out_name=next(a for a in args if a.startswith("--out=")).split("=",1)[1]
+ assert not any(a.startswith("--out=") for a in args), "aria2 ignores global --out in input-file mode"
+ input_lines=input.splitlines()
+ assert len(input_lines)==2 and input_lines[0]==url, "only the signed URL and one per-URI option are expected"
+ assert input_lines[1].startswith(" out="), "the output file must be specified as a per-URI aria2 option"
+ out_name=input_lines[1].strip().split("=",1)[1]
+ assert out_name==os.path.basename(target)+".part", "aria2 must download to the temporary file"
  out_dir=next(a for a in args if a.startswith("--dir=")).split("=",1)[1]
  open(os.path.join(out_dir,out_name),"wb").write(payload)
  calls.append((args,input))
