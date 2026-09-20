@@ -286,7 +286,12 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   }, [project.rootPath]);
 
   useEffect(() => {
-    if (!state || pickerSessionRef.current || pickerOpeningRef.current || pickerCommitPendingRef.current)
+    if (
+      !state ||
+      pickerSessionRef.current ||
+      pickerOpeningRef.current ||
+      pickerCommitPendingRef.current
+    )
       return;
     const timer = window.setTimeout(() => {
       if (pickerSessionRef.current || pickerOpeningRef.current || pickerCommitPendingRef.current)
@@ -511,7 +516,12 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       : 1;
 
   const openPicker = () => {
-    if (!state || pickerOpeningRef.current || pickerSessionRef.current || pickerCommitPendingRef.current)
+    if (
+      !state ||
+      pickerOpeningRef.current ||
+      pickerSessionRef.current ||
+      pickerCommitPendingRef.current
+    )
       return;
     const openingToken = pickerGenerationRef.current.invalidate();
     pickerOpeningRef.current = true;
