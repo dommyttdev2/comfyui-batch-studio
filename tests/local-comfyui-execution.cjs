@@ -342,7 +342,8 @@ function startServer(install, options = {}) {
         'only submitted Local API graphs must route images to this Run ID',
       );
       assert.equal(
-        done.evidence.filter((x) => x.kind === 'CUSTOM' && x.scope === 'local-generated-file').length,
+        done.evidence.filter((x) => x.kind === 'CUSTOM' && x.scope === 'local-generated-file')
+          .length,
         3,
       );
       const firstFile = path.join(install, 'output', mock.calls.prompts[0].path, 'prompt-1.png');
@@ -366,9 +367,9 @@ function startServer(install, options = {}) {
       });
       assert.equal(nextDone.progress.overall.completed, 3);
       assert.ok(
-        mock.calls.prompts.slice(oldCount).every((x) =>
-          x.path.startsWith(`BatchStudio/${next.projectId}/${next.runId}/`),
-        ),
+        mock.calls.prompts
+          .slice(oldCount)
+          .every((x) => x.path.startsWith(`BatchStudio/${next.projectId}/${next.runId}/`)),
       );
       assert.equal((await verifyLocalOutputs(install, nextDone)).count, 3);
       assert.equal((await verifyLocalOutputs(install, done)).count, 3);
