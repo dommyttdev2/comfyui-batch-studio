@@ -7,6 +7,7 @@ import type {
   CodexModelSettings,
   CodexModelSelection,
   CodexTurnStatus,
+  AutoArtifactEvent,
   CodexSendResult,
   GrokTask,
 } from '../shared/types';
@@ -69,6 +70,8 @@ export function CodexPane() {
   const [snapshot, setSnapshot] = useState<CodexSnapshot | null>(null);
   const [messages, setMessages] = useState<CodexMessage[]>([]);
   const [stream, setStream] = useState('');
+  const [autoArtifact, setAutoArtifact] = useState<AutoArtifactEvent | null>(null);
+  const artifactTaskRef = useRef(false);
   const [input, setInput] = useState('');
   const [extra, setExtra] = useState('');
   const [task, setTask] = useState<GrokTask['stage']>('story-finalize');
@@ -93,6 +96,8 @@ export function CodexPane() {
     setSnapshot(value);
     setMessages(value.messages);
     setBusy(value.busy);
+    if (value.artifact) setAutoArtifact(value.artifact);
+    artifactTaskRef.current = value.busy && value.artifact?.phase === 'waiting';
     setTurnStatus(value.status);
     if (value.historyUnavailable)
       setError(
@@ -108,6 +113,8 @@ export function CodexPane() {
       setSnapshot(null);
       setMessages([]);
       setStream('');
+      setAutoArtifact(null);
+      artifactTaskRef.current = false;
       setError('');
       setBusy(false);
       setTurnStatus(idleStatus);
@@ -143,6 +150,12 @@ export function CodexPane() {
     const offContext = window.batchStudio.codex.onContext((next) => {
       void switchContext(next);
     });
+    const offArtifact = window.batchStudio.autoArtifact.onEvent((event) => {
+      if (event.provider !== 'codex' || !currentContext.current ||
+          currentContext.current !== event.root + '\0' + (event.stage.startsWith('story-') ? 'story' : event.stage.startsWith('models') ? 'models' : event.stage.startsWith('prompt-plan') ? 'prompt-plan' : 'caption')) return;
+      setAutoArtifact(event);
+      if (event.phase === 'imported' || event.phase === 'duplicate') artifactTaskRef.current = false;
+    });
     const offEvent = window.batchStudio.codex.onEvent((event) => {
       if (event.method === 'account/updated' || event.method === 'account/login/completed') {
         void refreshAccount().catch((err) => setError(errorText(err)));
@@ -169,7 +182,7 @@ export function CodexPane() {
         return;
       }
       if (event.method === 'turn/started') setBusy(true);
-      if (event.method === 'item/agentMessage/delta' && typeof event.params.delta === 'string')
+      if (event.method === 'item/agentMessage/delta' && !artifactTaskRef.current && typeof event.params.delta === 'string')
         setStream((text) => text + event.params.delta);
       if (event.method === 'turn/completed') {
         setBusy(false);
@@ -190,6 +203,7 @@ export function CodexPane() {
     return () => {
       offContext();
       offEvent();
+      offArtifact();
     };
   }, [refresh, refreshAccount, switchContext]);
 
@@ -202,9 +216,15 @@ export function CodexPane() {
     return () => clearInterval(ticker);
   }, [turnStatus.phase]);
 
-  const send = async (request: () => Promise<CodexSendResult>, text: string) => {
+  const send = async (
+    request: () => Promise<CodexSendResult>,
+    text: string,
+    artifactStage?: GrokTask['stage'],
+  ) => {
     const key = currentContext.current;
     setError('');
+    artifactTaskRef.current = Boolean(artifactStage && artifactStage !== 'story-initial');
+    setAutoArtifact(null);
     setBusy(true);
     setTurnStatus({
       ...idleStatus,
@@ -223,9 +243,11 @@ export function CodexPane() {
         // until its turn finishes. Update history selection without reading it.
         setSnapshot((previous) => (previous ? { ...previous, ...threads } : previous));
         setTurnStatus(threads.status);
+        setAutoArtifact(threads.artifact ?? null);
       }
     } catch (err) {
       if (key === currentContext.current) {
+        artifactTaskRef.current = false;
         setBusy(false);
         setTurnStatus({
           ...idleStatus,
@@ -250,6 +272,8 @@ export function CodexPane() {
       if (key === currentContext.current) {
         setSnapshot(next);
         setMessages(next.messages);
+        setAutoArtifact(next.artifact ?? null);
+        artifactTaskRef.current = next.busy && next.artifact?.phase === 'waiting';
         setTurnStatus(next.status);
         setBusy(next.busy);
         setStream('');
@@ -287,7 +311,7 @@ export function CodexPane() {
         )
       : null;
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
-  const output = latestAssistant?.text ?? stream;
+  const output = autoArtifact || artifactTaskRef.current ? '' : (latestAssistant?.text ?? stream);
 
   return (
     <main className="codex-pane">
@@ -441,13 +465,28 @@ export function CodexPane() {
             <p>{message.text}</p>
           </article>
         ))}
-        {stream && (
+        {stream && !autoArtifact && (
           <article className="codex-message assistant">
             <strong>Codex · 回答中</strong>
             <p>{stream}</p>
           </article>
         )}
         {activeTurn && <p className="codex-processing">{phaseLabel[turnStatus.phase]}</p>}
+        {autoArtifact && (
+          <section className="codex-artifact-result" aria-live="polite">
+            <strong>{autoArtifact.fileName}</strong>
+            <span>{autoArtifact.phase === 'waiting' ? '成果物の生成を待っています…' :
+              autoArtifact.phase === 'detected' ? '成果物を検出しました' :
+              autoArtifact.phase === 'validating' ? '成果物を検証しています…' :
+              autoArtifact.phase === 'imported' ? 'ファイルに保存し、下書きへ取り込みました（未確定）' :
+              autoArtifact.phase === 'duplicate' ? '取り込み済みの成果物です' :
+              autoArtifact.message ?? '成果物を取り込めませんでした'}</span>
+            {autoArtifact.issues?.map((issue, index) => <small key={index}>{issue.message}</small>)}
+            {autoArtifact.filePath && <button onClick={() => void window.batchStudio.file.showInFolder(autoArtifact.filePath!)}>ファイルの場所を開く</button>}
+            {(autoArtifact.phase === 'invalid' || autoArtifact.phase === 'failed') &&
+              <button disabled={busy} onClick={() => void window.batchStudio.codex.retryArtifact().then((value) => { if (value) setAutoArtifact(value); }).catch((err) => setError(errorText(err)))}>成果物の取り込みを再試行</button>}
+          </section>
+        )}
         {['completed', 'failed', 'interrupted', 'unknown'].includes(turnStatus.phase) && (
           <p className="codex-turn-result">{phaseLabel[turnStatus.phase]}</p>
         )}
@@ -474,6 +513,7 @@ export function CodexPane() {
                   '工程の依頼: ' +
                     stageTasks[context.stage].find((value) => value.value === task)?.label +
                     (extra ? '\n' + extra : ''),
+                  task,
                 )
               }
             >
@@ -505,7 +545,7 @@ export function CodexPane() {
               送信
             </button>
             <button
-              disabled={!output || busy}
+              disabled={!output || busy || Boolean(autoArtifact)}
               onClick={() =>
                 void window.batchStudio.codex
                   .saveResponse(output)
