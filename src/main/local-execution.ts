@@ -14,6 +14,7 @@ import { ComfyUiClient } from './comfyui-client.js';
 import { ScenePromptRunClient } from './scene-prompt-client.js';
 import {
   getExecutionRun,
+  readExecutionWorkflow,
   mutateExecutionRun,
   recordExecutionEvidence,
   validatedExecutionEvidence,
@@ -395,9 +396,7 @@ export class LocalExecutionService {
         throw new Error(`Prompt ${promptId} is absent from ComfyUI Queue and History.`);
       await sleep(750);
     }
-    const graph = await readJson<ApiGraph>(path.join(root, run.snapshot.workflow.apiPath));
-    if (!graph)
-      throw new Error('Saved API graph is missing; existing prompt outputs cannot be verified.');
+    const { api: graph } = await readExecutionWorkflow(root, run);
     const binding = enumerateSceneBranches(graph, run).find(
       (item) => item.branchId === run.current.branchId,
     );
@@ -455,9 +454,7 @@ export class LocalExecutionService {
     await mutateExecutionRun(root, runId, (r) => {
       r.phase = 'LOCAL_CAPABILITY_CHECKING';
     });
-    const graph = await readJson<ApiGraph>(path.join(root, run.snapshot.workflow.apiPath)),
-      workflow = await readJson<unknown>(path.join(root, run.snapshot.workflow.uiPath));
-    if (!graph || !workflow) throw new Error('Execution workflow snapshot files are missing.');
+    const { api: graph, ui: workflow } = await readExecutionWorkflow(root, run);
     const info = await comfy.objectInfo(),
       required = new Set(Object.values(graph).map((node) => node.class_type));
     const missing = [...required].filter((name) => !info?.[name]);
