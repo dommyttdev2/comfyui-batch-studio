@@ -15,11 +15,31 @@ const selectedCardsUi = fs.readFileSync(
   path.join(repo, 'src/renderer/SelectedModelCards.tsx'),
   'utf8',
 );
-assert.match(modelStageUi, /<SelectedModelCards/, 'model stage must expose editable current selections');
-assert.match(selectedCardsUi, /変更を下書きへ保存/, 'manual selection must have an explicit save action');
-assert.match(selectedCardsUi, /civit-model-card/, 'manual selection must reuse Civit Explorer cards');
-assert.match(modelStageUi, /artifact\.saveDraft\(/, 'manual version updates must persist models draft');
-assert.match(modelStageUi, /artifact\.confirm\(/, 'manual changes must still require models confirmation');
+assert.match(
+  modelStageUi,
+  /<SelectedModelCards/,
+  'model stage must expose editable current selections',
+);
+assert.match(
+  selectedCardsUi,
+  /変更を下書きへ保存/,
+  'manual selection must have an explicit save action',
+);
+assert.match(
+  selectedCardsUi,
+  /civit-model-card/,
+  'manual selection must reuse Civit Explorer cards',
+);
+assert.match(
+  modelStageUi,
+  /artifact\.saveDraft\(/,
+  'manual version updates must persist models draft',
+);
+assert.match(
+  modelStageUi,
+  /artifact\.confirm\(/,
+  'manual changes must still require models confirmation',
+);
 assert.match(
   modelStageUi,
   /Civitai モデルカタログを更新/,
@@ -203,9 +223,11 @@ const modelFile = (ref, fileName) => ({ ref, fileName, reason: 'user selected' }
           provenance: { source: 'civitai', basis: 'creator-declared' },
         },
       },
-      { versionId: 903, versionName: 'no model weights', files: [
-        { id: 94, name: 'training.zip', type: 'Training Data' },
-      ] },
+      {
+        versionId: 903,
+        versionName: 'no model weights',
+        files: [{ id: 94, name: 'training.zip', type: 'Training Data' }],
+      },
     ],
   };
   const original = {
@@ -240,9 +262,7 @@ const modelFile = (ref, fileName) => ({ ref, fileName, reason: 'user selected' }
   assert.equal(changedVersion.strengthBaseline.value, 0.8);
   assert.equal(changedVersion.modelUrl, 'https://civitai.com/models/9?modelVersionId=902');
   assert.equal(original.versionId, 901, 'original selection must not be mutated');
-  const changedFile = replaceSelectedModelVersion(
-    original, versionedItem, 'lora', 902, 93,
-  );
+  const changedFile = replaceSelectedModelVersion(original, versionedItem, 'lora', 902, 93);
   assert.equal(changedFile.fileName, 'alternate.safetensors');
   assert.throws(
     () => replaceSelectedModelVersion(original, versionedItem, 'lora', 902, 91),
@@ -262,23 +282,24 @@ const modelFile = (ref, fileName) => ({ ref, fileName, reason: 'user selected' }
     () => replaceSelectedModelVersion(original, { ...versionedItem, modelId: 10 }, 'lora', 902),
     /別のモデル/,
   );
-  const noBaseline = replaceSelectedModelVersion(
-    changedVersion, versionedItem, 'lora', 901, 91,
-  );
+  const noBaseline = replaceSelectedModelVersion(changedVersion, versionedItem, 'lora', 901, 91);
   assert.equal(noBaseline.strengthBaseline?.value, 0.3);
   assert.deepEqual(noBaseline.trainedWords, ['old trigger']);
   const checkpointItem = {
     ...versionedItem,
     modelType: 'Checkpoint',
-    versions: [{
-      versionId: 902,
-      versionName: 'new',
-      baseModel: 'Illustrious',
-      files: [newFile],
-    }],
+    versions: [
+      {
+        versionId: 902,
+        versionName: 'new',
+        baseModel: 'Illustrious',
+        files: [newFile],
+      },
+    ],
   };
   assert.throws(
-    () => replaceSelectedModelVersion(original, checkpointItem, 'checkpoint', 902, undefined, 'anima'),
+    () =>
+      replaceSelectedModelVersion(original, checkpointItem, 'checkpoint', 902, undefined, 'anima'),
     /指定したバージョン/,
     'base model version changes must respect selected model family',
   );
