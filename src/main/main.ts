@@ -1364,7 +1364,8 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
         threadId: saved.activeThreadId,
         includeTurns: true,
       });
-      const turns = (read as { thread?: { turns?: Array<{ id?: unknown }> } } | null)?.thread?.turns;
+      const turns = (read as { thread?: { turns?: Array<{ id?: unknown }> } } | null)?.thread
+        ?.turns;
       const lastTurn = turns?.at(-1);
       const lastTurnId = typeof lastTurn?.id === 'string' ? lastTurn.id : null;
       return {
@@ -1373,9 +1374,10 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
         messages: codexMessages(read),
         busy: false,
         status: codexTurnMonitor.fromRead(saved.activeThreadId, read),
-        artifact: lastTurnId && codexTaskFileForTurn(lastTurn)
-          ? await codexArtifactFor(context, saved.activeThreadId, lastTurnId)
-          : null,
+        artifact:
+          lastTurnId && codexTaskFileForTurn(lastTurn)
+            ? await codexArtifactFor(context, saved.activeThreadId, lastTurnId)
+            : null,
       };
     } catch (error) {
       if (!(error instanceof Error) || !/no rollout found for thread id/i.test(error.message))
