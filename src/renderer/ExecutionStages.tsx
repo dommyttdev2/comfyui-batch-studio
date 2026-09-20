@@ -682,15 +682,17 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
   const canRestartRemote = Boolean(
     active && remoteInstanceChanged && phaseIndex(current!.phase) < phaseIndex('EXECUTING'),
   );
+  const recoveryUncertain = current?.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN';
   const canRestartFromScratch = Boolean(
     current &&
+      !recoveryUncertain &&
       (current.lifecycle !== 'RUNNING' ||
         current.executionTarget === 'local' ||
         phaseIndex(current.phase) <= phaseIndex('EXECUTING')),
   );
-  const canStart = preflight?.state === 'READY' && !active;
+  const canStart = preflight?.state === 'READY' && !active && !recoveryUncertain;
   const canResume = Boolean(
-    current && ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
+    current && !recoveryUncertain && ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
   );
   const canStopScheduling = Boolean(
     current &&
@@ -704,7 +706,12 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
       current.phase === 'EXECUTING' &&
       current.controls.interrupt !== 'INTERRUPTED',
   );
-  const startBanner = checking
+  const startBanner = recoveryUncertain
+    ? {
+        state: 'RECOVERY REQUIRED',
+        message: `既存Prompt/Workerの状態が未確定のため、自動生成とResumeを停止しています。「状態を再確認」は既存処理の確認のみ行い、新しいPromptを投入しません。Remoteの場合はVast.ai Instanceの課金状態も確認してください。`,
+      }
+    : checking
     ? { state: 'CHECKING', message: 'Preflightを確認しています。' }
     : canRestartRemote
       ? {
@@ -833,6 +840,17 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
           >
             Resume
           </button>
+          {recoveryUncertain && current && (
+            <button
+              onClick={() =>
+                void apply(() =>
+                  window.batchStudio.execution.reconcile(project.rootPath, current.runId),
+                )
+              }
+            >
+              既存Runの状態を再確認
+            </button>
+          )}
           <button
             disabled={current?.lifecycle !== 'COMPLETED'}
             onClick={() => void window.batchStudio.project.openFolder(outputPath)}
