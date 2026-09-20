@@ -31,6 +31,11 @@ import type {
   CodexMessage,
   CodexSnapshot,
   CodexAccountStatus,
+  CodexSendResult,
+  CodexTurnStatus,
+  CodexModelOption,
+  CodexModelSelection,
+  CodexModelSettings,
   ThumbnailSlotKey,
   R2ConnectionInput,
   ValidationIssue,
@@ -89,6 +94,8 @@ import { GrokChatStateStore } from './grok-chat-state.js';
 import { CodexChatStateStore, type CodexStageChats } from './codex-chat-state.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
+import { CodexTurnMonitor } from './codex-turn-monitor.js';
+import { CodexModelSelectionStore } from './codex-model-selection.js';
 import { R2ConfigStore } from './r2-config.js';
 import { R2Manager } from './r2-manager.js';
 import { R2ObjectIndex } from './r2-object-index.js';
@@ -227,6 +234,8 @@ let lastFocusedProjectWindowId: number | null = null,
   assistantProviderState: AssistantProviderStore | null = null,
   codexAppServer: CodexAppServer | null = null,
   codexBusy = new Set<string>(),
+  codexTurnMonitor = new CodexTurnMonitor(),
+  codexModelSelections: CodexModelSelectionStore | null = null,
   r2Manager: R2Manager | null = null,
   r2ObjectIndex: R2ObjectIndex | null = null,
   appSettingsStore: AppSettingsStore | null = null,
@@ -1179,6 +1188,10 @@ function codexContextFor(state: ProjectWindowState): CodexContext {
 }
 function forwardCodexNotification(notification: CodexNotification) {
   const threadId = notification.params.threadId;
+  const status =
+    typeof threadId === 'string'
+      ? codexTurnMonitor.notification(threadId, notification)
+      : null;
   if (notification.method === 'turn/completed' && typeof threadId === 'string')
     codexBusy.delete(threadId);
   for (const state of projectWindows.values()) {
@@ -1190,6 +1203,11 @@ function forwardCodexNotification(notification: CodexNotification) {
         continue;
     }
     state.codexView.webContents.send(IPC.CODEX_EVENT, notification);
+    if (status)
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: 'batch-studio/turn-status',
+        params: { threadId, status },
+      });
   }
 }
 const stateCodexActiveThread = new Map<number, string | null>();
@@ -1228,17 +1246,30 @@ function codexMessages(result: unknown): CodexMessage[] {
   }
   return messages;
 }
+function codexTurnStatus(threadId: string | null): CodexTurnStatus {
+  return threadId
+    ? (codexTurnMonitor.get(threadId) ?? {
+        phase: 'unknown',
+        startedAt: null,
+        updatedAt: null,
+        finishedAt: null,
+        error: null,
+      })
+    : { phase: 'idle', startedAt: null, updatedAt: null, finishedAt: null, error: null };
+}
 async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> {
   const context = codexContextFor(state);
   const { server, store } = codexService();
   const saved = await store.get(context.root, context.stage);
   stateCodexActiveThread.set(state.window.id, saved.activeThreadId);
-  if (!saved.activeThreadId) return { ...context, ...saved, messages: [], busy: false };
+  if (!saved.activeThreadId)
+    return { ...context, ...saved, messages: [], busy: false, status: codexTurnStatus(null) };
 
   // A thread/start ID exists before its first rollout is persisted. Reading or
   // resuming it while the first turn is running fails with "no rollout found".
   const busy = codexBusy.has(saved.activeThreadId);
-  if (busy) return { ...context, ...saved, messages: [], busy: true };
+  if (busy)
+    return { ...context, ...saved, messages: [], busy: true, status: codexTurnStatus(saved.activeThreadId) };
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       // Reading history must never resume a thread; resume belongs to send only.
@@ -1246,7 +1277,13 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
         threadId: saved.activeThreadId,
         includeTurns: true,
       });
-      return { ...context, ...saved, messages: codexMessages(read), busy: false };
+      return {
+        ...context,
+        ...saved,
+        messages: codexMessages(read),
+        busy: false,
+        status: codexTurnMonitor.fromRead(saved.activeThreadId, read),
+      };
     } catch (error) {
       if (!(error instanceof Error) || !/no rollout found for thread id/i.test(error.message))
         throw error;
@@ -1256,7 +1293,14 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
       }
       // Do not delete a possibly recoverable conversation ID. The user can
       // retry restoration or explicitly start a new chat.
-      return { ...context, ...saved, messages: [], busy: false, historyUnavailable: true };
+      return {
+        ...context,
+        ...saved,
+        messages: [],
+        busy: false,
+        historyUnavailable: true,
+        status: codexTurnStatus(saved.activeThreadId),
+      };
     }
   }
   throw new Error('Unexpected Codex snapshot state.');
@@ -1273,7 +1317,7 @@ async function codexAccount(): Promise<CodexAccountStatus> {
     planType: result.account?.planType ?? null,
   };
 }
-async function codexSend(state: ProjectWindowState, message: string): Promise<CodexStageChats> {
+async function codexSend(state: ProjectWindowState, message: string): Promise<CodexSendResult> {
   const context = codexContextFor(state);
   const input = message.trim();
   if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
@@ -1283,6 +1327,7 @@ async function codexSend(state: ProjectWindowState, message: string): Promise<Co
       'ChatGPTアカウントでCodexにサインインしてください。APIキー認証では送信しません。',
     );
   const { server, store } = codexService();
+  const settings = await codexModelSettings(context);
   const saved = await store.get(context.root, context.stage);
   let threadId = saved.activeThreadId;
   if (threadId && codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
@@ -1307,17 +1352,27 @@ async function codexSend(state: ProjectWindowState, message: string): Promise<Co
   if (codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
   stateCodexActiveThread.set(state.window.id, threadId);
   codexBusy.add(threadId);
+  codexTurnMonitor.sending(threadId);
   try {
     await server.request('turn/start', {
       threadId,
       input: [{ type: 'text', text: input, text_elements: [] }],
+      model: settings.selection.model,
+      effort: settings.selection.effort,
     });
   } catch (error) {
     codexBusy.delete(threadId);
+    codexTurnMonitor.failedToSend(
+      threadId,
+      error instanceof Error ? error.message : String(error),
+    );
     throw error;
   }
-  // Return only IDs here: do not read/resume a newly started, unpersisted rollout.
-  return store.get(context.root, context.stage);
+  // Return metadata without reading a rollout that may not yet be persisted.
+  return {
+    ...(await store.get(context.root, context.stage)),
+    status: codexTurnStatus(threadId),
+  };
 }
 const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
   story: ['story-initial', 'story-finalize', 'story-fix'],
@@ -1335,7 +1390,7 @@ async function codexSendTask(
   state: ProjectWindowState,
   stage: GrokTask['stage'],
   extra: string,
-): Promise<CodexStageChats> {
+): Promise<CodexSendResult> {
   const context = codexContextFor(state);
   if (!codexTaskContexts[context.stage].includes(stage))
     throw new Error('選択した工程に対応しない依頼です。');
@@ -2708,10 +2763,12 @@ async function initializeApplication() {
   ensureCatalogRuntimePath();
   grokChatState = new GrokChatStateStore(userData);
   codexChatState = new CodexChatStateStore(userData);
+  codexModelSelections = new CodexModelSelectionStore(userData);
   assistantProviderState = new AssistantProviderStore(userData);
   codexAppServer = new CodexAppServer();
   codexAppServer.on('notification', forwardCodexNotification);
   codexAppServer.on('disconnected', (message: string) => {
+    codexTurnMonitor.disconnected();
     codexBusy.clear();
     for (const state of projectWindows.values())
       state.codexView.webContents.send(IPC.CODEX_EVENT, {
