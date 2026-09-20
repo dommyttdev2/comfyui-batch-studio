@@ -458,3 +458,35 @@
     height: 90px;
   }
 }
+
+.selected-models .panelhead p {
+  max-width: 760px;
+  color: #9ba4b1;
+}
+.selected-model-card .civit-model-content {
+  flex: 1;
+}
+.selected-model-card .civit-model-title strong {
+  overflow-wrap: anywhere;
+}
+.selected-model-file {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: #8993a2;
+  font-size: 11px;
+}
+.selected-model-file select {
+  width: 100%;
+  min-width: 0;
+}
+.selected-model-pending {
+  color: #fcd34d;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  margin: 0;
+}
+.selected-model-save {
+  align-self: stretch;
+  margin-top: auto;
+}
