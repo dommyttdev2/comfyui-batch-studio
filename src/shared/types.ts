@@ -1039,6 +1039,26 @@ export interface R2Metrics {
 }
 export type GrokContextStage = 'story' | 'models' | 'prompt-plan' | 'caption';
 export type AssistantPaneProvider = 'grok' | 'codex';
+export type AutoArtifactProvider = 'grok' | 'codex';
+export type AutoArtifactPhase =
+  | 'waiting'
+  | 'detected'
+  | 'validating'
+  | 'imported'
+  | 'duplicate'
+  | 'invalid'
+  | 'failed';
+export interface AutoArtifactEvent {
+  provider: AutoArtifactProvider;
+  root: string;
+  stage: GrokTask['stage'];
+  fileName: string;
+  phase: AutoArtifactPhase;
+  sourceId: string;
+  filePath?: string;
+  message?: string;
+  issues?: ValidationIssue[];
+}
 export interface CodexMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -1085,6 +1105,7 @@ export interface CodexThreadState {
 }
 export interface CodexSendResult extends CodexThreadState {
   status: CodexTurnStatus;
+  artifact?: AutoArtifactEvent | null;
 }
 export interface CodexSnapshot extends CodexContext, CodexSendResult {
   messages: CodexMessage[];
@@ -1154,6 +1175,10 @@ export interface BatchStudioApi {
   };
   grokTask: {
     build: (root: string, stage: GrokTask['stage'], extra?: string) => Promise<GrokTask>;
+  };
+  autoArtifact: {
+    armGrok: (root: string, stage: GrokTask['stage']) => Promise<AutoArtifactEvent | null>;
+    onEvent: (listener: (event: AutoArtifactEvent) => void) => () => void;
   };
   file: { showInFolder: (filePath: string) => Promise<void> };
   catalog: {
@@ -1354,6 +1379,8 @@ export interface BatchStudioApi {
     sendTask: (stage: GrokTask['stage'], extra?: string) => Promise<CodexSendResult>;
     onEvent: (listener: (event: CodexEvent) => void) => () => void;
     saveResponse: (text: string) => Promise<string | null>;
+    retryArtifact: () => Promise<AutoArtifactEvent | null>;
+    latestArtifact: () => Promise<AutoArtifactEvent | null>;
   };
   grok: {
     setVisible: (visible: boolean) => Promise<GrokPaneState>;

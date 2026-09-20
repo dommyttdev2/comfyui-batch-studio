@@ -31,6 +31,7 @@ import type {
   CodexMessage,
   CodexSnapshot,
   CodexAccountStatus,
+  AutoArtifactEvent,
   CodexSendResult,
   CodexTurnStatus,
   CodexModelOption,
@@ -95,6 +96,12 @@ import { CodexChatStateStore } from './codex-chat-state.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { CodexTurnMonitor } from './codex-turn-monitor.js';
+import {
+  expectedArtifact,
+  importAutoArtifact,
+  latestAutoArtifact,
+} from './agent-artifact-import.js';
+import { GrokAutoArtifactWatcher } from './grok-auto-artifact-watcher.js';
 import { CodexModelSelectionStore } from './codex-model-selection.js';
 import { R2ConfigStore } from './r2-config.js';
 import { R2Manager } from './r2-manager.js';
@@ -216,6 +223,7 @@ type ProjectWindowState = {
   localRatio: number;
   activeGrokContext: { root: string; stage: GrokContextStage } | null;
   restoringGrokContext: boolean;
+  grokArtifactWatcher: GrokAutoArtifactWatcher | null;
   grokNavigationQueue: GrokNavigationQueue;
   grokContextQueue: LatestGrokContextQueue<GrokPaneState>;
   lastFocusedAt: number;
@@ -234,6 +242,10 @@ let lastFocusedProjectWindowId: number | null = null,
   assistantProviderState: AssistantProviderStore | null = null,
   codexAppServer: CodexAppServer | null = null,
   codexBusy = new Set<string>(),
+  codexPendingArtifacts = new Map<
+    string,
+    { root: string; stage: GrokTask['stage']; fileName: string }
+  >(),
   codexTurnMonitor = new CodexTurnMonitor(),
   codexModelSelections: CodexModelSelectionStore | null = null,
   r2Manager: R2Manager | null = null,
@@ -457,6 +469,7 @@ function createProjectWindow(
       localRatio: 0.45,
       activeGrokContext: null,
       restoringGrokContext: false,
+      grokArtifactWatcher: null,
       grokNavigationQueue: new GrokNavigationQueue(),
       grokContextQueue: new LatestGrokContextQueue<GrokPaneState>(),
       lastFocusedAt: ++projectWindowFocusSequence,
@@ -473,6 +486,7 @@ function createProjectWindow(
     .catch((error) => console.warn('Grok loading placeholder failed:', error));
   configureGrokContents(grokView.webContents);
   attachGrokHistoryTracking(state);
+  state.grokArtifactWatcher = new GrokAutoArtifactWatcher(grokView.webContents, notifyAutoArtifact);
   window.on('focus', () => {
     state.lastFocusedAt = ++projectWindowFocusSequence;
     lastFocusedProjectWindowId = windowId;
@@ -486,6 +500,7 @@ function createProjectWindow(
     for (const picker of marketplacePickerWindows.values()) {
       if (picker.opener.id === localView.webContents.id) picker.window.close();
     }
+    state.grokArtifactWatcher?.dispose();
     localView.webContents.close();
     grokView.webContents.close();
     grokLoadingView.webContents.close();
@@ -1200,12 +1215,27 @@ function forwardCodexNotification(notification: CodexNotification) {
       if (typeof threadId !== 'string' || threadId !== stateCodexActiveThread.get(state.window.id))
         continue;
     }
-    state.codexView.webContents.send(IPC.CODEX_EVENT, notification);
+    // Artifact turns can contain megabytes of JSON: never forward their raw deltas to the UI.
+    if (
+      !(
+        typeof threadId === 'string' &&
+        codexPendingArtifacts.has(threadId) &&
+        notification.method === 'item/agentMessage/delta'
+      )
+    )
+      state.codexView.webContents.send(IPC.CODEX_EVENT, notification);
     if (status)
       state.codexView.webContents.send(IPC.CODEX_EVENT, {
         method: 'batch-studio/turn-status',
         params: { threadId, status },
       });
+  }
+  if (notification.method === 'turn/completed' && typeof threadId === 'string') {
+    const pending = codexPendingArtifacts.get(threadId);
+    if (pending) {
+      codexPendingArtifacts.delete(threadId);
+      void collectCodexArtifact(threadId, pending, notification.params);
+    }
   }
 }
 const stateCodexActiveThread = new Map<number, string | null>();
@@ -1222,11 +1252,26 @@ function messageText(item: Record<string, unknown>): string {
     .map((content) => content.text)
     .join('\n');
 }
+function codexTaskFileForTurn(turn: unknown): string | null {
+  const items = (turn as { items?: unknown[] } | null)?.items;
+  if (!Array.isArray(items)) return null;
+  const message = items.find((item) => (item as { type?: string } | null)?.type === 'userMessage');
+  if (!message || typeof message !== 'object') return null;
+  const text = messageText(message as Record<string, unknown>);
+  if (!text.includes('## Codex向け出力契約')) return null;
+  // The story discussion task also mentions story.md, but does not produce a file.
+  // Only classify turns with an explicit artifact output instruction.
+  const match = text.match(
+    /回答の最後に\s*(story\.md|model_loras\.json|prompt_plan\.json|caption_content\.json)/,
+  );
+  return match?.[0] ?? null;
+}
 function codexMessages(result: unknown): CodexMessage[] {
   const thread = (result as { thread?: { turns?: unknown[] } } | null)?.thread;
   if (!Array.isArray(thread?.turns)) return [];
   const messages: CodexMessage[] = [];
   for (const turn of thread.turns) {
+    const artifactFile = codexTaskFileForTurn(turn);
     const items = (turn as { items?: unknown[] } | null)?.items;
     if (!Array.isArray(items)) continue;
     for (const item of items) {
@@ -1239,7 +1284,16 @@ function codexMessages(result: unknown): CodexMessage[] {
             ? 'assistant'
             : null;
       const text = messageText(record);
-      if (role && text) messages.push({ id: String(record.id ?? messages.length), role, text });
+      if (role && text)
+        messages.push({
+          id: String(record.id ?? messages.length),
+          role,
+          text: artifactFile
+            ? role === 'user'
+              ? `工程用の依頼を送信（${artifactFile}）`
+              : `${artifactFile} は成果物ファイルとして処理されます。JSON本文は表示しません。`
+            : text,
+        });
     }
   }
   return messages;
@@ -1255,13 +1309,41 @@ function codexTurnStatus(threadId: string | null): CodexTurnStatus {
       })
     : { phase: 'idle', startedAt: null, updatedAt: null, finishedAt: null, error: null };
 }
+async function codexArtifactFor(
+  context: CodexContext,
+  threadId: string | null,
+  lastTurnId?: string,
+): Promise<AutoArtifactEvent | null> {
+  if (!threadId) return null;
+  const pending = codexPendingArtifacts.get(threadId);
+  if (pending && projectRootKey(pending.root) === projectRootKey(context.root))
+    return {
+      provider: 'codex',
+      root: pending.root,
+      stage: pending.stage,
+      fileName: pending.fileName,
+      sourceId: threadId,
+      phase: 'waiting',
+    };
+  return lastTurnId
+    ? latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/' + lastTurnId)
+    : null;
+}
 async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> {
   const context = codexContextFor(state);
   const { server, store } = codexService();
   const saved = await store.get(context.root, context.stage);
+  const artifact = await codexArtifactFor(context, saved.activeThreadId);
   stateCodexActiveThread.set(state.window.id, saved.activeThreadId);
   if (!saved.activeThreadId)
-    return { ...context, ...saved, messages: [], busy: false, status: codexTurnStatus(null) };
+    return {
+      ...context,
+      ...saved,
+      messages: [],
+      busy: false,
+      status: codexTurnStatus(null),
+      artifact,
+    };
 
   // A thread/start ID exists before its first rollout is persisted. Reading or
   // resuming it while the first turn is running fails with "no rollout found".
@@ -1273,6 +1355,7 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
       messages: [],
       busy: true,
       status: codexTurnStatus(saved.activeThreadId),
+      artifact,
     };
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
@@ -1281,12 +1364,20 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
         threadId: saved.activeThreadId,
         includeTurns: true,
       });
+      const turns = (read as { thread?: { turns?: Array<{ id?: unknown }> } } | null)?.thread
+        ?.turns;
+      const lastTurn = turns?.at(-1);
+      const lastTurnId = typeof lastTurn?.id === 'string' ? lastTurn.id : null;
       return {
         ...context,
         ...saved,
         messages: codexMessages(read),
         busy: false,
         status: codexTurnMonitor.fromRead(saved.activeThreadId, read),
+        artifact:
+          lastTurnId && codexTaskFileForTurn(lastTurn)
+            ? await codexArtifactFor(context, saved.activeThreadId, lastTurnId)
+            : null,
       };
     } catch (error) {
       if (!(error instanceof Error) || !/no rollout found for thread id/i.test(error.message))
@@ -1304,6 +1395,7 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
         busy: false,
         historyUnavailable: true,
         status: codexTurnStatus(saved.activeThreadId),
+        artifact,
       };
     }
   }
@@ -1430,7 +1522,11 @@ async function codexChooseModel(
   await codexModelSelections.remember(context.root, context.stage, requested);
   return requested;
 }
-async function codexSend(state: ProjectWindowState, message: string): Promise<CodexSendResult> {
+async function codexSend(
+  state: ProjectWindowState,
+  message: string,
+  artifactStage?: GrokTask['stage'],
+): Promise<CodexSendResult> {
   const context = codexContextFor(state);
   const input = message.trim();
   if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
@@ -1465,6 +1561,13 @@ async function codexSend(state: ProjectWindowState, message: string): Promise<Co
   if (codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
   stateCodexActiveThread.set(state.window.id, threadId);
   codexBusy.add(threadId);
+  const artifactFile = artifactStage ? expectedArtifact(artifactStage) : null;
+  if (artifactFile && artifactStage)
+    codexPendingArtifacts.set(threadId, {
+      root: context.root,
+      stage: artifactStage,
+      fileName: artifactFile,
+    });
   codexTurnMonitor.sending(threadId);
   try {
     await server.request('turn/start', {
@@ -1475,6 +1578,7 @@ async function codexSend(state: ProjectWindowState, message: string): Promise<Co
     });
   } catch (error) {
     codexBusy.delete(threadId);
+    codexPendingArtifacts.delete(threadId);
     codexTurnMonitor.failedToSend(threadId, error instanceof Error ? error.message : String(error));
     throw error;
   }
@@ -1482,7 +1586,94 @@ async function codexSend(state: ProjectWindowState, message: string): Promise<Co
   return {
     ...(await store.get(context.root, context.stage)),
     status: codexTurnStatus(threadId),
+    artifact:
+      artifactFile && artifactStage
+        ? {
+            provider: 'codex',
+            root: context.root,
+            stage: artifactStage,
+            fileName: artifactFile,
+            sourceId: threadId,
+            phase: 'waiting',
+          }
+        : null,
   };
+}
+function notifyAutoArtifact(event: AutoArtifactEvent) {
+  for (const state of projectWindows.values()) {
+    if (state.projectRoot && projectRootKey(state.projectRoot) === projectRootKey(event.root)) {
+      state.localView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);
+      state.codexView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);
+    }
+  }
+}
+async function collectCodexArtifact(
+  threadId: string,
+  pending: { root: string; stage: GrokTask['stage']; fileName: string },
+  params: Record<string, unknown>,
+): Promise<AutoArtifactEvent | null> {
+  const turn = params.turn as { status?: unknown; id?: unknown } | undefined;
+  if (turn?.status !== 'completed') {
+    const failed: AutoArtifactEvent = {
+      provider: 'codex',
+      root: pending.root,
+      stage: pending.stage,
+      fileName: pending.fileName,
+      sourceId: threadId,
+      phase: 'failed',
+      message: 'Codexが正常終了していないため、成果物は取り込みません。',
+    };
+    notifyAutoArtifact(failed);
+    return failed;
+  }
+  const server = codexService().server;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const read = await server.request<{
+        thread?: { turns?: Array<{ id?: unknown; items?: unknown[] }> };
+      }>('thread/read', { threadId, includeTurns: true });
+      const turns = read.thread?.turns ?? [];
+      const current =
+        typeof turn.id === 'string'
+          ? turns.find((candidate) => candidate.id === turn.id)
+          : turns.at(-1);
+      if (!current || codexTaskFileForTurn(current) !== pending.fileName)
+        throw new Error('Codexの完了した依頼と成果物を対応付けられません。');
+      const items = current.items ?? [];
+      const reply = [...items]
+        .reverse()
+        .find((item) => (item as { type?: string } | null)?.type === 'agentMessage');
+      const raw =
+        reply && typeof reply === 'object' ? messageText(reply as Record<string, unknown>) : '';
+      if (!raw.trim()) throw new Error('Codexの完成した成果物本文がありません。');
+      const sourceId = threadId + '/' + String(current.id ?? 'last');
+      return importAutoArtifact(
+        pending.root,
+        'codex',
+        pending.stage,
+        sourceId,
+        raw,
+        notifyAutoArtifact,
+      );
+    } catch (error) {
+      if (attempt < 5) {
+        await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+        continue;
+      }
+      const failed: AutoArtifactEvent = {
+        provider: 'codex',
+        root: pending.root,
+        stage: pending.stage,
+        fileName: pending.fileName,
+        sourceId: threadId,
+        phase: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      };
+      notifyAutoArtifact(failed);
+      return failed;
+    }
+  }
+  return null;
 }
 const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
   story: ['story-initial', 'story-finalize', 'story-fix'],
@@ -1523,11 +1714,15 @@ async function codexSendTask(
     state,
     prompt +
       '\n\n## Codex向け出力契約\n' +
-      'ファイルを変更しないでください。回答の最後に ' +
-      codexReturnFile[context.stage] +
-      ' の内容だけをMarkdownコードブロックなしで出力してください。' +
-      '添付ファイルとして生成する指示は適用しません。\n\n' +
+      (stage === 'story-initial'
+        ? 'これは対話用の検討依頼です。成果物ファイルはまだ作成しません。'
+        : 'ファイルを書き換えず、回答の最後に ' +
+          codexReturnFile[context.stage] +
+          ' の完成した内容だけをMarkdownコードブロックなしで出力してください。' +
+          'Batch Studioが回答をチャットに展開せず、検証後にファイルへ保存します。') +
+      '\n\n' +
       (files.length ? '## 参照ファイル\n' + files.join('\n\n') : ''),
+    stage,
   );
 }
 
@@ -1838,6 +2033,20 @@ function register() {
   ipcMain.handle(IPC.PROMPT_PLAN_SAVE, (_e, root: unknown, plan: PromptPlanArtifact) => {
     validRoot(root);
     return savePromptPlan(root, plan);
+  });
+  ipcMain.handle(IPC.AUTO_ARTIFACT_GROK_ARM, (event, root: unknown, stage: unknown) => {
+    validRoot(root);
+    const state = projectWindowForSender(event.sender);
+    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
+      throw new Error('選択中のプロジェクトと自動取り込み対象が一致しません。');
+    if (
+      !Object.values(codexTaskContexts)
+        .flat()
+        .includes(stage as GrokTask['stage'])
+    )
+      throw new Error('Invalid Grok artifact stage.');
+    if (!state.grokArtifactWatcher) throw new Error('Grokの監視が初期化されていません。');
+    return state.grokArtifactWatcher.arm(state.projectRoot, stage as GrokTask['stage']);
   });
   ipcMain.handle(
     IPC.GROK_TASK_BUILD,
@@ -2747,6 +2956,50 @@ function register() {
       projectWindowForSender(event.sender),
       stage as GrokTask['stage'],
       typeof extra === 'string' ? extra : '',
+    );
+  });
+  ipcMain.handle(IPC.CODEX_LATEST_ARTIFACT, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    const context = codexContextFor(state);
+    const saved = await codexService().store.get(context.root, context.stage);
+    return codexArtifactFor(context, saved.activeThreadId);
+  });
+  ipcMain.handle(IPC.CODEX_RETRY_ARTIFACT, async (event) => {
+    const context = codexContextFor(projectWindowForSender(event.sender));
+    const saved = await codexService().store.get(context.root, context.stage);
+    const threadId = saved.activeThreadId;
+    if (!threadId || codexBusy.has(threadId))
+      throw new Error('再取得できる完了済みのCodex会話がありません。');
+    const read = await codexService().server.request<{
+      thread?: { turns?: Array<{ id?: unknown; status?: string; items?: unknown[] }> };
+    }>('thread/read', { threadId, includeTurns: true });
+    const turn = read.thread?.turns?.at(-1);
+    const expected = turn ? codexTaskFileForTurn(turn) : null;
+    const fileName =
+      turn && expectedArtifact(context.stage === 'story' ? 'story-finalize' : context.stage);
+    if (!turn || turn.status !== 'completed' || !fileName || expected !== fileName)
+      throw new Error('この工程の完了済みArtifact依頼が見つかりません。');
+    const reply = [...(turn.items ?? [])]
+      .reverse()
+      .find((item) => (item as { type?: string } | null)?.type === 'agentMessage');
+    const raw =
+      reply && typeof reply === 'object' ? messageText(reply as Record<string, unknown>) : '';
+    if (!raw.trim()) throw new Error('Codexの回答から成果物本文を取得できません。');
+    const taskStage =
+      context.stage === 'story'
+        ? 'story-finalize'
+        : context.stage === 'models'
+          ? 'models'
+          : context.stage === 'prompt-plan'
+            ? 'prompt-plan'
+            : 'caption';
+    return importAutoArtifact(
+      context.root,
+      'codex',
+      taskStage,
+      threadId + '/' + String(turn.id ?? 'last'),
+      raw,
+      notifyAutoArtifact,
     );
   });
   ipcMain.handle(IPC.CODEX_SAVE_RESPONSE, async (event, response: unknown) => {

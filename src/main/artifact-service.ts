@@ -173,6 +173,7 @@ async function saveRawGrokResponse(
   key: GrokImportKey,
   raw: string,
   stageOverride?: GrokResponseStage,
+  provider: 'grok' | 'codex' = 'grok',
 ) {
   const isFix = await exists(confirmedPath(root, key)),
     inferred = grokResponseStage(key, isFix),
@@ -182,7 +183,7 @@ async function saveRawGrokResponse(
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const file = path.join(
     internalDir(root),
-    'grok-responses',
+    provider === 'codex' ? 'codex-responses' : 'grok-responses',
     stage,
     `${stamp}-${randomUUID()}.txt`,
   );
@@ -402,8 +403,9 @@ export async function importGrok(
   key: 'story' | 'models' | 'promptPlan',
   raw: string,
   stageOverride?: GrokResponseStage,
+  options: { automatic?: boolean; provider?: 'grok' | 'codex' } = {},
 ): Promise<ImportResult> {
-  const response = await saveRawGrokResponse(root, key, raw, stageOverride);
+  const response = await saveRawGrokResponse(root, key, raw, stageOverride, options.provider);
   let extracted = key === 'story' ? storyCandidate(raw) : jsonCandidate(raw),
     miss: MissingRequirement[] = [];
   if (key === 'models') {
@@ -474,6 +476,30 @@ export async function importGrok(
     if (fallbacks.length) merged.promptFallbacks = fallbacks;
     if (miss.length) merged.missingRequirements = miss;
     extracted = JSON.stringify(merged, null, 2);
+  }
+  // Automatic imports must not overwrite a working draft with incomplete or
+  // invalid output. Manual imports retain their existing editable-draft flow.
+  if (options.automatic) {
+    const checked = await validateContent(root, key, extracted);
+    if (!checked.valid || miss.length)
+      return {
+        extracted,
+        validation: checked.valid
+          ? {
+              valid: false,
+              issues: [
+                ...checked.issues,
+                {
+                  severity: 'error',
+                  code: 'MISSING_REQUIREMENTS',
+                  message: `未解決の不足モデルが${miss.length}件あります。`,
+                },
+              ],
+            }
+          : checked,
+        summary: {},
+        missingRequirements: miss,
+      };
   }
   const saved = await saveDraft(root, key, extracted);
   if (key === 'models' && (response.stage === 'models' || response.stage === 'models-fix'))

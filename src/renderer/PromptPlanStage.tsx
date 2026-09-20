@@ -155,6 +155,10 @@ export function PromptPlanStage({
         title="GrokでPrompt Planを作成"
         run={run}
         onImport={importPlan}
+        onAutoImported={async () => {
+          await load();
+          setEditing(true);
+        }}
       />
       {project.artifacts.find((a) => a.key === 'promptPlan')?.state !== 'missing' && (
         <GrokBridge
@@ -163,6 +167,10 @@ export function PromptPlanStage({
           title="Prompt Planの修正依頼"
           run={run}
           onImport={importPlan}
+          onAutoImported={async () => {
+            await load();
+            setEditing(true);
+          }}
         />
       )}
       <section className="panel treepanel">
