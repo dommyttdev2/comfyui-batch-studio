@@ -9,7 +9,13 @@ const repo = path.resolve(__dirname, '..');
 const compiled = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-project-meta-build-'));
 execFileSync(
   process.execPath,
-  [path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', path.join(repo, 'tsconfig.electron.json'), '--outDir', compiled],
+  [
+    path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc'),
+    '-p',
+    path.join(repo, 'tsconfig.electron.json'),
+    '--outDir',
+    compiled,
+  ],
   { cwd: repo, stdio: 'inherit' },
 );
 
@@ -56,7 +62,10 @@ execFileSync(
   assert.equal(last.workflowBuild.workflowIdentity, 'latest');
   const previous = fs.readFileSync(path.join(root, 'project_meta.json'), 'utf8');
   await assert.rejects(
-    () => metaApi.updateProjectMeta(root, () => { throw new Error('injected failure'); }),
+    () =>
+      metaApi.updateProjectMeta(root, () => {
+        throw new Error('injected failure');
+      }),
     /injected failure/,
   );
   assert.equal(fs.readFileSync(path.join(root, 'project_meta.json'), 'utf8'), previous);
