@@ -132,11 +132,7 @@ export async function importAutoArtifact(
     const content =
       stage === 'story-finalize' || stage === 'story-fix'
         ? result.extracted
-        : raw
-            .trim()
-            .replace(/^\x60\x60\x60(?:json)?\s*\n/i, '')
-            .replace(/\n\x60\x60\x60\s*$/, '')
-            .trim();
+        : JSON.stringify(JSON.parse(result.extracted), null, 2);
     await writeTextAtomic(filePath, content.trimEnd() + '\n');
     const imported: AutoArtifactEvent = {
       ...base,
