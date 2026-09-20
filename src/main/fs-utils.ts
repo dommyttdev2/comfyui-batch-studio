@@ -15,6 +15,32 @@ const RETRYABLE_REPLACE_ERRORS = new Set(['EPERM', 'EBUSY', 'EACCES']);
 const ATOMIC_RENAME_RETRIES = 4;
 const atomicWrites = new Map<string, Promise<void>>();
 
+// Read-modify-write transactions must hold a lock across the read and the atomic write.
+// A write-only lock is insufficient: two callers can both read the same old snapshot.
+const templateTransactions = new Map<string, Promise<void>>();
+export async function withTemplateStoreLock<T>(
+  file: string,
+  action: () => Promise<T>,
+): Promise<T> {
+  const resolved = path.resolve(file);
+  const key = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  const previous = templateTransactions.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = previous.then(() => gate);
+  templateTransactions.set(key, tail);
+  await previous;
+  try {
+    return await action();
+  } finally {
+    release();
+    if (templateTransactions.get(key) === tail) templateTransactions.delete(key);
+  }
+}
+
+
 function retryableReplaceError(error: unknown) {
   return RETRYABLE_REPLACE_ERRORS.has(String((error as NodeJS.ErrnoException)?.code ?? ''));
 }
