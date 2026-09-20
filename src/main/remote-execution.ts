@@ -289,18 +289,22 @@ export class RemoteExecutionService {
     return task;
   }
   private async recoverSequence(root: string, runId: string) {
-    let response = asResponse((await this.remote.reconcile(root, runId)).response) as
-      WorkerSequenceResponse & { sequenceRunning?: boolean };
+    let response = asResponse(
+      (await this.remote.reconcile(root, runId)).response,
+    ) as WorkerSequenceResponse & { sequenceRunning?: boolean };
     let state = response.state;
     if (!state || state.runId !== runId)
       throw new Error('Remote Worker does not have state for the persisted Run.');
     while (state.status === 'running' || state.status === 'interrupting') {
       if (response.sequenceRunning !== true)
-        throw new Error('Persisted Worker is not holding the sequence lock; an in-flight Prompt cannot be ruled out.');
+        throw new Error(
+          'Persisted Worker is not holding the sequence lock; an in-flight Prompt cannot be ruled out.',
+        );
       await this.syncState(root, runId, state);
       await sleep(750);
-      response = asResponse((await this.remote.reconcile(root, runId)).response) as
-        WorkerSequenceResponse & { sequenceRunning?: boolean };
+      response = asResponse(
+        (await this.remote.reconcile(root, runId)).response,
+      ) as WorkerSequenceResponse & { sequenceRunning?: boolean };
       state = response.state;
       if (!state || state.runId !== runId)
         throw new Error('Remote Worker state vanished while restoring monitoring.');
@@ -315,12 +319,16 @@ export class RemoteExecutionService {
       return;
     }
     if (state.status !== 'completed')
-      throw new Error(`Remote Worker ended with status ${state.status ?? 'unknown'}; inspect its current Prompt before resuming.`);
+      throw new Error(
+        `Remote Worker ended with status ${state.status ?? 'unknown'}; inspect its current Prompt before resuming.`,
+      );
     const run = await getExecutionRun(root, runId);
     if (!run || run.lifecycle !== 'RUNNING') return;
     const completed = Number(state.overallCompleted);
     if (completed !== run.progress.overall.total)
-      throw new Error(`Remote Worker completed ${completed} of ${run.progress.overall.total} images.`);
+      throw new Error(
+        `Remote Worker completed ${completed} of ${run.progress.overall.total} images.`,
+      );
     if (!latestEvidence(run, 'EXECUTION_COMPLETED', 'remote-generation')) {
       await recordExecutionEvidence(root, runId, {
         kind: 'EXECUTION_COMPLETED',
@@ -328,7 +336,9 @@ export class RemoteExecutionService {
         data: {
           images: completed,
           expectedImages: run.progress.overall.total,
-          outputPrefix: state.artifact?.outputPrefix ?? `BatchStudio/${safeProjectPart(run.projectId)}/${runId}`,
+          outputPrefix:
+            state.artifact?.outputPrefix ??
+            `BatchStudio/${safeProjectPart(run.projectId)}/${runId}`,
           baselineCapturedAt: state.artifact?.capturedAt ?? null,
         },
       });
