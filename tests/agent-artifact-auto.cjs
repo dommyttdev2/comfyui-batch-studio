@@ -21,7 +21,7 @@ execFileSync(
 const source = (name) => fs.readFileSync(path.join(repo, name), 'utf8');
 const main = source('src/main/main.ts');
 const pane = source('src/renderer/CodexPane.tsx');
-assert.match(main, /codexPendingArtifacts\.has\(threadId\).*item\/agentMessage\/delta/);
+assert.match(main, /codexPendingArtifacts\.has\(threadId\)[\s\S]*item\/agentMessage\/delta/);
 assert.match(main, /codexTaskFileForTurn\(turn\)/);
 assert.match(main, /collectCodexArtifact\(threadId, pending, notification\.params\)/);
 assert.match(pane, /codex\.retryArtifact\(\)/);
