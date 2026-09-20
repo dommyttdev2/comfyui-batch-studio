@@ -434,6 +434,37 @@ function startServer(install, options = {}) {
     const { root, install, run } = await makeProject(
         execution,
         hashCanonicalJson,
+        'lost-prompt-project',
+      ),
+      mock = await startServer(install, { holdFirst: true });
+    try {
+      const service = new LocalExecutionService(async () => ({
+        endpoint: mock.endpoint,
+        installPath: install,
+      }));
+      service.start(root, run.runId);
+      await waitFor(() => mock.calls.prompts.length === 1);
+      mock.history.delete('prompt-1');
+      mock.running.delete('prompt-1');
+      const failed = await waitFor(async () => {
+        const current = await execution.getExecutionRun(root, run.runId);
+        return current?.lifecycle === 'FAILED' ? current : null;
+      }, 8000);
+      assert.match(failed.error.message, /COMFYUI_PROMPT_LOST/);
+      assert.equal(mock.calls.prompts.length, 1, 'lost prompt must not be resubmitted');
+      assert.equal(
+        mock.calls.releases.length,
+        1,
+        'lost prompt must release the Scene Prompt handle',
+      );
+    } finally {
+      mock.server.close();
+    }
+  }
+  {
+    const { root, install, run } = await makeProject(
+        execution,
+        hashCanonicalJson,
         'interrupt-project',
       ),
       mock = await startServer(install);

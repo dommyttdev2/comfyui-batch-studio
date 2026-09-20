@@ -394,14 +394,43 @@ export class LocalExecutionService {
             runHandleClaimed = true;
           }
           let terminal: 'success' | 'error' = 'error',
-            terminalHistory: any = null;
+            terminalHistory: any = null,
+            missingPolls = 0,
+            apiErrors = 0;
           for (;;) {
-            const history = await comfy.history(lastPromptId),
-              state = comfy.historyState(history, lastPromptId);
-            if (state !== 'pending') {
-              terminal = state;
-              terminalHistory = history;
-              break;
+            try {
+              const history = await comfy.history(lastPromptId),
+                state = comfy.historyState(history, lastPromptId);
+              if (state !== 'pending') {
+                terminal = state;
+                terminalHistory = history;
+                break;
+              }
+              // A prompt briefly leaves the queue before history becomes visible.
+              // Only consider it lost after repeated successful API responses.
+              if (await comfy.isPromptQueued(lastPromptId)) missingPolls = 0;
+              else if (++missingPolls >= 4) {
+                const latestHistory = await comfy.history(lastPromptId);
+                if (comfy.historyState(latestHistory, lastPromptId) === 'pending') {
+                  const latestRun = await getExecutionRun(root, runId);
+                  if (latestRun?.controls.interrupt !== 'IDLE') {
+                    await markInterrupted(root, runId);
+                    return;
+                  }
+                  throw new Error(
+                    `COMFYUI_PROMPT_LOST: Prompt ${lastPromptId} is absent from both ComfyUI Queue and History. Verify the Run before retrying to avoid duplicate generation.`,
+                  );
+                }
+                missingPolls = 0;
+              }
+              apiErrors = 0;
+            } catch (error) {
+              if (error instanceof Error && error.message.startsWith('COMFYUI_PROMPT_LOST:'))
+                throw error;
+              if (++apiErrors >= 3)
+                throw new Error(
+                  `COMFYUI_PROMPT_STATUS_UNAVAILABLE: Could not check ComfyUI Queue/History for ${lastPromptId}: ${error instanceof Error ? error.message : String(error)}`,
+                );
             }
             await sleep(750);
           }

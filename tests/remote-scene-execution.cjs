@@ -84,6 +84,7 @@ function startMock() {
     finalizes: [],
     releases: [],
     interrupts: 0,
+    loseNextPrompt: false,
   };
   const history = new Map([['recovered-1', 'success']]);
   const running = new Set();
@@ -128,7 +129,8 @@ function startMock() {
         index: expand.inputs.current_index,
         runHandle: expand.inputs.run_handle,
       });
-      history.set(id, 'success');
+      if (calls.loseNextPrompt) calls.loseNextPrompt = false;
+      else history.set(id, 'success');
       return json(200, { prompt_id: id, number: calls.prompts.length, node_errors: {} });
     }
     if (req.url?.startsWith('/history/')) {
@@ -373,6 +375,21 @@ function startMock() {
     assert.equal(result.code, 2);
     assert.equal(result.lines.at(-1).error.code, 'REMOTE_RESUME_UNSAFE');
     assert.equal(mock.calls.prompts.length, unsafeBefore);
+
+    // The worker must stop waiting and release its run_handle if ComfyUI loses
+    // a submitted prompt from both Queue and History.
+    const lostDir = path.join(runtime, 'lost-prompt');
+    fs.mkdirSync(lostDir);
+    const callsBeforeLost = mock.calls.prompts.length;
+    const releasesBeforeLost = mock.calls.releases.length;
+    mock.calls.loseNextPrompt = true;
+    result = await callWorker(workerPath, lostDir, payload(mock.endpoint, 'lost-run'));
+    assert.equal(result.code, 0, result.stderr);
+    response = result.lines.at(-1).result;
+    assert.equal(response.state.status, 'failed');
+    assert.equal(response.state.error.code, 'REMOTE_PROMPT_LOST');
+    assert.equal(mock.calls.prompts.length - callsBeforeLost, 1);
+    assert.equal(mock.calls.releases.length - releasesBeforeLost, 1);
 
     const interruptDir = path.join(runtime, 'interrupt');
     fs.mkdirSync(interruptDir);

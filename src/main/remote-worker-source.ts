@@ -508,20 +508,43 @@ def mark_prompt_success(root,state,branch,index):
  save_state(root,state);sequence_progress(state,"prompt_terminal",terminal="success")
 
 def wait_prompt_terminal(root,state,branch,index,endpoint,prompt_id):
+ missing_polls=0;api_errors=0;failure_code=None
  while True:
-  terminal=prompt_history_state(endpoint,prompt_id)
-  if terminal!="pending":break
+  try:
+   terminal=prompt_history_state(endpoint,prompt_id)
+   if terminal!="pending":break
+   if prompt_queue_state(endpoint,prompt_id)=="absent":
+    missing_polls+=1
+    if missing_polls>=4:
+     # Queue->History promotion can be delayed. Read history once more before declaring loss.
+     terminal=prompt_history_state(endpoint,prompt_id)
+     if terminal!="pending":break
+     if prompt_queue_state(endpoint,prompt_id)=="absent":
+      failure_code="REMOTE_PROMPT_LOST";break
+     missing_polls=0
+   else:missing_polls=0
+   api_errors=0
+  except WorkerError:
+   api_errors+=1
+   if api_errors>=3:
+    failure_code="REMOTE_PROMPT_STATUS_UNAVAILABLE";break
   control=read_control(root)
   if control.get("interruptRequested"):
    state["status"]="interrupting";save_state(root,state)
   time.sleep(0.25)
- if terminal=="success":
+ if not failure_code and terminal=="success":
   mark_prompt_success(root,state,branch,index);return "success"
  control=read_control(root)
  state["status"]="interrupted" if control.get("interruptRequested") else "failed"
- state["error"]=None if state["status"]=="interrupted" else {"code":"REMOTE_PROMPT_FAILED","message":"ComfyUI prompt failed: "+str(prompt_id)}
- state["current"]={"branchId":branch["branchId"],"leafId":branch["leafIds"][index] if index<len(branch["leafIds"]) else None,"index":index,"promptId":None}
- save_state(root,state);sequence_progress(state,"prompt_terminal",terminal="error");return "error"
+ if state["status"]=="interrupted":state["error"]=None
+ elif failure_code:
+  message="Prompt "+str(prompt_id)+" is absent from both ComfyUI Queue and History; verify the Run before retrying." if failure_code=="REMOTE_PROMPT_LOST" else "ComfyUI Queue/History API was unavailable during prompt monitoring."
+  state["error"]={"code":failure_code,"message":message}
+ else:state["error"]={"code":"REMOTE_PROMPT_FAILED","message":"ComfyUI prompt failed: "+str(prompt_id)}
+ # Preserve an uncertain prompt id. Automatically re-submitting it could generate a duplicate.
+ if not failure_code:
+  state["current"]={"branchId":branch["branchId"],"leafId":branch["leafIds"][index] if index<len(branch["leafIds"]) else None,"index":index,"promptId":None}
+ state["workerPid"]=0;save_state(root,state);sequence_progress(state,"prompt_terminal",terminal="error");return "error"
 
 def reconcile_current_prompt(root,state,branches,endpoint):
  current=state.get("current") or {};prompt_id=current.get("promptId")

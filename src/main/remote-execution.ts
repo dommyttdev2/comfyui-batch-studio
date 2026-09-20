@@ -385,7 +385,10 @@ export class RemoteExecutionService {
       return false;
     }
     if (state.status === 'failed')
-      throw new Error(state.error?.message || state.error?.code || 'Remote sequence failed.');
+      throw new ArtifactPipelineError(
+        state.error?.code || 'REMOTE_EXECUTION_FAILED',
+        state.error?.message || state.error?.code || 'Remote sequence failed.',
+      );
     if (state.status !== 'completed')
       throw new Error(`Remote sequence ended in unexpected state: ${state.status ?? 'unknown'}`);
     const latest = await getExecutionRun(root, runId);

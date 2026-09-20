@@ -94,6 +94,13 @@ export class ComfyUiClient {
     const queue = await this.queue();
     return queueHasPrompt(queue?.queue_running, promptId);
   }
+  async isPromptQueued(promptId: string) {
+    const queue = await this.queue();
+    return (
+      queueHasPrompt(queue?.queue_running, promptId) ||
+      queueHasPrompt(queue?.queue_pending, promptId)
+    );
+  }
   async interrupt() {
     const response = await this.request('/interrupt', {
       method: 'POST',
