@@ -137,7 +137,7 @@ export async function importAutoArtifact(
             .replace(/^\x60\x60\x60(?:json)?\s*\n/i, '')
             .replace(/\n\x60\x60\x60\s*$/, '')
             .trim();
-    await writeTextAtomic(filePath, content + '\n');
+    await writeTextAtomic(filePath, content.trimEnd() + '\n');
     const imported: AutoArtifactEvent = {
       ...base,
       phase: 'imported',
