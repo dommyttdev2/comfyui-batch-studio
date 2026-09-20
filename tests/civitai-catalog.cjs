@@ -344,6 +344,32 @@ execFileSync(
     );
     assert.equal(secondStatus.metrics.membershipItems, 1);
     assert.equal(secondStatus.metrics.collectionPages, 1);
+
+    await Promise.all(
+      Array.from({ length: 25 }, (_, n) =>
+        (n % 2 ? first : second).saveTemplate({
+          name: 'concurrent-' + n,
+          selection: [{ collectionId: 100, modelId: n + 1, versionId: n + 1 }],
+        }),
+      ),
+    );
+    const templates = await second.templates();
+    assert.equal(templates.length, 25, 'concurrent multi-window saves must not lose updates');
+    assert.equal(new Set(templates.map((item) => item.id)).size, 25);
+    const victim = templates.find((item) => item.name === 'concurrent-0');
+    await Promise.all([
+      first.deleteTemplate(victim.id),
+      second.saveTemplate({ name: 'saved-while-deleting', selection: [] }),
+    ]);
+    const finalTemplates = await first.templates();
+    assert.equal(finalTemplates.length, 25);
+    assert.equal(finalTemplates.some((item) => item.id === victim.id), false);
+    assert.equal(finalTemplates.some((item) => item.name === 'saved-while-deleting'), true);
+    assert.deepEqual(
+      finalTemplates,
+      JSON.parse(fs.readFileSync(first.templatesPath, 'utf8')),
+      'template state must remain readable after overlapping writes',
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
