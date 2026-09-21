@@ -12,11 +12,14 @@ Batch Studio と生成アシスタントの責務境界を守ってください�
 - あなたは意味・創作上の判断を担当します。
 - ComfyUI Workflow JSON、node ID、link ID、group ID、node position、widgets_values は生成しません。
 - 添付ファイルに存在しない Model / Version / File identity を捏造しません。`;
-export const artifactFileOutputRules = (fileName: string) => `## 出力契約
+export const artifactFileOutputRules = (fileName: string) => `## 出力契約（必須）
+- 完成した内容を全て記載した UTF-8 のプレーンテキストファイル（名前: ${fileName}）を作成し、チャット上でダウンロード可能な添付ファイルとして返してください。
 - 最終成果物はチャット本文へ展開せず、\`${fileName}\` という名前のダウンロード可能なファイルとして生成・添付してください。
-- ファイル内容をチャット本文、code block、引用、要約へ再掲しません。
-- チャット本文には説明、挨拶、注釈、要約、注意書き、「以下です」「補足」等の成果物外テキストを付けません。
-- ファイルは UTF-8 のプレーンテキストとして作成してください。
+- ファイルを作成したと報告するだけでは納品になりません。「作成しました」「ファイルパス:」などの説明文、空のパス、ファイル名だけの表示は成果物ではありません。
+- 実際に添付ファイルを提供できない場合に限り、代替として完全なファイル本文だけを一つの Markdown code block に入れて出力してください。\`${fileName}\` が .md なら markdown、.json なら json のコードブロックを用います。Batch Studioがこの本文を検証して自動取り込みします。
+- 添付ファイルがある場合、ファイル内容をチャット本文、code block、引用、要約へ再掲しません。
+- 添付ファイル・代替code blockのいずれも提供できない場合は、実ファイルを作成したと主張せず、生成できなかった理由を明示してください。
+- チャット本文には成果物外の挨拶、説明、要約、ファイルパス、追加質問を付けません。
 - 指定された形式・見出し・field以外を追加しません。`;
 const storyDiscussionShape = `## 出力形式
 次の見出し順で回答してください。これは検討用回答であり code block には入れません。
@@ -348,7 +351,7 @@ export async function buildGrokTask(
     return {
       stage,
       title: stage === 'story-finalize' ? 'ストーリー完成版' : 'ストーリー修正',
-      prompt: `${common}\n\n## Task\nこれまでのGrok上の会話と添付された基本設定${stage === 'story-fix' ? '・現在の story.md' : ''}を基に、画像生成計画へ展開可能な完成 story.md を作成してください。章・場面・進行が追える構造にし、Prompt PlanそのものやComfyUI内部情報は書かないでください。\n\n${storyShape}${extra ? `\n\n修正意図:\n${extra}` : ''}`,
+      prompt: `${common}\n\n## Task\n検討は完了しています。これまでの会話でユーザーが確定した事項と添付された基本設定${stage === 'story-fix' ? '・現在の story.md' : ''}を基に、検討案・質問ではなく、画像生成計画へ展開可能な完成版 story.md の全文を納品してください。以前の検討用プロンプトの見出し（調査・前提、Story案、確認事項）で回答してはいけません。章・場面・進行が追える構造にし、Prompt PlanそのものやComfyUI内部情報は書かないでください。出力するのは実際のダウンロード可能な story.md（添付不可なら上記出力契約に従う完全な本文）であり、「作成しました」という完了報告だけではいけません。\n\n${storyShape}${extra ? `\n\n修正意図:\n${extra}` : ''}`,
       attachments: [
         await attachment('project_brief.json', brief, '基本設定'),
         ...(stage === 'story-fix'

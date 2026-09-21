@@ -179,9 +179,30 @@ export function GrokBridge({
             <p>
               {provider === 'codex'
                 ? '右側のCodex Paneで「成果物の取り込みを再試行」を選択してください。'
-                : '右側のGrok Paneで成果物の生成を確認し、必要なら下の手動取り込みを利用してください。'}
+                : 'Grokの回答に実ファイルまたは成果物全文があるか確認してください。必要なら再出力を依頼するか、下の手動取り込みを利用してください。'}
             </p>
           )}
+          {provider === 'grok' &&
+            (autoArtifact.phase === 'waiting' ||
+              autoArtifact.phase === 'invalid' ||
+              autoArtifact.phase === 'failed') && (
+              <div className="assistant-artifact-recovery">
+                <p>
+                  「作成しました」という報告や空のファイルパスだけでは取り込めません。
+                  ダウンロード可能な成果物またはコードブロック内の全文が必要です。
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.batchStudio.clipboard.writeText(
+                      `完成した ${returnFile.name} の全文が必要です。実際にダウンロード可能な ${returnFile.name} を添付してください。ファイル添付ができない場合は、完成した本文全体を一つの ${returnFile.name.endsWith('.md') ? 'markdown' : 'json'} コードブロックで出力してください。作成完了の報告、空のファイルパス、要約、追加質問は不要です。`,
+                    )
+                  }
+                >
+                  Grokに成果物の再出力を依頼（コピー）
+                </button>
+              </div>
+            )}
         </div>
       )}
       {provider === 'codex' ? (
