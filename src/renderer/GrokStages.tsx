@@ -232,7 +232,7 @@ export function GrokBridge({
             <p role="status">
               右側で「{title}」を選択しました。「工程用の依頼を送信」を押すと、この依頼が送信されます。
             </p>
-          )
+          )}
         </div>
       ) : (
         <>
