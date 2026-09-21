@@ -743,7 +743,10 @@ export function CodexPane() {
             !artifactTaskRef.current &&
             messages.at(-1)?.role === 'assistant' &&
             !messages.at(-1)?.text.includes('の取り込み結果は下に表示します。') && (
-              <section className="codex-revision-action" aria-label="Prompt Planの修正を成果物へ反映">
+              <section
+                className="codex-revision-action"
+                aria-label="Prompt Planの修正を成果物へ反映"
+              >
                 <strong>この会話の回答はまだ prompt_plan.json に反映されていません。</strong>
                 <p>
                   Branch単位のJSON断片は、そのままでは全体のPrompt Planとして取り込めません。
@@ -751,7 +754,10 @@ export function CodexPane() {
                 </p>
                 <button
                   disabled={Boolean(taskSendDisabledReason)}
-                  title={taskSendDisabledReason ?? '現在の会話を踏まえ、完成版を検証して自動取り込みします'}
+                  title={
+                    taskSendDisabledReason ??
+                    '現在の会話を踏まえ、完成版を検証して自動取り込みします'
+                  }
                   onClick={() =>
                     void send(
                       () => window.batchStudio.codex.sendTask('prompt-plan-fix', extra),
