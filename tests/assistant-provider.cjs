@@ -57,6 +57,42 @@ matchCode(
   'Old Codex projects must retain their Codex chat when switching the global default',
 );
 
+const ipc = read('src/shared/ipc.ts');
+const preload = read('src/preload/index.cjs');
+const main = read('src/main/main.ts');
+const stages = read('src/renderer/GrokStages.tsx');
+const codex = read('src/renderer/CodexPane.tsx');
+matchCode(ipc, /CODEX_SELECT_STAGE_TASK:/, 'Stage-targeted Codex selection must have an IPC channel');
+matchCode(preload, /selectStageTask: \(root, stage\)/, 'Project steps must be able to select their own Codex task');
+matchCode(
+  stages,
+  /codex\.selectStageTask\(project\.rootPath, stage\)/,
+  'Every AI step must select its exact stage instead of using the default Codex dropdown',
+);
+matchCode(
+  main,
+  /codexTaskContexts\[context\.stage\]\.includes\(stage as GrokTask\['stage'\]\)/,
+  'A requested task must belong to the currently selected project stage',
+);
+matchCode(
+  codex,
+  /onStageTaskSelected\([\s\S]*setTask\(selected\)/,
+  'The Codex pane must accept stage selection requests from the corresponding project step',
+);
+for (const expected of [
+  "'story-initial'",
+  "'story-finalize'",
+  "'story-fix'",
+  "'models'",
+  "'models-fix'",
+  "'prompt-plan'",
+  "'prompt-plan-fix'",
+  "'caption'",
+]) {
+  matchCode(main, new RegExp(expected), `Codex stage mapping must include ${expected}`);
+}
+
+
 (async () => {
   const { AssistantProviderStore } = await import(
     pathToFileURL(path.join(runtime, 'main', 'assistant-provider-state.js')).href
