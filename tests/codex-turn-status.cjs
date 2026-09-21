@@ -74,7 +74,11 @@ assert.match(
   assert.equal(legacyCalls, 1, 'Legacy history must not require paging');
   assert.deepEqual(legacyHistory.thread.turns, [legacyTurn]);
 
-  const newest = { id: 'third', status: 'completed', items: [{ type: 'agentMessage', text: 'ok' }] };
+  const newest = {
+    id: 'third',
+    status: 'completed',
+    items: [{ type: 'agentMessage', text: 'ok' }],
+  };
   const middle = { id: 'second', status: 'completed', items: [{ type: 'userMessage' }] };
   const oldest = { id: 'first', status: 'completed', items: [{ type: 'userMessage' }] };
   const pagedCalls = [];
@@ -112,7 +116,8 @@ assert.match(
   await assert.rejects(
     () =>
       readCodexHistory(async (method) => {
-        if (method === 'thread/read') throw new Error('paginated threads do not support thread/read(includeTurns=true)');
+        if (method === 'thread/read')
+          throw new Error('paginated threads do not support thread/read(includeTurns=true)');
         return { data: [], nextCursor: 'same' };
       }, 'invalid-cursor'),
     /ページ送りが停止/,
