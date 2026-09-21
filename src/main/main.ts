@@ -97,6 +97,14 @@ import { GrokChatStateStore } from './grok-chat-state.js';
 import { CodexChatStateStore } from './codex-chat-state.js';
 import { codexTaskFileForTurn, latestCompletedArtifactTurn } from './codex-artifact-turn.js';
 import { readCodexHistory } from './codex-thread-history.js';
+import {
+  prepareCodexFileWorkspace,
+  workspaceOutputInstruction,
+  readCodexOutput,
+  rememberCodexWorkspace,
+  findCodexWorkspace,
+  type FileArtifactWorkspace,
+} from './codex-file-artifact.js';
 import { promptPlanPatchBase } from './prompt-plan-patch.js';
 import {
   codexActivityFromHistory,
@@ -255,7 +263,7 @@ let lastFocusedProjectWindowId: number | null = null,
   codexBusy = new Set<string>(),
   codexPendingArtifacts = new Map<
     string,
-    { root: string; stage: GrokTask['stage']; fileName: string }
+    { root: string; stage: GrokTask['stage']; fileName: string; workspace?: FileArtifactWorkspace }
   >(),
   codexTurnMonitor = new CodexTurnMonitor(),
   codexModelSelections: CodexModelSelectionStore | null = null,
@@ -1694,6 +1702,7 @@ async function codexSend(
   state: ProjectWindowState,
   message: string,
   artifactStage?: GrokTask['stage'],
+  workspace?: FileArtifactWorkspace,
 ): Promise<CodexSendResult> {
   const context = codexContextFor(state);
   const input = message.trim();
@@ -1708,11 +1717,15 @@ async function codexSend(
   const saved = await store.get(context.root, context.stage);
   let threadId = saved.activeThreadId;
   if (threadId && codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
+  // All file-producing turns run in a disposable workspace, not the project.
+  // Normal conversations remain read-only, including after a writable turn.
+  const cwd = workspace?.directory ?? context.root;
+  const sandbox = workspace ? 'workspace-write' : 'read-only';
   if (!threadId) {
     const started = await server.request<{ thread: { id: string } }>('thread/start', {
-      cwd: context.root,
+      cwd,
       approvalPolicy: 'never',
-      sandbox: 'read-only',
+      sandbox,
       serviceName: 'comfyui_batch_studio',
       ephemeral: false,
     });
@@ -1721,9 +1734,9 @@ async function codexSend(
   } else {
     await server.request('thread/resume', {
       threadId,
-      cwd: context.root,
+      cwd,
       approvalPolicy: 'never',
-      sandbox: 'read-only',
+      sandbox,
     });
   }
   if (codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
@@ -1735,16 +1748,30 @@ async function codexSend(
       root: context.root,
       stage: artifactStage,
       fileName: artifactFile,
+      workspace,
     });
   codexTurnMonitor.sending(threadId);
   try {
-    await server.request('turn/start', {
+    const startedTurn = await server.request<{ turn: { id: string } }>('turn/start', {
       threadId,
       input: [{ type: 'text', text: input, text_elements: [] }],
+      ...(workspace
+        ? {
+            cwd,
+            approvalPolicy: 'never',
+            sandboxPolicy: {
+              type: 'workspaceWrite',
+              writableRoots: [cwd],
+              networkAccess: false,
+            },
+          }
+        : { cwd, sandboxPolicy: { type: 'readOnly', networkAccess: false } }),
       model: settings.selection.model,
       effort: settings.selection.effort,
       summary: 'auto',
     });
+    if (workspace && startedTurn?.turn?.id)
+      await rememberCodexWorkspace(context.root, workspace, threadId, startedTurn.turn.id);
   } catch (error) {
     codexBusy.delete(threadId);
     codexPendingArtifacts.delete(threadId);
@@ -1778,7 +1805,12 @@ function notifyAutoArtifact(event: AutoArtifactEvent) {
 }
 async function collectCodexArtifact(
   threadId: string,
-  pending: { root: string; stage: GrokTask['stage']; fileName: string },
+  pending: {
+    root: string;
+    stage: GrokTask['stage'];
+    fileName: string;
+    workspace?: FileArtifactWorkspace;
+  },
   params: Record<string, unknown>,
 ): Promise<AutoArtifactEvent | null> {
   const turn = params.turn as { status?: unknown; id?: unknown } | undefined;
@@ -1795,6 +1827,33 @@ async function collectCodexArtifact(
     notifyAutoArtifact(failed);
     return failed;
   }
+  if (pending.workspace) {
+    try {
+      const raw = await readCodexOutput(pending.workspace);
+      const turnId = typeof turn.id === 'string' ? turn.id : 'last';
+      return await importAutoArtifact(
+        pending.root,
+        'codex',
+        pending.stage,
+        threadId + '/' + turnId,
+        raw,
+        notifyAutoArtifact,
+      );
+    } catch (error) {
+      const failed: AutoArtifactEvent = {
+        provider: 'codex',
+        root: pending.root,
+        stage: pending.stage,
+        fileName: pending.fileName,
+        sourceId: threadId,
+        phase: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      };
+      notifyAutoArtifact(failed);
+      return failed;
+    }
+  }
+  // Backward compatibility for artifact turns created before file-based output.
   const server = codexService().server;
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
