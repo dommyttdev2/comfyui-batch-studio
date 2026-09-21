@@ -32,7 +32,10 @@ assert.match(main, /server\.request\('turn\/interrupt', \{ threadId, turnId \}\)
 assert.match(main, /codexTurnStartRequests\.set\(threadId, turnIdRequest\)/);
 assert.match(main, /codexActiveTurnIds\.get\(threadId\)/);
 assert.match(main, /if \(!codexBusy\.has\(threadId\)\) return;/);
-assert.match(main, /if \(notification\.method === 'turn\/completed' && typeof threadId === 'string'\) \{/);
+assert.match(
+  main,
+  /if \(notification\.method === 'turn\/completed' && typeof threadId === 'string'\) \{/,
+);
 assert.match(main, /codexBusy\.delete\(threadId\)/);
 assert.match(
   main,
