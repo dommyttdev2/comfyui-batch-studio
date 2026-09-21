@@ -21,6 +21,7 @@ const fileNames: Partial<Record<Stage, string>> = {
   'models-fix': 'model_loras.json',
   'prompt-plan': 'prompt_plan.json',
   'prompt-plan-fix': 'prompt_plan.json',
+  'prompt-plan-patch': 'prompt_plan_patch.json',
   caption: 'caption_content.json',
 };
 
