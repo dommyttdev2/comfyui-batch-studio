@@ -232,6 +232,7 @@ type ProjectWindowState = {
   grokView: WebContentsView;
   codexView: WebContentsView;
   paneProvider: AssistantPaneProvider;
+  assistantSelectionGeneration: number;
   codexContext: CodexContext | null;
   grokLoadingView: WebContentsView;
   projectRoot: string | null;
@@ -478,6 +479,7 @@ function createProjectWindow(
       grokView,
       codexView,
       paneProvider: 'grok',
+      assistantSelectionGeneration: 0,
       codexContext: null,
       grokLoadingView,
       projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
@@ -3215,43 +3217,56 @@ function register() {
     if (typeof text !== 'string') throw new Error('Clipboard text must be string');
     clipboard.writeText(text);
   });
-  ipcMain.handle(IPC.CODEX_GET_PROVIDER, async (event) => {
+  ipcMain.handle(IPC.CODEX_GET_PROVIDER, async (event, stage: unknown) => {
     const state = projectWindowForSender(event.sender);
+    validGrokContextStage(stage);
+    const generation = ++state.assistantSelectionGeneration;
     if (event.sender.id !== state.localView.webContents.id)
       throw new Error('Only the project window may select the assistant.');
     if (!state.projectRoot || !assistantProviderState) throw new Error('No active project.');
     const root = state.projectRoot;
     const defaultProvider = (await settingsStore().values()).assistantProvider;
-    const provider = await assistantProviderState.resolve(root, defaultProvider, async () => {
-      const stages: GrokContextStage[] = ['story', 'models', 'prompt-plan', 'caption'];
-      // Existing projects created before this preference was introduced may
-      // already have a history in one provider. Preserve that provider.
-      const grokHistory = grokChatState
-        ? (await Promise.all(stages.map((stage) => grokChatState!.get(root, stage)))).some(Boolean)
-        : false;
-      const codexHistory = codexChatState
-        ? (await Promise.all(stages.map((stage) => codexChatState!.get(root, stage)))).some(
-            (chats) => chats.threadIds.length > 0,
-          )
-        : false;
-      if (grokHistory && !codexHistory) return 'grok';
-      if (codexHistory && !grokHistory) return 'codex';
-      return null;
-    });
-    if (state.projectRoot !== root) throw new Error('Project changed during agent restore.');
+    const provider = await assistantProviderState.resolve(
+      root,
+      defaultProvider,
+      async () => {
+        const stages: GrokContextStage[] = ['story', 'models', 'prompt-plan', 'caption'];
+        // Existing projects created before this preference was introduced may
+        // already have a history in one provider. Preserve that provider.
+        const grokHistory = grokChatState
+          ? (await Promise.all(stages.map((stage) => grokChatState!.get(root, stage)))).some(
+              Boolean,
+            )
+          : false;
+        const codexHistory = codexChatState
+          ? (await Promise.all(stages.map((stage) => codexChatState!.get(root, stage)))).some(
+              (chats) => chats.threadIds.length > 0,
+            )
+          : false;
+        if (grokHistory && !codexHistory) return 'grok';
+        if (codexHistory && !grokHistory) return 'codex';
+        return null;
+      },
+      stage,
+    );
+    if (state.projectRoot !== root || state.assistantSelectionGeneration !== generation)
+      throw new Error('Project or stage changed during agent restore.');
     state.paneProvider = provider;
     layoutProjectWindow(state);
     return provider;
   });
-  ipcMain.handle(IPC.CODEX_SET_PROVIDER, async (event, provider: unknown) => {
+  ipcMain.handle(IPC.CODEX_SET_PROVIDER, async (event, provider: unknown, stage: unknown) => {
     const state = projectWindowForSender(event.sender);
+    validGrokContextStage(stage);
+    const generation = ++state.assistantSelectionGeneration;
     if (event.sender.id !== state.localView.webContents.id)
       throw new Error('Codex pane cannot change its parent window.');
     if (provider !== 'grok' && provider !== 'codex') throw new Error('Invalid AI provider.');
     if (!state.projectRoot || !assistantProviderState) throw new Error('No active project.');
     const root = state.projectRoot;
-    await assistantProviderState.remember(root, provider);
-    if (state.projectRoot !== root) throw new Error('Project changed during agent switch.');
+    await assistantProviderState.remember(root, provider, stage);
+    if (state.projectRoot !== root || state.assistantSelectionGeneration !== generation)
+      throw new Error('Project or stage changed during agent switch.');
     state.paneProvider = provider;
     layoutProjectWindow(state);
     return paneState(state);

@@ -349,8 +349,8 @@ contextBridge.exposeInMainWorld('batchStudio', {
     },
   },
   codex: {
-    getProvider: () => ipcRenderer.invoke(I.CODEX_GET_PROVIDER),
-    setProvider: (p) => ipcRenderer.invoke(I.CODEX_SET_PROVIDER, p),
+    getProvider: (stage) => ipcRenderer.invoke(I.CODEX_GET_PROVIDER, stage),
+    setProvider: (p, stage) => ipcRenderer.invoke(I.CODEX_SET_PROVIDER, p, stage),
     setContext: (r, s) => ipcRenderer.invoke(I.CODEX_SET_CONTEXT, r, s),
     selectStageTask: (root, stage) => ipcRenderer.invoke(I.CODEX_SELECT_STAGE_TASK, root, stage),
     onStageTaskSelected: (listener) => {
