@@ -105,7 +105,22 @@ export class AssistantProviderStore {
     // explicit switch made while an earlier asynchronous lookup was pending.
     await this.writeQueue;
     const saved = await this.get(projectRoot, stage);
-    if (saved) return saved;
+    if (saved) {
+      if (stage) {
+        this.writeQueue = this.writeQueue
+          .catch(() => {})
+          .then(async () => {
+            const state = await this.read();
+            const entry = state.projects[projectKey(projectRoot)];
+            if (entry && !isAssistantProvider(entry.stages[stage])) {
+              entry.stages[stage] = saved;
+              await writeJsonAtomic(this.filePath, state);
+            }
+          });
+        await this.writeQueue;
+      }
+      return (await this.get(projectRoot, stage)) ?? saved;
+    }
     const legacy = await legacyProvider();
     const candidate = legacy ?? defaultProvider;
     this.writeQueue = this.writeQueue
