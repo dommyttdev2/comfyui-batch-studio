@@ -973,6 +973,12 @@ input[readonly] {
 .assistant-artifact-status button {
   justify-self: start;
 }
+.assistant-artifact-recovery {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding-top: 4px;
+}
 .assistant-manual-fallback {
   margin-top: 14px;
   padding: 12px;
