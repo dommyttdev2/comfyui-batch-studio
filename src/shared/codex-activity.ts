@@ -95,7 +95,10 @@ function itemSummary(kind: ActivityKind, item: Record<string, unknown>): string 
   return '';
 }
 
-function toItem(item: Record<string, unknown>, previous?: CodexActivityItem): CodexActivityItem | null {
+function toItem(
+  item: Record<string, unknown>,
+  previous?: CodexActivityItem,
+): CodexActivityItem | null {
   const kind = itemKind(item.type);
   const id = clip(item.id, 200);
   if (!kind || !id) return null;
@@ -108,7 +111,10 @@ function toItem(item: Record<string, unknown>, previous?: CodexActivityItem): Co
     summary: summary || previous?.summary || '',
     output:
       kind === 'commandExecution'
-        ? clip(item.output, MAX_OUTPUT) || clip(item.aggregatedOutput, MAX_OUTPUT) || previous?.output || ''
+        ? clip(item.output, MAX_OUTPUT) ||
+          clip(item.aggregatedOutput, MAX_OUTPUT) ||
+          previous?.output ||
+          ''
         : previous?.output || '',
   };
 }
@@ -124,8 +130,7 @@ export function safeCodexActivityEvent(
 ): CodexActivityEvent | null {
   const turnId = clip(params.turnId, 200);
   if (!turnId) return null;
-  if (method === 'turn/started' || method === 'turn/completed')
-    return { method, turnId };
+  if (method === 'turn/started' || method === 'turn/completed') return { method, turnId };
   if (method === 'item/started' || method === 'item/completed') {
     const source = asRecord(params.item);
     const kind = itemKind(source?.type);
@@ -148,8 +153,7 @@ export function safeCodexActivityEvent(
     turnId,
     itemId,
     delta: clip(params.delta, 2048),
-    summaryIndex:
-      typeof params.summaryIndex === 'number' ? params.summaryIndex : undefined,
+    summaryIndex: typeof params.summaryIndex === 'number' ? params.summaryIndex : undefined,
   };
 }
 
@@ -168,14 +172,14 @@ export function updateCodexActivity(
   if (event.item) {
     const item = event.item;
     next = toItem(item, old);
-    if (next && event.method === 'item/completed') next.status = clip(item.status, 40) || 'completed';
+    if (next && event.method === 'item/completed')
+      next.status = clip(item.status, 40) || 'completed';
   } else {
-    const kind: ActivityKind =
-      event.method.startsWith('item/reasoning/')
-        ? 'reasoning'
-        : event.method === 'item/plan/delta'
-          ? 'plan'
-          : 'commandExecution';
+    const kind: ActivityKind = event.method.startsWith('item/reasoning/')
+      ? 'reasoning'
+      : event.method === 'item/plan/delta'
+        ? 'plan'
+        : 'commandExecution';
     if (old && old.kind !== kind) return state;
     const base = old ?? toItem({ id: itemId, type: kind });
     if (!base) return state;
@@ -185,9 +189,7 @@ export function updateCodexActivity(
       summary: !isOutput
         ? (base.summary + (event.delta ?? '')).slice(0, MAX_SUMMARY)
         : base.summary,
-      output: isOutput
-        ? (base.output + (event.delta ?? '')).slice(-MAX_OUTPUT)
-        : base.output,
+      output: isOutput ? (base.output + (event.delta ?? '')).slice(-MAX_OUTPUT) : base.output,
     };
     if (event.method === 'item/reasoning/summaryPartAdded' && old?.summary)
       next.summary = (old.summary + '\n\n').slice(0, MAX_SUMMARY);
