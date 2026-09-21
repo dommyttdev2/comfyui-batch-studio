@@ -135,6 +135,9 @@ export async function importAutoArtifact(
         phase: 'invalid',
         message: '検証に失敗しました。既存の下書きは変更していません。',
         issues: result.validation.issues,
+        ...('rawResponsePath' in result && typeof result.rawResponsePath === 'string'
+          ? { rawResponsePath: result.rawResponsePath }
+          : {}),
       };
       notify?.(invalid);
       return invalid;
