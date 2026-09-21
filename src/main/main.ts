@@ -1880,18 +1880,27 @@ async function codexSendTask(
       throw new Error('参照ファイルが大きすぎるため送信できません。添付内容を整理してください。');
     files.push('### ' + attachment.name + ' (' + attachment.purpose + ')\n' + data);
   }
+  // Keep the output contract at the end, after all reference JSON. Otherwise a
+  // conversational patch may be mistaken for the requested complete artifact.
+  const revisionContract =
+    stage === 'prompt-plan-fix'
+      ? 'これは差分の相談ではなく、修正した完成版の再生成依頼です。会話で合意した修正を添付の既存prompt_plan.json全体へ適用してください。' +
+        'Schema v2のroot objectから全Branch/全Leafまでを一つの完全なJSONとして出力し、既存のID・順序・枚数を維持してください。' +
+        'b19など一部BranchのJSON断片、差分、説明、修正手順、「他は変更しない」などの省略表現は不可です。' +
+        '全文が出力できない場合は部分JSONを完成品と称さず、出力できない理由を返してください。'
+      : '';
   return codexSend(
     state,
     prompt +
+      (files.length ? '\n\n## 参照ファイル\n' + files.join('\n\n') : '') +
       '\n\n## Codex向け出力契約\n' +
       (stage === 'story-initial'
         ? 'これは対話用の検討依頼です。成果物ファイルはまだ作成しません。'
-        : 'ファイルを書き換えず、回答の最後に ' +
+        : revisionContract +
+          'ファイルを書き換えず、回答の最後に ' +
           codexReturnFile[context.stage] +
           ' の完成した内容だけをMarkdownコードブロックなしで出力してください。' +
           'Batch Studioが回答をチャットに展開せず、検証後にファイルへ保存します。') +
-      '\n\n' +
-      (files.length ? '## 参照ファイル\n' + files.join('\n\n') : ''),
     stage,
   );
 }
