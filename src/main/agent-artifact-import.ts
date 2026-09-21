@@ -118,22 +118,22 @@ export async function importAutoArtifact(
       return duplicate;
     }
     notify?.({ ...base, phase: 'validating' });
-    const result =
-      stage === 'caption'
-        ? await importCaptionGrok(root, raw, { automatic: true, provider })
-        : stage === 'prompt-plan-patch'
-          ? await applyPromptPlanPatch(root, raw)
-          : await importGrok(
-                root,
-                stage.startsWith('story-')
-                  ? 'story'
-                  : stage.startsWith('models')
-                    ? 'models'
-                    : 'promptPlan',
-                raw,
-                stage as Exclude<Stage, 'story-initial' | 'caption'>,
-                { automatic: true, provider },
-              );
+    const result = await (async () => {
+      if (stage === 'caption')
+        return importCaptionGrok(root, raw, { automatic: true, provider });
+      if (stage === 'prompt-plan-patch') return applyPromptPlanPatch(root, raw);
+      return importGrok(
+        root,
+        stage.startsWith('story-')
+          ? 'story'
+          : stage.startsWith('models')
+            ? 'models'
+            : 'promptPlan',
+        raw,
+        stage as Exclude<Stage, 'story-initial' | 'caption' | 'prompt-plan-patch'>,
+        { automatic: true, provider },
+      );
+    })();
     if (!result.validation.valid) {
       const invalid: AutoArtifactEvent = {
         ...base,
