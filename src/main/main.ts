@@ -1368,12 +1368,33 @@ function forwardCodexNotification(notification: CodexNotification) {
     }
     // Never forward raw item objects, raw reasoning or artifact answer deltas.
     // Only an allowlisted, length-bounded progress projection reaches the renderer.
-    const isItemNotification = notification.method.startsWith('item/');
     const isSafeMessageDelta =
       notification.method === 'item/agentMessage/delta' &&
       !codexPendingArtifacts.has(threadId as string);
-    if (!isItemNotification || isSafeMessageDelta)
-      state.codexView.webContents.send(IPC.CODEX_EVENT, notification);
+    // Forward only the fields consumed by the UI, never full Turn/Item objects.
+    if (notification.method.startsWith('account/'))
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: notification.method,
+        params: {},
+      });
+    if (notification.method === 'turn/started' || notification.method === 'turn/completed') {
+      const turn = notification.params.turn as Record<string, unknown> | undefined;
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: notification.method,
+        params: {
+          threadId,
+          turn: { id: turn?.id, status: turn?.status },
+        },
+      });
+    }
+    if (isSafeMessageDelta)
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: notification.method,
+        params: {
+          threadId,
+          delta: notification.params.delta,
+        },
+      });
     const activity = safeCodexActivityEvent(notification.method, notification.params);
     if (activity)
       state.codexView.webContents.send(IPC.CODEX_EVENT, {
