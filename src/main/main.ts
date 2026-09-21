@@ -1721,6 +1721,7 @@ async function codexSend(
       input: [{ type: 'text', text: input, text_elements: [] }],
       model: settings.selection.model,
       effort: settings.selection.effort,
+      summary: 'auto',
     });
   } catch (error) {
     codexBusy.delete(threadId);
