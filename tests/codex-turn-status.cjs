@@ -21,6 +21,25 @@ execFileSync(
 const source = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
 const main = source('src/main/main.ts');
 const pane = source('src/renderer/CodexPane.tsx');
+const ipc = source('src/shared/ipc.ts');
+const preload = source('src/preload/index.cjs');
+const types = source('src/shared/types.ts');
+assert.match(ipc, /CODEX_STOP_TURN: 'codex:stop-turn'/);
+assert.match(preload, /stopTurn: \(\) => ipcRenderer\.invoke\(I\.CODEX_STOP_TURN\)/);
+assert.match(types, /stopTurn: \(\) => Promise<CodexSnapshot>/);
+assert.match(main, /ipcMain\.handle\(IPC\.CODEX_STOP_TURN/);
+assert.match(main, /server\.request\('turn\/interrupt', \{ threadId, turnId \}\)/);
+assert.match(main, /codexTurnStartRequests\.set\(threadId, turnIdRequest\)/);
+assert.match(main, /codexActiveTurnIds\.get\(threadId\)/);
+assert.match(main, /if \(!codexBusy\.has\(threadId\)\) return;/);
+assert.match(main, /if \(notification\.method === 'turn\/completed' && typeof threadId === 'string'\) \{/);
+assert.match(main, /codexBusy\.delete\(threadId\)/);
+assert.match(main, /if \(turn\?\.status !== 'completed'\)/,
+  'Interrupted artifact turns must not import incomplete files');
+assert.match(pane, /window\.batchStudio\.codex\.stopTurn\(\)/);
+assert.match(pane, /現在の生成を中止/);
+assert.match(pane, /disabled=\{stopping\}/);
+assert.match(pane, /if \(event\.method === 'turn\/completed'\) \{[\s\S]*setStopping\(false\)/);
 assert.match(main, /codexTurnMonitor\.notification\(threadId, notification\)/);
 assert.match(main, /codexTurnMonitor\.fromRead\(saved\.activeThreadId, read\)/);
 assert.match(main, /codexTurnMonitor\.disconnected\(\)/);
