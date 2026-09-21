@@ -124,16 +124,16 @@ export async function importAutoArtifact(
         : stage === 'prompt-plan-patch'
           ? await applyPromptPlanPatch(root, raw)
           : await importGrok(
-            root,
-            stage.startsWith('story-')
-              ? 'story'
-              : stage.startsWith('models')
-                ? 'models'
-                : 'promptPlan',
-            raw,
-            stage as Exclude<Stage, 'story-initial' | 'caption'>,
-            { automatic: true, provider },
-          );
+                root,
+                stage.startsWith('story-')
+                  ? 'story'
+                  : stage.startsWith('models')
+                    ? 'models'
+                    : 'promptPlan',
+                raw,
+                stage as Exclude<Stage, 'story-initial' | 'caption'>,
+                { automatic: true, provider },
+              );
     if (!result.validation.valid) {
       const invalid: AutoArtifactEvent = {
         ...base,
