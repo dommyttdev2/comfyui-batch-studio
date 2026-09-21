@@ -119,16 +119,11 @@ export async function importAutoArtifact(
     }
     notify?.({ ...base, phase: 'validating' });
     const result = await (async () => {
-      if (stage === 'caption')
-        return importCaptionGrok(root, raw, { automatic: true, provider });
+      if (stage === 'caption') return importCaptionGrok(root, raw, { automatic: true, provider });
       if (stage === 'prompt-plan-patch') return applyPromptPlanPatch(root, raw);
       return importGrok(
         root,
-        stage.startsWith('story-')
-          ? 'story'
-          : stage.startsWith('models')
-            ? 'models'
-            : 'promptPlan',
+        stage.startsWith('story-') ? 'story' : stage.startsWith('models') ? 'models' : 'promptPlan',
         raw,
         stage as Exclude<Stage, 'story-initial' | 'caption' | 'prompt-plan-patch'>,
         { automatic: true, provider },
