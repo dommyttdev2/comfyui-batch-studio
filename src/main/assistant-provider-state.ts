@@ -6,7 +6,10 @@ interface SavedAssistantProviders {
   schemaVersion: 2;
   projects: Record<
     string,
-    { lastProvider: AssistantPaneProvider; stages: Partial<Record<GrokContextStage, AssistantPaneProvider>> }
+    {
+      lastProvider: AssistantPaneProvider;
+      stages: Partial<Record<GrokContextStage, AssistantPaneProvider>>;
+    }
   >;
 }
 interface LegacyAssistantProviders {
@@ -58,16 +61,14 @@ export class AssistantProviderStore {
     return { schemaVersion: 2, projects: {} };
   }
 
-  async get(
-    projectRoot: string,
-    stage?: GrokContextStage,
-  ): Promise<AssistantPaneProvider | null> {
+  async get(projectRoot: string, stage?: GrokContextStage): Promise<AssistantPaneProvider | null> {
     await this.writeQueue;
     const entry = (await this.read()).projects[projectKey(projectRoot)];
     if (!entry) return null;
-    const provider = stage && isAssistantProvider(entry.stages?.[stage])
-      ? entry.stages[stage]
-      : entry.lastProvider;
+    const provider =
+      stage && isAssistantProvider(entry.stages?.[stage])
+        ? entry.stages[stage]
+        : entry.lastProvider;
     return isAssistantProvider(provider) ? provider : null;
   }
 
@@ -77,8 +78,7 @@ export class AssistantProviderStore {
     stage?: GrokContextStage,
   ): Promise<void> {
     if (!isAssistantProvider(provider)) throw new Error('Invalid assistant provider');
-    if (stage !== undefined && !isAssistantStage(stage))
-      throw new Error('Invalid assistant stage');
+    if (stage !== undefined && !isAssistantStage(stage)) throw new Error('Invalid assistant stage');
     this.writeQueue = this.writeQueue
       .catch(() => {})
       .then(async () => {
