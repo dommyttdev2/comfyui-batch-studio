@@ -249,7 +249,10 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
   const patchedText = fs.readFileSync(patchedDraftPath, 'utf8');
   const patched = JSON.parse(patchedText);
   assert.equal(patched.branches.length, 19);
-  assert.equal(patched.branches.reduce((total, b) => total + b.leaves.length, 0), 500);
+  assert.equal(
+    patched.branches.reduce((total, b) => total + b.leaves.length, 0),
+    500,
+  );
   assert.deepEqual(patched.branches[18].prompt.triggerWords, operation.after);
   assert.deepEqual(patched.branches[0], plan.branches[0], 'Untouched Branches must be identical');
   assert.deepEqual(patched.branches[18].leaves, plan.branches[18].leaves);
@@ -275,14 +278,22 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
     { operation: { ...operation, path: 'rootLoras' }, code: 'PATCH_OPERATION' },
     { operation: { ...operation, branchId: 'b99' }, code: 'PATCH_TARGET' },
     {
-      operation: { ...operation, path: 'prompt.positive.camera.pov', before: [], after: ['bad,tag'] },
+      operation: {
+        ...operation,
+        path: 'prompt.positive.camera.pov',
+        before: [],
+        after: ['bad,tag'],
+      },
       code: 'PROMPT_TAG_FORMAT',
     },
   ];
   for (const { operation: proposed, code } of invalidCases) {
     const result = await applyPromptPlanPatch(largeRoot, patch(nextBase.baseSha256, [proposed]));
     assert.equal(result.validation.valid, false, code);
-    assert.ok(result.validation.issues.some((issue) => issue.code === code), JSON.stringify(result));
+    assert.ok(
+      result.validation.issues.some((issue) => issue.code === code),
+      JSON.stringify(result),
+    );
     assert.equal(fs.readFileSync(patchedDraftPath, 'utf8'), patchedText);
   }
   const duplicateOperations = await applyPromptPlanPatch(
