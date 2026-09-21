@@ -33,12 +33,16 @@ export function codexTaskFileForTurn(turn: unknown): string | null {
 
 export function latestCompletedArtifactTurn<T extends { status?: unknown }>(
   turns: T[],
-  fileName: string,
+  fileName: string | readonly string[],
 ): T | null {
+  const allowed = Array.isArray(fileName) ? fileName : [fileName];
   return (
     [...turns]
       .reverse()
-      .find((turn) => turn.status === 'completed' && codexTaskFileForTurn(turn) === fileName) ??
-    null
+      .find(
+        (turn) =>
+          turn.status === 'completed' &&
+          allowed.includes(codexTaskFileForTurn(turn) ?? ''),
+      ) ?? null
   );
 }
