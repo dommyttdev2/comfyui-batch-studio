@@ -3304,7 +3304,13 @@ function register() {
       threadId,
     );
     const fileName = expectedArtifact(context.stage === 'story' ? 'story-finalize' : context.stage);
-    const turn = fileName ? latestCompletedArtifactTurn(read.thread?.turns ?? [], fileName) : null;
+    const allowedFiles =
+      context.stage === 'prompt-plan'
+        ? ['prompt_plan.json', 'prompt_plan_patch.json']
+        : fileName
+          ? [fileName]
+          : [];
+    const turn = latestCompletedArtifactTurn(read.thread?.turns ?? [], allowedFiles);
     if (!turn) throw new Error('この工程の完了済みArtifact依頼が見つかりません。');
     const reply = [...(turn.items ?? [])]
       .reverse()
@@ -3318,7 +3324,9 @@ function register() {
         : context.stage === 'models'
           ? 'models'
           : context.stage === 'prompt-plan'
-            ? 'prompt-plan'
+            ? codexTaskFileForTurn(turn) === 'prompt_plan_patch.json'
+              ? 'prompt-plan-patch'
+              : 'prompt-plan'
             : 'caption';
     return importAutoArtifact(
       context.root,
