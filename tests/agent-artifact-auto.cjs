@@ -191,7 +191,11 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
 
   for (const [source, fragment, expectedError] of [
     ['cut-off', '{"schemaVersion":2,"branches":[{"id":"b19"', '途中で切れている'],
-    ['explanation', 'prompt_plan.jsonを修正しました。全文は省略します。', 'JSONオブジェクトではありません'],
+    [
+      'explanation',
+      'prompt_plan.jsonを修正しました。全文は省略します。',
+      'JSONオブジェクトではありません',
+    ],
     ['malformed', '{"schemaVersion":2,"branches":,}', 'JSON構文が不正'],
   ]) {
     const result = await importAutoArtifact(
