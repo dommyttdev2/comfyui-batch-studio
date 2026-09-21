@@ -74,8 +74,12 @@ assert.match(
     pathToFileURL(path.join(runtime, 'main', 'codex-thread-history.js')).href
   );
 
-  const { emptyCodexActivity, safeCodexActivityEvent, updateCodexActivity, codexActivityFromHistory } =
-    await import(pathToFileURL(path.join(runtime, 'shared', 'codex-activity.js')).href);
+  const {
+    emptyCodexActivity,
+    safeCodexActivityEvent,
+    updateCodexActivity,
+    codexActivityFromHistory,
+  } = await import(pathToFileURL(path.join(runtime, 'shared', 'codex-activity.js')).href);
   const notification = (method, params) => safeCodexActivityEvent(method, params);
   const art = 'private-unique-artifact-payload';
   assert.equal(
@@ -108,11 +112,17 @@ assert.match(
     item: { type: 'reasoning', id: 'r1', content: [art], status: 'inProgress' },
   });
   apply('item/reasoning/summaryTextDelta', {
-    turnId: 't1', itemId: 'r1', summaryIndex: 0, delta: '検討中',
+    turnId: 't1',
+    itemId: 'r1',
+    summaryIndex: 0,
+    delta: '検討中',
   });
   apply('item/reasoning/summaryPartAdded', { turnId: 't1', itemId: 'r1', summaryIndex: 1 });
   apply('item/reasoning/summaryTextDelta', {
-    turnId: 't1', itemId: 'r1', summaryIndex: 1, delta: '次の手順',
+    turnId: 't1',
+    itemId: 'r1',
+    summaryIndex: 1,
+    delta: '次の手順',
   });
   assert.match(activity.items[0].summary, /検討中[\s\S]*次の手順/);
   apply('item/started', {
@@ -120,22 +130,32 @@ assert.match(
     item: { type: 'commandExecution', id: 'cmd', command: 'npm test', status: 'inProgress' },
   });
   apply('item/commandExecution/outputDelta', {
-    turnId: 't1', itemId: 'cmd', delta: 'ok',
+    turnId: 't1',
+    itemId: 'cmd',
+    delta: 'ok',
   });
   apply('item/completed', {
     turnId: 't1',
     item: {
-      type: 'commandExecution', id: 'cmd', command: 'npm test',
-      status: 'completed', aggregatedOutput: 'all tests passed',
+      type: 'commandExecution',
+      id: 'cmd',
+      command: 'npm test',
+      status: 'completed',
+      aggregatedOutput: 'all tests passed',
       arguments: art,
     },
   });
   assert.equal(activity.items[1].title, 'npm test');
   assert.equal(activity.items[1].output, 'all tests passed');
   assert.equal(activity.items[1].status, 'completed');
-  assert.ok(!JSON.stringify(activity).includes(art), 'No arbitrary tool arguments or raw reasoning');
+  assert.ok(
+    !JSON.stringify(activity).includes(art),
+    'No arbitrary tool arguments or raw reasoning',
+  );
   const wrongTurn = notification('item/plan/delta', {
-    turnId: 'another-turn', itemId: 'plan', delta: 'wrong',
+    turnId: 'another-turn',
+    itemId: 'plan',
+    delta: 'wrong',
   });
   assert.deepEqual(updateCodexActivity(activity, wrongTurn), activity);
   apply('turn/started', { turnId: 't2' });
@@ -143,14 +163,21 @@ assert.match(
   assert.equal(activity.turnId, 't2');
   const restoredActivity = codexActivityFromHistory({
     thread: {
-      turns: [{
-        id: 't3',
-        items: [
-          { id: 'r', type: 'reasoning', summary: [{ text: 'Persisted summary' }], content: [art] },
-          { id: 'c', type: 'commandExecution', command: 'git status', status: 'completed' },
-          { id: 'answer', type: 'agentMessage', text: art },
-        ],
-      }],
+      turns: [
+        {
+          id: 't3',
+          items: [
+            {
+              id: 'r',
+              type: 'reasoning',
+              summary: [{ text: 'Persisted summary' }],
+              content: [art],
+            },
+            { id: 'c', type: 'commandExecution', command: 'git status', status: 'completed' },
+            { id: 'answer', type: 'agentMessage', text: art },
+          ],
+        },
+      ],
     },
   });
   assert.equal(restoredActivity.turnId, 't3');
