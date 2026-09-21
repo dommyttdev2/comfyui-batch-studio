@@ -1094,6 +1094,7 @@ export interface AutoArtifactEvent {
   phase: AutoArtifactPhase;
   sourceId: string;
   filePath?: string;
+  rawResponsePath?: string;
   message?: string;
   issues?: ValidationIssue[];
 }
