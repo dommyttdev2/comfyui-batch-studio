@@ -591,7 +591,15 @@ export function CodexPane() {
                   <li key={item.id} className="codex-activity-item">
                     <div className="codex-activity-item-heading">
                       <strong>{item.title}</strong>
-                      <small>{item.status === 'inProgress' ? '処理中' : item.status === 'completed' ? '完了' : item.status === 'failed' ? '失敗' : item.status}</small>
+                      <small>
+                        {item.status === 'inProgress'
+                          ? '処理中'
+                          : item.status === 'completed'
+                            ? '完了'
+                            : item.status === 'failed'
+                              ? '失敗'
+                              : item.status}
+                      </small>
                     </div>
                     {(item.summary || item.output) && (
                       <details open={item.status === 'inProgress'}>
@@ -604,7 +612,9 @@ export function CodexPane() {
                 ))}
               </ol>
             )}
-            <small>モデルから提供された思考の要約と実際の作業イベントです。内部推論の全文ではありません。</small>
+            <small>
+              モデルから提供された思考の要約と実際の作業イベントです。内部推論の全文ではありません。
+            </small>
           </section>
         )}
         {activeTurn && <p className="codex-processing">{phaseLabel[turnStatus.phase]}</p>}
