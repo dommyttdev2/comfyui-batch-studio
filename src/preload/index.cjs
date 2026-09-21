@@ -141,6 +141,7 @@ const I = {
   CODEX_SELECT_MODEL: 'codex:select-model',
   CODEX_NEW_CHAT: 'codex:new-chat',
   CODEX_RESTORE_CHAT: 'codex:restore-chat',
+  CODEX_STOP_TURN: 'codex:stop-turn',
   CODEX_SEND: 'codex:send',
   CODEX_SEND_TASK: 'codex:send-task',
   CODEX_EVENT: 'codex:event',
@@ -371,6 +372,7 @@ contextBridge.exposeInMainWorld('batchStudio', {
     selectModel: (selection) => ipcRenderer.invoke(I.CODEX_SELECT_MODEL, selection),
     newChat: () => ipcRenderer.invoke(I.CODEX_NEW_CHAT),
     restoreChat: (id) => ipcRenderer.invoke(I.CODEX_RESTORE_CHAT, id),
+    stopTurn: () => ipcRenderer.invoke(I.CODEX_STOP_TURN),
     send: (text) => ipcRenderer.invoke(I.CODEX_SEND, text),
     sendTask: (stage, extra) => ipcRenderer.invoke(I.CODEX_SEND_TASK, stage, extra),
     onEvent: (listener) => {
