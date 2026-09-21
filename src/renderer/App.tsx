@@ -194,17 +194,21 @@ function App() {
       cancelled = true;
     };
   }, []);
+  const contextStage = grokContextStage(stage);
+  const providerKey =
+    project && contextStage ? project.rootPath + '\0' + contextStage : null;
   useEffect(() => {
     let cancelled = false;
     const root = project?.rootPath ?? null;
+    const context = grokContextStage(stage);
     setPaneProviderRoot(null);
-    if (root) {
+    if (root && context) {
       void window.batchStudio.codex
-        .getProvider()
+        .getProvider(context)
         .then((provider) => {
           if (cancelled) return;
           setPaneProvider(provider);
-          setPaneProviderRoot(root);
+          setPaneProviderRoot(root + '\0' + context);
         })
         .catch((e) => {
           if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -213,13 +217,14 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [project?.rootPath]);
+  }, [project?.rootPath, stage]);
   const changeProvider = async (provider: AssistantPaneProvider) => {
-    if (!project || paneProviderRoot !== project.rootPath || switchingProvider) return;
+    if (!project || !contextStage || paneProviderRoot !== providerKey || switchingProvider)
+      return;
     setSwitchingProvider(true);
     setError('');
     try {
-      await window.batchStudio.codex.setProvider(provider);
+      await window.batchStudio.codex.setProvider(provider, contextStage);
       setPaneProvider(provider);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -230,7 +235,7 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      if (project && paneProviderRoot !== project.rootPath) {
+      if (project && contextStage && paneProviderRoot !== providerKey) {
         const state = await window.batchStudio.grok.setVisible(false);
         if (!cancelled) {
           setGrok(state.visible);
@@ -265,7 +270,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [stage, project?.rootPath, tool, paneProvider, paneProviderRoot]);
+  }, [stage, project?.rootPath, tool, paneProvider, paneProviderRoot, providerKey]);
   const title =
       project?.title ??
       (tool === 'services'
@@ -295,7 +300,7 @@ function App() {
             <select
               aria-label="AIアシスタント"
               value={paneProvider}
-              disabled={paneProviderRoot !== project.rootPath || switchingProvider}
+              disabled={paneProviderRoot !== providerKey || switchingProvider}
               onChange={(event) => void changeProvider(event.target.value as AssistantPaneProvider)}
             >
               <option value="grok">Grok</option>
@@ -359,6 +364,9 @@ function App() {
                 <h2>{stage}</h2>
                 {resetScope && <StageResetMenu scope={resetScope} onReset={resetFrom} />}
               </div>
+              {contextStage && paneProviderRoot !== providerKey ? (
+                <div className="panel" role="status">この工程のAIエージェントを復元中…</div>
+              ) : (
               <StageErrorBoundary
                 key={`${project.rootPath}:${stage}:${resetRevision}:${stageReloadRevision}`}
                 stage={stage}
@@ -377,6 +385,7 @@ function App() {
                   resetFrom={resetFrom}
                 />
               </StageErrorBoundary>
+              )}
             </>
           )}
           {!project && tool === 'services' && (
