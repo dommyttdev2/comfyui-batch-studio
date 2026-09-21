@@ -63,12 +63,12 @@ matchCode(
 );
 matchCode(
   src,
-  /stage === 'story-initial'[\\s\\S]*storyDiscussionShape[\\s\\S]*stage === 'story-finalize' \\|\\| stage === 'story-fix'/,
+  /stage === 'story-initial'[\s\S]*storyDiscussionShape[\s\S]*stage === 'story-finalize' \|\| stage === 'story-fix'/,
   'discussion and final story stages must build distinct prompts',
 );
 matchCode(
   src,
-  /検討案・質問ではなく、画像生成計画へ展開可能な完成版 story\\.md の全文を納品/,
+  /検討案・質問ではなく、画像生成計画へ展開可能な完成版 story\.md の全文を納品/,
   'finalization must request the complete story rather than another discussion',
 );
 matchCode(
