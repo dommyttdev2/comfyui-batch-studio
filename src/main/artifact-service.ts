@@ -94,8 +94,7 @@ function jsonCandidate(raw: string) {
 }
 function promptPlanJsonParseMessage(content: string): string {
   const candidate = content.trim();
-  if (!candidate)
-    return 'prompt_plan.jsonが空です。完成したJSON全文を再生成してください。';
+  if (!candidate) return 'prompt_plan.jsonが空です。完成したJSON全文を再生成してください。';
   if (!candidate.startsWith('{'))
     return 'prompt_plan.jsonの先頭がJSONオブジェクトではありません。説明文や部分的な回答ではなく、完成したJSON全文が必要です。';
   if (!candidate.endsWith('}'))
