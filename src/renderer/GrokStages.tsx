@@ -84,6 +84,7 @@ export function GrokBridge({
     [extra, setExtra] = useState(''),
     [selectedFile, setSelectedFile] = useState<File | null>(null),
     [fileIssue, setFileIssue] = useState(''),
+    [codexSelected, setCodexSelected] = useState(false),
     [dragging, setDragging] = useState(false);
   // Both agents import into the same draft. Keep one stage-scoped subscription,
   // rather than attaching a new listener whenever a parent rerenders.
@@ -95,6 +96,7 @@ export function GrokBridge({
     setResult(null);
     setSelectedFile(null);
     setFileIssue('');
+    setCodexSelected(false);
     return window.batchStudio.autoArtifact.onEvent((event) => {
       if (event.provider !== provider || event.root !== project.rootPath || event.stage !== stage)
         return;
@@ -212,11 +214,25 @@ export function GrokBridge({
             {receive ? '対応する工程用の依頼を送信' : '「ストーリーを検討」を選択'}してください。
           </strong>
           <p>
-            {receive
-              ? '完了すると成果物を自動的に検証・取り込みます。通常の「送信」ではなく「工程用の依頼を送信」を使用してください。'
-              : '右側の工程選択で「ストーリーを検討」を選択し、工程用の依頼を送信してください。'}
+            この画面には複数の依頼がある場合があります。下のボタンでこの工程の依頼を右側のCodex Paneに選択してから送信してください。
             {receive && returnFile ? ` 取り込み先: ${returnFile.name}（下書き）` : ''}
           </p>
+          <button
+            type="button"
+            onClick={() =>
+              run(async () => {
+                await window.batchStudio.codex.selectStageTask(project.rootPath, stage);
+                setCodexSelected(true);
+              })
+            }
+          >
+            {title} をCodexで選択
+          </button>
+          {codexSelected && (
+            <p role="status">
+              右側で「{title}」を選択しました。「工程用の依頼を送信」を押すと、この依頼が送信されます。
+            </p>
+          )
         </div>
       ) : (
         <>
