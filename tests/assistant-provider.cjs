@@ -62,8 +62,16 @@ const preload = read('src/preload/index.cjs');
 const main = read('src/main/main.ts');
 const stages = read('src/renderer/GrokStages.tsx');
 const codex = read('src/renderer/CodexPane.tsx');
-matchCode(ipc, /CODEX_SELECT_STAGE_TASK:/, 'Stage-targeted Codex selection must have an IPC channel');
-matchCode(preload, /selectStageTask: \(root, stage\)/, 'Project steps must be able to select their own Codex task');
+matchCode(
+  ipc,
+  /CODEX_SELECT_STAGE_TASK:/,
+  'Stage-targeted Codex selection must have an IPC channel',
+);
+matchCode(
+  preload,
+  /selectStageTask: \(root, stage\)/,
+  'Project steps must be able to select their own Codex task',
+);
 matchCode(
   stages,
   /codex\.selectStageTask\(project\.rootPath, stage\)/,
@@ -91,7 +99,6 @@ for (const expected of [
 ]) {
   matchCode(main, new RegExp(expected), `Codex stage mapping must include ${expected}`);
 }
-
 
 (async () => {
   const { AssistantProviderStore } = await import(
