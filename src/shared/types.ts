@@ -1146,6 +1146,7 @@ export interface CodexSendResult extends CodexThreadState {
 }
 export interface CodexSnapshot extends CodexContext, CodexSendResult {
   messages: CodexMessage[];
+  activity: import('./codex-activity.js').CodexActivityState;
   busy: boolean;
   historyUnavailable?: boolean;
 }
