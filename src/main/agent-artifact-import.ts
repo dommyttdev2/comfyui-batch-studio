@@ -30,6 +30,10 @@ export function expectedArtifact(stage: Stage): string | null {
 }
 export function artifactFileContent(stage: Stage, raw: string, extracted: string): string {
   if (stage === 'story-finalize' || stage === 'story-fix') return extracted.trimEnd();
+  if (stage === 'prompt-plan-patch') {
+    const fenced = raw.trim().match(/^`{3}(?:json)?\s*\n([\s\S]*?)\n`{3}\s*$/i);
+    return JSON.stringify(JSON.parse(fenced?.[1] ?? raw), null, 2);
+  }
   if (stage === 'models' || stage === 'models-fix') {
     // importGrok merges LoRA selections with the user's base models for the draft.
     // The downloadable model_loras.json must retain ONLY the agent's LoRA payload.
@@ -117,7 +121,9 @@ export async function importAutoArtifact(
     const result =
       stage === 'caption'
         ? await importCaptionGrok(root, raw, { automatic: true, provider })
-        : await importGrok(
+        : stage === 'prompt-plan-patch'
+          ? await applyPromptPlanPatch(root, raw)
+          : await importGrok(
             root,
             stage.startsWith('story-')
               ? 'story'
