@@ -214,7 +214,8 @@ export function GrokBridge({
             {receive ? '対応する工程用の依頼を送信' : '「ストーリーを検討」を選択'}してください。
           </strong>
           <p>
-            この画面には複数の依頼がある場合があります。下のボタンでこの工程の依頼を右側のCodex Paneに選択してから送信してください。
+            この画面には複数の依頼がある場合があります。下のボタンでこの工程の依頼を右側のCodex
+            Paneに選択してから送信してください。
             {receive && returnFile ? ` 取り込み先: ${returnFile.name}（下書き）` : ''}
           </p>
           <button
@@ -230,7 +231,8 @@ export function GrokBridge({
           </button>
           {codexSelected && (
             <p role="status">
-              右側で「{title}」を選択しました。「工程用の依頼を送信」を押すと、この依頼が送信されます。
+              右側で「{title}
+              」を選択しました。「工程用の依頼を送信」を押すと、この依頼が送信されます。
             </p>
           )}
         </div>
