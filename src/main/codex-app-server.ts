@@ -55,6 +55,7 @@ export class CodexAppServer extends EventEmitter {
           title: 'ComfyUI Batch Studio',
           version: '1.0.0',
         },
+        capabilities: { experimentalApi: true },
       });
       this.write({ method: 'initialized', params: {} });
     } catch (error) {
