@@ -143,11 +143,15 @@ export function CodexPane() {
       setLoading(true);
       setModelLoading(true);
       try {
-        await refresh(key);
+        // History restoration must not block account or model loading:
+        // paginated/older threads may be temporarily unreadable.
         const status = await refreshAccount();
-        // The model list can be unavailable until ChatGPT login succeeds.
-        // Keep history readable and retry model discovery after login.
         if (status.authenticated) await refreshModels(key);
+        try {
+          await refresh(key);
+        } catch (err) {
+          if (currentContext.current === key) setError(errorText(err));
+        }
       } catch (err) {
         if (currentContext.current === key) setError(errorText(err));
       } finally {
