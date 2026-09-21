@@ -142,6 +142,7 @@ export const IPC = {
   CODEX_SELECT_MODEL: 'codex:select-model',
   CODEX_NEW_CHAT: 'codex:new-chat',
   CODEX_RESTORE_CHAT: 'codex:restore-chat',
+  CODEX_STOP_TURN: 'codex:stop-turn',
   CODEX_SEND: 'codex:send',
   CODEX_SEND_TASK: 'codex:send-task',
   CODEX_EVENT: 'codex:event',
