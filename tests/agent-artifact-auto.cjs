@@ -30,6 +30,27 @@ assert.match(main, /codexTaskFileForTurn\(turn\)/);
 assert.match(main, /collectCodexArtifact\(threadId, pending, notification\.params\)/);
 assert.match(pane, /retryArtifact\(\)/);
 assert.match(
+  pane,
+  /window\.batchStudio\.codex\.sendTask\('prompt-plan-fix', extra\)/,
+  'A completed conversational revision must have an explicit route to an artifact task',
+);
+assert.match(
+  pane,
+  /通常の「送信」は相談用です/,
+  'A normal chat reply must not imply the project draft was changed',
+);
+assert.match(
+  main,
+  /const revisionContract =([\s\S]*?)stage === 'prompt-plan-fix'/,
+  'Prompt Plan revisions must request a complete artifact, not a Branch patch',
+);
+const taskBuilder = main.slice(main.indexOf('async function codexSendTask('));
+assert.ok(
+  taskBuilder.indexOf('## 参照ファイル') < taskBuilder.indexOf('## Codex向け出力契約'),
+  'The complete-artifact output contract must follow reference JSON',
+);
+
+assert.match(
   source('src/main/grok-auto-artifact-watcher.ts'),
   /MutationObserver|observeGrokArtifact/,
 );
@@ -138,6 +159,22 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
   const invalid = await importAutoArtifact(root, 'grok', 'story-fix', 'chat-1/code-1', '    ');
   assert.equal(invalid.phase, 'invalid');
   assert.equal(fs.readFileSync(draft, 'utf8'), raw + '\n', 'invalid auto-import must retain draft');
+  const promptDraft = path.join(root, '._batch_studio', 'drafts', 'prompt_plan.json');
+  fs.writeFileSync(promptDraft, '{"original":"preserve"}\\n');
+  const partialPlan = await importAutoArtifact(
+    root,
+    'codex',
+    'prompt-plan-fix',
+    'thread-partial/turn-partial',
+    '{"id":"b19","prompt":{"triggerWords":[]}}',
+  );
+  assert.equal(partialPlan.phase, 'invalid', 'A Branch fragment is not a complete Prompt Plan');
+  assert.equal(
+    fs.readFileSync(promptDraft, 'utf8'),
+    '{"original":"preserve"}\\n',
+    'An invalid partial revision must not overwrite the current plan draft',
+  );
+
   const recovered = await latestAutoArtifact(root, 'codex', 'story-finalize', 'thread-1/');
   assert.equal(recovered.filePath, first.filePath);
 
