@@ -39,15 +39,26 @@ assert.match(
   /通常の「送信」は相談用です/,
   'A normal chat reply must not imply the project draft was changed',
 );
+const taskBuilder = main.slice(main.indexOf('async function codexSendTask('));
+assert.match(
+  taskBuilder,
+  /prepareCodexFileWorkspace[\s\S]*workspaceOutputInstruction\(workspace\)/,
+  'Artifact tasks must stage input files and request a written output file',
+);
 assert.match(
   main,
-  /const revisionContract =([\s\S]*?)stage === 'prompt-plan-fix'/,
-  'Prompt Plan revisions must request a complete artifact, not a Branch patch',
+  /sandboxPolicy:\s*\{[\s\S]*type: 'workspaceWrite'[\s\S]*writableRoots: \[cwd\]/,
+  'Writable Codex turns must be limited to the isolated workspace',
 );
-const taskBuilder = main.slice(main.indexOf('async function codexSendTask('));
-assert.ok(
-  taskBuilder.indexOf('## 参照ファイル') < taskBuilder.indexOf('## Codex向け出力契約'),
-  'The complete-artifact output contract must follow reference JSON',
+assert.match(
+  main,
+  /readCodexOutput\(pending\.workspace\)/,
+  'Codex file output must be read from disk rather than the assistant final message',
+);
+assert.match(
+  main,
+  /findCodexWorkspace\([\s\S]*readCodexOutput\(workspace\)/,
+  'Retry should restore and read the completed workspace artifact',
 );
 
 assert.match(
@@ -65,6 +76,51 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
   const { promptPlanPatchBase, applyPromptPlanPatch } = await import(
     pathToFileURL(path.join(runtime, 'main', 'prompt-plan-patch.js')).href
   );
+  const {
+    prepareCodexFileWorkspace,
+    workspaceOutputInstruction,
+    rememberCodexWorkspace,
+    findCodexWorkspace,
+    readCodexOutput,
+  } = await import(pathToFileURL(path.join(runtime, 'main', 'codex-file-artifact.js')).href);
+  const sandboxRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-sandbox-'));
+  const isolatedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-project-'));
+  const prepared = await prepareCodexFileWorkspace(sandboxRoot, 'prompt-plan', [
+    { name: 'story.md', content: '# Story' },
+    { name: 'models.json', content: '{"schemaVersion":3}' },
+  ]);
+  assert.ok(prepared.directory.startsWith(sandboxRoot));
+  assert.deepEqual(fs.readdirSync(path.join(prepared.directory, 'input')), [
+    '1-story.md',
+    '2-models.json',
+  ]);
+  assert.match(workspaceOutputInstruction(prepared), /output\/prompt_plan\.json/);
+  assert.match(
+    workspaceOutputInstruction(prepared),
+    /回答の最後に prompt_plan\.json の生成状況のみ/,
+  );
+  await assert.rejects(readCodexOutput(prepared), /output\/prompt_plan\.json を生成しませんでした/);
+  fs.writeFileSync(prepared.outputPath, '{"schemaVersion":2}');
+  assert.equal(await readCodexOutput(prepared), '{"schemaVersion":2}');
+  await rememberCodexWorkspace(isolatedRoot, prepared, 'thread-files', 'turn-files');
+  const located = await findCodexWorkspace(
+    isolatedRoot,
+    sandboxRoot,
+    'thread-files',
+    'turn-files',
+    'prompt-plan',
+  );
+  assert.equal(located?.outputPath, prepared.outputPath);
+  assert.equal(
+    await findCodexWorkspace(isolatedRoot, sandboxRoot, 'thread-files', 'turn-files', 'caption'),
+    null,
+  );
+  fs.unlinkSync(prepared.outputPath);
+  fs.symlinkSync(path.join(prepared.directory, 'input', '2-models.json'), prepared.outputPath);
+  await assert.rejects(readCodexOutput(prepared), /通常のファイルではない/);
+  fs.unlinkSync(prepared.outputPath);
+  console.log('Codex isolated file workspace, safe output read and persisted retry passed.');
+
   const taskTurn = (fileName) => ({
     status: 'completed',
     items: [
