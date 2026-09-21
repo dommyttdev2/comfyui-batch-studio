@@ -88,7 +88,25 @@ export function CodexPane() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const refreshAccount = useCallback(async () => {
-    setAccount(await window.batchStudio.codex.status());
+    const status = await window.batchStudio.codex.status();
+    setAccount(status);
+    return status;
+  }, []);
+  const refreshModels = useCallback(async (key: string) => {
+    if (!key || currentContext.current !== key) return;
+    setModelLoading(true);
+    setModelError('');
+    try {
+      const available = await window.batchStudio.codex.models();
+      if (currentContext.current === key) setModelSettings(available);
+    } catch (err) {
+      if (currentContext.current === key) {
+        setModelSettings(null);
+        setModelError(errorText(err));
+      }
+    } finally {
+      if (currentContext.current === key) setModelLoading(false);
+    }
   }, []);
   const refresh = useCallback(async (key: string) => {
     const value = await window.batchStudio.codex.snapshot();
@@ -126,14 +144,10 @@ export function CodexPane() {
       setModelLoading(true);
       try {
         await refresh(key);
-        await refreshAccount();
-        // Model discovery failures must not prevent reading an existing chat.
-        try {
-          const available = await window.batchStudio.codex.models();
-          if (currentContext.current === key) setModelSettings(available);
-        } catch (err) {
-          if (currentContext.current === key) setModelError(errorText(err));
-        }
+        const status = await refreshAccount();
+        // The model list can be unavailable until ChatGPT login succeeds.
+        // Keep history readable and retry model discovery after login.
+        if (status.authenticated) await refreshModels(key);
       } catch (err) {
         if (currentContext.current === key) setError(errorText(err));
       } finally {
@@ -143,7 +157,7 @@ export function CodexPane() {
         }
       }
     },
-    [refresh, refreshAccount],
+    [refresh, refreshAccount, refreshModels],
   );
 
   useEffect(() => {
@@ -172,7 +186,17 @@ export function CodexPane() {
     });
     const offEvent = window.batchStudio.codex.onEvent((event) => {
       if (event.method === 'account/updated' || event.method === 'account/login/completed') {
-        void refreshAccount().catch((err) => setError(errorText(err)));
+        const key = currentContext.current;
+        void refreshAccount()
+          .then((status) => {
+            if (currentContext.current !== key) return;
+            if (status.authenticated) return refreshModels(key);
+            setModelSettings(null);
+            setModelLoading(false);
+          })
+          .catch((err) => {
+            if (currentContext.current === key) setError(errorText(err));
+          });
         return;
       }
       if (event.method === 'disconnected') {
@@ -223,7 +247,7 @@ export function CodexPane() {
       offEvent();
       offArtifact();
     };
-  }, [refresh, refreshAccount, switchContext]);
+  }, [refresh, refreshAccount, refreshModels, switchContext]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -330,6 +354,19 @@ export function CodexPane() {
       : null;
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
   const output = autoArtifact || artifactTaskRef.current ? '' : (latestAssistant?.text ?? stream);
+  const taskSendDisabledReason = loading
+    ? '工程の会話履歴を読み込み中です。'
+    : busy
+      ? 'Codexが回答中です。完了後に送信できます。'
+      : !account?.authenticated
+        ? 'CodexでChatGPTにログインしてください。'
+        : modelLoading
+          ? '利用可能なCodexモデルを取得中です。'
+          : modelSaving
+            ? 'モデル設定の保存中です。'
+            : !modelSettings
+              ? 'Codexモデルを取得できません。モデル一覧を再取得してください。'
+              : null;
 
   return (
     <main className="codex-pane">
@@ -390,7 +427,11 @@ export function CodexPane() {
                     });
                 }}
               >
-                {!modelSettings && <option value="">モデル一覧を読み込み中…</option>}
+                {!modelSettings && (
+                  <option value="">
+                    {modelLoading ? 'モデル一覧を読み込み中…' : 'モデルを取得できません'}
+                  </option>
+                )}
                 {modelSettings?.models.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.displayName}
@@ -430,6 +471,12 @@ export function CodexPane() {
           {modelError && (
             <div className="codex-error" role="alert">
               {modelError}
+              <button
+                disabled={loading || busy || modelLoading || !account?.authenticated}
+                onClick={() => void refreshModels(currentContext.current)}
+              >
+                モデル一覧を再取得
+              </button>
             </div>
           )}
         </section>
@@ -552,7 +599,8 @@ export function CodexPane() {
               ))}
             </select>
             <button
-              disabled={loading || busy || !modelSettings || !account?.authenticated}
+              disabled={Boolean(taskSendDisabledReason)}
+              title={taskSendDisabledReason ?? '選択した工程の依頼を送信します'}
               onClick={() =>
                 void send(
                   () => window.batchStudio.codex.sendTask(task, extra),
@@ -566,6 +614,21 @@ export function CodexPane() {
               工程用の依頼を送信
             </button>
           </div>
+          {taskSendDisabledReason && (
+            <div className="codex-task-disabled-reason" role="status">
+              {taskSendDisabledReason}
+              {!loading &&
+                !busy &&
+                !modelLoading &&
+                account?.authenticated &&
+                !modelSettings &&
+                !modelError && (
+                  <button onClick={() => void refreshModels(currentContext.current)}>
+                    モデル一覧を再取得
+                  </button>
+                )}
+            </div>
+          )}
           <textarea
             value={extra}
             rows={2}
