@@ -142,6 +142,7 @@ export interface ImportResult {
   validation: ValidationResult;
   summary: Record<string, string | number | boolean | null>;
   missingRequirements: MissingRequirement[];
+  rawResponsePath?: string;
 }
 export interface StrengthBaseline {
   value: number;
