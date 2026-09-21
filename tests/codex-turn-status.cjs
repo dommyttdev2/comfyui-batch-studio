@@ -34,8 +34,11 @@ assert.match(main, /codexActiveTurnIds\.get\(threadId\)/);
 assert.match(main, /if \(!codexBusy\.has\(threadId\)\) return;/);
 assert.match(main, /if \(notification\.method === 'turn\/completed' && typeof threadId === 'string'\) \{/);
 assert.match(main, /codexBusy\.delete\(threadId\)/);
-assert.match(main, /if \(turn\?\.status !== 'completed'\)/,
-  'Interrupted artifact turns must not import incomplete files');
+assert.match(
+  main,
+  /if \(turn\?\.status !== 'completed'\)/,
+  'Interrupted artifact turns must not import incomplete files',
+);
 assert.match(pane, /window\.batchStudio\.codex\.stopTurn\(\)/);
 assert.match(pane, /現在の生成を中止/);
 assert.match(pane, /disabled=\{stopping\}/);
