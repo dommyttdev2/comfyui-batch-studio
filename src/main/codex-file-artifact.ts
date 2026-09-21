@@ -67,7 +67,8 @@ export async function prepareCodexFileWorkspace(
   const used = new Set<string>();
   for (const [index, reference] of references.entries()) {
     total += Buffer.byteLength(reference.content, 'utf8');
-    if (total > MAX_REFERENCE_BYTES) throw new Error('Codex参照ファイルの合計が12MBを超えています。');
+    if (total > MAX_REFERENCE_BYTES)
+      throw new Error('Codex参照ファイルの合計が12MBを超えています。');
     const clean = path.basename(reference.name).replace(/[^a-zA-Z0-9_.-]/g, '_');
     const fileName = `${index + 1}-${clean || 'reference.txt'}`;
     if (used.has(fileName)) throw new Error('参照ファイル名が重複しています。');
@@ -103,7 +104,9 @@ export async function rememberCodexWorkspace(
   if (!threadId || !turnId) throw new Error('Codex Turn IDがありません。');
   const index = await readIndex(root);
   index.records = [
-    ...index.records.filter((record) => !(record.threadId === threadId && record.turnId === turnId)),
+    ...index.records.filter(
+      (record) => !(record.threadId === threadId && record.turnId === turnId),
+    ),
     { workspaceId: workspace.workspaceId, stage: workspace.stage, threadId, turnId },
   ].slice(-300);
   await writeJsonAtomic(indexPath(root), index);
@@ -123,9 +126,7 @@ export async function findCodexWorkspace(
     ? workspaceFor(userData, stage, record.workspaceId)
     : null;
 }
-export async function readCodexOutput(
-  workspace: FileArtifactWorkspace,
-): Promise<string> {
+export async function readCodexOutput(workspace: FileArtifactWorkspace): Promise<string> {
   let stat;
   try {
     stat = await lstat(workspace.outputPath);
