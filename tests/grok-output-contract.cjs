@@ -48,8 +48,28 @@ matchCode(
 );
 matchCode(
   src,
-  /ファイル内容をチャット本文、code block、引用、要約へ再掲しません/,
-  'artifact file contents must not be repeated in chat',
+  /添付ファイルがある場合、ファイル内容をチャット本文、code block、引用、要約へ再掲しません/,
+  'artifact file contents must not be repeated when a downloadable file exists',
+);
+matchCode(
+  src,
+  /実際に添付ファイルを提供できない場合に限り、代替として完全なファイル本文/,
+  'when file attachment is unavailable, require the complete content as a code block',
+);
+matchCode(
+  src,
+  /ファイルを作成したと報告するだけでは納品になりません/,
+  'a completion-only message with no file or full content must not be considered a deliverable',
+);
+matchCode(
+  src,
+  /stage === 'story-initial'[\\s\\S]*storyDiscussionShape[\\s\\S]*stage === 'story-finalize' \\|\\| stage === 'story-fix'/,
+  'discussion and final story stages must build distinct prompts',
+);
+matchCode(
+  src,
+  /検討案・質問ではなく、画像生成計画へ展開可能な完成版 story\\.md の全文を納品/,
+  'finalization must request the complete story rather than another discussion',
 );
 matchCode(
   src,
