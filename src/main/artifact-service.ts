@@ -92,6 +92,15 @@ function jsonCandidate(raw: string) {
     b = raw.lastIndexOf('}');
   return a >= 0 && b > a ? raw.slice(a, b + 1).trim() : raw.trim();
 }
+function promptPlanJsonParseMessage(content: string): string {
+  const candidate = content.trim();
+  if (!candidate) return 'prompt_plan.jsonが空です。完成したJSON全文を再生成してください。';
+  if (!candidate.startsWith('{'))
+    return 'prompt_plan.jsonの先頭がJSONオブジェクトではありません。説明文や部分的な回答ではなく、完成したJSON全文が必要です。';
+  if (!candidate.endsWith('}'))
+    return 'prompt_plan.jsonの末尾が閉じられていません。生成結果が途中で切れている可能性があります。既存の計画を修正する場合は、全文再生成ではなく「Prompt Planを部分修正（差分）」を利用してください。';
+  return 'prompt_plan.jsonのJSON構文が不正です。修正前に失敗した回答を確認してください。';
+}
 function storyCandidate(raw: string) {
   return fence(raw, 'markdown') ?? fence(raw, 'md') ?? fence(raw) ?? raw.trim();
 }
@@ -274,7 +283,7 @@ async function validateContent(
           {
             severity: 'error',
             code: 'PLAN_PARSE',
-            message: 'prompt_plan.jsonをJSONとして解析できません。',
+            message: promptPlanJsonParseMessage(content),
           },
         ],
       };
@@ -486,6 +495,7 @@ export async function importGrok(
     if (!checked.valid || miss.length)
       return {
         extracted,
+        rawResponsePath: response.file,
         validation: checked.valid
           ? {
               valid: false,

@@ -177,6 +177,23 @@ export function GrokBridge({
               ファイルの場所を開く
             </button>
           )}
+          {autoArtifact.rawResponsePath &&
+            (autoArtifact.phase === 'invalid' || autoArtifact.phase === 'failed') && (
+              <button
+                type="button"
+                onClick={() =>
+                  void window.batchStudio.file.showInFolder(autoArtifact.rawResponsePath!)
+                }
+              >
+                検証に失敗した回答の保存先を開く
+              </button>
+            )}
+          {autoArtifact.phase === 'invalid' && autoArtifact.fileName === 'prompt_plan.json' && (
+            <p>
+              JSON全文が途中で切れている場合、欠けた内容を自動補完して保存することはできません。
+              修正元の計画がある場合は、Codexの「Prompt Planを部分修正（差分）」も利用できます。
+            </p>
+          )}
           {(autoArtifact.phase === 'invalid' || autoArtifact.phase === 'failed') && (
             <p>
               {provider === 'codex'

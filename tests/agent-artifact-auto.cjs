@@ -189,6 +189,38 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
     'An invalid partial revision must not overwrite the current plan draft',
   );
 
+  for (const [source, fragment, expectedError] of [
+    ['cut-off', '{"schemaVersion":2,"branches":[{"id":"b19"', '途中で切れている'],
+    [
+      'explanation',
+      'prompt_plan.jsonを修正しました。全文は省略します。',
+      'JSONオブジェクトではありません',
+    ],
+    ['malformed', '{"schemaVersion":2,"branches":,}', 'JSON構文が不正'],
+  ]) {
+    const result = await importAutoArtifact(
+      root,
+      'codex',
+      'prompt-plan-fix',
+      `thread-invalid/${source}`,
+      fragment,
+    );
+    assert.equal(result.phase, 'invalid');
+    assert.ok(
+      result.issues.some((issue) => issue.message.includes(expectedError)),
+      JSON.stringify(result.issues),
+    );
+    assert.ok(result.rawResponsePath, 'Invalid replies must expose the persisted raw response');
+    assert.equal(fs.readFileSync(result.rawResponsePath, 'utf8').trim(), fragment);
+    assert.equal(
+      fs.readFileSync(promptDraft, 'utf8'),
+      '{"original":"preserve"}\\n',
+      'Malformed or truncated outputs must never overwrite the existing Prompt Plan',
+    );
+  }
+  assert.match(source('src/renderer/GrokStages.tsx'), /rawResponsePath/);
+  assert.match(source('src/renderer/CodexPane.tsx'), /rawResponsePath/);
+
   const largeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-plan-patch-'));
   let nextLeaf = 0;
   const plan = {
