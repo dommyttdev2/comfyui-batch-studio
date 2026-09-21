@@ -1423,6 +1423,7 @@ export interface BatchStudioApi {
     selectModel: (selection: CodexModelSelection) => Promise<CodexModelSelection>;
     newChat: () => Promise<CodexSnapshot>;
     restoreChat: (threadId: string) => Promise<CodexSnapshot>;
+    stopTurn: () => Promise<CodexSnapshot>;
     send: (text: string) => Promise<CodexSendResult>;
     sendTask: (stage: GrokTask['stage'], extra?: string) => Promise<CodexSendResult>;
     onEvent: (listener: (event: CodexEvent) => void) => () => void;
