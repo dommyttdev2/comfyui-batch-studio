@@ -34,7 +34,8 @@ const stageTasks: Record<
   ],
   'prompt-plan': [
     { value: 'prompt-plan', label: 'Prompt Planを作成' },
-    { value: 'prompt-plan-fix', label: 'Prompt Planを修正' },
+    { value: 'prompt-plan-fix', label: 'Prompt Planを全文再生成' },
+    { value: 'prompt-plan-patch', label: 'Prompt Planを部分修正（差分）' },
   ],
   caption: [{ value: 'caption', label: 'キャプションを作成' }],
 };
@@ -750,23 +751,24 @@ export function CodexPane() {
                 <strong>この会話の回答はまだ prompt_plan.json に反映されていません。</strong>
                 <p>
                   Branch単位のJSON断片は、そのままでは全体のPrompt Planとして取り込めません。
-                  修正元の下書きを維持したまま、会話で合意した内容を全体に反映した完成版を生成します。
+                  小さな差分JSONを生成し、元の下書きのハッシュと修正前の値を照合して、
+                  問題がなければ全画像を検証したうえで下書きに反映します。
                 </p>
                 <button
                   disabled={Boolean(taskSendDisabledReason)}
                   title={
                     taskSendDisabledReason ??
-                    '現在の会話を踏まえ、完成版を検証して自動取り込みします'
+                    '現在の会話を踏まえ、小さな差分を検証して自動取り込みします'
                   }
                   onClick={() =>
                     void send(
-                      () => window.batchStudio.codex.sendTask('prompt-plan-fix', extra),
-                      '工程の依頼: Prompt Planを修正' + (extra ? '\n' + extra : ''),
-                      'prompt-plan-fix',
+                      () => window.batchStudio.codex.sendTask('prompt-plan-patch', extra),
+                      '工程の依頼: Prompt Planを部分修正' + (extra ? '\n' + extra : ''),
+                      'prompt-plan-patch',
                     )
                   }
                 >
-                  修正内容を完成版に反映して自動取り込み
+                  修正内容を差分検証して自動取り込み
                 </button>
               </section>
             )}
