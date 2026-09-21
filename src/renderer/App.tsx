@@ -195,8 +195,7 @@ function App() {
     };
   }, []);
   const contextStage = grokContextStage(stage);
-  const providerKey =
-    project && contextStage ? project.rootPath + '\0' + contextStage : null;
+  const providerKey = project && contextStage ? project.rootPath + '\0' + contextStage : null;
   useEffect(() => {
     let cancelled = false;
     const root = project?.rootPath ?? null;
@@ -219,8 +218,7 @@ function App() {
     };
   }, [project?.rootPath, stage]);
   const changeProvider = async (provider: AssistantPaneProvider) => {
-    if (!project || !contextStage || paneProviderRoot !== providerKey || switchingProvider)
-      return;
+    if (!project || !contextStage || paneProviderRoot !== providerKey || switchingProvider) return;
     setSwitchingProvider(true);
     setError('');
     try {
