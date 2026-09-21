@@ -96,6 +96,7 @@ import { UiStateStore } from './ui-state.js';
 import { GrokChatStateStore } from './grok-chat-state.js';
 import { CodexChatStateStore } from './codex-chat-state.js';
 import { codexTaskFileForTurn, latestCompletedArtifactTurn } from './codex-artifact-turn.js';
+import { readCodexHistory } from './codex-thread-history.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { CodexTurnMonitor } from './codex-turn-monitor.js';
@@ -1491,10 +1492,10 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       // Reading history must never resume a thread; resume belongs to send only.
-      const read = await server.request<unknown>('thread/read', {
-        threadId: saved.activeThreadId,
-        includeTurns: true,
-      });
+      const read = await readCodexHistory(
+        (method, params) => server.request(method, params),
+        saved.activeThreadId,
+      );
       const turns = (read as { thread?: { turns?: Array<{ id?: unknown }> } } | null)?.thread
         ?.turns;
       const lastTurn = turns?.at(-1);
@@ -1760,9 +1761,10 @@ async function collectCodexArtifact(
   const server = codexService().server;
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
-      const read = await server.request<{
-        thread?: { turns?: Array<{ id?: unknown; items?: unknown[] }> };
-      }>('thread/read', { threadId, includeTurns: true });
+      const read = await readCodexHistory(
+        (method, params) => server.request(method, params),
+        threadId,
+      );
       const turns = read.thread?.turns ?? [];
       const current =
         typeof turn.id === 'string'
@@ -3197,9 +3199,10 @@ function register() {
     const threadId = saved.activeThreadId;
     if (!threadId || codexBusy.has(threadId))
       throw new Error('再取得できる完了済みのCodex会話がありません。');
-    const read = await codexService().server.request<{
-      thread?: { turns?: Array<{ id?: unknown; status?: string; items?: unknown[] }> };
-    }>('thread/read', { threadId, includeTurns: true });
+    const read = await readCodexHistory(
+      (method, params) => codexService().server.request(method, params),
+      threadId,
+    );
     const fileName = expectedArtifact(context.stage === 'story' ? 'story-finalize' : context.stage);
     const turn = fileName ? latestCompletedArtifactTurn(read.thread?.turns ?? [], fileName) : null;
     if (!turn) throw new Error('この工程の完了済みArtifact依頼が見つかりません。');

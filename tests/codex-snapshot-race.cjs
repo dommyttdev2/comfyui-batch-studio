@@ -19,10 +19,7 @@ const rendererSend = pane.slice(
   pane.indexOf('const selectChat'),
 );
 
-assert.ok(
-  snapshot.includes("server.request<unknown>('thread/read'"),
-  'Saved history must remain readable',
-);
+assert.ok(snapshot.includes('readCodexHistory('), 'Saved history must remain readable');
 assert.ok(
   !snapshot.includes("'thread/resume'"),
   'Viewing history must never resume an unpersisted thread',

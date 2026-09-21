@@ -263,3 +263,17 @@
   line-height: 1.5;
   font-size: 12px;
 }
+
+.codex-task-disabled-reason {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #f0c78e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.codex-task-disabled-reason button,
+.codex-error button {
+  font-size: 12px;
+}
