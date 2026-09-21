@@ -1799,7 +1799,10 @@ async function codexSend(
       codexBusy.delete(threadId);
       codexPendingArtifacts.delete(threadId);
       codexActiveTurnIds.delete(threadId);
-      codexTurnMonitor.failedToSend(threadId, error instanceof Error ? error.message : String(error));
+      codexTurnMonitor.failedToSend(
+        threadId,
+        error instanceof Error ? error.message : String(error),
+      );
     }
     throw error;
   } finally {
@@ -1843,8 +1846,7 @@ async function codexStopTurn(state: ProjectWindowState): Promise<CodexSnapshot> 
   try {
     await interrupt;
   } finally {
-    if (codexInterruptRequests.get(threadId) === interrupt)
-      codexInterruptRequests.delete(threadId);
+    if (codexInterruptRequests.get(threadId) === interrupt) codexInterruptRequests.delete(threadId);
   }
   // Do not mark the turn interrupted locally. turn/completed provides the
   // authoritative terminal status and releases the busy lock.
