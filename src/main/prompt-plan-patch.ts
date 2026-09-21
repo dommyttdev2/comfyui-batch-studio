@@ -93,10 +93,8 @@ function validPath(scope: Scope, path: string): string[] | null {
   const parts = path.split('.');
   if (scope !== 'common' && parts.shift() !== 'prompt') return null;
   if (parts.length === 1 && parts[0] === 'triggerWords') return parts;
-  if (parts.length === 2 && parts[0] === 'positive' && positive.has(parts[1]))
-    return parts;
-  if (parts.length === 2 && parts[0] === 'negative' && negative.has(parts[1]))
-    return parts;
+  if (parts.length === 2 && parts[0] === 'positive' && positive.has(parts[1])) return parts;
+  if (parts.length === 2 && parts[0] === 'negative' && negative.has(parts[1])) return parts;
   if (
     parts.length === 3 &&
     parts[0] === 'positive' &&
@@ -106,7 +104,10 @@ function validPath(scope: Scope, path: string): string[] | null {
     return parts;
   return null;
 }
-function scopeTarget(plan: PromptPlanArtifactV2, operation: PatchOperation): StructuredPrompt | null {
+function scopeTarget(
+  plan: PromptPlanArtifactV2,
+  operation: PatchOperation,
+): StructuredPrompt | null {
   if (operation.scope === 'common') return plan.common;
   const branch = plan.branches.find((candidate) => candidate.id === operation.branchId);
   if (!branch) return null;
@@ -125,8 +126,7 @@ function validOperation(value: unknown): value is PatchOperation {
   )
     return false;
   if (!validPath(value.scope as Scope, value.path)) return false;
-  if (value.scope === 'common')
-    return !('branchId' in value) && !('leafId' in value);
+  if (value.scope === 'common') return !('branchId' in value) && !('leafId' in value);
   if (typeof value.branchId !== 'string' || !value.branchId) return false;
   return value.scope === 'branch'
     ? !('leafId' in value)
@@ -176,12 +176,21 @@ export async function applyPromptPlanPatch(root: string, raw: string): Promise<P
   const modified = new Set<string>();
   for (const [index, operation] of patch.operations.entries()) {
     if (!validOperation(operation))
-      return failure('PATCH_OPERATION', `operations[${index}] のscope・path・before・afterが不正です。`);
+      return failure(
+        'PATCH_OPERATION',
+        `operations[${index}] のscope・path・before・afterが不正です。`,
+      );
     const target = scopeTarget(updated, operation);
-    if (!target) return failure('PATCH_TARGET', `operations[${index}] のBranch/Leafまたはpromptがありません。`);
+    if (!target)
+      return failure(
+        'PATCH_TARGET',
+        `operations[${index}] のBranch/Leafまたはpromptがありません。`,
+      );
     const segments = validPath(operation.scope, operation.path);
     if (!segments) return failure('PATCH_PATH', `operations[${index}] のpathは変更できません。`);
-    const identity = [operation.scope, operation.branchId, operation.leafId, operation.path].join('/');
+    const identity = [operation.scope, operation.branchId, operation.leafId, operation.path].join(
+      '/',
+    );
     if (modified.has(identity))
       return failure('PATCH_DUPLICATE', `operations[${index}] は同じpathを二重に変更しています。`);
     modified.add(identity);
@@ -204,8 +213,7 @@ export async function applyPromptPlanPatch(root: string, raw: string): Promise<P
   const modelsContent = await readText(confirmedPath(root, 'models'));
   const models: ModelsArtifact | null = modelsContent ? parseModels(modelsContent) : null;
   const checked = validatePromptPlan(updated, models);
-  if (!checked.valid)
-    return { extracted: '', validation: checked, summary: {} };
+  if (!checked.valid) return { extracted: '', validation: checked, summary: {} };
   const again = await currentPlan(root);
   if (!again || again.source !== current.source || sha256(again.content) !== patch.baseSha256)
     return failure(
@@ -217,6 +225,10 @@ export async function applyPromptPlanPatch(root: string, raw: string): Promise<P
   return {
     extracted: content,
     validation: checked,
-    summary: { branches: updated.branches.length, leaves: updated.branches.reduce((n, b) => n + b.leaves.length, 0), operations: patch.operations.length },
+    summary: {
+      branches: updated.branches.length,
+      leaves: updated.branches.reduce((n, b) => n + b.leaves.length, 0),
+      operations: patch.operations.length,
+    },
   };
 }
