@@ -178,6 +178,20 @@ export function PromptPlanStage({
           }}
         />
       )}
+      {provider === 'codex' &&
+        project.artifacts.find((a) => a.key === 'promptPlan')?.state !== 'missing' && (
+          <GrokBridge
+            project={project}
+            stage="prompt-plan-patch"
+            provider={provider}
+            title="Prompt Planを部分修正（差分検証）"
+            run={run}
+            onAutoImported={async () => {
+              await load();
+              setEditing(true);
+            }}
+          />
+        )}
       <section className="panel treepanel">
         <div className="panelhead">
           <div>
