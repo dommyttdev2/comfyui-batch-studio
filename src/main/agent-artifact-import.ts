@@ -8,6 +8,7 @@ import type {
 } from '../shared/types.js';
 import { importGrok, internalDir } from './artifact-service.js';
 import { importCaptionGrok } from './caption-service.js';
+import { applyPromptPlanPatch } from './prompt-plan-patch.js';
 import { readJson, writeJsonAtomic, writeTextAtomic } from './fs-utils.js';
 
 type Stage = GrokTask['stage'];
