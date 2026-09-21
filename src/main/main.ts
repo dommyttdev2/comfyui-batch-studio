@@ -97,6 +97,11 @@ import { GrokChatStateStore } from './grok-chat-state.js';
 import { CodexChatStateStore } from './codex-chat-state.js';
 import { codexTaskFileForTurn, latestCompletedArtifactTurn } from './codex-artifact-turn.js';
 import { readCodexHistory } from './codex-thread-history.js';
+import {
+  codexActivityFromHistory,
+  emptyCodexActivity,
+  safeCodexActivityEvent,
+} from '../shared/codex-activity.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { CodexTurnMonitor } from './codex-turn-monitor.js';
@@ -1361,15 +1366,20 @@ function forwardCodexNotification(notification: CodexNotification) {
       if (typeof threadId !== 'string' || threadId !== stateCodexActiveThread.get(state.window.id))
         continue;
     }
-    // Artifact turns can contain megabytes of JSON: never forward their raw deltas to the UI.
-    if (
-      !(
-        typeof threadId === 'string' &&
-        codexPendingArtifacts.has(threadId) &&
-        notification.method === 'item/agentMessage/delta'
-      )
-    )
+    // Never forward raw item objects, raw reasoning or artifact answer deltas.
+    // Only an allowlisted, length-bounded progress projection reaches the renderer.
+    const isItemNotification = notification.method.startsWith('item/');
+    const isSafeMessageDelta =
+      notification.method === 'item/agentMessage/delta' &&
+      !codexPendingArtifacts.has(threadId as string);
+    if (!isItemNotification || isSafeMessageDelta)
       state.codexView.webContents.send(IPC.CODEX_EVENT, notification);
+    const activity = safeCodexActivityEvent(notification.method, notification.params);
+    if (activity)
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: 'batch-studio/activity',
+        params: { threadId, activity },
+      });
     if (status)
       state.codexView.webContents.send(IPC.CODEX_EVENT, {
         method: 'batch-studio/turn-status',
@@ -1472,6 +1482,7 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
       ...context,
       ...saved,
       messages: [],
+      activity: emptyCodexActivity(),
       busy: false,
       status: codexTurnStatus(null),
       artifact,
@@ -1485,6 +1496,7 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
       ...context,
       ...saved,
       messages: [],
+      activity: emptyCodexActivity(),
       busy: true,
       status: codexTurnStatus(saved.activeThreadId),
       artifact,
@@ -1504,6 +1516,7 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
         ...context,
         ...saved,
         messages: codexMessages(read),
+        activity: codexActivityFromHistory(read),
         busy: false,
         status: codexTurnMonitor.fromRead(saved.activeThreadId, read),
         artifact:
@@ -1524,6 +1537,7 @@ async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> 
         ...context,
         ...saved,
         messages: [],
+        activity: emptyCodexActivity(),
         busy: false,
         historyUnavailable: true,
         status: codexTurnStatus(saved.activeThreadId),
