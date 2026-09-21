@@ -403,6 +403,8 @@ export async function buildGrokTask(
         ? planDraft
         : path.join(root, 'prompt_plan.json')
       : null;
+  if (stage === 'prompt-plan-fix' && (!currentPlan || !(await exists(currentPlan))))
+    throw new Error('修正元のprompt_plan.jsonがありません。先にPrompt Planを生成してください。');
   const planToFix = currentPlan ? await readJson<PromptPlanArtifact>(currentPlan) : null;
   const issues = planToFix ? validatePromptPlan(planToFix, modelData).issues : [];
   const issueCounts = new Map<string, { count: number; examples: string[] }>();
