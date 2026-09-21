@@ -40,9 +40,7 @@ export function latestCompletedArtifactTurn<T extends { status?: unknown }>(
     [...turns]
       .reverse()
       .find(
-        (turn) =>
-          turn.status === 'completed' &&
-          allowed.includes(codexTaskFileForTurn(turn) ?? ''),
+        (turn) => turn.status === 'completed' && allowed.includes(codexTaskFileForTurn(turn) ?? ''),
       ) ?? null
   );
 }
