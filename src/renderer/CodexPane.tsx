@@ -479,7 +479,7 @@ export function CodexPane() {
             )}
             {turnStatus.error && <small>{turnStatus.error}</small>}
           </div>
-          {busy && activeTurn && (
+          {busy && ['processing', 'streaming'].includes(turnStatus.phase) && (
             <div className="codex-runtime-actions">
               <button
                 type="button"
