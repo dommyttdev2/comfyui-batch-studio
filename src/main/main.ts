@@ -1900,7 +1900,7 @@ async function codexSendTask(
           'ファイルを書き換えず、回答の最後に ' +
           codexReturnFile[context.stage] +
           ' の完成した内容だけをMarkdownコードブロックなしで出力してください。' +
-          'Batch Studioが回答をチャットに展開せず、検証後にファイルへ保存します。') +
+          'Batch Studioが回答をチャットに展開せず、検証後にファイルへ保存します。'),
     stage,
   );
 }
