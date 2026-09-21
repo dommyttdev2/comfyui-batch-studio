@@ -26,7 +26,7 @@ export function codexTaskFileForTurn(turn: unknown): string | null {
   // Story discussion can mention story.md without requesting an artifact.
   // Capture only the filename, not the entire phrase "回答の最後に ...".
   const match = text.match(
-    /回答の最後に\s*(story\.md|model_loras\.json|prompt_plan\.json|caption_content\.json)/,
+    /回答の最後に\s*(story\.md|model_loras\.json|prompt_plan\.json|prompt_plan_patch\.json|caption_content\.json)/,
   );
   return match?.[1] ?? null;
 }
