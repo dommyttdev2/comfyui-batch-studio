@@ -97,6 +97,7 @@ import { GrokChatStateStore } from './grok-chat-state.js';
 import { CodexChatStateStore } from './codex-chat-state.js';
 import { codexTaskFileForTurn, latestCompletedArtifactTurn } from './codex-artifact-turn.js';
 import { readCodexHistory } from './codex-thread-history.js';
+import { promptPlanPatchBase } from './prompt-plan-patch.js';
 import {
   codexActivityFromHistory,
   emptyCodexActivity,
@@ -1847,7 +1848,7 @@ async function collectCodexArtifact(
 const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
   story: ['story-initial', 'story-finalize', 'story-fix'],
   models: ['models', 'models-fix'],
-  'prompt-plan': ['prompt-plan', 'prompt-plan-fix'],
+  'prompt-plan': ['prompt-plan', 'prompt-plan-fix', 'prompt-plan-patch'],
   caption: ['caption'],
 };
 const codexReturnFile: Record<GrokContextStage, string> = {
@@ -1864,6 +1865,43 @@ async function codexSendTask(
   const context = codexContextFor(state);
   if (!codexTaskContexts[context.stage].includes(stage))
     throw new Error('選択した工程に対応しない依頼です。');
+  if (stage === 'prompt-plan-patch') {
+    const baseline = await promptPlanPatchBase(context.root);
+    const projectPath = path.relative(context.root, baseline.filePath);
+    const patchPrompt = `## Task
+あなたはComfyUI Batch StudioのPrompt Plan Schema v2を修正します。
+これは相談や全文再生成ではなく、この会話で合意した変更を、現在の既存計画へ部分適用するための差分生成依頼です。
+プロジェクト内の既存ファイル ${projectPath} を必要な箇所だけ読み込み、該当Branch/Leafを実際に確認してください。ファイルは変更しません。
+現在のファイル本文のSHA-256（UTF-8のバイト列）: ${baseline.baseSha256}
+現在の計画: ${baseline.branches} Branch / ${baseline.leaves} Leaf。
+この会話の修正対象以外のBranch/Leaf、ID、枚数、モデル設定、タグを絶対に変更しないでください。
+
+## 差分JSON形式（厳守）
+{
+  "schemaVersion": 1,
+  "baseSha256": "${baseline.baseSha256}",
+  "operations": [
+    {
+      "scope": "branch",
+      "branchId": "既存Branch ID（例: b19）",
+      "path": "prompt.triggerWords",
+      "before": [{"modelRef": "実際の既存ref", "words": ["修正前の値"]}],
+      "after": [{"modelRef": "実際の既存ref", "words": ["修正後の値"]}]
+    }
+  ]
+}
+- 上記のbefore/afterは構造例であり、実際の元ファイルから対象配列の全要素を正確に転記してください。推測で記載しないでください。
+- 操作対象は、commonならscope=commonでpath=triggerWords、positive.category、positive.camera.pov/angle/framing/gaze/focus、negative.category、Branch/Leafならscope=branch/leafでpathの先頭にprompt.を付けた同じ形式です。
+- BranchにはbranchId、LeafにはbranchIdとleafIdを指定します。共通Scopeにはどちらも指定しません。
+- beforeとafterはどちらも対象の配列全体を入れ、beforeは現在のファイル内容と完全一致させてください。変更対象外の要素は維持してください。
+- この差分はBatch Studioが基準ハッシュとbeforeを照合して原子的に下書きへ適用し、計画全件を検証します。
+- JSONは上記3つのroot fieldのみ、operationはscope/branchId/leafId/path/before/afterのみを使用してください。
+- 同じscope・Branch・Leaf・pathへの変更は1操作に統合してください。操作数は100件以下です。
+- 修正する既存配列が見つからない、または配列の全値を正確に読めない場合、差分を作成したと主張せず理由を示してください。
+- 原本全体や修正案だけの会話は出力しません。回答の最後に prompt_plan_patch.json の完成した内容だけをMarkdownコードブロックなしで出力してください。Batch Studioが検証後に保存します。
+${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
+    return codexSend(state, patchPrompt, stage);
+  }
   const task = await buildGrokTask(context.root, stage, extra);
   // Only replace provider-specific file instructions. The shared Schema v2
   // JSON example and all validation rules must reach both Grok and Codex.
