@@ -1407,7 +1407,10 @@ export interface BatchStudioApi {
   };
   codex: {
     getProvider: (stage: GrokContextStage) => Promise<AssistantPaneProvider>;
-    setProvider: (provider: AssistantPaneProvider, stage: GrokContextStage) => Promise<GrokPaneState>;
+    setProvider: (
+      provider: AssistantPaneProvider,
+      stage: GrokContextStage,
+    ) => Promise<GrokPaneState>;
     setContext: (root: string, stage: GrokContextStage) => Promise<void>;
     selectStageTask: (root: string, stage: GrokTask['stage']) => Promise<void>;
     onStageTaskSelected: (listener: (stage: GrokTask['stage']) => void) => () => void;
