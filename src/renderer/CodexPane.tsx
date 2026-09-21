@@ -734,7 +734,42 @@ export function CodexPane() {
             >
               送信
             </button>
+            <small>
+              通常の「送信」は相談用です。回答にJSONの修正案が含まれていても成果物は更新されません。
+            </small>
           </div>
+          {context.stage === 'prompt-plan' &&
+            !autoArtifact &&
+            !artifactTaskRef.current &&
+            messages.at(-1)?.role === 'assistant' &&
+            !messages.at(-1)?.text.includes('の取り込み結果は下に表示します。') && (
+              <section
+                className="codex-revision-action"
+                aria-label="Prompt Planの修正を成果物へ反映"
+              >
+                <strong>この会話の回答はまだ prompt_plan.json に反映されていません。</strong>
+                <p>
+                  Branch単位のJSON断片は、そのままでは全体のPrompt Planとして取り込めません。
+                  修正元の下書きを維持したまま、会話で合意した内容を全体に反映した完成版を生成します。
+                </p>
+                <button
+                  disabled={Boolean(taskSendDisabledReason)}
+                  title={
+                    taskSendDisabledReason ??
+                    '現在の会話を踏まえ、完成版を検証して自動取り込みします'
+                  }
+                  onClick={() =>
+                    void send(
+                      () => window.batchStudio.codex.sendTask('prompt-plan-fix', extra),
+                      '工程の依頼: Prompt Planを修正' + (extra ? '\n' + extra : ''),
+                      'prompt-plan-fix',
+                    )
+                  }
+                >
+                  修正内容を完成版に反映して自動取り込み
+                </button>
+              </section>
+            )}
           {!autoArtifact && Boolean(output) && (
             <details className="codex-manual-fallback">
               <summary>通常の回答をファイルとして保存（手動）</summary>
