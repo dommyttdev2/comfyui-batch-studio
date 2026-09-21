@@ -137,11 +137,21 @@ export async function readCodexOutput(workspace: FileArtifactWorkspace): Promise
   }
   if (!stat.isFile() || stat.isSymbolicLink() || !stat.size || stat.size > MAX_OUTPUT_BYTES)
     throw new Error('Codex成果物が通常のファイルではない、空、または10MBを超えています。');
-  const [directory, output] = await Promise.all([
-    realpath(path.join(workspace.directory, 'output')),
+  const outputDirectory = path.join(workspace.directory, 'output');
+  const [workspaceStat, outputStat, workspaceReal, directory, output] = await Promise.all([
+    lstat(workspace.directory),
+    lstat(outputDirectory),
+    realpath(workspace.directory),
+    realpath(outputDirectory),
     realpath(workspace.outputPath),
   ]);
-  if (output !== path.join(directory, workspace.fileName))
+  if (
+    workspaceStat.isSymbolicLink() ||
+    outputStat.isSymbolicLink() ||
+    !outputStat.isDirectory() ||
+    directory !== path.join(workspaceReal, 'output') ||
+    output !== path.join(directory, workspace.fileName)
+  )
     throw new Error('Codex成果物の保存先が作業領域外を指しています。');
   const content = await readFile(workspace.outputPath, 'utf8');
   if (!content.trim()) throw new Error('Codexが生成した成果物ファイルは空です。');
