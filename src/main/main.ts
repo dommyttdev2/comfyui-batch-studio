@@ -1991,20 +1991,9 @@ ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
       '_',
     );
     references.push({ name: filename, content });
-    referenceGuide.push(
-      'input/' +
-        references.length +
-        '-' +
-        filename +
-        ' — ' +
-        attachment.purpose,
-    );
+    referenceGuide.push('input/' + references.length + '-' + filename + ' — ' + attachment.purpose);
   }
-  const workspace = await prepareCodexFileWorkspace(
-    app.getPath('userData'),
-    stage,
-    references,
-  );
+  const workspace = await prepareCodexFileWorkspace(app.getPath('userData'), stage, references);
   return codexSend(
     state,
     prompt +
