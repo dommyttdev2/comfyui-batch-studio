@@ -196,6 +196,8 @@ function App() {
   }, []);
   const contextStage = grokContextStage(stage);
   const providerKey = project && contextStage ? project.rootPath + '\0' + contextStage : null;
+  const activeProviderKey = useRef(providerKey);
+  activeProviderKey.current = providerKey;
   useEffect(() => {
     let cancelled = false;
     const root = project?.rootPath ?? null;
@@ -219,13 +221,15 @@ function App() {
   }, [project?.rootPath, stage]);
   const changeProvider = async (provider: AssistantPaneProvider) => {
     if (!project || !contextStage || paneProviderRoot !== providerKey || switchingProvider) return;
+    const selectedKey = providerKey;
     setSwitchingProvider(true);
     setError('');
     try {
       await window.batchStudio.codex.setProvider(provider, contextStage);
-      setPaneProvider(provider);
+      if (activeProviderKey.current === selectedKey) setPaneProvider(provider);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (activeProviderKey.current === selectedKey)
+        setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSwitchingProvider(false);
     }
