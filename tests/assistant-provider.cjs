@@ -65,7 +65,7 @@ matchCode(
 matchCode(
   read('src/renderer/App.tsx'),
   /paneProviderRoot !== providerKey[\s\S]*この工程のAIエージェントを復元中/,
-  'Do not render a stage with another stage\'s agent before restoration',
+  "Do not render a stage with another stage's agent before restoration",
 );
 matchCode(
   read('src/main/main.ts'),
@@ -80,7 +80,7 @@ matchCode(
 matchCode(
   read('src/main/main.ts'),
   /assistantSelectionGeneration !== generation/,
-  'Out-of-order restores must not select the previous stage\'s provider',
+  "Out-of-order restores must not select the previous stage's provider",
 );
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
@@ -227,12 +227,7 @@ for (const expected of [
   assert.equal(migratedOnDisk.projects[legacyRoot].stages.caption, 'grok');
 
   const firstOpenRoot = path.join(userData, 'project-first-open');
-  const firstProvider = await store.resolve(
-    firstOpenRoot,
-    'grok',
-    async () => null,
-    'models',
-  );
+  const firstProvider = await store.resolve(firstOpenRoot, 'grok', async () => null, 'models');
   assert.equal(firstProvider, 'grok');
   await store.remember(firstOpenRoot, 'codex', 'story');
   assert.equal(
