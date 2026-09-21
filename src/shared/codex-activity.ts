@@ -128,7 +128,7 @@ export function safeCodexActivityEvent(
   method: string,
   params: Record<string, unknown>,
 ): CodexActivityEvent | null {
-  const turnId = clip(params.turnId, 200);
+  const turnId = clip(params.turnId, 200) || clip(asRecord(params.turn)?.id, 200);
   if (!turnId) return null;
   if (method === 'turn/started' || method === 'turn/completed') return { method, turnId };
   if (method === 'item/started' || method === 'item/completed') {
@@ -137,7 +137,16 @@ export function safeCodexActivityEvent(
     if (!source || !kind) return null;
     const item = toItem(source);
     if (!item) return null;
-    return { method, turnId, itemId: item.id, item: { ...item, type: kind } };
+    return {
+      method,
+      turnId,
+      itemId: item.id,
+      item: {
+        ...item,
+        status: method === 'item/completed' && !source.status ? 'completed' : item.status,
+        type: kind,
+      },
+    };
   }
   if (
     method !== 'item/reasoning/summaryTextDelta' &&
