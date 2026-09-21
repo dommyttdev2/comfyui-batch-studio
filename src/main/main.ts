@@ -1926,11 +1926,13 @@ async function codexSendTask(
     throw new Error('選択した工程に対応しない依頼です。');
   if (stage === 'prompt-plan-patch') {
     const baseline = await promptPlanPatchBase(context.root);
-    const projectPath = path.relative(context.root, baseline.filePath);
+    const workspace = await prepareCodexFileWorkspace(app.getPath('userData'), stage, [
+      { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
+    ]);
     const patchPrompt = `## Task
 あなたはComfyUI Batch StudioのPrompt Plan Schema v2を修正します。
 これは相談や全文再生成ではなく、この会話で合意した変更を、現在の既存計画へ部分適用するための差分生成依頼です。
-プロジェクト内の既存ファイル ${projectPath} を必要な箇所だけ読み込み、該当Branch/Leafを実際に確認してください。ファイルは変更しません。
+作業ディレクトリの input/1-prompt_plan.json を読み込み、該当Branch/Leafを実際に確認してください。入力ファイルは変更しません。
 現在のファイル本文のSHA-256（UTF-8のバイト列）: ${baseline.baseSha256}
 現在の計画: ${baseline.branches} Branch / ${baseline.leaves} Leaf。
 この会話の修正対象以外のBranch/Leaf、ID、枚数、モデル設定、タグを絶対に変更しないでください。
@@ -1957,9 +1959,14 @@ async function codexSendTask(
 - JSONは上記3つのroot fieldのみ、operationはscope/branchId/leafId/path/before/afterのみを使用してください。
 - 同じscope・Branch・Leaf・pathへの変更は1操作に統合してください。操作数は100件以下です。
 - 修正する既存配列が見つからない、または配列の全値を正確に読めない場合、差分を作成したと主張せず理由を示してください。
-- 原本全体や修正案だけの会話は出力しません。回答の最後に prompt_plan_patch.json の完成した内容だけをMarkdownコードブロックなしで出力してください。Batch Studioが検証後に保存します。
+- 原本全体や修正案だけの会話は出力しません。次の出力契約に従い、差分JSONをファイルに書き込んでください。
 ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
-    return codexSend(state, patchPrompt, stage);
+    return codexSend(
+      state,
+      patchPrompt + '\n\n' + workspaceOutputInstruction(workspace),
+      stage,
+      workspace,
+    );
   }
   const task = await buildGrokTask(context.root, stage, extra);
   // Only replace provider-specific file instructions. The shared Schema v2
@@ -1967,38 +1974,45 @@ ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
   const prompt = task.prompt
     .replace(artifactFileOutputRules(codexReturnFile[context.stage]), '')
     .replaceAll('Grok', 'Codex');
-  const files: string[] = [];
-  let combinedSize = prompt.length;
+  if (stage === 'story-initial')
+    return codexSend(
+      state,
+      prompt +
+        '\n\n## Codex向け出力契約\nこれは対話用の検討依頼です。成果物ファイルはまだ作成しません。',
+      stage,
+    );
+  const references: Array<{ name: string; content: string }> = [];
+  const referenceGuide: string[] = [];
   for (const attachment of task.attachments) {
     if (!attachment.exists) continue;
-    const data = await readFile(attachment.path, 'utf8');
-    combinedSize += data.length;
-    if (combinedSize > 750_000)
-      throw new Error('参照ファイルが大きすぎるため送信できません。添付内容を整理してください。');
-    files.push('### ' + attachment.name + ' (' + attachment.purpose + ')\n' + data);
+    const content = await readFile(attachment.path, 'utf8');
+    const filename = (attachment.name.split(/[\\/]/).at(-1) ?? 'reference.txt').replace(
+      /[^a-zA-Z0-9_.-]/g,
+      '_',
+    );
+    references.push({ name: filename, content });
+    referenceGuide.push(
+      'input/' +
+        references.length +
+        '-' +
+        filename +
+        ' — ' +
+        attachment.purpose,
+    );
   }
-  // Keep the output contract at the end, after all reference JSON. Otherwise a
-  // conversational patch may be mistaken for the requested complete artifact.
-  const revisionContract =
-    stage === 'prompt-plan-fix'
-      ? 'これは差分の相談ではなく、修正した完成版の再生成依頼です。会話で合意した修正を添付の既存prompt_plan.json全体へ適用してください。' +
-        'Schema v2のroot objectから全Branch/全Leafまでを一つの完全なJSONとして出力し、既存のID・順序・枚数を維持してください。' +
-        'b19など一部BranchのJSON断片、差分、説明、修正手順、「他は変更しない」などの省略表現は不可です。' +
-        '全文が出力できない場合は部分JSONを完成品と称さず、出力できない理由を返してください。'
-      : '';
+  const workspace = await prepareCodexFileWorkspace(
+    app.getPath('userData'),
+    stage,
+    references,
+  );
   return codexSend(
     state,
     prompt +
-      (files.length ? '\n\n## 参照ファイル\n' + files.join('\n\n') : '') +
-      '\n\n## Codex向け出力契約\n' +
-      (stage === 'story-initial'
-        ? 'これは対話用の検討依頼です。成果物ファイルはまだ作成しません。'
-        : revisionContract +
-          'ファイルを書き換えず、回答の最後に ' +
-          codexReturnFile[context.stage] +
-          ' の完成した内容だけをMarkdownコードブロックなしで出力してください。' +
-          'Batch Studioが回答をチャットに展開せず、検証後にファイルへ保存します。'),
+      (referenceGuide.length ? '\n\n## 参照ファイル\n' + referenceGuide.join('\n') : '') +
+      '\n\n' +
+      workspaceOutputInstruction(workspace),
     stage,
+    workspace,
   );
 }
 
