@@ -147,6 +147,29 @@
   font-size: 12px;
 }
 
+.codex-runtime-actions {
+  display: flex;
+  align-items: center;
+}
+
+.codex-stop-button {
+  padding: 6px 12px;
+  border: 1px solid #d68b7c;
+  border-radius: 6px;
+  background: #42252a;
+  color: #ffe2dc;
+  cursor: pointer;
+}
+
+.codex-stop-button:hover:not(:disabled) {
+  background: #573038;
+}
+
+.codex-stop-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .codex-runtime-state small,
 .codex-model-note {
   font-size: 11px;

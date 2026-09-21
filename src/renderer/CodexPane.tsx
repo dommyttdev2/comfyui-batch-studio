@@ -84,6 +84,7 @@ export function CodexPane() {
   const [extra, setExtra] = useState('');
   const [task, setTask] = useState<GrokTask['stage']>('story-finalize');
   const [busy, setBusy] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [turnStatus, setTurnStatus] = useState<CodexTurnStatus>(idleStatus);
   const [clock, setClock] = useState(Date.now());
   const [modelSettings, setModelSettings] = useState<CodexModelSettings | null>(null);
@@ -131,6 +132,7 @@ export function CodexPane() {
             : value.activity,
     );
     setBusy(value.busy);
+    if (!value.busy) setStopping(false);
     if (value.artifact) setAutoArtifact(value.artifact);
     artifactTaskRef.current = value.busy && value.artifact?.phase === 'waiting';
     setTurnStatus(value.status);
@@ -153,6 +155,7 @@ export function CodexPane() {
       artifactTaskRef.current = false;
       setError('');
       setBusy(false);
+      setStopping(false);
       setTurnStatus(idleStatus);
       setModelSettings(null);
       setModelError('');
@@ -240,6 +243,7 @@ export function CodexPane() {
       }
       if (event.method === 'disconnected') {
         setBusy(false);
+        setStopping(false);
         setTurnStatus((previous) =>
           ['sending', 'processing', 'streaming'].includes(previous.phase)
             ? {
@@ -267,6 +271,7 @@ export function CodexPane() {
         setStream((text) => text + event.params.delta);
       if (event.method === 'turn/completed') {
         setBusy(false);
+        setStopping(false);
         const key = currentContext.current;
         void refresh(key)
           .then((value) => {
@@ -340,6 +345,29 @@ export function CodexPane() {
         });
         setError(errorText(err));
         void refresh(key).catch(() => {});
+      }
+    }
+  };
+
+  const stopTurn = async () => {
+    const key = currentContext.current;
+    setStopping(true);
+    setError('');
+    try {
+      const next = await window.batchStudio.codex.stopTurn();
+      if (currentContext.current !== key) return;
+      setBusy(next.busy);
+      setTurnStatus(next.status);
+      if (!next.busy) {
+        setStopping(false);
+        await refresh(key);
+      }
+      // Otherwise wait for turn/completed: the interrupt request alone is
+      // not proof that the turn has stopped.
+    } catch (err) {
+      if (currentContext.current === key) {
+        setStopping(false);
+        setError(errorText(err));
       }
     }
   };
@@ -451,6 +479,18 @@ export function CodexPane() {
             )}
             {turnStatus.error && <small>{turnStatus.error}</small>}
           </div>
+          {busy && ['processing', 'streaming'].includes(turnStatus.phase) && (
+            <div className="codex-runtime-actions">
+              <button
+                type="button"
+                className="codex-stop-button"
+                disabled={stopping}
+                onClick={() => void stopTurn()}
+              >
+                {stopping ? '中止中…' : '現在の生成を中止'}
+              </button>
+            </div>
+          )}
           <div className="codex-model-controls">
             <label>
               使用するモデル
