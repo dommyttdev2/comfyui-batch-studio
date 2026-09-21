@@ -8,6 +8,7 @@ import type {
 } from '../shared/types.js';
 import { importGrok, internalDir } from './artifact-service.js';
 import { importCaptionGrok } from './caption-service.js';
+import { applyPromptPlanPatch } from './prompt-plan-patch.js';
 import { readJson, writeJsonAtomic, writeTextAtomic } from './fs-utils.js';
 
 type Stage = GrokTask['stage'];
@@ -20,6 +21,7 @@ const fileNames: Partial<Record<Stage, string>> = {
   'models-fix': 'model_loras.json',
   'prompt-plan': 'prompt_plan.json',
   'prompt-plan-fix': 'prompt_plan.json',
+  'prompt-plan-patch': 'prompt_plan_patch.json',
   caption: 'caption_content.json',
 };
 
@@ -28,6 +30,10 @@ export function expectedArtifact(stage: Stage): string | null {
 }
 export function artifactFileContent(stage: Stage, raw: string, extracted: string): string {
   if (stage === 'story-finalize' || stage === 'story-fix') return extracted.trimEnd();
+  if (stage === 'prompt-plan-patch') {
+    const fenced = raw.trim().match(/^`{3}(?:json)?\s*\n([\s\S]*?)\n`{3}\s*$/i);
+    return JSON.stringify(JSON.parse(fenced?.[1] ?? raw), null, 2);
+  }
   if (stage === 'models' || stage === 'models-fix') {
     // importGrok merges LoRA selections with the user's base models for the draft.
     // The downloadable model_loras.json must retain ONLY the agent's LoRA payload.
@@ -112,20 +118,17 @@ export async function importAutoArtifact(
       return duplicate;
     }
     notify?.({ ...base, phase: 'validating' });
-    const result =
-      stage === 'caption'
-        ? await importCaptionGrok(root, raw, { automatic: true, provider })
-        : await importGrok(
-            root,
-            stage.startsWith('story-')
-              ? 'story'
-              : stage.startsWith('models')
-                ? 'models'
-                : 'promptPlan',
-            raw,
-            stage as Exclude<Stage, 'story-initial' | 'caption'>,
-            { automatic: true, provider },
-          );
+    const result = await (async () => {
+      if (stage === 'caption') return importCaptionGrok(root, raw, { automatic: true, provider });
+      if (stage === 'prompt-plan-patch') return applyPromptPlanPatch(root, raw);
+      return importGrok(
+        root,
+        stage.startsWith('story-') ? 'story' : stage.startsWith('models') ? 'models' : 'promptPlan',
+        raw,
+        stage as Exclude<Stage, 'story-initial' | 'caption' | 'prompt-plan-patch'>,
+        { automatic: true, provider },
+      );
+    })();
     if (!result.validation.valid) {
       const invalid: AutoArtifactEvent = {
         ...base,

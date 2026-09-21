@@ -334,6 +334,8 @@ export async function buildGrokTask(
   stage: GrokTask['stage'],
   extra = '',
 ): Promise<GrokTask> {
+  if (stage === 'prompt-plan-patch')
+    throw new Error('部分修正用の差分生成はCodex Paneから実行してください。');
   const brief = path.join(root, 'project_brief.json'),
     story = path.join(root, 'story.md'),
     models = path.join(root, 'models.json'),

@@ -31,7 +31,7 @@ assert.match(main, /collectCodexArtifact\(threadId, pending, notification\.param
 assert.match(pane, /retryArtifact\(\)/);
 assert.match(
   pane,
-  /window\.batchStudio\.codex\.sendTask\('prompt-plan-fix', extra\)/,
+  /window\.batchStudio\.codex\.sendTask\('prompt-plan-patch', extra\)/,
   'A completed conversational revision must have an explicit route to an artifact task',
 );
 assert.match(
@@ -62,6 +62,9 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
   const { codexTaskFileForTurn, latestCompletedArtifactTurn } = await import(
     pathToFileURL(path.join(runtime, 'main', 'codex-artifact-turn.js')).href
   );
+  const { promptPlanPatchBase, applyPromptPlanPatch } = await import(
+    pathToFileURL(path.join(runtime, 'main', 'prompt-plan-patch.js')).href
+  );
   const taskTurn = (fileName) => ({
     status: 'completed',
     items: [
@@ -80,6 +83,7 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
     'story.md',
     'model_loras.json',
     'prompt_plan.json',
+    'prompt_plan_patch.json',
     'caption_content.json',
   ]) {
     assert.equal(codexTaskFileForTurn(taskTurn(fileName)), fileName);
@@ -110,6 +114,15 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
     }),
     null,
   );
+  const patchTurn = taskTurn('prompt_plan_patch.json');
+  assert.equal(
+    latestCompletedArtifactTurn(
+      [taskTurn('prompt_plan.json'), patchTurn, { status: 'completed', items: [] }],
+      ['prompt_plan.json', 'prompt_plan_patch.json'],
+    ),
+    patchTurn,
+    'Retry must select the latest patch task, not an older full Plan task.',
+  );
   const captionTurn = taskTurn('caption_content.json');
   const otherTurn = taskTurn('prompt_plan.json');
   assert.equal(
@@ -131,6 +144,7 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
   assert.equal(expectedArtifact('story-initial'), null);
   assert.equal(expectedArtifact('models'), 'model_loras.json');
   assert.equal(expectedArtifact('caption'), 'caption_content.json');
+  assert.equal(expectedArtifact('prompt-plan-patch'), 'prompt_plan_patch.json');
   assert.deepEqual(
     JSON.parse(
       artifactFileContent(
@@ -174,6 +188,130 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
     '{"original":"preserve"}\\n',
     'An invalid partial revision must not overwrite the current plan draft',
   );
+
+  const largeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-plan-patch-'));
+  let nextLeaf = 0;
+  const plan = {
+    schemaVersion: 2,
+    triggerWordsMode: 'selected',
+    common: { positive: { camera: { pov: ['pov'] } }, negative: {}, triggerWords: [] },
+    rootLoras: [],
+    branches: Array.from({ length: 19 }, (_, i) => ({
+      id: 'b' + String(i + 1).padStart(2, '0'),
+      label: 'Branch ' + (i + 1),
+      loras: [],
+      prompt: {
+        triggerWords: i === 18 ? [{ modelRef: 'lora.foo', words: ['pov'] }] : [],
+        positive: { camera: { pov: [] } },
+        negative: {},
+      },
+      leaves: Array.from({ length: i === 18 ? 32 : 26 }, () => {
+        nextLeaf++;
+        return {
+          id: 's' + String(nextLeaf).padStart(3, '0'),
+          name: 'Scene ' + nextLeaf,
+          prompt: { positive: { expression: ['neutral'] }, negative: {} },
+        };
+      }),
+    })),
+  };
+  assert.equal(nextLeaf, 500);
+  const confirmedPlanPath = path.join(largeRoot, 'prompt_plan.json');
+  const originalPlanText = JSON.stringify(plan, null, 2) + '\n';
+  fs.writeFileSync(confirmedPlanPath, originalPlanText);
+  const base = await promptPlanPatchBase(largeRoot);
+  assert.equal(base.branches, 19);
+  assert.equal(base.leaves, 500);
+  assert.equal(base.filePath, confirmedPlanPath);
+  const operation = {
+    scope: 'branch',
+    branchId: 'b19',
+    path: 'prompt.triggerWords',
+    before: [{ modelRef: 'lora.foo', words: ['pov'] }],
+    after: [{ modelRef: 'lora.foo', words: [] }],
+  };
+  const patch = (hash, operations) =>
+    JSON.stringify({ schemaVersion: 1, baseSha256: hash, operations });
+  const candidate = patch(base.baseSha256, [operation]);
+  const patchResult = await importAutoArtifact(
+    largeRoot,
+    'codex',
+    'prompt-plan-patch',
+    'thread-patch/turn-patch',
+    candidate,
+  );
+  assert.equal(patchResult.phase, 'imported', JSON.stringify(patchResult));
+  assert.equal(path.basename(patchResult.filePath), 'prompt_plan_patch.json');
+  assert.deepEqual(JSON.parse(fs.readFileSync(patchResult.filePath, 'utf8')).operations, [
+    operation,
+  ]);
+  const patchedDraftPath = path.join(largeRoot, '._batch_studio', 'drafts', 'prompt_plan.json');
+  const patchedText = fs.readFileSync(patchedDraftPath, 'utf8');
+  const patched = JSON.parse(patchedText);
+  assert.equal(patched.branches.length, 19);
+  assert.equal(
+    patched.branches.reduce((total, b) => total + b.leaves.length, 0),
+    500,
+  );
+  assert.deepEqual(patched.branches[18].prompt.triggerWords, operation.after);
+  assert.deepEqual(patched.branches[0], plan.branches[0], 'Untouched Branches must be identical');
+  assert.deepEqual(patched.branches[18].leaves, plan.branches[18].leaves);
+  assert.equal(
+    fs.readFileSync(confirmedPlanPath, 'utf8'),
+    originalPlanText,
+    'Partial revision must only update the draft, never the confirmed Plan',
+  );
+  const sameTurn = await importAutoArtifact(
+    largeRoot,
+    'codex',
+    'prompt-plan-patch',
+    'thread-patch/turn-patch',
+    candidate,
+  );
+  assert.equal(sameTurn.phase, 'duplicate', 'Completed patch imports must be idempotent');
+  const stale = await applyPromptPlanPatch(largeRoot, candidate);
+  assert.equal(stale.validation.valid, false);
+  assert.equal(stale.validation.issues[0].code, 'PATCH_BASE_CHANGED');
+  const nextBase = await promptPlanPatchBase(largeRoot);
+  const invalidCases = [
+    { operation: { ...operation, before: operation.before }, code: 'PATCH_EXPECTED_MISMATCH' },
+    { operation: { ...operation, path: 'rootLoras' }, code: 'PATCH_OPERATION' },
+    { operation: { ...operation, branchId: 'b99' }, code: 'PATCH_TARGET' },
+    {
+      operation: {
+        ...operation,
+        path: 'prompt.positive.camera.pov',
+        before: [],
+        after: ['bad,tag'],
+      },
+      code: 'PROMPT_TAG_FORMAT',
+    },
+  ];
+  for (const { operation: proposed, code } of invalidCases) {
+    const result = await applyPromptPlanPatch(largeRoot, patch(nextBase.baseSha256, [proposed]));
+    assert.equal(result.validation.valid, false, code);
+    assert.ok(
+      result.validation.issues.some((issue) => issue.code === code),
+      JSON.stringify(result),
+    );
+    assert.equal(fs.readFileSync(patchedDraftPath, 'utf8'), patchedText);
+  }
+  const duplicateOperations = await applyPromptPlanPatch(
+    largeRoot,
+    patch(nextBase.baseSha256, [
+      { ...operation, before: operation.after },
+      { ...operation, before: operation.after },
+    ]),
+  );
+  assert.equal(duplicateOperations.validation.issues[0].code, 'PATCH_DUPLICATE');
+  assert.equal(fs.readFileSync(patchedDraftPath, 'utf8'), patchedText);
+  const fragment = await applyPromptPlanPatch(
+    largeRoot,
+    '{"id":"b19","prompt":{"triggerWords":[]}}',
+  );
+  assert.equal(fragment.validation.issues[0].code, 'PATCH_FORMAT');
+  assert.equal(fs.readFileSync(patchedDraftPath, 'utf8'), patchedText);
+  console.log('500-leaf Prompt Plan patch validation, stale hash, atomicity and retry passed.');
 
   const recovered = await latestAutoArtifact(root, 'codex', 'story-finalize', 'thread-1/');
   assert.equal(recovered.filePath, first.filePath);

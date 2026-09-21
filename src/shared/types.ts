@@ -753,6 +753,7 @@ export interface GrokTask {
     | 'models-fix'
     | 'prompt-plan'
     | 'prompt-plan-fix'
+    | 'prompt-plan-patch'
     | 'caption';
   title: string;
   prompt: string;
