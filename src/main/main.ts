@@ -3385,12 +3385,6 @@ function register() {
           : [];
     const turn = latestCompletedArtifactTurn(read.thread?.turns ?? [], allowedFiles);
     if (!turn) throw new Error('この工程の完了済みArtifact依頼が見つかりません。');
-    const reply = [...(turn.items ?? [])]
-      .reverse()
-      .find((item) => (item as { type?: string } | null)?.type === 'agentMessage');
-    const raw =
-      reply && typeof reply === 'object' ? messageText(reply as Record<string, unknown>) : '';
-    if (!raw.trim()) throw new Error('Codexの回答から成果物本文を取得できません。');
     const taskStage =
       context.stage === 'story'
         ? 'story-finalize'
@@ -3401,6 +3395,35 @@ function register() {
               ? 'prompt-plan-patch'
               : 'prompt-plan'
             : 'caption';
+    const workspace =
+      typeof turn.id === 'string'
+        ? await findCodexWorkspace(
+            context.root,
+            app.getPath('userData'),
+            threadId,
+            turn.id,
+            taskStage,
+          )
+        : null;
+    if (workspace) {
+      const raw = await readCodexOutput(workspace);
+      return importAutoArtifact(
+        context.root,
+        'codex',
+        taskStage,
+        threadId + '/' + turn.id,
+        raw,
+        notifyAutoArtifact,
+      );
+    }
+    // Older tasks sent before file-based generation still carry their answer
+    // in the completed turn. Never use the reply for a new file-based turn.
+    const reply = [...(turn.items ?? [])]
+      .reverse()
+      .find((item) => (item as { type?: string } | null)?.type === 'agentMessage');
+    const raw =
+      reply && typeof reply === 'object' ? messageText(reply as Record<string, unknown>) : '';
+    if (!raw.trim()) throw new Error('Codexの回答から成果物本文を取得できません。');
     return importAutoArtifact(
       context.root,
       'codex',
