@@ -365,26 +365,28 @@ function App() {
                 {resetScope && <StageResetMenu scope={resetScope} onReset={resetFrom} />}
               </div>
               {contextStage && paneProviderRoot !== providerKey ? (
-                <div className="panel" role="status">この工程のAIエージェントを復元中…</div>
+                <div className="panel" role="status">
+                  この工程のAIエージェントを復元中…
+                </div>
               ) : (
-              <StageErrorBoundary
-                key={`${project.rootPath}:${stage}:${resetRevision}:${stageReloadRevision}`}
-                stage={stage}
-                onRetry={() => {
-                  setError('');
-                  setStageReloadRevision((revision) => revision + 1);
-                }}
-              >
-                <StageView
-                  project={project}
+                <StageErrorBoundary
+                  key={`${project.rootPath}:${stage}:${resetRevision}:${stageReloadRevision}`}
                   stage={stage}
-                  provider={paneProvider}
-                  refresh={refresh}
-                  setProject={setProject}
-                  run={run}
-                  resetFrom={resetFrom}
-                />
-              </StageErrorBoundary>
+                  onRetry={() => {
+                    setError('');
+                    setStageReloadRevision((revision) => revision + 1);
+                  }}
+                >
+                  <StageView
+                    project={project}
+                    stage={stage}
+                    provider={paneProvider}
+                    refresh={refresh}
+                    setProject={setProject}
+                    run={run}
+                    resetFrom={resetFrom}
+                  />
+                </StageErrorBoundary>
               )}
             </>
           )}
