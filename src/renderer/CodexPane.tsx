@@ -170,7 +170,10 @@ export function CodexPane() {
     });
     const offStageTask = window.batchStudio.codex.onStageTaskSelected((selected) => {
       const contextStage = currentContext.current.split('\0').at(-1) as CodexContext['stage'];
-      if (!currentContext.current || !stageTasks[contextStage]?.some((item) => item.value === selected))
+      if (
+        !currentContext.current ||
+        !stageTasks[contextStage]?.some((item) => item.value === selected)
+      )
         return;
       setTask(selected);
       setExtra('');
