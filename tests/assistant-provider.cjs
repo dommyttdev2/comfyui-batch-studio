@@ -33,12 +33,12 @@ matchCode(
 );
 matchCode(
   read('src/renderer/App.tsx'),
-  /codex\.getProvider\(\)/,
+  /codex\.getProvider\(context\)/,
   'App must load the project-specific choice before opening a stage',
 );
 matchCode(
   read('src/renderer/App.tsx'),
-  /codex\.setProvider\(provider\)/,
+  /codex\.setProvider\(provider, contextStage\)/,
   'Switching agents must persist the selected provider',
 );
 matchCode(
@@ -57,6 +57,31 @@ matchCode(
   'Old Codex projects must retain their Codex chat when switching the global default',
 );
 
+matchCode(
+  read('src/renderer/App.tsx'),
+  /\[project\?\.rootPath, stage\]/,
+  'Returning to a stage must reload its own last selected agent',
+);
+matchCode(
+  read('src/renderer/App.tsx'),
+  /paneProviderRoot !== providerKey[\s\S]*この工程のAIエージェントを復元中/,
+  'Do not render a stage with another stage\'s agent before restoration',
+);
+matchCode(
+  read('src/main/main.ts'),
+  /assistantProviderState\.resolve\(root, defaultProvider, async \(\) => \{[\s\S]*?\}, stage\)/,
+  'The project-level fallback must resolve into a stage-specific provider',
+);
+matchCode(
+  read('src/main/main.ts'),
+  /assistantProviderState\.remember\(root, provider, stage\)/,
+  'The explicit agent switch must be persisted for only the active stage',
+);
+matchCode(
+  read('src/main/main.ts'),
+  /assistantSelectionGeneration !== generation/,
+  'Out-of-order restores must not select the previous stage\'s provider',
+);
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
 const main = read('src/main/main.ts');
@@ -154,6 +179,66 @@ for (const expected of [
     await afterRestart.get(projectB),
     'codex',
     'Concurrent writes must not drop projects',
+  );
+  // Each planning stage remembers its own last opened agent, including after
+  // moving through non-AI stages and reopening the project.
+  await store.remember(projectA, 'grok', 'story');
+  await store.remember(projectA, 'codex', 'models');
+  await store.remember(projectA, 'grok', 'prompt-plan');
+  await store.remember(projectA, 'codex', 'caption');
+  assert.equal(await store.get(projectA, 'story'), 'grok');
+  assert.equal(await store.get(projectA, 'models'), 'codex');
+  assert.equal(await store.get(projectA, 'prompt-plan'), 'grok');
+  assert.equal(await store.get(projectA, 'caption'), 'codex');
+  await store.remember(projectA, 'codex', 'story');
+  assert.equal(await store.get(projectA, 'story'), 'codex');
+  assert.equal(await store.get(projectA, 'models'), 'codex');
+  assert.equal(await store.get(projectA, 'prompt-plan'), 'grok');
+  assert.equal(await store.get(projectA, 'caption'), 'codex');
+  assert.equal(await afterRestart.get(projectA, 'prompt-plan'), 'grok');
+  assert.equal(await afterRestart.get(projectA, 'caption'), 'codex');
+  assert.equal(await afterRestart.get(projectB, 'story'), 'codex');
+  await assert.rejects(
+    () => store.remember(projectA, 'grok', 'unknown'),
+    /Invalid assistant stage/,
+  );
+
+  const legacyRoot = path.join(userData, 'project-old-version');
+  const oldState = {
+    schemaVersion: 1,
+    projects: { [legacyRoot]: 'codex' },
+  };
+  const legacyDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-legacy-agent-'));
+  fs.writeFileSync(
+    path.join(legacyDirectory, 'assistant-provider-state.json'),
+    JSON.stringify(oldState),
+  );
+  const migrated = new AssistantProviderStore(legacyDirectory);
+  assert.equal(await migrated.get(legacyRoot, 'story'), 'codex');
+  await migrated.resolve(legacyRoot, 'grok', async () => null, 'story');
+  await migrated.remember(legacyRoot, 'grok', 'caption');
+  assert.equal(await migrated.get(legacyRoot, 'story'), 'codex');
+  assert.equal(await migrated.get(legacyRoot, 'caption'), 'grok');
+  const migratedOnDisk = JSON.parse(
+    fs.readFileSync(path.join(legacyDirectory, 'assistant-provider-state.json'), 'utf8'),
+  );
+  assert.equal(migratedOnDisk.schemaVersion, 2);
+  assert.equal(migratedOnDisk.projects[legacyRoot].stages.story, 'codex');
+  assert.equal(migratedOnDisk.projects[legacyRoot].stages.caption, 'grok');
+
+  const firstOpenRoot = path.join(userData, 'project-first-open');
+  const firstProvider = await store.resolve(
+    firstOpenRoot,
+    'grok',
+    async () => null,
+    'models',
+  );
+  assert.equal(firstProvider, 'grok');
+  await store.remember(firstOpenRoot, 'codex', 'story');
+  assert.equal(
+    await store.resolve(firstOpenRoot, 'codex', async () => null, 'models'),
+    'grok',
+    'Opening another stage must not overwrite the first-open choice',
   );
   await assert.rejects(() => store.remember(projectA, 'invalid'), /Invalid assistant provider/);
   console.log(
