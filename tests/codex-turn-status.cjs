@@ -30,6 +30,16 @@ assert.match(main, /server\.request\('model\/list'/);
 assert.match(pane, /Codexモデル/);
 assert.match(pane, /Codex推論強度/);
 assert.match(pane, /経過時間:/);
+assert.match(main, /safeCodexActivityEvent\(notification\.method, notification\.params\)/);
+assert.match(main, /summary: 'auto'/, 'Each Codex turn should request a reasoning summary');
+assert.match(main, /activity: codexActivityFromHistory\(read\)/);
+assert.match(
+  pane,
+  /updateCodexActivity\(previous, value\)/,
+  'Codex pane must render work progress independently of final answer streaming',
+);
+assert.match(pane, /思考要約・作業状況/);
+
 assert.match(pane, /phaseLabel\[turnStatus\.phase\]/);
 assert.match(
   pane,
@@ -63,6 +73,119 @@ assert.match(
   const { readCodexHistory } = await import(
     pathToFileURL(path.join(runtime, 'main', 'codex-thread-history.js')).href
   );
+
+  const {
+    emptyCodexActivity,
+    safeCodexActivityEvent,
+    updateCodexActivity,
+    codexActivityFromHistory,
+  } = await import(pathToFileURL(path.join(runtime, 'shared', 'codex-activity.js')).href);
+  const notification = (method, params) => safeCodexActivityEvent(method, params);
+  const art = 'private-unique-artifact-payload';
+  assert.equal(
+    notification('item/agentMessage/delta', { turnId: 't1', itemId: 'answer', delta: art }),
+    null,
+    'Artifact answer streaming must not be mixed into work activity',
+  );
+  assert.equal(
+    notification('item/reasoning/textDelta', { turnId: 't1', itemId: 'r1', delta: art }),
+    null,
+    'Never display raw reasoning even if a model supplies it',
+  );
+  assert.equal(
+    notification('item/started', {
+      turnId: 't1',
+      item: { id: 'a', type: 'agentMessage', text: art },
+    }),
+    null,
+    'Never forward full assistant output items as activity',
+  );
+  let activity = emptyCodexActivity();
+  const apply = (method, params) => {
+    const event = notification(method, { threadId: 'thread1', ...params });
+    assert.ok(event, `Recognized activity event: ${method}`);
+    activity = updateCodexActivity(activity, event);
+  };
+  apply('turn/started', { turnId: 't1' });
+  apply('item/started', {
+    turnId: 't1',
+    item: { type: 'reasoning', id: 'r1', content: [art], status: 'inProgress' },
+  });
+  apply('item/reasoning/summaryTextDelta', {
+    turnId: 't1',
+    itemId: 'r1',
+    summaryIndex: 0,
+    delta: '検討中',
+  });
+  apply('item/reasoning/summaryPartAdded', { turnId: 't1', itemId: 'r1', summaryIndex: 1 });
+  apply('item/reasoning/summaryTextDelta', {
+    turnId: 't1',
+    itemId: 'r1',
+    summaryIndex: 1,
+    delta: '次の手順',
+  });
+  assert.match(activity.items[0].summary, /検討中[\s\S]*次の手順/);
+  apply('item/started', {
+    turnId: 't1',
+    item: { type: 'commandExecution', id: 'cmd', command: 'npm test', status: 'inProgress' },
+  });
+  apply('item/commandExecution/outputDelta', {
+    turnId: 't1',
+    itemId: 'cmd',
+    delta: 'ok',
+  });
+  apply('item/completed', {
+    turnId: 't1',
+    item: {
+      type: 'commandExecution',
+      id: 'cmd',
+      command: 'npm test',
+      status: 'completed',
+      aggregatedOutput: 'all tests passed',
+      arguments: art,
+    },
+  });
+  assert.equal(activity.items[1].title, 'npm test');
+  assert.equal(activity.items[1].output, 'all tests passed');
+  assert.equal(activity.items[1].status, 'completed');
+  assert.ok(
+    !JSON.stringify(activity).includes(art),
+    'No arbitrary tool arguments or raw reasoning',
+  );
+  const wrongTurn = notification('item/plan/delta', {
+    turnId: 'another-turn',
+    itemId: 'plan',
+    delta: 'wrong',
+  });
+  assert.deepEqual(updateCodexActivity(activity, wrongTurn), activity);
+  apply('turn/started', { turnId: 't2' });
+  assert.equal(activity.items.length, 0, 'New turn must clear the previous activity');
+  assert.equal(activity.turnId, 't2');
+  const restoredActivity = codexActivityFromHistory({
+    thread: {
+      turns: [
+        {
+          id: 't3',
+          items: [
+            {
+              id: 'r',
+              type: 'reasoning',
+              summary: [{ text: 'Persisted summary' }],
+              content: [art],
+            },
+            { id: 'c', type: 'commandExecution', command: 'git status', status: 'completed' },
+            { id: 'answer', type: 'agentMessage', text: art },
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(restoredActivity.turnId, 't3');
+  assert.equal(restoredActivity.items[0].summary, 'Persisted summary');
+  assert.equal(restoredActivity.items[1].title, 'git status');
+  assert.ok(!JSON.stringify(restoredActivity).includes(art));
+  assert.ok(!restoredActivity.items.some((entry) => entry.kind === 'agentMessage'));
+
   const legacyTurn = { id: 'legacy', status: 'completed', items: [{ type: 'userMessage' }] };
   let legacyCalls = 0;
   const legacyHistory = await readCodexHistory(async (method, params) => {

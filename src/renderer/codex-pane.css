@@ -277,3 +277,71 @@
 .codex-error button {
   font-size: 12px;
 }
+
+.codex-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid #40536e;
+  border-radius: 10px;
+  padding: 12px;
+  background: #192432;
+}
+.codex-activity-heading,
+.codex-activity-item-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.codex-activity-heading strong {
+  color: #c4d9fa;
+}
+.codex-activity-heading span,
+.codex-activity small {
+  color: #aebdd1;
+  font-size: 12px;
+}
+.codex-activity > p {
+  margin: 0;
+  color: #c0c9d5;
+}
+.codex-activity-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+.codex-activity-item {
+  border: 1px solid #34485e;
+  border-radius: 7px;
+  padding: 9px;
+  background: #1e2b3b;
+}
+.codex-activity-item-heading strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.codex-activity-item details {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.codex-activity-item summary {
+  cursor: pointer;
+  color: #b9cdee;
+}
+.codex-activity-item p,
+.codex-activity-item pre {
+  margin: 8px 0 0;
+  padding: 8px;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #142030;
+  color: #dce7f5;
+}
