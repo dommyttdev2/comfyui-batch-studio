@@ -262,6 +262,9 @@ let lastFocusedProjectWindowId: number | null = null,
   assistantProviderState: AssistantProviderStore | null = null,
   codexAppServer: CodexAppServer | null = null,
   codexBusy = new Set<string>(),
+  codexTurnStartRequests = new Map<string, Promise<string>>(),
+  codexActiveTurnIds = new Map<string, string>(),
+  codexInterruptRequests = new Map<string, Promise<void>>(),
   codexPendingArtifacts = new Map<
     string,
     { root: string; stage: GrokTask['stage']; fileName: string; workspace?: FileArtifactWorkspace }
@@ -1367,8 +1370,16 @@ function forwardCodexNotification(notification: CodexNotification) {
   const threadId = notification.params.threadId;
   const status =
     typeof threadId === 'string' ? codexTurnMonitor.notification(threadId, notification) : null;
-  if (notification.method === 'turn/completed' && typeof threadId === 'string')
+  if (notification.method === 'turn/started' && typeof threadId === 'string') {
+    const turn = notification.params.turn as Record<string, unknown> | undefined;
+    const turnId = typeof turn?.id === 'string' ? turn.id : notification.params.turnId;
+    if (typeof turnId === 'string' && codexBusy.has(threadId))
+      codexActiveTurnIds.set(threadId, turnId);
+  }
+  if (notification.method === 'turn/completed' && typeof threadId === 'string') {
     codexBusy.delete(threadId);
+    codexActiveTurnIds.delete(threadId);
+  }
   for (const state of projectWindows.values()) {
     const context = state.codexContext;
     if (!context) continue;
@@ -1754,7 +1765,7 @@ async function codexSend(
     });
   codexTurnMonitor.sending(threadId);
   try {
-    const startedTurn = await server.request<{ turn: { id: string } }>('turn/start', {
+    const turnStart = server.request<{ turn: { id: string } }>('turn/start', {
       threadId,
       input: [{ type: 'text', text: input, text_elements: [] }],
       ...(workspace
@@ -1772,13 +1783,27 @@ async function codexSend(
       effort: settings.selection.effort,
       summary: 'auto',
     });
-    if (workspace && startedTurn?.turn?.id)
-      await rememberCodexWorkspace(context.root, workspace, threadId, startedTurn.turn.id);
+    const turnIdRequest = turnStart.then((result) => {
+      if (typeof result?.turn?.id !== 'string') throw new Error('CodexターンIDを取得できません。');
+      return result.turn.id;
+    });
+    codexTurnStartRequests.set(threadId, turnIdRequest);
+    const turnId = await turnIdRequest;
+    if (codexBusy.has(threadId)) codexActiveTurnIds.set(threadId, turnId);
+    if (workspace && codexBusy.has(threadId))
+      await rememberCodexWorkspace(context.root, workspace, threadId, turnId);
   } catch (error) {
-    codexBusy.delete(threadId);
-    codexPendingArtifacts.delete(threadId);
-    codexTurnMonitor.failedToSend(threadId, error instanceof Error ? error.message : String(error));
+    // A completed turn can race with turn/start returning. Do not replace its
+    // terminal state with a send failure or discard an artifact after completion.
+    if (codexBusy.has(threadId)) {
+      codexBusy.delete(threadId);
+      codexPendingArtifacts.delete(threadId);
+      codexActiveTurnIds.delete(threadId);
+      codexTurnMonitor.failedToSend(threadId, error instanceof Error ? error.message : String(error));
+    }
     throw error;
+  } finally {
+    codexTurnStartRequests.delete(threadId);
   }
   // Return metadata without reading a rollout that may not yet be persisted.
   return {
@@ -1796,6 +1821,34 @@ async function codexSend(
           }
         : null,
   };
+}
+async function codexStopTurn(state: ProjectWindowState): Promise<CodexSnapshot> {
+  const context = codexContextFor(state);
+  const { server, store } = codexService();
+  const saved = await store.get(context.root, context.stage);
+  const threadId = saved.activeThreadId;
+  if (!threadId || !codexBusy.has(threadId)) return codexSnapshot(state);
+  let interrupt = codexInterruptRequests.get(threadId);
+  if (!interrupt) {
+    interrupt = (async () => {
+      // The stop button can be pressed before turn/start returns its turn ID.
+      const turnId =
+        codexActiveTurnIds.get(threadId) ?? (await codexTurnStartRequests.get(threadId));
+      if (!turnId) throw new Error('中止対象のCodexターンを特定できません。');
+      if (!codexBusy.has(threadId)) return;
+      await server.request('turn/interrupt', { threadId, turnId });
+    })();
+    codexInterruptRequests.set(threadId, interrupt);
+  }
+  try {
+    await interrupt;
+  } finally {
+    if (codexInterruptRequests.get(threadId) === interrupt)
+      codexInterruptRequests.delete(threadId);
+  }
+  // Do not mark the turn interrupted locally. turn/completed provides the
+  // authoritative terminal status and releases the busy lock.
+  return codexSnapshot(state);
 }
 function notifyAutoArtifact(event: AutoArtifactEvent) {
   for (const state of projectWindows.values()) {
@@ -3349,6 +3402,9 @@ function register() {
     stateCodexActiveThread.set(state.window.id, id);
     return codexSnapshot(state);
   });
+  ipcMain.handle(IPC.CODEX_STOP_TURN, (event) =>
+    codexStopTurn(projectWindowForSender(event.sender)),
+  );
   ipcMain.handle(IPC.CODEX_SEND, (event, input: unknown) => {
     if (typeof input !== 'string') throw new Error('Invalid Codex prompt.');
     return codexSend(projectWindowForSender(event.sender), input);
@@ -3574,6 +3630,10 @@ async function initializeApplication() {
   codexAppServer.on('disconnected', (message: string) => {
     codexTurnMonitor.disconnected();
     codexBusy.clear();
+    codexTurnStartRequests.clear();
+    codexActiveTurnIds.clear();
+    codexInterruptRequests.clear();
+    codexPendingArtifacts.clear();
     for (const state of projectWindows.values())
       state.codexView.webContents.send(IPC.CODEX_EVENT, {
         method: 'disconnected',
