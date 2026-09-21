@@ -416,6 +416,9 @@ export async function buildGrokTask(
     stage === 'prompt-plan-fix'
       ? `\n\n## 修正対象・検証結果
 - 添付した現在のprompt_plan.jsonを修正対象として使い、正常なBranch/Leafのid・順序・内容を維持してください。問題のない画像を作り直したり、枚数を勝手に減らしたりしません。
+- この会話で合意した修正内容（タグの削除や重複解消など）を、添付の全体JSONに反映してください。会話内の修正提案だけで終わらず、修正後の完成したprompt_plan.jsonを納品してください。
+- b19だけ、特定のBranchだけ、差分パッチ、置換前後の断片、修正手順、説明文だけの回答は成果物ではありません。common / rootLoras / 全branches / 全leaves を含む Schema v2 の完全なJSONを、元の枚数とidを維持して出力してください。
+- JSON全文を一度に出力できない場合は、修正が完了したと報告せず、出力できない理由を明示してください。部分的なJSONを完成したprompt_plan.jsonとして渡してはいけません。
 - 既存ファイルが構文不正ならまず構文を修正し、全件チェックを実施してください。
 ${[...issueCounts].map(([code, item]) => `- ${code}: ${item.count}件。例: ${item.examples.join(' / ')}`).join('\n') || '- 構造検証の指摘はありません。追加の修正条件があればそれを優先してください。'}`
       : '';
