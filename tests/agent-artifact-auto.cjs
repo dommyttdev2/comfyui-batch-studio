@@ -82,9 +82,7 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
     rememberCodexWorkspace,
     findCodexWorkspace,
     readCodexOutput,
-  } = await import(
-    pathToFileURL(path.join(runtime, 'main', 'codex-file-artifact.js')).href
-  );
+  } = await import(pathToFileURL(path.join(runtime, 'main', 'codex-file-artifact.js')).href);
   const sandboxRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-sandbox-'));
   const isolatedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-project-'));
   const prepared = await prepareCodexFileWorkspace(sandboxRoot, 'prompt-plan', [
@@ -93,19 +91,24 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
   ]);
   assert.ok(prepared.directory.startsWith(sandboxRoot));
   assert.deepEqual(fs.readdirSync(path.join(prepared.directory, 'input')), [
-    '1-story.md', '2-models.json',
+    '1-story.md',
+    '2-models.json',
   ]);
   assert.match(workspaceOutputInstruction(prepared), /output\/prompt_plan\.json/);
-  assert.match(workspaceOutputInstruction(prepared), /回答の最後に prompt_plan\.json の生成状況のみ/);
-  await assert.rejects(
-    readCodexOutput(prepared),
-    /output\/prompt_plan\.json を生成しませんでした/,
+  assert.match(
+    workspaceOutputInstruction(prepared),
+    /回答の最後に prompt_plan\.json の生成状況のみ/,
   );
+  await assert.rejects(readCodexOutput(prepared), /output\/prompt_plan\.json を生成しませんでした/);
   fs.writeFileSync(prepared.outputPath, '{"schemaVersion":2}');
   assert.equal(await readCodexOutput(prepared), '{"schemaVersion":2}');
   await rememberCodexWorkspace(isolatedRoot, prepared, 'thread-files', 'turn-files');
   const located = await findCodexWorkspace(
-    isolatedRoot, sandboxRoot, 'thread-files', 'turn-files', 'prompt-plan',
+    isolatedRoot,
+    sandboxRoot,
+    'thread-files',
+    'turn-files',
+    'prompt-plan',
   );
   assert.equal(located?.outputPath, prepared.outputPath);
   assert.equal(
