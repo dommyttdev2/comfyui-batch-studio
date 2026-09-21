@@ -1406,8 +1406,8 @@ export interface BatchStudioApi {
     metrics: () => Promise<R2Metrics>;
   };
   codex: {
-    getProvider: () => Promise<AssistantPaneProvider>;
-    setProvider: (provider: AssistantPaneProvider) => Promise<GrokPaneState>;
+    getProvider: (stage: GrokContextStage) => Promise<AssistantPaneProvider>;
+    setProvider: (provider: AssistantPaneProvider, stage: GrokContextStage) => Promise<GrokPaneState>;
     setContext: (root: string, stage: GrokContextStage) => Promise<void>;
     selectStageTask: (root: string, stage: GrokTask['stage']) => Promise<void>;
     onStageTaskSelected: (listener: (stage: GrokTask['stage']) => void) => () => void;
