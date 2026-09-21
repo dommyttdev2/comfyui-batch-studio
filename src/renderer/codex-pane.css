@@ -345,3 +345,25 @@
   background: #142030;
   color: #dce7f5;
 }
+
+.codex-revision-action {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #405f81;
+  border-radius: 8px;
+  background: #1b2c3d;
+}
+.codex-revision-action strong {
+  color: #d7e7fc;
+  font-size: 12px;
+}
+.codex-revision-action p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #bfcede;
+}
+.codex-revision-action button {
+  justify-self: start;
+}
