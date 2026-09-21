@@ -3127,6 +3127,23 @@ function register() {
     const state = projectWindowForSender(event.sender);
     return state.codexContext;
   });
+  ipcMain.handle(IPC.CODEX_SELECT_STAGE_TASK, (event, root: unknown, stage: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    if (event.sender.id !== state.localView.webContents.id)
+      throw new Error('Only the project window can select a Codex task.');
+    validRoot(root);
+    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
+      throw new Error('This project is not active in the current window.');
+    if (state.paneProvider !== 'codex') throw new Error('Codex is not the selected AI provider.');
+    const context = codexContextFor(state);
+    if (
+      projectRootKey(root) !== projectRootKey(context.root) ||
+      !codexTaskContexts[context.stage].includes(stage as GrokTask['stage'])
+    )
+      throw new Error('選択した依頼は現在の工程に対応していません。');
+    state.codexView.webContents.send(IPC.CODEX_STAGE_TASK_SELECTED, stage);
+  });
+
   ipcMain.handle(IPC.CODEX_STATUS, () => codexAccount());
   ipcMain.handle(IPC.CODEX_SIGN_IN, async () => {
     const { server } = codexService();

@@ -168,6 +168,17 @@ export function CodexPane() {
     const offContext = window.batchStudio.codex.onContext((next) => {
       void switchContext(next);
     });
+    const offStageTask = window.batchStudio.codex.onStageTaskSelected((selected) => {
+      const contextStage = currentContext.current.split('\0').at(-1) as CodexContext['stage'];
+      if (
+        !currentContext.current ||
+        !stageTasks[contextStage]?.some((item) => item.value === selected)
+      )
+        return;
+      setTask(selected);
+      setExtra('');
+      setError('');
+    });
     const offArtifact = window.batchStudio.autoArtifact.onEvent((event) => {
       if (
         event.provider !== 'codex' ||
@@ -248,6 +259,7 @@ export function CodexPane() {
       .catch((err) => setError(errorText(err)));
     return () => {
       offContext();
+      offStageTask();
       offEvent();
       offArtifact();
     };

@@ -352,6 +352,12 @@ contextBridge.exposeInMainWorld('batchStudio', {
     getProvider: () => ipcRenderer.invoke(I.CODEX_GET_PROVIDER),
     setProvider: (p) => ipcRenderer.invoke(I.CODEX_SET_PROVIDER, p),
     setContext: (r, s) => ipcRenderer.invoke(I.CODEX_SET_CONTEXT, r, s),
+    selectStageTask: (root, stage) => ipcRenderer.invoke(I.CODEX_SELECT_STAGE_TASK, root, stage),
+    onStageTaskSelected: (listener) => {
+      const handler = (_event, stage) => listener(stage);
+      ipcRenderer.on(I.CODEX_STAGE_TASK_SELECTED, handler);
+      return () => ipcRenderer.removeListener(I.CODEX_STAGE_TASK_SELECTED, handler);
+    },
     context: () => ipcRenderer.invoke(I.CODEX_CONTEXT),
     onContext: (listener) => {
       const handler = (_event, context) => listener(context);
