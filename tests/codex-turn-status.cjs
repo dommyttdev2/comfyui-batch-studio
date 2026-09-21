@@ -31,6 +31,24 @@ assert.match(pane, /Codexモデル/);
 assert.match(pane, /Codex推論強度/);
 assert.match(pane, /経過時間:/);
 assert.match(pane, /phaseLabel\[turnStatus\.phase\]/);
+assert.match(
+  pane,
+  /const taskSendDisabledReason = loading[\s\S]*!account\?\.authenticated[\s\S]*modelLoading[\s\S]*!modelSettings/,
+  'Disabled task send must explain its precise prerequisite rather than fail silently',
+);
+assert.match(pane, /title=\{taskSendDisabledReason \?\?/, 'Disabled buttons must explain the reason');
+assert.match(pane, /モデル一覧を再取得/, 'Model discovery failures must be recoverable');
+assert.match(
+  pane,
+  /if \(status\.authenticated\) return refreshModels\(key\)/,
+  'Successful login must refresh the model list without changing stages',
+);
+assert.match(
+  pane,
+  /if \(status\.authenticated\) await refreshModels\(key\)/,
+  'Initial model discovery must run after the authentication check',
+);
+
 
 (async () => {
   const { CodexTurnMonitor, statusFromThreadRead } = await import(
