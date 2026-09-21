@@ -60,6 +60,65 @@ assert.match(
   const { CodexModelSelectionStore } = await import(
     pathToFileURL(path.join(runtime, 'main', 'codex-model-selection.js')).href
   );
+  const { readCodexHistory } = await import(
+    pathToFileURL(path.join(runtime, 'main', 'codex-thread-history.js')).href
+  );
+  const legacyTurn = { id: 'legacy', status: 'completed', items: [{ type: 'userMessage' }] };
+  let legacyCalls = 0;
+  const legacyHistory = await readCodexHistory(async (method, params) => {
+    legacyCalls++;
+    assert.equal(method, 'thread/read');
+    assert.equal(params.includeTurns, true);
+    return { thread: { turns: [legacyTurn] } };
+  }, 'legacy-thread');
+  assert.equal(legacyCalls, 1, 'Legacy history must not require paging');
+  assert.deepEqual(legacyHistory.thread.turns, [legacyTurn]);
+
+  const newest = { id: 'third', status: 'completed', items: [{ type: 'agentMessage', text: 'ok' }] };
+  const middle = { id: 'second', status: 'completed', items: [{ type: 'userMessage' }] };
+  const oldest = { id: 'first', status: 'completed', items: [{ type: 'userMessage' }] };
+  const pagedCalls = [];
+  const pagedHistory = await readCodexHistory(async (method, params) => {
+    pagedCalls.push({ method, params });
+    if (method === 'thread/read')
+      throw new Error('paginated threads do not support thread/read(includeTurns=true)');
+    assert.equal(method, 'thread/turns/list');
+    assert.equal(params.threadId, 'paged-thread');
+    assert.equal(params.itemsView, 'full', 'Artifact capture requires complete turn items');
+    assert.equal(params.sortDirection, 'desc');
+    return params.cursor === null
+      ? { data: [newest, middle], nextCursor: 'older' }
+      : { data: [oldest], nextCursor: null };
+  }, 'paged-thread');
+  assert.deepEqual(pagedHistory.thread.turns, [oldest, middle, newest]);
+  assert.equal(pagedCalls.length, 3);
+  assert.equal(pagedCalls[2].params.cursor, 'older');
+
+  const metadataHistory = await readCodexHistory(async (method) => {
+    if (method === 'thread/read') return { thread: { historyMode: 'paginated', turns: [] } };
+    return { data: [newest], nextCursor: null };
+  }, 'metadata-thread');
+  assert.deepEqual(metadataHistory.thread.turns, [newest]);
+
+  await assert.rejects(
+    () =>
+      readCodexHistory(async (method) => {
+        if (method === 'thread/read') throw new Error('permission denied');
+        return { data: [], nextCursor: null };
+      }, 'denied'),
+    /permission denied/,
+    'Unrelated read errors must not be swallowed by the paginated fallback',
+  );
+  await assert.rejects(
+    () =>
+      readCodexHistory(async (method) => {
+        if (method === 'thread/read') throw new Error('paginated threads do not support thread/read(includeTurns=true)');
+        return { data: [], nextCursor: 'same' };
+      }, 'invalid-cursor'),
+    /ページ送りが停止/,
+    'Repeated cursors must not loop forever or silently truncate conversation history',
+  );
+
   const monitor = new CodexTurnMonitor();
   const id = 'thread-one';
   assert.equal(monitor.get(id), null);
