@@ -13,7 +13,7 @@ Batch Studio と生成アシスタントの責務境界を守ってください�
 - ComfyUI Workflow JSON、node ID、link ID、group ID、node position、widgets_values は生成しません。
 - 添付ファイルに存在しない Model / Version / File identity を捏造しません。`;
 export const artifactFileOutputRules = (fileName: string) => `## 出力契約（必須）
-- 完成した内容を全て記載した UTF-8 のプレーンテキストファイル \<escape\>${fileName}\</escape\> を作成し、チャット上でダウンロード可能な添付ファイルとして返してください。
+- 完成した内容を全て記載した UTF-8 のプレーンテキストファイル（名前: ${fileName}）を作成し、チャット上でダウンロード可能な添付ファイルとして返してください。
 - 最終成果物はチャット本文へ展開せず、\`${fileName}\` という名前のダウンロード可能なファイルとして生成・添付してください。
 - ファイルを作成したと報告するだけでは納品になりません。「作成しました」「ファイルパス:」などの説明文、空のパス、ファイル名だけの表示は成果物ではありません。
 - 実際に添付ファイルを提供できない場合に限り、代替として完全なファイル本文だけを一つの Markdown code block に入れて出力してください。\`${fileName}\` が .md なら markdown、.json なら json のコードブロックを用います。Batch Studioがこの本文を検証して自動取り込みします。
