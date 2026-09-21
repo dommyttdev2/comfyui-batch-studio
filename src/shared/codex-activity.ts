@@ -71,6 +71,7 @@ function activityTitle(kind: ActivityKind, item: Record<string, unknown>): strin
 
 function itemSummary(kind: ActivityKind, item: Record<string, unknown>): string {
   if (kind === 'reasoning') {
+    if (typeof item.summary === 'string') return clip(item.summary, MAX_SUMMARY);
     const sections = Array.isArray(item.summary) ? item.summary : [];
     return sections
       .map((entry) => clip(asRecord(entry)?.text, MAX_SUMMARY))
@@ -78,7 +79,7 @@ function itemSummary(kind: ActivityKind, item: Record<string, unknown>): string 
       .join('\n\n')
       .slice(0, MAX_SUMMARY);
   }
-  if (kind === 'plan') return clip(item.text, MAX_SUMMARY);
+  if (kind === 'plan') return clip(item.summary, MAX_SUMMARY) || clip(item.text, MAX_SUMMARY);
   if (kind === 'todoList') {
     const items = Array.isArray(item.items) ? item.items : [];
     return items
@@ -102,12 +103,12 @@ function toItem(item: Record<string, unknown>, previous?: CodexActivityItem): Co
   return {
     id,
     kind,
-    title: activityTitle(kind, item),
+    title: clip(item.title, MAX_TITLE) || activityTitle(kind, item),
     status: clip(item.status, 40) || previous?.status || 'inProgress',
     summary: summary || previous?.summary || '',
     output:
       kind === 'commandExecution'
-        ? clip(item.aggregatedOutput, MAX_OUTPUT) || previous?.output || ''
+        ? clip(item.output, MAX_OUTPUT) || clip(item.aggregatedOutput, MAX_OUTPUT) || previous?.output || ''
         : previous?.output || '',
   };
 }
