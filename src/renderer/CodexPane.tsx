@@ -11,6 +11,12 @@ import type {
   CodexSendResult,
   GrokTask,
 } from '../shared/types';
+import {
+  emptyCodexActivity,
+  updateCodexActivity,
+  type CodexActivityState,
+  type CodexActivityEvent,
+} from '../shared/codex-activity';
 import './codex-pane.css';
 
 const stageTasks: Record<
@@ -69,6 +75,7 @@ export function CodexPane() {
   const [account, setAccount] = useState<CodexAccountStatus | null>(null);
   const [snapshot, setSnapshot] = useState<CodexSnapshot | null>(null);
   const [messages, setMessages] = useState<CodexMessage[]>([]);
+  const [activity, setActivity] = useState<CodexActivityState>(emptyCodexActivity);
   const [stream, setStream] = useState('');
   const [autoArtifact, setAutoArtifact] = useState<AutoArtifactEvent | null>(null);
   const artifactTaskRef = useRef(false);
@@ -113,6 +120,15 @@ export function CodexPane() {
     if (currentContext.current !== key) return value;
     setSnapshot(value);
     setMessages(value.messages);
+    setActivity((previous) =>
+      value.busy && !value.activity.items.length
+        ? previous
+        : value.activity.items.length
+          ? value.activity
+          : previous.turnId === value.activity.turnId
+            ? previous
+            : value.activity,
+    );
     setBusy(value.busy);
     if (value.artifact) setAutoArtifact(value.artifact);
     artifactTaskRef.current = value.busy && value.artifact?.phase === 'waiting';
@@ -130,6 +146,7 @@ export function CodexPane() {
       setContext(next);
       setSnapshot(null);
       setMessages([]);
+      setActivity(emptyCodexActivity());
       setStream('');
       setAutoArtifact(null);
       artifactTaskRef.current = false;
@@ -200,6 +217,12 @@ export function CodexPane() {
         artifactTaskRef.current = false;
     });
     const offEvent = window.batchStudio.codex.onEvent((event) => {
+      if (event.method === 'batch-studio/activity') {
+        const value = event.params.activity as CodexActivityEvent | undefined;
+        if (value && typeof value.turnId === 'string')
+          setActivity((previous) => updateCodexActivity(previous, value));
+        return;
+      }
       if (event.method === 'account/updated' || event.method === 'account/login/completed') {
         const key = currentContext.current;
         void refreshAccount()
@@ -291,6 +314,7 @@ export function CodexPane() {
       updatedAt: Date.now(),
     });
     setStream('');
+    setActivity(emptyCodexActivity());
     setMessages((before) => [...before, { id: 'pending-' + Date.now(), role: 'user', text }]);
     try {
       const threads = await request();
@@ -330,6 +354,7 @@ export function CodexPane() {
       if (key === currentContext.current) {
         setSnapshot(next);
         setMessages(next.messages);
+        setActivity(next.activity);
         setAutoArtifact(next.artifact ?? null);
         artifactTaskRef.current = next.busy && next.artifact?.phase === 'waiting';
         setTurnStatus(next.status);
@@ -551,6 +576,36 @@ export function CodexPane() {
             <strong>Codex · 回答中</strong>
             <p>{stream}</p>
           </article>
+        )}
+        {(activity.items.length > 0 || activeTurn) && (
+          <section className="codex-activity" aria-label="Codexの思考要約と作業進捗">
+            <div className="codex-activity-heading">
+              <strong>思考要約・作業状況</strong>
+              {activeTurn && <span>進行中</span>}
+            </div>
+            {activity.items.length === 0 ? (
+              <p>作業イベントを待っています。モデルによっては思考要約が提供されません。</p>
+            ) : (
+              <ol className="codex-activity-list">
+                {activity.items.map((item) => (
+                  <li key={item.id} className="codex-activity-item">
+                    <div className="codex-activity-item-heading">
+                      <strong>{item.title}</strong>
+                      <small>{item.status === 'inProgress' ? '処理中' : item.status === 'completed' ? '完了' : item.status === 'failed' ? '失敗' : item.status}</small>
+                    </div>
+                    {(item.summary || item.output) && (
+                      <details open={item.status === 'inProgress'}>
+                        <summary>内容を表示</summary>
+                        {item.summary && <p>{item.summary}</p>}
+                        {item.output && <pre>{item.output}</pre>}
+                      </details>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+            <small>モデルから提供された思考の要約と実際の作業イベントです。内部推論の全文ではありません。</small>
+          </section>
         )}
         {activeTurn && <p className="codex-processing">{phaseLabel[turnStatus.phase]}</p>}
         {autoArtifact && (
