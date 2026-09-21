@@ -645,6 +645,22 @@ export function CodexPane() {
                 ファイルの場所を開く
               </button>
             )}
+            {autoArtifact.rawResponsePath &&
+              (autoArtifact.phase === 'invalid' || autoArtifact.phase === 'failed') && (
+                <button
+                  onClick={() =>
+                    void window.batchStudio.file.showInFolder(autoArtifact.rawResponsePath!)
+                  }
+                >
+                  検証に失敗した回答の保存先を開く
+                </button>
+              )}
+            {autoArtifact.phase === 'invalid' && autoArtifact.fileName === 'prompt_plan.json' && (
+              <p>
+                完成版JSONの出力が途中で切れた場合、取り込み再試行だけでは解決できません。
+                既存の計画を修正する場合は「Prompt Planを部分修正（差分）」を選択してください。
+              </p>
+            )}
             {(autoArtifact.phase === 'invalid' || autoArtifact.phase === 'failed') && (
               <button
                 disabled={busy}
