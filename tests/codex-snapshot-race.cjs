@@ -20,7 +20,7 @@ const rendererSend = pane.slice(
 );
 
 assert.ok(
-  snapshot.includes("server.request<unknown>('thread/read'"),
+  snapshot.includes('readCodexHistory('),
   'Saved history must remain readable',
 );
 assert.ok(
