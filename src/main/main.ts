@@ -3226,22 +3226,29 @@ function register() {
     if (!state.projectRoot || !assistantProviderState) throw new Error('No active project.');
     const root = state.projectRoot;
     const defaultProvider = (await settingsStore().values()).assistantProvider;
-    const provider = await assistantProviderState.resolve(root, defaultProvider, async () => {
-      const stages: GrokContextStage[] = ['story', 'models', 'prompt-plan', 'caption'];
-      // Existing projects created before this preference was introduced may
-      // already have a history in one provider. Preserve that provider.
-      const grokHistory = grokChatState
-        ? (await Promise.all(stages.map((stage) => grokChatState!.get(root, stage)))).some(Boolean)
-        : false;
-      const codexHistory = codexChatState
-        ? (await Promise.all(stages.map((stage) => codexChatState!.get(root, stage)))).some(
-            (chats) => chats.threadIds.length > 0,
-          )
-        : false;
-      if (grokHistory && !codexHistory) return 'grok';
-      if (codexHistory && !grokHistory) return 'codex';
-      return null;
-    }, stage);
+    const provider = await assistantProviderState.resolve(
+      root,
+      defaultProvider,
+      async () => {
+        const stages: GrokContextStage[] = ['story', 'models', 'prompt-plan', 'caption'];
+        // Existing projects created before this preference was introduced may
+        // already have a history in one provider. Preserve that provider.
+        const grokHistory = grokChatState
+          ? (await Promise.all(stages.map((stage) => grokChatState!.get(root, stage)))).some(
+              Boolean,
+            )
+          : false;
+        const codexHistory = codexChatState
+          ? (await Promise.all(stages.map((stage) => codexChatState!.get(root, stage)))).some(
+              (chats) => chats.threadIds.length > 0,
+            )
+          : false;
+        if (grokHistory && !codexHistory) return 'grok';
+        if (codexHistory && !grokHistory) return 'codex';
+        return null;
+      },
+      stage,
+    );
     if (state.projectRoot !== root || state.assistantSelectionGeneration !== generation)
       throw new Error('Project or stage changed during agent restore.');
     state.paneProvider = provider;
