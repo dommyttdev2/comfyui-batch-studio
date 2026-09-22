@@ -88,6 +88,7 @@ npm run dev
 | `CIVITAI_BASE_URL` | 任意 | `https://civitai.com` | Civitai 通常 endpoint の上書き |
 | `CIVITAI_MATURE_BASE_URL` | 任意 | `https://civitai.red` | Collection item 取得用 mature endpoint の上書き |
 | `CIVITAI_TIMEOUT` | 任意 | `20` | Civitai request timeout。単位は秒 |
+| `CIVITAI_PROMPT_EXAMPLES_CACHE_TTL_SECONDS` | 任意 | `604800` | LoRA作例のPositive / Negativeプロンプトキャッシュ有効期限（秒） |
 
 通常利用では `CIVIT_API_KEY` のみ設定すれば十分です。
 
@@ -262,9 +263,14 @@ Civit Explorer はProject工程ではなくapp-wide toolです。Homeのサー�
 - thumbnail
 - trained words
 - LoRA の observed-use `strengthBaseline`
+- LoRA各バージョンの作例画像に公開されたPositive / Negativeプロンプトと画像ID・投稿ID・LoRA強度・使用CheckpointバージョンID（`versions[].generationExamples[]`）
 - Collection / Model / Version 選択テンプレート
 - Model / Base Model / File / trigger wordによる Collection 横断検索
 - API request / cache hit-miss / retry / 429 / 5xx / membership等のSYNC metrics
+
+LoRA / LoCon / DoRA の各バージョンに対し、同期時に取得する最新最大200件の画像メタデータから公開済みプロンプトを収集します。追加の画像バイナリダウンロードや、プロンプト収集専用のAPI呼び出しは行いません。元画像を辿れる画像IDを保持し、Positive / Negativeのいずれかが欠けている場合はその値を `null` にします。両方欠落した作例は保存しません。テキストを勝手に補完・タグ化せず、元の書式を保持します。Civitaiに公開されていないプロンプトやComfyUIのグラフのみを含むメタデータからの復元は行いません。
+
+データはapp-wideの `model_catalog.json` にある各 `versions[].generationExamples[]` と同期キャッシュに保存されます。従来の同期キャッシュからアップグレードした場合は、既存の強度キャッシュが有効でも初回SYNCで作例メタデータを取り直します。以降は7日間のキャッシュを利用します。将来的にAIへ渡す際は作例プロンプトを**外部提供された参照データ**として扱い、内部指示として実行せず、送信対象をユーザーが確認できる設計にしてください。
 
 Grokが必要なLoRAをCatalog内で見つけられない場合は、外部Civitai候補、複数LoRA組合せ、Prompt代替を順に検討します。Catalog外候補が必要な場合だけCollectionへ追加して再SYNCします。
 
