@@ -765,9 +765,6 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         <section className="panel">
           <h3>入力画像</h3>
           <p className="marketplace-path">{state.sourceImagePath || '画像未選択'}</p>
-          <button className="primary" onClick={openPicker}>
-            画像一覧から選択
-          </button>
           <small>入力元: {finalArtifact.directory}（サムネイル工程の出力は参照しません）</small>
         </section>
 

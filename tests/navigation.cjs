@@ -43,6 +43,36 @@ matchCode(
   /execution\.status\(project\.rootPath\)/,
   'ExecutionStage must restore and poll the persistent current Run',
 );
+matchCode(
+  executionSource,
+  /\{canStopScheduling&&\(<button/,
+  'Only show Stop scheduling when it is available for the current Run',
+);
+matchCode(
+  executionSource,
+  /\{canForceInterrupt&&\(<button/,
+  'Only show Force interrupt during an interruptible generation phase',
+);
+matchCode(
+  executionSource,
+  /<details className="execution-advanced-actions">/,
+  'Replacement Run actions must be secondary to normal execution controls',
+);
+matchCode(
+  executionSource,
+  /<details className="execution-technical-details">/,
+  'Run technical diagnostics must be available on demand',
+);
+matchCode(
+  executionSource,
+  /<details className="sectioncheck" key=\{s.name\} open=\{!s.valid\}>/,
+  'Preflight must expand failing checks while keeping passing check details collapsed',
+);
+matchCode(
+  executionSource,
+  /cloudInstanceStatusMessage\(current\)&&\(/,
+  'Remote cloud instance state must stay visible outside technical details',
+);
 matchCode(executionSource, /Stop scheduling/);
 matchCode(executionSource, /Force interrupt/);
 matchCode(

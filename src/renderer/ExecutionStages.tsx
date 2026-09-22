@@ -439,12 +439,12 @@ export function PreflightStage({ project, run }: { project: ProjectSummary; run:
             </>
           )}
           {r.sections.map((s) => (
-            <div className="sectioncheck" key={s.name}>
-              <h4>
+            <details className="sectioncheck" key={s.name} open={!s.valid}>
+              <summary>
                 {s.valid ? '✓' : '✕'} {s.name}
-              </h4>
-              {issuesView(s.issues)}
-            </div>
+              </summary>
+              {s.issues.length > 0 && issuesView(s.issues)}
+            </details>
           ))}
           {r.warnings.length > 0 && (
             <>
@@ -758,10 +758,7 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
         <div className="panelhead">
           <div>
             <h3>Execution Run</h3>
-            <p>
-              永続化された Run State を監視し、Start / Stop scheduling / Force interrupt / Resume /
-              最新のPrompt Planで最初から実行 を操作します。
-            </p>
+            <p>生成の進捗を監視し、現在の状態で利用できる操作を表示します。</p>
           </div>
           <button onClick={() => void refreshPreflight()} disabled={checking}>
             {checking ? '確認中…' : 'Preflight再確認'}
@@ -779,69 +776,53 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
           </>
         )}
         <div className="actions execution-actions">
-          <button
-            className="primary"
-            disabled={!canStart}
-            onClick={() => void apply(() => window.batchStudio.execution.start(project.rootPath))}
-          >
-            Start
-          </button>
-          <button
-            className="primary"
-            disabled={!canRestartRemote}
-            onClick={() =>
-              current &&
-              void apply(() =>
-                window.batchStudio.execution.restartRemote(project.rootPath, current.runId),
-              )
-            }
-          >
-            別Instanceで新しく実行
-          </button>
-          <button
-            className="danger"
-            disabled={!canRestartFromScratch}
-            onClick={() =>
-              current &&
-              void apply(() =>
-                window.batchStudio.execution.restartFromScratch(project.rootPath, current.runId),
-              )
-            }
-          >
-            最新のPrompt Planで最初から実行
-          </button>
-          <button
-            disabled={!canStopScheduling}
-            onClick={() =>
-              current &&
-              void apply(() =>
-                window.batchStudio.execution.stopScheduling(project.rootPath, current.runId),
-              )
-            }
-          >
-            Stop scheduling
-          </button>
-          <button
-            className="danger"
-            disabled={!canForceInterrupt}
-            onClick={() =>
-              current &&
-              void apply(() =>
-                window.batchStudio.execution.forceInterrupt(project.rootPath, current.runId),
-              )
-            }
-          >
-            Force interrupt
-          </button>
-          <button
-            disabled={!canResume}
-            onClick={() =>
-              current &&
-              void apply(() => window.batchStudio.execution.resume(project.rootPath, current.runId))
-            }
-          >
-            Resume
-          </button>
+          {(!current || current.lifecycle === 'COMPLETED' || canStart) && (
+            <button
+              className="primary"
+              disabled={!canStart}
+              onClick={() => void apply(() => window.batchStudio.execution.start(project.rootPath))}
+            >
+              Start
+            </button>
+          )}
+          {canStopScheduling && (
+            <button
+              onClick={() =>
+                current &&
+                void apply(() =>
+                  window.batchStudio.execution.stopScheduling(project.rootPath, current.runId),
+                )
+              }
+            >
+              Stop scheduling
+            </button>
+          )}
+          {canForceInterrupt && (
+            <button
+              className="danger"
+              onClick={() =>
+                current &&
+                void apply(() =>
+                  window.batchStudio.execution.forceInterrupt(project.rootPath, current.runId),
+                )
+              }
+            >
+              Force interrupt
+            </button>
+          )}
+          {canResume && (
+            <button
+              className="primary"
+              onClick={() =>
+                current &&
+                void apply(() =>
+                  window.batchStudio.execution.resume(project.rootPath, current.runId),
+                )
+              }
+            >
+              Resume
+            </button>
+          )}
           {recoveryUncertain && current && (
             <button
               onClick={() =>
@@ -853,52 +834,69 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
               既存Runの状態を再確認
             </button>
           )}
-          <button
-            disabled={current?.lifecycle !== 'COMPLETED'}
-            onClick={() => void window.batchStudio.project.openFolder(outputPath)}
-          >
-            Open local output directory
-          </button>
+          {current?.lifecycle === 'COMPLETED' && (
+            <button
+              disabled={current?.lifecycle !== 'COMPLETED'}
+              onClick={() => void window.batchStudio.project.openFolder(outputPath)}
+            >
+              Open local output directory
+            </button>
+          )}
         </div>
+        {current && (canRestartRemote || canRestartFromScratch) && (
+          <details className="execution-advanced-actions">
+            <summary>別のRunとして実行する</summary>
+            <p className="hint">
+              現在のRunを再開する操作とは異なります。既存の実行を破棄して最初から生成する場合に使用します。
+            </p>
+            <div className="actions">
+              {canRestartRemote && (
+                <button
+                  onClick={() =>
+                    void apply(() =>
+                      window.batchStudio.execution.restartRemote(project.rootPath, current.runId),
+                    )
+                  }
+                >
+                  別Instanceで新しく実行
+                </button>
+              )}
+              {canRestartFromScratch && (
+                <button
+                  className="danger"
+                  onClick={() =>
+                    void apply(() =>
+                      window.batchStudio.execution.restartFromScratch(
+                        project.rootPath,
+                        current.runId,
+                      ),
+                    )
+                  }
+                >
+                  最新のPrompt Planで最初から実行
+                </button>
+              )}
+            </div>
+          </details>
+        )}
       </section>
 
       {!current ? (
         <section className="panel execution-empty">
           <h3>Runはまだありません</h3>
-          <p>
-            PreflightがREADYならStartできます。開始後のRun
-            ID・phase・progressはProject内に永続化され、画面再読込後も復元されます。
-          </p>
+          <p>実行開始後は、この画面で生成の進捗と結果を確認できます。</p>
         </section>
       ) : (
         <>
           <section className="panel">
             <div className="execution-run-head">
               <div>
-                <span className="eyebrow">Current Run ID</span>
-                <code>{current.runId}</code>
+                <span className="eyebrow">現在の工程</span>
+                <strong>{executionPhaseLabel(current)}</strong>
               </div>
               <span className={'run-lifecycle ' + current.lifecycle.toLowerCase()}>
                 {current.lifecycle}
               </span>
-            </div>
-            <div className="facts execution-facts">
-              <div>
-                <span>Execution target</span>
-                <b>{current.executionTarget === 'remote' ? 'Remote' : 'Local'}</b>
-              </div>
-              <div>
-                <span>Current phase</span>
-                <b>{executionPhaseLabel(current)}</b>
-              </div>
-              <div>
-                <span>Connection status</span>
-                <b>{connectionStatus(current)}</b>
-              </div>
-              <div>
-                <span>Model preparation</span>
-                <b>{modelStatus(current)}</b>
-              </div>
             </div>
             {cloudInstanceStatusMessage(current) && (
               <div className="remote-phase-note">
@@ -906,51 +904,75 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
                 <span>{cloudInstanceStatusMessage(current)}</span>
               </div>
             )}
-            {current.executionTarget === 'remote' && (
-              <>
-                <div className="remote-phase-note">
-                  <b>Remote phase separation</b>
-                  <span>
-                    Instance / SSH / model preparation / generation / artifact transfer
-                    を独立phaseとして監視します。
-                  </span>
+            <details className="execution-technical-details">
+              <summary>接続・モデル・Run IDなどの詳細</summary>
+              <p className="hint">
+                Current Run ID: <code>{current.runId}</code>
+              </p>
+              <div className="facts execution-facts">
+                <div>
+                  <span>Execution target</span>
+                  <b>{current.executionTarget === 'remote' ? 'Remote' : 'Local'}</b>
                 </div>
-                {remoteInstanceChanged && (
+                <div>
+                  <span>Current phase</span>
+                  <b>{executionPhaseLabel(current)}</b>
+                </div>
+                <div>
+                  <span>Connection status</span>
+                  <b>{connectionStatus(current)}</b>
+                </div>
+                <div>
+                  <span>Model preparation</span>
+                  <b>{modelStatus(current)}</b>
+                </div>
+              </div>
+              {current.executionTarget === 'remote' && (
+                <>
                   <div className="remote-phase-note">
-                    <b>Remote Instance changed</b>
+                    <b>Remote phase separation</b>
                     <span>
-                      Current Run: #{current.remote?.instanceId ?? '-'} / Project selection: #
-                      {selectedProjectRemoteInstanceId ?? '-'}. 既存RunのInstance
-                      IDは変更せず、新規Runで切り替えます。
+                      Instance / SSH / model preparation / generation / artifact transfer
+                      を独立phaseとして監視します。
                     </span>
                   </div>
-                )}
-                {remoteLifecycle && (
-                  <div className="facts execution-facts">
-                    <div>
-                      <span>Vast initial state</span>
-                      <b>{remoteLifecycle.initialStatus?.toUpperCase() ?? 'RESOLVING'}</b>
+                  {remoteInstanceChanged && (
+                    <div className="remote-phase-note">
+                      <b>Remote Instance changed</b>
+                      <span>
+                        Current Run: #{current.remote?.instanceId ?? '-'} / Project selection: #
+                        {selectedProjectRemoteInstanceId ?? '-'}. 既存RunのInstance
+                        IDは変更せず、新規Runで切り替えます。
+                      </span>
                     </div>
-                    <div>
-                      <span>Vast current state</span>
-                      <b>{remoteLifecycle.latest?.status.toUpperCase() ?? '-'}</b>
+                  )}
+                  {remoteLifecycle && (
+                    <div className="facts execution-facts">
+                      <div>
+                        <span>Vast initial state</span>
+                        <b>{remoteLifecycle.initialStatus?.toUpperCase() ?? 'RESOLVING'}</b>
+                      </div>
+                      <div>
+                        <span>Vast current state</span>
+                        <b>{remoteLifecycle.latest?.status.toUpperCase() ?? '-'}</b>
+                      </div>
+                      <div>
+                        <span>Instance lifecycle owner</span>
+                        <b>
+                          {remoteLifecycle.startedByBatchStudio
+                            ? 'Batch Studio'
+                            : 'Provider / pre-existing'}
+                        </b>
+                      </div>
+                      <div>
+                        <span>Initial state restored</span>
+                        <b>{remoteLifecycle.restoredInitialState ? 'YES' : 'NO'}</b>
+                      </div>
                     </div>
-                    <div>
-                      <span>Instance lifecycle owner</span>
-                      <b>
-                        {remoteLifecycle.startedByBatchStudio
-                          ? 'Batch Studio'
-                          : 'Provider / pre-existing'}
-                      </b>
-                    </div>
-                    <div>
-                      <span>Initial state restored</span>
-                      <b>{remoteLifecycle.restoredInitialState ? 'YES' : 'NO'}</b>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+                  )}
+                </>
+              )}
+            </details>
           </section>
           <section className="panel">
             <div className="panelhead">
@@ -986,72 +1008,80 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
                 <span>Artifact delivery completed</span>
                 <b>{deliveryDone ? '完了' : '未完了'}</b>
               </div>
-              <div>
-                <span>Current branch</span>
-                <b>{current.current.branchId ?? '-'}</b>
-              </div>
-              <div>
-                <span>Current prompt ID</span>
-                <b>{current.current.promptId ?? current.current.leafId ?? '-'}</b>
-              </div>
             </div>
-            {branch && (
-              <div className="branch-progress">
-                <div>
-                  <span>Branch progress · {branch.branchId}</span>
-                  <b>
-                    {branch.completed} / {branch.total} · {branch.state}
-                  </b>
+            <details className="execution-branch-details">
+              <summary>ブランチ別進捗・Prompt ID</summary>
+              <p className="hint">
+                Current branch: <code>{current.current.branchId ?? '-'}</code>
+                {' / '}Current prompt ID:{' '}
+                <code>{current.current.promptId ?? current.current.leafId ?? '-'}</code>
+              </p>
+              {branch && (
+                <div className="branch-progress">
+                  <div>
+                    <span>Branch progress · {branch.branchId}</span>
+                    <b>
+                      {branch.completed} / {branch.total} · {branch.state}
+                    </b>
+                  </div>
+                  <progress max={100} value={pct(branch.completed, branch.total)} />
                 </div>
-                <progress max={100} value={pct(branch.completed, branch.total)} />
-              </div>
-            )}
+              )}
+            </details>
           </section>
 
           <section className="panel">
-            <h3>Artifact delivery</h3>
-            <div className="execution-status-grid">
-              <div>
-                <span>Artifact packaging</span>
-                <b>{delivery?.packaging}</b>
+            <details className="execution-delivery-details">
+              <summary>
+                成果物回収の詳細 · {deliveryDone ? '完了' : generationDone ? '回収中' : '生成待ち'}
+              </summary>
+              <h3>Artifact delivery</h3>
+              <div className="execution-status-grid">
+                <div>
+                  <span>Artifact packaging</span>
+                  <b>{delivery?.packaging}</b>
+                </div>
+                <div>
+                  <span>R2 upload</span>
+                  <b>{delivery?.r2}</b>
+                </div>
+                <div>
+                  <span>Local download</span>
+                  <b>{delivery?.download}</b>
+                </div>
+                <div>
+                  <span>Final verification</span>
+                  <b>{delivery?.verify}</b>
+                </div>
               </div>
-              <div>
-                <span>R2 upload</span>
-                <b>{delivery?.r2}</b>
-              </div>
-              <div>
-                <span>Local download</span>
-                <b>{delivery?.download}</b>
-              </div>
-              <div>
-                <span>Final verification</span>
-                <b>{delivery?.verify}</b>
-              </div>
-            </div>
+            </details>
           </section>
           <section className="panel">
-            <h3>Control state</h3>
-            <div className="facts execution-facts">
-              <div>
-                <span>Scheduling</span>
-                <b>{current.controls.scheduling}</b>
+            <details className="execution-control-details">
+              <summary>制御状態・診断情報</summary>
+              <h3>Control state</h3>
+              <div className="facts execution-facts">
+                <div>
+                  <span>Scheduling</span>
+                  <b>{current.controls.scheduling}</b>
+                </div>
+                <div>
+                  <span>Interrupt</span>
+                  <b>{current.controls.interrupt}</b>
+                </div>
+                <div>
+                  <span>Updated</span>
+                  <b>{new Date(current.updatedAt).toLocaleString()}</b>
+                </div>
+                <div>
+                  <span>Resume attempts</span>
+                  <b>{current.resume.attempts}</b>
+                </div>
               </div>
-              <div>
-                <span>Interrupt</span>
-                <b>{current.controls.interrupt}</b>
-              </div>
-              <div>
-                <span>Updated</span>
-                <b>{new Date(current.updatedAt).toLocaleString()}</b>
-              </div>
-              <div>
-                <span>Resume attempts</span>
-                <b>{current.resume.attempts}</b>
-              </div>
-            </div>
-            <p className="hint">
-              Local output: <code>{outputPath}</code>
-            </p>
+              <p className="hint">
+                Local output: <code>{outputPath}</code>
+              </p>
+            </details>
           </section>
           {(current.error || current.lifecycle === 'FAILED') && (
             <section className="panel execution-failure">

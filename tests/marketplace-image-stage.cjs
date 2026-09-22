@@ -10,6 +10,11 @@ const stage = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'MarketplaceImageStage.tsx'),
   'utf8',
 );
+assert.equal(
+  (stage.match(/onClick=\{openPicker\}/g) ?? []).length,
+  1,
+  'Marketplace editor must expose one image-picker action without duplicate buttons',
+);
 const picker = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'MarketplaceImagePickerWindow.tsx'),
   'utf8',
