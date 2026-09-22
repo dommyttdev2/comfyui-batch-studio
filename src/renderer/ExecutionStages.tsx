@@ -439,12 +439,12 @@ export function PreflightStage({ project, run }: { project: ProjectSummary; run:
             </>
           )}
           {r.sections.map((s) => (
-            <div className="sectioncheck" key={s.name}>
-              <h4>
+            <details className="sectioncheck" key={s.name} open={!s.valid}>
+              <summary>
                 {s.valid ? '✓' : '✕'} {s.name}
-              </h4>
-              {issuesView(s.issues)}
-            </div>
+              </summary>
+              {s.issues.length > 0 && issuesView(s.issues)}
+            </details>
           ))}
           {r.warnings.length > 0 && (
             <>
@@ -758,10 +758,7 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
         <div className="panelhead">
           <div>
             <h3>Execution Run</h3>
-            <p>
-              永続化された Run State を監視し、Start / Stop scheduling / Force interrupt / Resume /
-              最新のPrompt Planで最初から実行 を操作します。
-            </p>
+            <p>生成の進捗を監視し、現在の状態で利用できる操作を表示します。</p>
           </div>
           <button onClick={() => void refreshPreflight()} disabled={checking}>
             {checking ? '確認中…' : 'Preflight再確認'}
@@ -883,8 +880,7 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
         <section className="panel execution-empty">
           <h3>Runはまだありません</h3>
           <p>
-            PreflightがREADYならStartできます。開始後のRun
-            ID・phase・progressはProject内に永続化され、画面再読込後も復元されます。
+            実行開始後は、この画面で生成の進捗と結果を確認できます。
           </p>
         </section>
       ) : (
@@ -910,174 +906,174 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
               <p className="hint">
                 Current Run ID: <code>{current.runId}</code>
               </p>
-            <div className="facts execution-facts">
-              <div>
-                <span>Execution target</span>
-                <b>{current.executionTarget === 'remote' ? 'Remote' : 'Local'}</b>
-              </div>
-              <div>
-                <span>Current phase</span>
-                <b>{executionPhaseLabel(current)}</b>
-              </div>
-              <div>
-                <span>Connection status</span>
-                <b>{connectionStatus(current)}</b>
-              </div>
-              <div>
-                <span>Model preparation</span>
-                <b>{modelStatus(current)}</b>
-              </div>
-            </div>
-            {current.executionTarget === 'remote' && (
-              <>
-                <div className="remote-phase-note">
-                  <b>Remote phase separation</b>
-                  <span>
-                    Instance / SSH / model preparation / generation / artifact transfer
-                    を独立phaseとして監視します。
-                  </span>
-                </div>
-                {remoteInstanceChanged && (
-                  <div className="remote-phase-note">
-                    <b>Remote Instance changed</b>
-                    <span>
-                      Current Run: #{current.remote?.instanceId ?? '-'} / Project selection: #
-                      {selectedProjectRemoteInstanceId ?? '-'}. 既存RunのInstance
-                      IDは変更せず、新規Runで切り替えます。
-                    </span>
+              <div className="facts execution-facts">
+                  <div>
+                    <span>Execution target</span>
+                    <b>{current.executionTarget === 'remote' ? 'Remote' : 'Local'}</b>
                   </div>
+                  <div>
+                    <span>Current phase</span>
+                    <b>{executionPhaseLabel(current)}</b>
+                  </div>
+                  <div>
+                    <span>Connection status</span>
+                    <b>{connectionStatus(current)}</b>
+                  </div>
+                  <div>
+                    <span>Model preparation</span>
+                    <b>{modelStatus(current)}</b>
+                  </div>
+                </div>
+                {current.executionTarget === 'remote' && (
+                  <>
+                    <div className="remote-phase-note">
+                      <b>Remote phase separation</b>
+                      <span>
+                        Instance / SSH / model preparation / generation / artifact transfer
+                        を独立phaseとして監視します。
+                      </span>
+                    </div>
+                    {remoteInstanceChanged && (
+                      <div className="remote-phase-note">
+                        <b>Remote Instance changed</b>
+                        <span>
+                          Current Run: #{current.remote?.instanceId ?? '-'} / Project selection: #
+                          {selectedProjectRemoteInstanceId ?? '-'}. 既存RunのInstance
+                          IDは変更せず、新規Runで切り替えます。
+                        </span>
+                      </div>
+                    )}
+                    {remoteLifecycle && (
+                      <div className="facts execution-facts">
+                        <div>
+                          <span>Vast initial state</span>
+                          <b>{remoteLifecycle.initialStatus?.toUpperCase() ?? 'RESOLVING'}</b>
+                        </div>
+                        <div>
+                          <span>Vast current state</span>
+                          <b>{remoteLifecycle.latest?.status.toUpperCase() ?? '-'}</b>
+                        </div>
+                        <div>
+                          <span>Instance lifecycle owner</span>
+                          <b>
+                            {remoteLifecycle.startedByBatchStudio
+                              ? 'Batch Studio'
+                              : 'Provider / pre-existing'}
+                          </b>
+                        </div>
+                        <div>
+                          <span>Initial state restored</span>
+                          <b>{remoteLifecycle.restoredInitialState ? 'YES' : 'NO'}</b>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
-                {remoteLifecycle && (
-                  <div className="facts execution-facts">
+              </details>
+            </section>
+            <section className="panel">
+              <div className="panelhead">
+                <div>
+                  <h3>Generation progress</h3>
+                  <p>generation completed と artifact delivery completed は別状態です。</p>
+                </div>
+                <b>
+                  {current.progress.overall.completed} / {current.progress.overall.total}
+                </b>
+              </div>
+              <progress
+                className="execution-progress"
+                max={100}
+                value={pct(current.progress.overall.completed, current.progress.overall.total)}
+              />
+              <div className="facts execution-facts">
+                <div>
+                  <span>Generation completed</span>
+                  <b>{generationDone ? '完了' : '未完了'}</b>
+                </div>
+                <div>
+                  <span>推定残り時間</span>
+                  <b>{generationDone ? '完了' : formatGenerationDuration(generationEta)}</b>
+                  <small style={{ display: 'block', marginTop: 4 }}>
+                    直近 {generationSamples} / 5枚の移動平均
+                    {generationAverage != null
+                      ? ` · 1枚平均 ${formatGenerationDuration(generationAverage)}`
+                      : ''}
+                  </small>
+                </div>
+                <div>
+                  <span>Artifact delivery completed</span>
+                  <b>{deliveryDone ? '完了' : '未完了'}</b>
+                </div>
+              </div>
+              <details className="execution-branch-details">
+                <summary>ブランチ別進捗・Prompt ID</summary>
+                <p className="hint">
+                  Current branch: <code>{current.current.branchId ?? '-'}</code>
+                  {' / '}Current prompt ID: <code>{current.current.promptId ?? current.current.leafId ?? '-'}</code>
+                </p>
+                {branch && (
+                  <div className="branch-progress">
                     <div>
-                      <span>Vast initial state</span>
-                      <b>{remoteLifecycle.initialStatus?.toUpperCase() ?? 'RESOLVING'}</b>
-                    </div>
-                    <div>
-                      <span>Vast current state</span>
-                      <b>{remoteLifecycle.latest?.status.toUpperCase() ?? '-'}</b>
-                    </div>
-                    <div>
-                      <span>Instance lifecycle owner</span>
+                      <span>Branch progress · {branch.branchId}</span>
                       <b>
-                        {remoteLifecycle.startedByBatchStudio
-                          ? 'Batch Studio'
-                          : 'Provider / pre-existing'}
+                        {branch.completed} / {branch.total} · {branch.state}
                       </b>
                     </div>
-                    <div>
-                      <span>Initial state restored</span>
-                      <b>{remoteLifecycle.restoredInitialState ? 'YES' : 'NO'}</b>
-                    </div>
+                    <progress max={100} value={pct(branch.completed, branch.total)} />
                   </div>
                 )}
-              </>
-            )}
-            </details>
-          </section>
-          <section className="panel">
-            <div className="panelhead">
-              <div>
-                <h3>Generation progress</h3>
-                <p>generation completed と artifact delivery completed は別状態です。</p>
-              </div>
-              <b>
-                {current.progress.overall.completed} / {current.progress.overall.total}
-              </b>
-            </div>
-            <progress
-              className="execution-progress"
-              max={100}
-              value={pct(current.progress.overall.completed, current.progress.overall.total)}
-            />
-            <div className="facts execution-facts">
-              <div>
-                <span>Generation completed</span>
-                <b>{generationDone ? '完了' : '未完了'}</b>
-              </div>
-              <div>
-                <span>推定残り時間</span>
-                <b>{generationDone ? '完了' : formatGenerationDuration(generationEta)}</b>
-                <small style={{ display: 'block', marginTop: 4 }}>
-                  直近 {generationSamples} / 5枚の移動平均
-                  {generationAverage != null
-                    ? ` · 1枚平均 ${formatGenerationDuration(generationAverage)}`
-                    : ''}
-                </small>
-              </div>
-              <div>
-                <span>Artifact delivery completed</span>
-                <b>{deliveryDone ? '完了' : '未完了'}</b>
-              </div>
-            </div>
-            <details className="execution-branch-details">
-              <summary>ブランチ別進捗・Prompt ID</summary>
-              <p className="hint">
-                Current branch: <code>{current.current.branchId ?? '-'}</code>
-                {' / '}Current prompt ID: <code>{current.current.promptId ?? current.current.leafId ?? '-'}</code>
-              </p>
-              {branch && (
-              <div className="branch-progress">
-                <div>
-                  <span>Branch progress · {branch.branchId}</span>
-                  <b>
-                    {branch.completed} / {branch.total} · {branch.state}
-                  </b>
-                </div>
-                <progress max={100} value={pct(branch.completed, branch.total)} />
-              </div>
-              )}
-            </details>
-          </section>
+              </details>
+            </section>
 
-          <section className="panel">
-            <details className="execution-delivery-details">
-              <summary>
-                成果物回収の詳細 · {deliveryDone ? '完了' : generationDone ? '回収中' : '生成待ち'}
-              </summary>
-              <h3>Artifact delivery</h3>
-              <div className="execution-status-grid">
-              <div>
-                <span>Artifact packaging</span>
-                <b>{delivery?.packaging}</b>
+            <section className="panel">
+              <details className="execution-delivery-details">
+                <summary>
+                  成果物回収の詳細 · {deliveryDone ? '完了' : generationDone ? '回収中' : '生成待ち'}
+                </summary>
+                <h3>Artifact delivery</h3>
+                <div className="execution-status-grid">
+                  <div>
+                    <span>Artifact packaging</span>
+                    <b>{delivery?.packaging}</b>
+                  </div>
+                  <div>
+                    <span>R2 upload</span>
+                    <b>{delivery?.r2}</b>
+                  </div>
+                  <div>
+                    <span>Local download</span>
+                    <b>{delivery?.download}</b>
+                  </div>
+                  <div>
+                    <span>Final verification</span>
+                    <b>{delivery?.verify}</b>
+                  </div>
+                </div>
+              </details>
+            </section>
+            <section className="panel">
+              <details className="execution-control-details">
+                <summary>制御状態・診断情報</summary>
+                <h3>Control state</h3>
+                <div className="facts execution-facts">
+                <div>
+                  <span>Scheduling</span>
+                  <b>{current.controls.scheduling}</b>
+                </div>
+                <div>
+                  <span>Interrupt</span>
+                  <b>{current.controls.interrupt}</b>
+                </div>
+                <div>
+                  <span>Updated</span>
+                  <b>{new Date(current.updatedAt).toLocaleString()}</b>
+                </div>
+                <div>
+                  <span>Resume attempts</span>
+                  <b>{current.resume.attempts}</b>
+                </div>
               </div>
-              <div>
-                <span>R2 upload</span>
-                <b>{delivery?.r2}</b>
-              </div>
-              <div>
-                <span>Local download</span>
-                <b>{delivery?.download}</b>
-              </div>
-              <div>
-                <span>Final verification</span>
-                <b>{delivery?.verify}</b>
-              </div>
-              </div>
-            </details>
-          </section>
-          <section className="panel">
-            <details className="execution-control-details">
-              <summary>制御状態・診断情報</summary>
-              <h3>Control state</h3>
-              <div className="facts execution-facts">
-              <div>
-                <span>Scheduling</span>
-                <b>{current.controls.scheduling}</b>
-              </div>
-              <div>
-                <span>Interrupt</span>
-                <b>{current.controls.interrupt}</b>
-              </div>
-              <div>
-                <span>Updated</span>
-                <b>{new Date(current.updatedAt).toLocaleString()}</b>
-              </div>
-              <div>
-                <span>Resume attempts</span>
-                <b>{current.resume.attempts}</b>
-              </div>
-            </div>
               <p className="hint">
                 Local output: <code>{outputPath}</code>
               </p>
