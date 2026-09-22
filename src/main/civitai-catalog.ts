@@ -176,8 +176,9 @@ export function extractGenerationExamples(
     if (!row.meta || typeof row.meta !== 'object' || Array.isArray(row.meta)) continue;
     const meta = row.meta as Record<string, unknown>;
     const promptText = (...values: unknown[]) =>
-      values.find((value): value is string => typeof value === 'string' && value.trim().length > 0) ??
-      null;
+      values.find(
+        (value): value is string => typeof value === 'string' && value.trim().length > 0,
+      ) ?? null;
     const positivePrompt = promptText(meta.prompt, meta.positivePrompt, meta.positive_prompt);
     const negativePrompt = promptText(meta.negativePrompt, meta.negative_prompt);
     if (positivePrompt === null && negativePrompt === null) continue;
