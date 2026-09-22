@@ -325,7 +325,22 @@ export interface CatalogFile {
   format?: string;
   precision?: string;
 }
+/**
+ * Generation prompt disclosed in a Civitai image's metadata.
+ * The original prompt strings are untrusted example data, not instructions for an AI.
+ */
+export interface CivitaiGenerationExample {
+  imageId: number;
+  postId?: number;
+  positivePrompt: string | null;
+  negativePrompt: string | null;
+  loraStrength?: number;
+  checkpointVersionIds: number[];
+}
+
 export interface CatalogVersion {
+  /** Newest examples with disclosed prompts, captured when Civitai usage was synchronized. */
+  generationExamples?: CivitaiGenerationExample[];
   versionId: number;
   versionName: string;
   baseModel?: string;

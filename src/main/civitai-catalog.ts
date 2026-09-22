@@ -6,6 +6,7 @@ import type {
   CatalogSelectionTemplate,
   CatalogSelectionTemplateInput,
   CivitaiCatalogStatus,
+  CivitaiGenerationExample,
   ModelCatalog,
   StrengthBaseline,
 } from '../shared/types.js';
@@ -22,6 +23,7 @@ const MODEL_CACHE_TTL_DEFAULT = 30 * 60;
 const VERSION_CACHE_TTL_DEFAULT = 30 * 60;
 const BASELINE_CACHE_TTL_DEFAULT = 7 * 24 * 60 * 60;
 const CHECKPOINT_EVIDENCE_CACHE_TTL_DEFAULT = 7 * 24 * 60 * 60;
+const PROMPT_EXAMPLES_CACHE_TTL_DEFAULT = 7 * 24 * 60 * 60;
 const THUMBNAIL_CACHE_TTL_DEFAULT = 24 * 60 * 60;
 
 type LocalSyncMetrics = {
@@ -154,6 +156,61 @@ export function calculateObservedCheckpointReferences(
     .sort((a, b) => b.imageCount - a.imageCount || a.modelVersionId - b.modelVersionId);
 }
 
+/**
+ * Keep the original prompt text from Civitai's disclosed image metadata. Image
+ * records without either prompt are not useful as prompt examples. Missing
+ * positive/negative fields remain null rather than being invented.
+ */
+export function extractGenerationExamples(
+  items: unknown[],
+  versionId: number,
+): CivitaiGenerationExample[] {
+  const examples: CivitaiGenerationExample[] = [];
+  const seenImageIds = new Set<number>();
+  for (const image of items) {
+    if (!image || typeof image !== 'object') continue;
+    const row = image as Record<string, unknown>;
+    const imageId = Number(row.id);
+    if (!Number.isSafeInteger(imageId) || imageId <= 0 || seenImageIds.has(imageId)) continue;
+    if (typeof row.type === 'string' && row.type.toLowerCase() !== 'image') continue;
+    if (!row.meta || typeof row.meta !== 'object' || Array.isArray(row.meta)) continue;
+    const meta = row.meta as Record<string, unknown>;
+    const promptText = (...values: unknown[]) =>
+      values.find(
+        (value): value is string => typeof value === 'string' && value.trim().length > 0,
+      ) ?? null;
+    const positivePrompt = promptText(meta.prompt, meta.positivePrompt, meta.positive_prompt);
+    const negativePrompt = promptText(meta.negativePrompt, meta.negative_prompt);
+    if (positivePrompt === null && negativePrompt === null) continue;
+
+    const resources = Array.isArray(meta.civitaiResources) ? meta.civitaiResources : [];
+    const checkpoints = new Set<number>();
+    let loraStrength: number | undefined;
+    for (const resource of resources) {
+      if (!resource || typeof resource !== 'object') continue;
+      const r = resource as Record<string, unknown>;
+      const id = Number(r.modelVersionId);
+      if (!Number.isSafeInteger(id) || id <= 0) continue;
+      const type = String(r.type ?? '').toLowerCase();
+      if (type === 'checkpoint') checkpoints.add(id);
+      if (type === 'lora' && id === versionId && loraStrength === undefined)
+        loraStrength = numberValue(r.weight) ?? undefined;
+    }
+
+    const postId = Number(row.postId);
+    examples.push({
+      imageId,
+      ...(Number.isSafeInteger(postId) && postId > 0 ? { postId } : {}),
+      positivePrompt,
+      negativePrompt,
+      ...(loraStrength !== undefined ? { loraStrength } : {}),
+      checkpointVersionIds: [...checkpoints].sort((a, b) => a - b),
+    });
+    seenImageIds.add(imageId);
+  }
+  return examples;
+}
+
 function membershipMap(catalog: ModelCatalog | null) {
   const result = new Map<string, number>();
   for (const collection of catalog?.collections ?? [])
@@ -220,6 +277,7 @@ export class CivitaiCatalogService {
   private readonly versionCacheTtlMs: number;
   private readonly baselineCacheTtlMs: number;
   private readonly checkpointEvidenceCacheTtlMs: number;
+  private readonly promptExamplesCacheTtlMs: number;
   private readonly thumbnailCacheTtlMs: number;
   private snapshot: ModelCatalog | null = null;
   private syncPromise: Promise<void> | null = null;
@@ -254,6 +312,10 @@ export class CivitaiCatalogService {
     this.checkpointEvidenceCacheTtlMs = ttlMs(
       'CIVITAI_CHECKPOINT_EVIDENCE_CACHE_TTL_SECONDS',
       CHECKPOINT_EVIDENCE_CACHE_TTL_DEFAULT,
+    );
+    this.promptExamplesCacheTtlMs = ttlMs(
+      'CIVITAI_PROMPT_EXAMPLES_CACHE_TTL_SECONDS',
+      PROMPT_EXAMPLES_CACHE_TTL_DEFAULT,
     );
     this.thumbnailCacheTtlMs = ttlMs(
       'CIVITAI_THUMBNAIL_CACHE_TTL_SECONDS',
@@ -381,14 +443,18 @@ export class CivitaiCatalogService {
       versionId,
       this.checkpointEvidenceCacheTtlMs,
     );
+    const examplesLookup = this.cache.generationExamples(versionId, this.promptExamplesCacheTtlMs);
+    if (examplesLookup.hit) this.localMetrics.cacheHits += 1;
+    else this.localMetrics.cacheMisses += 1;
     if (baselineLookup.hit) this.localMetrics.cacheHits += 1;
     else this.localMetrics.cacheMisses += 1;
     if (checkpointLookup.hit) this.localMetrics.cacheHits += 1;
     else this.localMetrics.cacheMisses += 1;
-    if (baselineLookup.hit && checkpointLookup.hit)
+    if (baselineLookup.hit && checkpointLookup.hit && examplesLookup.hit)
       return {
         baseline: baselineLookup.value,
         checkpointEvidence: checkpointLookup.value,
+        generationExamples: examplesLookup.value,
       };
     try {
       const payload = await this.client.getImages({
@@ -400,13 +466,16 @@ export class CivitaiCatalogService {
       const items = Array.isArray(payload?.items) ? payload.items : [];
       const baseline = calculateStrengthBaseline(items, versionId);
       const checkpointEvidence = calculateObservedCheckpointReferences(items);
+      const generationExamples = extractGenerationExamples(items, versionId);
+      this.cache.setGenerationExamples(versionId, generationExamples);
       this.cache.setBaseline(versionId, baseline);
       this.cache.setCheckpointEvidence(versionId, checkpointEvidence);
-      return { baseline, checkpointEvidence };
+      return { baseline, checkpointEvidence, generationExamples };
     } catch {
       return {
         baseline: baselineLookup.hit ? baselineLookup.value : null,
         checkpointEvidence: checkpointLookup.hit ? checkpointLookup.value : [],
+        generationExamples: examplesLookup.hit ? examplesLookup.value : [],
       };
     }
   }
@@ -598,7 +667,11 @@ export class CivitaiCatalogService {
       ];
       const usageByVersion = new Map<
         number,
-        { baseline: StrengthBaseline | null; checkpointEvidence: CachedCheckpointEvidence[] }
+        {
+          baseline: StrengthBaseline | null;
+          checkpointEvidence: CachedCheckpointEvidence[];
+          generationExamples: CivitaiGenerationExample[];
+        }
       >();
       this.progress(
         'LoRA利用実績確認中',
@@ -677,6 +750,7 @@ export class CivitaiCatalogService {
             const versionId = Number(version.versionId),
               usage = usageByVersion.get(versionId);
             version.observedCheckpoints = resolvedCheckpointEvidence(versionId);
+            version.generationExamples = usage?.generationExamples ?? [];
             if (usage?.baseline) version.strengthBaseline = usage.baseline;
           }
           const selected = item.versions.find(

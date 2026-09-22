@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import type { StrengthBaseline } from '../shared/types.js';
+import type { CivitaiGenerationExample, StrengthBaseline } from '../shared/types.js';
 
 type CacheEntry<T> = { fetchedAt: number; value: T };
 type ThumbnailEntry = CacheEntry<string | null> & { imageId: number | null };
@@ -18,6 +18,7 @@ interface StoredCache {
   versions: Record<string, CacheEntry<unknown>>;
   baselines: Record<string, CacheEntry<StrengthBaseline | null>>;
   checkpointEvidence: Record<string, CacheEntry<CachedCheckpointEvidence[]>>;
+  generationExamples: Record<string, CacheEntry<CivitaiGenerationExample[]>>;
   collectionThumbnails: Record<string, ThumbnailEntry>;
 }
 
@@ -28,6 +29,7 @@ function emptyCache(): StoredCache {
     versions: {},
     baselines: {},
     checkpointEvidence: {},
+    generationExamples: {},
     collectionThumbnails: {},
   };
 }
@@ -47,6 +49,7 @@ async function readCache(file: string): Promise<StoredCache> {
       versions: value.versions ?? {},
       baselines: value.baselines ?? {},
       checkpointEvidence: value.checkpointEvidence ?? {},
+      generationExamples: value.generationExamples ?? {},
       collectionThumbnails: value.collectionThumbnails ?? {},
     };
   } catch {
@@ -94,6 +97,13 @@ export class CivitaiMetadataCache {
     this.value.checkpointEvidence[String(versionId)] = { fetchedAt: Date.now(), value };
   }
 
+  generationExamples(versionId: number, ttlMs: number) {
+    return fresh(this.value.generationExamples[String(versionId)], ttlMs);
+  }
+  setGenerationExamples(versionId: number, value: CivitaiGenerationExample[]) {
+    this.value.generationExamples[String(versionId)] = { fetchedAt: Date.now(), value };
+  }
+
   thumbnail(collectionId: number, imageId: number | null, ttlMs: number): Lookup<string | null> {
     const entry = this.value.collectionThumbnails[String(collectionId)];
     if (!entry || entry.imageId !== imageId) return { hit: false };
@@ -126,6 +136,8 @@ export class CivitaiMetadataCache {
       if (!baselines.has(key)) delete this.value.baselines[key];
     for (const key of Object.keys(this.value.checkpointEvidence))
       if (!baselines.has(key)) delete this.value.checkpointEvidence[key];
+    for (const key of Object.keys(this.value.generationExamples))
+      if (!baselines.has(key)) delete this.value.generationExamples[key];
     for (const key of Object.keys(this.value.collectionThumbnails))
       if (!collections.has(key)) delete this.value.collectionThumbnails[key];
   }

@@ -79,6 +79,58 @@ execFileSync(
     'checkpoint evidence must count each checkpoint once per image and retain image ids',
   );
 
+  assert.deepEqual(
+    mod.extractGenerationExamples(
+      [
+        {
+          id: 101,
+          postId: 201,
+          type: 'image',
+          meta: {
+            prompt: '  original positive, (detail:1.2)  ',
+            negativePrompt: 'original negative',
+            civitaiResources: [
+              { type: 'lora', modelVersionId: 42, weight: 0.65 },
+              { type: 'checkpoint', modelVersionId: 777 },
+              { type: 'checkpoint', modelVersionId: 777 },
+            ],
+          },
+        },
+        { id: 101, meta: { prompt: 'duplicate' } },
+        { id: 102, meta: { negativePrompt: 'negative only' } },
+        { id: 103, meta: { prompt: '  ', negativePrompt: '' } },
+        { id: 104, meta: null },
+        { id: 105, type: 'video', meta: { prompt: 'video prompt' } },
+        { id: 106, meta: { prompt: { nodes: [] }, negativePrompt: [] } },
+        { id: 107, meta: { positive_prompt: 'positive only', negative_prompt: 'negative alias' } },
+      ],
+      42,
+    ),
+    [
+      {
+        imageId: 101,
+        postId: 201,
+        positivePrompt: '  original positive, (detail:1.2)  ',
+        negativePrompt: 'original negative',
+        loraStrength: 0.65,
+        checkpointVersionIds: [777],
+      },
+      {
+        imageId: 102,
+        positivePrompt: null,
+        negativePrompt: 'negative only',
+        checkpointVersionIds: [],
+      },
+      {
+        imageId: 107,
+        positivePrompt: 'positive only',
+        negativePrompt: 'negative alias',
+        checkpointVersionIds: [],
+      },
+    ],
+    'only disclosed text prompts should be preserved, with image provenance and per-image resources',
+  );
+
   const before = {
     schemaVersion: 1,
     generation: 1,
@@ -169,6 +221,8 @@ execFileSync(
       id: 1100 + postId,
       postId,
       meta: {
+        prompt: `positive version 11 post ${postId}`,
+        negativePrompt: `negative version 11 post ${postId}`,
         civitaiResources: [
           { type: 'checkpoint', modelVersionId: 777 },
           { type: 'lora', modelVersionId: 11, weight: 0.7 },
@@ -179,6 +233,7 @@ execFileSync(
       id: 1200 + postId,
       postId: 100 + postId,
       meta: {
+        negativePrompt: `negative version 12 post ${postId}`,
         civitaiResources: [
           { type: 'checkpoint', modelVersionId: 888 },
           { type: 'lora', modelVersionId: 12, weight: 0.8 },
@@ -258,6 +313,31 @@ execFileSync(
     );
 
     const lora = firstCatalog.collections[0].items.find((x) => x.modelId === 1);
+    assert.deepEqual(lora.versions.find((x) => x.versionId === 11).generationExamples, [
+      ...[1, 2, 3, 4, 5].map((postId) => ({
+        imageId: 1100 + postId,
+        postId,
+        positivePrompt: `positive version 11 post ${postId}`,
+        negativePrompt: `negative version 11 post ${postId}`,
+        loraStrength: 0.7,
+        checkpointVersionIds: [777],
+      })),
+    ]);
+    assert.deepEqual(lora.versions.find((x) => x.versionId === 12).generationExamples, [
+      ...[1, 2].map((postId) => ({
+        imageId: 1200 + postId,
+        postId: 100 + postId,
+        positivePrompt: null,
+        negativePrompt: `negative version 12 post ${postId}`,
+        loraStrength: 0.8,
+        checkpointVersionIds: [888],
+      })),
+    ]);
+    assert.deepEqual(
+      lora.versions.find((x) => x.versionId === 13).generationExamples,
+      [],
+      'images without disclosed prompts must not have fabricated prompt examples',
+    );
     assert.deepEqual(lora.observedCheckpoints, [
       {
         modelVersionId: 777,
@@ -342,7 +422,42 @@ execFileSync(
       secondStatus.metrics.cacheHits >= 8,
       'model, LoRA usage, checkpoint identity and thumbnail cache hits should be observable',
     );
+    assert.deepEqual(
+      secondCatalog.collections[0].items[0].versions.find((x) => x.versionId === 11)
+        .generationExamples,
+      lora.versions.find((x) => x.versionId === 11).generationExamples,
+      'prompt examples must survive a repeated sync and cache reload',
+    );
     assert.equal(secondStatus.metrics.membershipItems, 1);
+
+    // A cache from a previous release has fresh usage metadata but does not
+    // contain a generationExamples entry. The next sync should backfill it.
+    const legacyCache = JSON.parse(fs.readFileSync(first.cachePath, 'utf8'));
+    delete legacyCache.generationExamples;
+    fs.writeFileSync(first.cachePath, JSON.stringify(legacyCache), 'utf8');
+    calls = [];
+    const upgraded = new mod.CivitaiCatalogService(storage);
+    await upgraded.initialize();
+    await upgraded.startSync();
+    await upgraded.waitForSync();
+    assert.equal(
+      calls.filter((x) => x.startsWith('/api/v1/images?')).length,
+      3,
+      'legacy caches must fetch each version exactly once to backfill prompts',
+    );
+    assert.equal(
+      upgraded.catalog().collections[0].items[0].versions.find((x) => x.versionId === 11)
+        .generationExamples.length,
+      5,
+    );
+    calls = [];
+    await upgraded.startSync();
+    await upgraded.waitForSync();
+    assert.equal(
+      calls.filter((x) => x.startsWith('/api/v1/images?')).length,
+      0,
+      'a second sync after prompt backfill must reuse the new cache',
+    );
     assert.equal(secondStatus.metrics.collectionPages, 1);
 
     await Promise.all(
