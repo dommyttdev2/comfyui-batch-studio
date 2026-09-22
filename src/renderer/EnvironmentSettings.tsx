@@ -222,56 +222,56 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
               通常は変更不要です。既定の接続先や統合機能を上書きする場合のみ設定してください。
             </p>
             <div className="formgrid">
-            <label className="wide">
-              <span>
-                Local ComfyUI API endpoint <code>BATCH_STUDIO_COMFYUI_API_ENDPOINT</code>
-              </span>
-              <input
-                value={settings.comfyUiApiEndpoint}
-                onChange={(e) => setField('comfyUiApiEndpoint', e.target.value)}
-                placeholder="http://127.0.0.1:8188"
-              />
-            </label>
-            <label className="wide">
-              <span>
-                外部 model_catalog.json（互換用） <code>BATCH_STUDIO_CATALOG_PATH</code>
-              </span>
-              <input
-                value={settings.catalogPath}
-                onChange={(e) => setField('catalogPath', e.target.value)}
-                placeholder="空欄 = Civitai統合カタログ"
-              />
-            </label>
-            <label className="wide">
-              <span>
-                R2ファイル一覧JSON（互換用） <code>BATCH_STUDIO_R2_INDEX_PATH</code>
-              </span>
-              <input
-                value={settings.r2IndexPath}
-                onChange={(e) => setField('r2IndexPath', e.target.value)}
-                placeholder="空欄 = R2統合インデックス"
-              />
-            </label>
-            <label>
-              <span>
-                Workflow Template <code>BATCH_STUDIO_TEMPLATE_PATH</code>
-              </span>
-              <input
-                value={settings.templatePath}
-                onChange={(e) => setField('templatePath', e.target.value)}
-                placeholder="空欄 = 内蔵"
-              />
-            </label>
-            <label>
-              <span>
-                Manifest <code>BATCH_STUDIO_MANIFEST_PATH</code>
-              </span>
-              <input
-                value={settings.manifestPath}
-                onChange={(e) => setField('manifestPath', e.target.value)}
-                placeholder="空欄 = 内蔵"
-              />
-            </label>
+              <label className="wide">
+                <span>
+                  Local ComfyUI API endpoint <code>BATCH_STUDIO_COMFYUI_API_ENDPOINT</code>
+                </span>
+                <input
+                  value={settings.comfyUiApiEndpoint}
+                  onChange={(e) => setField('comfyUiApiEndpoint', e.target.value)}
+                  placeholder="http://127.0.0.1:8188"
+                />
+              </label>
+              <label className="wide">
+                <span>
+                  外部 model_catalog.json（互換用） <code>BATCH_STUDIO_CATALOG_PATH</code>
+                </span>
+                <input
+                  value={settings.catalogPath}
+                  onChange={(e) => setField('catalogPath', e.target.value)}
+                  placeholder="空欄 = Civitai統合カタログ"
+                />
+              </label>
+              <label className="wide">
+                <span>
+                  R2ファイル一覧JSON（互換用） <code>BATCH_STUDIO_R2_INDEX_PATH</code>
+                </span>
+                <input
+                  value={settings.r2IndexPath}
+                  onChange={(e) => setField('r2IndexPath', e.target.value)}
+                  placeholder="空欄 = R2統合インデックス"
+                />
+              </label>
+              <label>
+                <span>
+                  Workflow Template <code>BATCH_STUDIO_TEMPLATE_PATH</code>
+                </span>
+                <input
+                  value={settings.templatePath}
+                  onChange={(e) => setField('templatePath', e.target.value)}
+                  placeholder="空欄 = 内蔵"
+                />
+              </label>
+              <label>
+                <span>
+                  Manifest <code>BATCH_STUDIO_MANIFEST_PATH</code>
+                </span>
+                <input
+                  value={settings.manifestPath}
+                  onChange={(e) => setField('manifestPath', e.target.value)}
+                  placeholder="空欄 = 内蔵"
+                />
+              </label>
             </div>
           </details>
           <p className="hint">
