@@ -1057,26 +1057,26 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
               <summary>制御状態・診断情報</summary>
               <h3>Control state</h3>
               <div className="facts execution-facts">
-              <div>
-                <span>Scheduling</span>
-                <b>{current.controls.scheduling}</b>
+                <div>
+                  <span>Scheduling</span>
+                  <b>{current.controls.scheduling}</b>
+                </div>
+                <div>
+                  <span>Interrupt</span>
+                  <b>{current.controls.interrupt}</b>
+                </div>
+                <div>
+                  <span>Updated</span>
+                  <b>{new Date(current.updatedAt).toLocaleString()}</b>
+                </div>
+                <div>
+                  <span>Resume attempts</span>
+                  <b>{current.resume.attempts}</b>
+                </div>
               </div>
-              <div>
-                <span>Interrupt</span>
-                <b>{current.controls.interrupt}</b>
-              </div>
-              <div>
-                <span>Updated</span>
-                <b>{new Date(current.updatedAt).toLocaleString()}</b>
-              </div>
-              <div>
-                <span>Resume attempts</span>
-                <b>{current.resume.attempts}</b>
-              </div>
-            </div>
-            <p className="hint">
-              Local output: <code>{outputPath}</code>
-            </p>
+              <p className="hint">
+                Local output: <code>{outputPath}</code>
+              </p>
             </details>
           </section>
           {(current.error || current.lifecycle === 'FAILED') && (
