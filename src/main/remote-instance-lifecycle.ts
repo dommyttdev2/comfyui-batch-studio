@@ -152,7 +152,10 @@ export class RemoteInstanceLifecycleService {
         throw new Error(
           `Vast.ai Instance ${instanceId} entered ${current.status}: ${statusDetail(current)}`,
         );
-      if (current.status === 'scheduling') {
+      // Scheduling after our accepted start request is a transient state.
+      // Only reject an Instance that was already scheduling before this Run
+      // and therefore did not receive a start request from Batch Studio.
+      if (current.status === 'scheduling' && initialStatus !== 'stopped') {
         await this.persistSnapshot(root, runId, current, 'CLOUD_INSTANCE_STARTING');
         throw new Error(
           `Vast.ai Instance ${instanceId} is scheduling; Execution Run cannot continue.`,
