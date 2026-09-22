@@ -511,7 +511,7 @@ export class CivitaiCatalogService {
         'コレクション所属情報を全件確認しています',
       );
       let collectionCompleted = 0;
-      const itemResults = await mapLimit(collectionIds, 4, async (id) => {
+      const itemResults = await mapLimit(collectionIds, 1, async (id) => {
         const result = await this.client.getCollectionItems(id);
         this.localMetrics.collectionPages += result.pages;
         collectionCompleted += 1;
