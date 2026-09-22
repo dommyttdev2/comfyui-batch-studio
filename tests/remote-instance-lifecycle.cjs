@@ -269,23 +269,49 @@ async function scenario(lifecycle, states) {
   }
 
   {
+    // Vast can report scheduling after accepting our start request. Do not
+    // fail the Run; wait through scheduling and starting until SSH is usable.
     const { root, client, service } = await scenario(lifecycle, [
+      instance('stopped'),
+      instance('scheduling'),
+      instance('starting', { rawStatus: 'starting' }),
+      ready(),
+    ]);
+    const result = await service.prepare(root, runId);
+    assert.equal(result.status, 'running');
+    assert.equal(client.starts, 1, 'start must be requested only once during scheduling');
+    const run = await execution.getExecutionRun(root, runId);
+    assert.equal(run.phase, 'CLOUD_INSTANCE_READY');
+    assert.equal(run.remoteLifecycle.initialStatus, 'stopped');
+    assert.equal(run.remoteLifecycle.startedByBatchStudio, true);
+    assert.equal(run.remoteLifecycle.latest.status, 'running');
+    assert.equal(run.remoteLifecycle.startRequestedAt, null);
+  }
+
+  {
+    // The provider may briefly return stopped even after accepting start,
+    // before reporting scheduling or starting. Never send a second start.
+    const { root, client, service } = await scenario(lifecycle, [
+      instance('stopped'),
       instance('stopped'),
       instance('scheduling'),
       ready(),
     ]);
-    await assert.rejects(
-      () => service.prepare(root, runId),
-      /is scheduling; Execution Run cannot continue/,
-    );
-    assert.equal(
-      client.starts,
-      1,
-      'stopped instance may be started once before scheduling is detected',
-    );
+    await service.prepare(root, runId);
+    assert.equal(client.starts, 1);
     const run = await execution.getExecutionRun(root, runId);
-    assert.equal(run.remoteLifecycle.initialStatus, 'stopped');
-    assert.equal(run.remoteLifecycle.startedByBatchStudio, true);
+    assert.equal(run.remoteLifecycle.latest.status, 'running');
+  }
+
+  {
+    // Scheduling remains bounded by the existing startup timeout.
+    const { root, client, service } = await scenario(lifecycle, [
+      instance('stopped'),
+      instance('scheduling'),
+    ]);
+    await assert.rejects(() => service.prepare(root, runId), /before timeout/);
+    assert.equal(client.starts, 1);
+    const run = await execution.getExecutionRun(root, runId);
     assert.equal(run.remoteLifecycle.latest.status, 'scheduling');
   }
 
