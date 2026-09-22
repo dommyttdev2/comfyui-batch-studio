@@ -815,7 +815,9 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
               className="primary"
               onClick={() =>
                 current &&
-                void apply(() => window.batchStudio.execution.resume(project.rootPath, current.runId))
+                void apply(() =>
+                  window.batchStudio.execution.resume(project.rootPath, current.runId),
+                )
               }
             >
               Resume
@@ -864,7 +866,10 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
                   className="danger"
                   onClick={() =>
                     void apply(() =>
-                      window.batchStudio.execution.restartFromScratch(project.rootPath, current.runId),
+                      window.batchStudio.execution.restartFromScratch(
+                        project.rootPath,
+                        current.runId,
+                      ),
                     )
                   }
                 >
@@ -879,9 +884,7 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
       {!current ? (
         <section className="panel execution-empty">
           <h3>Runはまだありません</h3>
-          <p>
-            実行開始後は、この画面で生成の進捗と結果を確認できます。
-          </p>
+          <p>実行開始後は、この画面で生成の進捗と結果を確認できます。</p>
         </section>
       ) : (
         <>
@@ -1010,7 +1013,8 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
               <summary>ブランチ別進捗・Prompt ID</summary>
               <p className="hint">
                 Current branch: <code>{current.current.branchId ?? '-'}</code>
-                {' / '}Current prompt ID: <code>{current.current.promptId ?? current.current.leafId ?? '-'}</code>
+                {' / '}Current prompt ID:{' '}
+                <code>{current.current.promptId ?? current.current.leafId ?? '-'}</code>
               </p>
               {branch && (
                 <div className="branch-progress">
