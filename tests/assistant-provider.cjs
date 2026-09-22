@@ -32,6 +32,16 @@ matchCode(
   'Environment settings must expose the chat agent choice',
 );
 matchCode(
+  read('src/renderer/EnvironmentSettings.tsx'),
+  /<details className="environment-advanced-settings">/,
+  'Advanced compatibility and connection overrides must not clutter everyday settings',
+);
+matchCode(
+  read('src/renderer/EnvironmentSettings.tsx'),
+  /<h3>Remote 実行設定<\/h3>/,
+  'Remote execution configuration must have a separate section',
+);
+matchCode(
   read('src/renderer/App.tsx'),
   /codex\.getProvider\(context\)/,
   'App must load the project-specific choice before opening a stage',
