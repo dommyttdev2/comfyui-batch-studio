@@ -15,7 +15,10 @@ assert.match(main, /window\.on\('close', \(event\) => \{/);
 assert.match(main, /event\.preventDefault\(\);/);
 assert.match(main, /confirmRunStopBeforeLeave\(state\.projectRoot, window/);
 assert.match(main, /app\.on\('before-quit', \(event\) => \{/);
-assert.match(main, /confirmRunStopBeforeLeave\(state\.projectRoot, state\.window, 'アプリケーションを終了する'\)/);
+assert.match(
+  main,
+  /confirmRunStopBeforeLeave\(state\.projectRoot, state\.window, 'アプリケーションを終了する'\)/,
+);
 assert.match(main, /await executionCoordinator\.waitForSettled/);
 assert.match(main, /await stopVastInstanceForExit/);
 assert.match(main, /instance\.status === 'stopped'/);
