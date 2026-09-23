@@ -17,7 +17,7 @@ assert.match(main, /confirmRunStopBeforeLeave\(state\.projectRoot, window/);
 assert.match(main, /app\.on\('before-quit', \(event\) => \{/);
 assert.match(
   main,
-  /confirmRunStopBeforeLeave\(state\.projectRoot, state\.window, 'アプリケーションを終了する'\)/,
+  /confirmRunStopBeforeLeave\(\s*state\.projectRoot,\s*state\.window,\s*'アプリケーションを終了する',?\s*\)/,
 );
 assert.match(main, /await executionCoordinator\.waitForSettled/);
 assert.match(main, /await stopVastInstanceForExit/);
