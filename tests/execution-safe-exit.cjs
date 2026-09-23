@@ -33,9 +33,9 @@ assert.match(
 assert.match(main, /executionCoordinator\.releaseReservation/);
 assert.match(main, /isDirectLocalComfyRefused/);
 assert.match(main, /url\.protocol !== 'http:'/);
-assert.match(main, /127\\.0\\.0\\.1/);
-assert.match(main, /\\[::1\\]/);
-assert.match(main, /run\\.lifecycle === 'RUNNING'\\s*\\|\\|\\s*executionCoordinator\\.hasActive\\(ref\\)/);
+assert.match(main, /127\.0\.0\.1/);
+assert.match(main, /\[::1\]/);
+assert.match(main, /run\.lifecycle === 'RUNNING'\s*\|\|\s*executionCoordinator\.hasActive\(ref\)/);
 assert.match(main, /await comfy\.health\(\)/);
 assert.match(main, /confirmOfflineLocalRunDiscard\(root, run, comfy, error, owner\)/);
 
