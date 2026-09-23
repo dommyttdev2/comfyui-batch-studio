@@ -87,8 +87,18 @@ assert.match(
 );
 assert.match(
   app,
-  /temporaryGrokKey === providerKey/,
-  'Temporary Grok must be scoped to the current project stage',
+  /temporaryGrokKey !== null && temporaryGrokKey === providerKey/,
+  'Temporary Grok must be scoped to a real AI stage and stay hidden when both keys are null',
+);
+assert.match(
+  app,
+  /const recoverTemporaryProvider = async \(\) =>[\s\S]*?getAssistantProvider\(contextStage\)[\s\S]*?setTemporaryGrokKey\(null\)/,
+  'Temporary Grok must allow the saved provider to be restored without another app restart',
+);
+assert.match(
+  app,
+  /onClick=\{\(\) => void recoverTemporaryProvider\(\)\}/,
+  'Temporary Grok warning must expose an in-place provider recovery action',
 );
 assert.match(
   app,
