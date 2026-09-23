@@ -31,6 +31,39 @@ const finalArtifactImageService = fs.readFileSync(
 const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
 const runtimeCopy = fs.readFileSync(path.join(repo, 'scripts', 'copy-runtime.cjs'), 'utf8');
+const pickerPerf = fs.readFileSync(
+  path.join(repo, 'src', 'main', 'thumbnail-picker-perf.ts'),
+  'utf8',
+);
+const thumbnailCache = fs.readFileSync(
+  path.join(repo, 'src', 'main', 'thumbnail-image-cache.ts'),
+  'utf8',
+);
+const thumbnailTypes = fs.readFileSync(path.join(repo, 'src', 'shared', 'types.ts'), 'utf8');
+const thumbnailIpc = fs.readFileSync(path.join(repo, 'src', 'shared', 'ipc.ts'), 'utf8');
+matchCode(pickerPerf, /thumbnail-picker-performance\\.jsonl/, 'performance events must be saved in a discoverable JSONL log');
+matchCode(pickerPerf, /sessionId/, 'timing events must be correlated to a picker session');
+matchCode(pickerPerf, /MAX_BYTES/, 'performance logs must be size bounded');
+doesNotMatchCode(pickerPerf, /imagePath|dataUrl|sourceImagePath/, 'performance log must not include source file paths or image contents');
+matchCode(main, /'window_opened'/, 'picker startup must be measured');
+matchCode(main, /'list_images'/, 'Main process file enumeration must be measured');
+matchCode(main, /'preview_read'/, 'individual preview read timings must be captured');
+matchCode(main, /'preview_error'/, 'preview failures must be timed');
+matchCode(main, /thumbnailPickerForSender\\(event\\.sender\\)/, 'renderer metrics must be bound to a picker window');
+matchCode(thumbnailCache, /timing\\.statMs/, 'cache identity lookup must be measured');
+matchCode(thumbnailCache, /timing\\.decodeMs/, 'cache decode must be measured');
+matchCode(thumbnailCache, /timing\\.resizeMs/, 'cache resizing must be measured');
+matchCode(thumbnailCache, /timing\\.hit = true/, 'cache hits must be distinguished from misses');
+matchCode(picker, /'list_painted'/, 'initial React list rendering must be measured');
+matchCode(picker, /'first_image_painted'/, 'first image paint must be measured');
+matchCode(picker, /'grid_painted'/, 'search and size changes must be measured');
+matchCode(picker, /onLoad=/, 'image decode completion must be measured');
+matchCode(thumbnailTypes, /logPickerPerf:/, 'typed preload must expose renderer metrics');
+matchCode(thumbnailIpc, /THUMBNAIL_PICKER_PERF/, 'IPC contract must expose renderer metrics');
+matchCode(preload, /logPickerPerf:/, 'preload must forward renderer metrics');
+matchCode(picker, /openPickerPerfLog/, 'picker must offer log folder action');
+
+
 
 matchCode(ui, /'キャプション',\s*'サムネイル'/, 'thumbnail stage must follow caption');
 matchCode(app, /case 'サムネイル':\s*return <ThumbnailStage/, 'thumbnail stage must render');
