@@ -109,10 +109,7 @@ function protectsProjectInputs(run: ExecutionRun | null): boolean {
     run &&
       (run.lifecycle === 'RUNNING' ||
         (run.executionTarget === 'remote' &&
-          !(
-            run.remoteLifecycle?.finalizedAt &&
-            run.remoteLifecycle.latest?.status === 'stopped'
-          ) &&
+          !(run.remoteLifecycle?.finalizedAt && run.remoteLifecycle.latest?.status === 'stopped') &&
           (run.lifecycle === 'PAUSED' ||
             run.lifecycle === 'INTERRUPTED' ||
             (run.lifecycle === 'FAILED' &&
