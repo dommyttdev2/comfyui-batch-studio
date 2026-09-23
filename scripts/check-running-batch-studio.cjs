@@ -16,8 +16,8 @@ function runningBatchStudioPids({
 } = {}) {
   if (platform !== 'win32') return [];
   const script = [
-    "$ErrorActionPreference = 'Stop'",
-    '$expected = [System.IO.Path]::GetFullPath($env:BATCH_STUDIO_ELECTRON_EXE)',
+    "$ErrorActionPreference = 'Stop';",
+    '$expected = [System.IO.Path]::GetFullPath($env:BATCH_STUDIO_ELECTRON_EXE);',
     'Get-CimInstance -ClassName Win32_Process -Filter "Name = \'electron.exe\'" |',
     '  Where-Object { $_.ExecutablePath -and $_.ExecutablePath.Equals($expected, [System.StringComparison]::OrdinalIgnoreCase) } |',
     '  Select-Object -ExpandProperty ProcessId',
