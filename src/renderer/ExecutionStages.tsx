@@ -702,9 +702,7 @@ export function ExecutionStage({
   );
   const canStart = preflight?.state === 'READY' && !active && !requiresRecovery;
   const canResume = Boolean(
-    current &&
-      !requiresRecovery &&
-      ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
+    current && !requiresRecovery && ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
   );
   const canDiscardForEdit = Boolean(
     current && current.lifecycle !== 'COMPLETED' && current.lifecycle !== 'DISCARDED',
@@ -721,12 +719,7 @@ export function ExecutionStage({
       current.phase === 'EXECUTING' &&
       current.controls.interrupt !== 'INTERRUPTED',
   );
-  const startBanner = outputUncollected
-    ? {
-        state: 'OUTPUT RECOVERY REQUIRED',
-        message: 'ComfyUI Historyで既存Promptの生成は確認されましたが、画像のローカル回収が未完了です。再確認で画像を回収するか、Runを破棄してください。新しいPromptは送信しません。',
-      }
-    : recoveryUncertain
+  let startBanner = recoveryUncertain
     ? {
         state: 'RECOVERY REQUIRED',
         message: `既存Prompt/Workerの状態が未確定のため、自動生成とResumeを停止しています。「状態を再確認」は既存処理の確認のみ行い、新しいPromptを投入しません。Remoteの場合はVast.ai Instanceの課金状態も確認してください。`,
@@ -757,6 +750,12 @@ export function ExecutionStage({
                   message: '既存Runが未完了です。新規StartではなくResumeで再開してください。',
                 }
             : { state: 'READY', message: 'Start可能です' };
+  if (outputUncollected)
+    startBanner = {
+      state: 'OUTPUT RECOVERY REQUIRED',
+      message:
+        'ComfyUI Historyで既存Promptの生成は確認されましたが、画像のローカル回収が未完了です。再確認で画像を回収するか、Runを破棄してください。新しいPromptは送信しません。',
+    };
   const branch =
     current?.progress.branches.find((x) => x.branchId === current.current.branchId) ?? null;
   const delivery = current ? deliveryStatus(current) : null;
