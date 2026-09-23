@@ -35,18 +35,20 @@ export function logThumbnailPickerPerformance(
     event,
     ...safeMetrics,
   })}\n`;
-  queue = queue.then(async () => {
-    await mkdir(path.dirname(destination), { recursive: true });
-    if (!announced) {
-      announced = true;
-      console.info(`[ThumbnailPickerPerf] 計測ログ: ${destination}`);
-    }
-    const info = await stat(destination).catch(() => null);
-    if (info && info.size > MAX_BYTES) {
-      await rename(destination, `${destination}.old`).catch(() => undefined);
-    }
-    await appendFile(destination, line, 'utf8');
-  }).catch((error: unknown) => {
-    console.warn('[ThumbnailPickerPerf] Failed to write performance log:', error);
-  });
+  queue = queue
+    .then(async () => {
+      await mkdir(path.dirname(destination), { recursive: true });
+      if (!announced) {
+        announced = true;
+        console.info(`[ThumbnailPickerPerf] 計測ログ: ${destination}`);
+      }
+      const info = await stat(destination).catch(() => null);
+      if (info && info.size > MAX_BYTES) {
+        await rename(destination, `${destination}.old`).catch(() => undefined);
+      }
+      await appendFile(destination, line, 'utf8');
+    })
+    .catch((error: unknown) => {
+      console.warn('[ThumbnailPickerPerf] Failed to write performance log:', error);
+    });
 }

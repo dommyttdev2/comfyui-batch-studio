@@ -174,8 +174,16 @@ import {
   readThumbnailTemplate,
   saveThumbnailState,
 } from './thumbnail-service.js';
-import { readCachedThumbnailImage, storeWebpThumbnailPreview, type ThumbnailCacheTiming } from './thumbnail-image-cache.js';
-import { logThumbnailPickerPerformance, pickerPerformanceLogPath, type PickerMetrics } from './thumbnail-picker-perf.js';
+import {
+  readCachedThumbnailImage,
+  storeWebpThumbnailPreview,
+  type ThumbnailCacheTiming,
+} from './thumbnail-image-cache.js';
+import {
+  logThumbnailPickerPerformance,
+  pickerPerformanceLogPath,
+  type PickerMetrics,
+} from './thumbnail-picker-perf.js';
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
@@ -3070,16 +3078,19 @@ function register() {
     const started = performance.now();
     const finalArtifact = await getFinalArtifactStatus(root);
     const statusMs = performance.now() - started;
-    const images = finalArtifact.exists && finalArtifact.directory
-      ? await listThumbnailImages(finalArtifact.directory) : [];
+    const images =
+      finalArtifact.exists && finalArtifact.directory
+        ? await listThumbnailImages(finalArtifact.directory)
+        : [];
     const state = thumbnailPickerWindows.get(event.sender.id);
-    if (state) logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'list_images', {
-      count: images.length,
-      statusMs,
-      listMs: performance.now() - started - statusMs,
-      totalMs: performance.now() - started,
-      sinceOpenMs: performance.now() - state.openedAt,
-    });
+    if (state)
+      logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'list_images', {
+        count: images.length,
+        statusMs,
+        listMs: performance.now() - started - statusMs,
+        totalMs: performance.now() - started,
+        sinceOpenMs: performance.now() - state.openedAt,
+      });
     return images;
   });
   ipcMain.handle(IPC.THUMBNAIL_READ_IMAGE, (_e, imagePath: unknown) => {
@@ -3093,11 +3104,19 @@ function register() {
     const state = thumbnailPickerWindows.get(event.sender.id);
     const requestNumber = state ? ++state.previewCount : 0;
     try {
-      const cached = await readCachedThumbnailImage(app.getPath('userData'), imagePath, 'gallery', timing);
+      const cached = await readCachedThumbnailImage(
+        app.getPath('userData'),
+        imagePath,
+        'gallery',
+        timing,
+      );
       const fallbackStarted = performance.now();
-      const source = cached ?? await readThumbnailPreview(imagePath);
+      const source = cached ?? (await readThumbnailPreview(imagePath));
       const elapsed = performance.now() - started;
-      if (state && (requestNumber <= 40 || requestNumber % 25 === 0 || elapsed > 100 || !timing.hit)) {
+      if (
+        state &&
+        (requestNumber <= 40 || requestNumber % 25 === 0 || elapsed > 100 || !timing.hit)
+      ) {
         const details: PickerMetrics = {
           requestNumber,
           totalMs: elapsed,
@@ -3105,20 +3124,26 @@ function register() {
           cacheHit: timing.hit === true,
           usedFallback: !cached,
           fallbackMs: cached ? 0 : performance.now() - fallbackStarted,
-          transferKB: source ? source.dataUrl.length * 0.75 / 1024 : 0,
+          transferKB: source ? (source.dataUrl.length * 0.75) / 1024 : 0,
           sourceWidth: source?.width ?? 0,
           sourceHeight: source?.height ?? 0,
         };
         for (const [key, value] of Object.entries(timing)) {
           if (typeof value === 'number' || typeof value === 'boolean') details[key] = value;
         }
-        logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'preview_read', details);
+        logThumbnailPickerPerformance(
+          app.getPath('userData'),
+          state.sessionId,
+          'preview_read',
+          details,
+        );
       }
       return source;
     } catch (error) {
-      if (state) logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'preview_error', {
-        totalMs: performance.now() - started,
-      });
+      if (state)
+        logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'preview_error', {
+          totalMs: performance.now() - started,
+        });
       throw error;
     }
   });
@@ -3190,8 +3215,13 @@ function register() {
     const safe: PickerMetrics = {};
     for (const [key, value] of Object.entries(metrics).slice(0, 20)) {
       if (!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key)) continue;
-      if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) safe[key] = value;
-      else if (key === 'displaySize' && (value === 'large' || value === 'medium' || value === 'small')) safe[key] = value;
+      if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)))
+        safe[key] = value;
+      else if (
+        key === 'displaySize' &&
+        (value === 'large' || value === 'medium' || value === 'small')
+      )
+        safe[key] = value;
     }
     logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, name, {
       ...safe,

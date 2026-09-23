@@ -41,15 +41,27 @@ const thumbnailCache = fs.readFileSync(
 );
 const thumbnailTypes = fs.readFileSync(path.join(repo, 'src', 'shared', 'types.ts'), 'utf8');
 const thumbnailIpc = fs.readFileSync(path.join(repo, 'src', 'shared', 'ipc.ts'), 'utf8');
-matchCode(pickerPerf, /thumbnail-picker-performance\.jsonl/, 'performance events must be saved in a discoverable JSONL log');
+matchCode(
+  pickerPerf,
+  /thumbnail-picker-performance\.jsonl/,
+  'performance events must be saved in a discoverable JSONL log',
+);
 matchCode(pickerPerf, /sessionId/, 'timing events must be correlated to a picker session');
 matchCode(pickerPerf, /MAX_BYTES/, 'performance logs must be size bounded');
-doesNotMatchCode(pickerPerf, /imagePath|dataUrl|sourceImagePath/, 'performance log must not include source file paths or image contents');
+doesNotMatchCode(
+  pickerPerf,
+  /imagePath|dataUrl|sourceImagePath/,
+  'performance log must not include source file paths or image contents',
+);
 matchCode(main, /'window_opened'/, 'picker startup must be measured');
 matchCode(main, /'list_images'/, 'Main process file enumeration must be measured');
 matchCode(main, /'preview_read'/, 'individual preview read timings must be captured');
 matchCode(main, /'preview_error'/, 'preview failures must be timed');
-matchCode(main, /thumbnailPickerForSender\(event\.sender\)/, 'renderer metrics must be bound to a picker window');
+matchCode(
+  main,
+  /thumbnailPickerForSender\(event\.sender\)/,
+  'renderer metrics must be bound to a picker window',
+);
 matchCode(thumbnailCache, /timing\.statMs/, 'cache identity lookup must be measured');
 matchCode(thumbnailCache, /timing\.decodeMs/, 'cache decode must be measured');
 matchCode(thumbnailCache, /timing\.resizeMs/, 'cache resizing must be measured');
@@ -62,8 +74,6 @@ matchCode(thumbnailTypes, /logPickerPerf:/, 'typed preload must expose renderer 
 matchCode(thumbnailIpc, /THUMBNAIL_PICKER_PERF/, 'IPC contract must expose renderer metrics');
 matchCode(preload, /logPickerPerf:/, 'preload must forward renderer metrics');
 matchCode(picker, /openPickerPerfLog/, 'picker must offer log folder action');
-
-
 
 matchCode(ui, /'キャプション',\s*'サムネイル'/, 'thumbnail stage must follow caption');
 matchCode(app, /case 'サムネイル':\s*return <ThumbnailStage/, 'thumbnail stage must render');

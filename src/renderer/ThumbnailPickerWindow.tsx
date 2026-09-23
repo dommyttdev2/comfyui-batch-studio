@@ -32,8 +32,14 @@ export function ThumbnailPickerWindow() {
     stats.totalIpcMs += timing.ipcMs;
     stats.totalDecodeMs += timing.decodeMs;
     stats.maxImageMs = Math.max(stats.maxImageMs, timing.totalMs);
-    if (stats.loaded === 1 || stats.loaded === 5 || stats.loaded === 10 ||
-        stats.loaded === 20 || stats.loaded === 50 || stats.loaded % 100 === 0) {
+    if (
+      stats.loaded === 1 ||
+      stats.loaded === 5 ||
+      stats.loaded === 10 ||
+      stats.loaded === 20 ||
+      stats.loaded === 50 ||
+      stats.loaded % 100 === 0
+    ) {
       reportPickerTiming('images_loaded', {
         loaded: stats.loaded,
         sinceMountMs: performance.now() - mountedAt.current,
@@ -44,11 +50,15 @@ export function ThumbnailPickerWindow() {
       });
     }
     if (stats.loaded === 1) {
-      requestAnimationFrame(() => requestAnimationFrame(() => reportPickerTiming('first_image_painted', {
-        sinceMountMs: performance.now() - mountedAt.current,
-        imageIpcMs: timing.ipcMs,
-        imageDecodeMs: timing.decodeMs,
-      })));
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() =>
+          reportPickerTiming('first_image_painted', {
+            sinceMountMs: performance.now() - mountedAt.current,
+            imageIpcMs: timing.ipcMs,
+            imageDecodeMs: timing.decodeMs,
+          }),
+        ),
+      );
     }
   };
 
@@ -73,18 +83,23 @@ export function ThumbnailPickerWindow() {
         if (cancelled) return;
         listReceivedAt.current = performance.now();
         reportPickerTiming('list_received', {
-          contextMs, listIpcMs, count: nextItems.length,
+          contextMs,
+          listIpcMs,
+          count: nextItems.length,
           sinceMountMs: listReceivedAt.current - mountedAt.current,
         });
         setContext(nextContext);
         setItems(nextItems);
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          if (!cancelled) reportPickerTiming('list_painted', {
-            count: nextItems.length,
-            renderMs: performance.now() - listReceivedAt.current,
-            sinceMountMs: performance.now() - mountedAt.current,
-          });
-        }));
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            if (!cancelled)
+              reportPickerTiming('list_painted', {
+                count: nextItems.length,
+                renderMs: performance.now() - listReceivedAt.current,
+                sinceMountMs: performance.now() - mountedAt.current,
+              });
+          }),
+        );
       } catch (e) {
         if (!cancelled) {
           reportPickerTiming('list_error', { sinceMountMs: performance.now() - mountedAt.current });
@@ -103,11 +118,15 @@ export function ThumbnailPickerWindow() {
     if (loading) return;
     const started = performance.now();
     reportPickerTiming('grid_changed', { displaySize: size, count: filteredItems.length });
-    const first = requestAnimationFrame(() => requestAnimationFrame(() => reportPickerTiming('grid_painted', {
-      displaySize: size,
-      count: filteredItems.length,
-      renderMs: performance.now() - started,
-    })));
+    const first = requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        reportPickerTiming('grid_painted', {
+          displaySize: size,
+          count: filteredItems.length,
+          renderMs: performance.now() - started,
+        }),
+      ),
+    );
     return () => cancelAnimationFrame(first);
   }, [size, filteredItems, loading]);
 
@@ -173,9 +192,15 @@ export function ThumbnailPickerWindow() {
           <span>
             {filteredItems.length} / {items.length} 枚
           </span>
-          <button type="button" title="計測ログが保存されるフォルダーを開く" onClick={() => {
-            void window.batchStudio.thumbnail.openPickerPerfLog().catch(() => undefined);
-          }}>計測ログを開く</button>
+          <button
+            type="button"
+            title="計測ログが保存されるフォルダーを開く"
+            onClick={() => {
+              void window.batchStudio.thumbnail.openPickerPerfLog().catch(() => undefined);
+            }}
+          >
+            計測ログを開く
+          </button>
         </div>
         {error && <div className="thumbnail-image-picker-error">{error}</div>}
         {loading ? (
@@ -221,7 +246,9 @@ function ThumbnailPickerChoice({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [preview, setPreview] = useState<ThumbnailImageSource | null>(null);
   const [failed, setFailed] = useState(false);
-  const loadTiming = useRef<{ started: number; ipcDone: number; webpFallback: boolean } | null>(null);
+  const loadTiming = useRef<{ started: number; ipcDone: number; webpFallback: boolean } | null>(
+    null,
+  );
   const alreadyReported = useRef(false);
 
   useEffect(() => {
@@ -297,17 +324,21 @@ function ThumbnailPickerChoice({
     >
       <span className="thumbnail-image-choice-preview">
         {preview ? (
-          <img src={preview.dataUrl} alt="" onLoad={() => {
-            const timing = loadTiming.current;
-            if (alreadyReported.current || !timing || !timing.ipcDone) return;
-            alreadyReported.current = true;
-            onImageLoaded({
-              ipcMs: timing.ipcDone - timing.started,
-              decodeMs: performance.now() - timing.ipcDone,
-              totalMs: performance.now() - timing.started,
-              webpFallback: timing.webpFallback,
-            });
-          }} />
+          <img
+            src={preview.dataUrl}
+            alt=""
+            onLoad={() => {
+              const timing = loadTiming.current;
+              if (alreadyReported.current || !timing || !timing.ipcDone) return;
+              alreadyReported.current = true;
+              onImageLoaded({
+                ipcMs: timing.ipcDone - timing.started,
+                decodeMs: performance.now() - timing.ipcDone,
+                totalMs: performance.now() - timing.started,
+                webpFallback: timing.webpFallback,
+              });
+            }}
+          />
         ) : (
           <span>{failed ? 'プレビューなし' : '読み込み中…'}</span>
         )}
