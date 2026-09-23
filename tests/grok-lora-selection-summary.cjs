@@ -67,7 +67,11 @@ matchCode(
   /imported\.validation\.valid&&imported\.missingRequirements\.length===0/,
   'invalid manual imports must never show a success toast',
 );
-matchCode(autoImport, /summary:result\.summary/, 'automatic imports must retain the actual summary');
+matchCode(
+  autoImport,
+  /summary:result\.summary/,
+  'automatic imports must retain the actual summary',
+);
 matchCode(
   app,
   /event\.phase!=='imported'/,

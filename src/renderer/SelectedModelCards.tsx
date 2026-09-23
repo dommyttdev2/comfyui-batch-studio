@@ -210,7 +210,9 @@ function SelectionCard({
           </>
         ) : (
           <div className="issue warning">
-            <div>現在の選定: {selection.versionName} / {selection.fileName}</div>
+            <div>
+              現在の選定: {selection.versionName} / {selection.fileName}
+            </div>
             Civitaiモデルカタログに選定中のバージョンがありません。カタログを同期してください。
           </div>
         )}
@@ -231,12 +233,15 @@ function SelectionCard({
               {placementLoading && (
                 <span className="grok-lora-indicator checking">… 配置確認中</span>
               )}
-              {!placementLoading && !placementError && !placement?.local && !placement?.r2 &&
-                !inCivitai && (
-                  <span className="grok-lora-indicator missing">✕ いずれにもない</span>
-                )}
+              {!placementLoading &&
+                !placementError &&
+                !placement?.local &&
+                !placement?.r2 &&
+                !inCivitai && <span className="grok-lora-indicator missing">✕ いずれにもない</span>}
             </div>
-            {placementError && <small className="issue warning">配置確認失敗: {placementError}</small>}
+            {placementError && (
+              <small className="issue warning">配置確認失敗: {placementError}</small>
+            )
             {selection.reason && (
               <details className="selected-model-reason">
                 <summary>選定理由</summary>
@@ -344,7 +349,9 @@ export function SelectedModelCards({
             ))}
           </div>
         ) : (
-          <p className="selected-models-empty">LoRAは未選定です。選定結果を取り込むとここに表示されます。</p>
+          <p className="selected-models-empty">
+            LoRAは未選定です。選定結果を取り込むとここに表示されます。
+          </p>
         )}
       </section>
     </>
