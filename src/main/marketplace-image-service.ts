@@ -18,6 +18,7 @@ import {
   readImagePreview,
 } from './final-artifact-image-service.js';
 import { assertExportedThumbnail } from './thumbnail-service.js';
+import { readProjectMeta } from './project-meta.js';
 import {
   fingerprintMarketplaceSource,
   marketplaceInputSignature,
@@ -310,8 +311,15 @@ async function writeAtomic(outputPath: string, bytes: Buffer) {
   await rename(temp, outputPath);
 }
 
-function generationManifestPath(root: string) {
-  return path.join(root, 'marketplace', '._generation-manifest.json');
+export async function marketplaceOutputDirectory(root: string): Promise<string> {
+  const meta = await readProjectMeta(root);
+  const base = meta?.settings.artifactOutputPath?.trim();
+  if (!base) throw new Error('成果物フォルダを設定してください。');
+  return path.join(path.resolve(base), 'marketplace');
+}
+
+function generationManifestPath(outputDirectory: string) {
+  return path.join(outputDirectory, '._generation-manifest.json');
 }
 
 export async function generateMarketplaceImages(
@@ -330,14 +338,14 @@ export async function generateMarketplaceImages(
   );
   const source = await fingerprintMarketplaceSource(resolved);
   const inputSignature = marketplaceInputSignature(state, targets);
-  const outputDirectory = path.join(root, 'marketplace');
+  const outputDirectory = await marketplaceOutputDirectory(root);
   const extension = FORMAT_EXTENSIONS[state.format];
   const outputPaths: string[] = [];
   const staged: Array<{ outputPath: string; bytes: Buffer }> = [];
   const outputs: MarketplaceGeneratedOutput[] = [];
 
   // A previous successful manifest must never certify a partial new generation.
-  await rm(generationManifestPath(root), { force: true });
+  await rm(generationManifestPath(outputDirectory), { force: true });
   for (const target of targets) {
     const crop = clampCrop(
       state.targets[target.id]?.crop ?? null,
@@ -390,7 +398,7 @@ export async function generateMarketplaceImages(
   };
   // The manifest is the commit marker. ZIP generation accepts only a complete,
   // content-verified set of outputs with the same generation identity.
-  await writeJsonAtomic(generationManifestPath(root), manifest);
+  await writeJsonAtomic(generationManifestPath(outputDirectory), manifest);
   return { outputDirectory, outputPaths, zipPath: null };
 }
 
@@ -415,7 +423,7 @@ export async function exportCustomMarketplaceImage(
     state.custom.height,
   );
   const extension = FORMAT_EXTENSIONS[state.format];
-  const outputDirectory = path.join(root, 'marketplace', 'custom');
+  const outputDirectory = path.join(await marketplaceOutputDirectory(root), 'custom');
   const outputPath = path.join(outputDirectory, `custom-output.${extension}`);
   const bytes =
     state.format === 'webp'
@@ -537,8 +545,8 @@ export async function generateMarketplaceZip(
       : await normalizeMarketplaceImageState(currentEditorState);
   const targets = await getMarketplaceImageTargets();
   const extension = FORMAT_EXTENSIONS[normalizedFormat];
-  const outputDirectory = path.join(root, 'marketplace');
-  const manifest = await readJson<MarketplaceGenerationManifest>(generationManifestPath(root));
+  const outputDirectory = await marketplaceOutputDirectory(root);
+  const manifest = await readJson<MarketplaceGenerationManifest>(generationManifestPath(outputDirectory));
   if (state.format !== normalizedFormat || !manifest)
     throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
   const sourcePath = await assertMarketplaceSource(
@@ -569,7 +577,7 @@ export async function generateMarketplaceZip(
   // Source and generation may change while the four files are read.
   const sourceAfter = await fingerprintMarketplaceSource(sourcePath);
   const currentManifest = await readJson<MarketplaceGenerationManifest>(
-    generationManifestPath(root),
+    generationManifestPath(outputDirectory),
   );
   validateMarketplaceGeneration(currentManifest, state, targets, sourceAfter);
   if (currentManifest?.generationId !== manifest.generationId)
