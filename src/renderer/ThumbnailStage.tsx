@@ -386,7 +386,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
       setState(loaded);
       // Do not block the editor on images belonging to other documents.
       loadedStateRef.current = true;
-        });
+    });
     return () => {
       cancelled = true;
     };
