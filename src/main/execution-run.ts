@@ -711,7 +711,7 @@ export async function resumeExecutionRun(
       run.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED'
     )
       throw new Error(
-        'Execution Run has an unaccounted accepted Prompt or failed output collection. Reconcile the exact Prompt before resuming; automatic re-submission is disabled.',
+        'Execution Run recovery is uncertain or output collection failed. Reconcile the exact accepted Prompt before resuming; automatic re-submission is disabled.',
       );
     const placeholder: PreflightResult = {
       state: 'READY',
