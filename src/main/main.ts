@@ -1235,7 +1235,13 @@ async function stopVastInstanceForExit(run: ExecutionRun, root: string) {
   const id = Number(run.remote?.instanceId);
   if (!Number.isInteger(id) || id < 1) throw new Error('Remote Run has no Vast.ai Instance ID.');
   const client = vastClient();
-  let instance = await client.getInstance(id);
+  let instance;
+  try {
+    instance = await client.getInstance(id);
+  } catch (error) {
+    if (error instanceof VastAiInstanceNotFoundError) return;
+    throw error;
+  }
   if (instance.id !== id) throw new Error('Vast.ai Instance identity mismatch.');
   if (instance.status !== 'stopped') await client.stopInstance(id);
   for (let attempt = 0; attempt < EXIT_SETTLE_POLLS; attempt++) {
@@ -1330,10 +1336,20 @@ async function runRequiresExitGuard(root: string) {
   for (const run of runs) {
     if (run.lifecycle === 'RUNNING' || run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
       return true;
-    if (run.executionTarget === 'remote' && ['PAUSED', 'INTERRUPTED'].includes(run.lifecycle)) {
+    if (
+      run.executionTarget === 'remote' &&
+      (['PAUSED', 'INTERRUPTED'].includes(run.lifecycle) ||
+        (run.lifecycle === 'FAILED' && run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED'))
+    ) {
+      if (run.remoteLifecycle?.finalizedAt && run.remoteLifecycle.latest?.status === 'stopped')
+        continue;
       if (!run.remote?.instanceId) return true;
-      const instance = await vastClient().getInstance(Number(run.remote.instanceId));
-      if (instance.status !== 'stopped') return true;
+      try {
+        const instance = await vastClient().getInstance(Number(run.remote.instanceId));
+        if (instance.status !== 'stopped') return true;
+      } catch (error) {
+        if (!(error instanceof VastAiInstanceNotFoundError)) throw error;
+      }
     }
   }
   return false;
