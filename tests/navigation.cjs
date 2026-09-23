@@ -162,33 +162,26 @@ matchCode(
 );
 matchCode(
   executionSource,
-  /const remoteInstanceChanged=Boolean/,
-  'Execution UI must detect when Project selection differs from the active Run Instance',
+  /readyForNewRun/,
+  'Execution UI must make Start available after safe discard without navigating',
 );
 matchCode(
   executionSource,
-  /別Instanceで新しく実行/,
-  'Execution UI must expose a distinct replacement-Run action',
+  /現在のRunを破棄/,
+  'Execution UI must expose discard as an independent action',
+);
+assert.doesNotMatch(executionSource, /別のRunとして実行する/);
+assert.doesNotMatch(executionSource, /execution\\.restartRemote/);
+assert.doesNotMatch(executionSource, /execution\\.restartFromScratch/);
+matchCode(
+  executionSource,
+  /一時停止を要求中…/,
+  'Pause action must provide immediate feedback',
 );
 matchCode(
   executionSource,
-  /execution\.restartRemote/,
-  'replacement action must use dedicated IPC rather than mutating the existing Run',
-);
-matchCode(
-  executionSource,
-  /最新のPrompt Planで最初から実行/,
-  'Execution UI must expose a latest-Prompt-Plan restart action',
-);
-matchCode(
-  executionSource,
-  /execution\.restartFromScratch/,
-  'fresh restart must use a dedicated IPC action',
-);
-matchCode(
-  executionSource,
-  /canRestartFromScratch/,
-  'fresh restart availability must be derived explicitly',
+  /再開/,
+  'Resume action must use the user-facing Japanese label',
 );
 matchCode(
   mainSource,
