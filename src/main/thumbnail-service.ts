@@ -286,7 +286,9 @@ export async function thumbnailOutputDirectory(root: string): Promise<string> {
 
 export async function listExportedThumbnails(root: string): Promise<ThumbnailImageItem[]> {
   const directory = await thumbnailOutputDirectory(root);
-  const editor = await loadThumbnailState(root);
+  // Avoid system-font enumeration for every gallery preview/source validation.
+  const raw = await readJson<unknown>(statePath(root));
+  const editor = normalizeThumbnailState(raw);
   const allowed = new Set(editor.documents.map((document) => document.id));
   let entries;
   try { entries = await readdir(directory, { withFileTypes: true }); }
