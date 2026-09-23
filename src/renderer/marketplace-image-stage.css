@@ -22,6 +22,14 @@
   margin-bottom: 14px;
 }
 
+.marketplace-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.marketplace-source-actions button { flex: 0 0 auto; }
+
 .marketplace-preview-head h3,
 .marketplace-inspector h3 {
   margin: 0 0 6px;
