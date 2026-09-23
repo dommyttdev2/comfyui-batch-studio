@@ -1,5 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import type { AssistantPaneProvider, ProjectBriefInput, ProjectSummary } from '../shared/types';
+import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
+import type {
+  AssistantPaneProvider,
+  ExecutionRun,
+  ProjectBriefInput,
+  ProjectSummary,
+} from '../shared/types';
 import { grokContextStage, stages, shouldShowGrok, statusDot, type Runner, type Stage } from './ui';
 import { Overview, Settings } from './ProjectStages';
 import { StoryStage, ModelsStage } from './GrokStages';
@@ -99,6 +104,60 @@ async function setAssistantProvider(
   }
 }
 
+function protectsProjectInputs(run: ExecutionRun | null): boolean {
+  return Boolean(
+    run &&
+      (run.lifecycle === 'RUNNING' ||
+        (run.executionTarget === 'remote' &&
+          !(run.remoteLifecycle?.finalizedAt && run.remoteLifecycle.latest?.status === 'stopped') &&
+          (run.lifecycle === 'PAUSED' ||
+            run.lifecycle === 'INTERRUPTED' ||
+            (run.lifecycle === 'FAILED' &&
+              run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED'))) ||
+        run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN'),
+  );
+}
+
+// Prevent edits without disabling scrolling or text selection. The main process
+// independently rejects writes, including those from stale windows.
+function ReadOnlyStage({ readOnly, children }: { readOnly: boolean; children: ReactNode }) {
+  const block = (event: SyntheticEvent) => {
+    if (!readOnly) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  return (
+    <div
+      className={readOnly ? 'stage-readonly-content' : undefined}
+      onClickCapture={block}
+      onDoubleClickCapture={block}
+      onChangeCapture={block}
+      onInputCapture={block}
+      onSubmitCapture={block}
+      onDragStartCapture={block}
+      onDropCapture={block}
+      onPointerDownCapture={(event) => {
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest('canvas, [draggable="true"], [contenteditable="true"]')
+        )
+          block(event);
+      }}
+      onKeyDownCapture={(event) => {
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest('input, textarea, select, button, [contenteditable], [role="button"]')
+        )
+          block(event);
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function App() {
   const [project, setProject] = useState<ProjectSummary | null>(null),
     [recent, setRecent] = useState<ProjectSummary[]>([]),
@@ -126,18 +185,36 @@ function App() {
     [tool, setTool] = useState<StandaloneTool>(null),
     [resetRevision, setResetRevision] = useState(0),
     [stageReloadRevision, setStageReloadRevision] = useState(0),
-    [importNotices, setImportNotices] = useState<ImportNotice[]>([]);
+    [importNotices, setImportNotices] = useState<ImportNotice[]>([]),
+    [executionViewState, setExecutionViewState] = useState<{
+      root: string;
+      protected: boolean;
+    } | null>(null);
   const importSequence = useRef(0);
   const seenAutoImports = useRef(new Set<string>());
   const currentProjectRoot = useRef(project?.rootPath);
   currentProjectRoot.current = project?.rootPath;
   const navigationPending = useRef(false);
+  const viewOnly = Boolean(
+    project &&
+      stage !== '実行' &&
+      (executionViewState?.root !== project.rootPath || executionViewState.protected),
+  );
   const navigateStage = async (next: Stage) => {
     if (!project || next === stage || navigationPending.current) return;
     navigationPending.current = true;
     setError('');
     try {
-      if (next !== '実行' && !(await window.batchStudio.execution.leave(project.rootPath))) return;
+      // Moving between stages must not stop the worker; closing or switching
+      // the project still uses the existing main-process exit confirmation.
+      if (next !== '実行') {
+        if (!(await window.batchStudio.execution.leave(project.rootPath))) return;
+        const current = await window.batchStudio.execution.status(project.rootPath);
+        setExecutionViewState({
+          root: project.rootPath,
+          protected: protectsProjectInputs(current),
+        });
+      }
       setTool(null);
       setStage(next);
     } catch (cause) {
@@ -146,6 +223,31 @@ function App() {
       navigationPending.current = false;
     }
   };
+  useEffect(() => {
+    if (!project) return;
+    const root = project.rootPath;
+    let cancelled = false;
+    let inFlight = false;
+    const inspect = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const current = await window.batchStudio.execution.status(root);
+        if (!cancelled) setExecutionViewState({ root, protected: protectsProjectInputs(current) });
+      } catch {
+        // A failed status query must not briefly enable editing.
+        if (!cancelled) setExecutionViewState({ root, protected: true });
+      } finally {
+        inFlight = false;
+      }
+    };
+    void inspect();
+    const timer = window.setInterval(() => void inspect(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [project?.rootPath]);
   const refresh = async () =>
     project && setProject(await window.batchStudio.project.scan(project.rootPath));
   const notifyImported = async (notice: ImportNoticeInput) => {
@@ -373,7 +475,7 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      if (project && contextStage && paneProviderRoot !== providerKey) {
+      if (viewOnly || (project && contextStage && paneProviderRoot !== providerKey)) {
         const state = await window.batchStudio.grok.setVisible(false);
         if (!cancelled) {
           setGrok(state.visible);
@@ -381,7 +483,7 @@ function App() {
         }
         return;
       }
-      const visible = Boolean(project && !tool && shouldShowGrok(stage)),
+      const visible = Boolean(project && !tool && !viewOnly && shouldShowGrok(stage)),
         context = grokContextStage(stage);
       if (visible && context && project) {
         setGrok(true);
@@ -408,7 +510,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [stage, project?.rootPath, tool, paneProvider, paneProviderRoot, providerKey]);
+  }, [stage, project?.rootPath, tool, paneProvider, paneProviderRoot, providerKey, viewOnly]);
   const title =
       project?.title ??
       (tool === 'services'
@@ -434,7 +536,7 @@ function App() {
           <small>{project?.rootPath}</small>
         </div>
         <div className="actions">
-          {project && !tool && shouldShowGrok(stage) && (
+          {project && !tool && !viewOnly && shouldShowGrok(stage) && (
             <select
               aria-label="AIアシスタント"
               value={paneProvider}
@@ -449,7 +551,7 @@ function App() {
               <option value="codex">Codex</option>
             </select>
           )}
-          {project && !tool && shouldShowGrok(stage) && (
+          {project && !tool && !viewOnly && shouldShowGrok(stage) && (
             <button
               onClick={async () => {
                 const s = await window.batchStudio.grok.setVisible(!grok);
@@ -507,9 +609,16 @@ function App() {
             <>
               <div className="stagehead">
                 <h2>{stage}</h2>
-                {resetScope && <StageResetMenu scope={resetScope} onReset={resetFrom} />}
+                {resetScope && !viewOnly && (
+                  <StageResetMenu scope={resetScope} onReset={resetFrom} />
+                )}
               </div>
-              {contextStage && paneProviderRoot !== providerKey ? (
+              {viewOnly && (
+                <div className="stage-readonly-notice" role="status">
+                  実行中のRunを保護するため、この工程は閲覧専用です。編集はRunの停止後に行ってください。
+                </div>
+              )}
+              {contextStage && !viewOnly && paneProviderRoot !== providerKey ? (
                 providerRestoreFailure?.key === providerKey ? (
                   <section className="panel" role="alert">
                     <h3>AIエージェントの復元に失敗しました</h3>
@@ -580,15 +689,17 @@ function App() {
                     }}
                   >
                     <ImportNoticeContext.Provider value={notifyImported}>
-                      <StageView
-                        project={project}
-                        stage={stage}
-                        provider={paneProvider}
-                        refresh={refresh}
-                        setProject={setProject}
-                        run={run}
-                        resetFrom={resetFrom}
-                      />
+                      <ReadOnlyStage readOnly={viewOnly}>
+                        <StageView
+                          project={project}
+                          stage={stage}
+                          provider={paneProvider}
+                          refresh={refresh}
+                          setProject={setProject}
+                          run={run}
+                          resetFrom={resetFrom}
+                        />
+                      </ReadOnlyStage>
                     </ImportNoticeContext.Provider>
                   </StageErrorBoundary>
                 </>

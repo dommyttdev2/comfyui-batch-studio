@@ -40,6 +40,44 @@ assert.match(main, /await comfy\.health\(\)/);
 assert.match(main, /confirmOfflineLocalRunDiscard\(root, run, comfy, error, owner\)/);
 
 assert.match(app, /await window\.batchStudio\.execution\.leave\(project\.rootPath\)/);
+const leaveHandler = main.slice(
+  main.indexOf('ipcMain.handle(IPC.EXECUTION_LEAVE'),
+  main.indexOf('ipcMain.handle(IPC.EXECUTION_STOP_FOR_EDIT'),
+);
+assert.ok(leaveHandler.includes('return true;'), 'stage browsing must always be allowed');
+assert.ok(
+  !leaveHandler.includes('return confirmRunStopBeforeLeave('),
+  'browsing must not stop a Run',
+);
+assert.ok(app.includes('<ReadOnlyStage readOnly={viewOnly}>'));
+assert.ok(app.includes("stage !== '実行'"));
+assert.ok(app.includes('window.batchStudio.execution.status(project.rootPath)'));
+assert.ok(app.includes('window.setInterval(() => void inspect(), 3000)'));
+assert.ok(app.includes('resetScope && !viewOnly'), 'reset actions must be hidden while running');
+assert.ok(main.includes('async function ensureProjectWritable(root: string)'));
+for (const channel of [
+  'PROJECT_SAVE_SETTINGS',
+  'PROJECT_SAVE_BRIEF',
+  'ARTIFACT_SAVE_DRAFT',
+  'ARTIFACT_IMPORT_GROK',
+  'ARTIFACT_CONFIRM',
+  'ARTIFACT_RESET_FROM',
+  'PROMPT_PLAN_SAVE',
+  'WORKFLOW_COMPILE',
+  'THUMBNAIL_SAVE',
+  'THUMBNAIL_EXPORT',
+  'MARKETPLACE_SAVE',
+  'MARKETPLACE_GENERATE',
+]) {
+  const start = main.indexOf('IPC.' + channel + ',');
+  assert.ok(start >= 0, channel + ' handler is missing');
+  const end = main.indexOf('ipcMain.handle(', start + channel.length);
+  const handler = main.slice(start, end < 0 ? undefined : end);
+  assert.ok(
+    handler.includes('await ensureProjectWritable(root);'),
+    channel + ' must reject writes',
+  );
+}
 assert.doesNotMatch(app, /onDiscarded=\{\(\) => \{/);
 assert.match(execution, /現在のRunを破棄/);
 assert.doesNotMatch(execution, /現在のRunを破棄してモデル選定へ戻る/);
