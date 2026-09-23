@@ -160,53 +160,61 @@ export function normalizeThumbnailState(
 ): ThumbnailEditorState {
   const defaults = createDefaultThumbnailState(defaultFontFamily);
   const input = value && typeof value === 'object' ? (value as Partial<ThumbnailEditorState>) : {};
-  const sourceDocuments = Array.isArray(input.documents) && input.documents.length
-    ? input.documents
-    : defaults.documents;
+  const sourceDocuments =
+    Array.isArray(input.documents) && input.documents.length ? input.documents : defaults.documents;
   const seenIds = new Set<number>();
-  const documents = sourceDocuments.filter((candidate): candidate is ThumbnailDocument => {
-    if (!candidate || typeof candidate !== 'object' || !Number.isSafeInteger(candidate.id) ||
-        candidate.id < 1 || seenIds.has(candidate.id)) return false;
-    seenIds.add(candidate.id);
-    return true;
-  }).map((candidate) => {
-    const fallback = createThumbnailDocument(candidate.id, defaultFontFamily);
-    const slots: ThumbnailDocument['slots'] = {};
-    if (candidate.slots && typeof candidate.slots === 'object') {
-      for (const [key, raw] of Object.entries(candidate.slots)) {
-        if (!SLOT_KEYS.has(key as ThumbnailSlotKey) || !raw || typeof raw !== 'object') continue;
-        const slot = raw as {
-          imagePath?: unknown;
-          offsetX?: unknown;
-          offsetY?: unknown;
-          scale?: unknown;
-        };
-        slots[key as ThumbnailSlotKey] = {
-          imagePath: typeof slot.imagePath === 'string' ? slot.imagePath : '',
-          offsetX: finite(slot.offsetX, 0, -1600, 1600),
-          offsetY: finite(slot.offsetY, 0, -1200, 1200),
-          scale: finite(slot.scale, 1, 0.1, 8),
-        };
+  const documents = sourceDocuments
+    .filter((candidate): candidate is ThumbnailDocument => {
+      if (
+        !candidate ||
+        typeof candidate !== 'object' ||
+        !Number.isSafeInteger(candidate.id) ||
+        candidate.id < 1 ||
+        seenIds.has(candidate.id)
+      )
+        return false;
+      seenIds.add(candidate.id);
+      return true;
+    })
+    .map((candidate) => {
+      const fallback = createThumbnailDocument(candidate.id, defaultFontFamily);
+      const slots: ThumbnailDocument['slots'] = {};
+      if (candidate.slots && typeof candidate.slots === 'object') {
+        for (const [key, raw] of Object.entries(candidate.slots)) {
+          if (!SLOT_KEYS.has(key as ThumbnailSlotKey) || !raw || typeof raw !== 'object') continue;
+          const slot = raw as {
+            imagePath?: unknown;
+            offsetX?: unknown;
+            offsetY?: unknown;
+            scale?: unknown;
+          };
+          slots[key as ThumbnailSlotKey] = {
+            imagePath: typeof slot.imagePath === 'string' ? slot.imagePath : '',
+            offsetX: finite(slot.offsetX, 0, -1600, 1600),
+            offsetY: finite(slot.offsetY, 0, -1200, 1200),
+            scale: finite(slot.scale, 1, 0.1, 8),
+          };
+        }
       }
-    }
-    return {
-      id: fallback.id,
-      pattern: PATTERNS.has(candidate.pattern) ? candidate.pattern : fallback.pattern,
-      slots,
-      title: cleanText(candidate.title, fallback.title),
-      subtitle: cleanText(candidate.subtitle, fallback.subtitle),
-    };
-  });
+      return {
+        id: fallback.id,
+        pattern: PATTERNS.has(candidate.pattern) ? candidate.pattern : fallback.pattern,
+        slots,
+        title: cleanText(candidate.title, fallback.title),
+        subtitle: cleanText(candidate.subtitle, fallback.subtitle),
+      };
+    });
   return {
     schemaVersion: 1,
     activeDocumentId: documents.some((document) => document.id === input.activeDocumentId)
-      ? input.activeDocumentId as number
-      : documents[0]?.id ?? 1,
+      ? (input.activeDocumentId as number)
+      : (documents[0]?.id ?? 1),
     documents,
     nextDocumentId: Math.max(
       ...documents.map((document) => document.id + 1),
       Number.isSafeInteger(input.nextDocumentId) && (input.nextDocumentId as number) > 0
-        ? input.nextDocumentId as number : 1,
+        ? (input.nextDocumentId as number)
+        : 1,
     ),
     ...(typeof input.saveRevision === 'number' &&
     Number.isSafeInteger(input.saveRevision) &&
@@ -297,8 +305,12 @@ export async function listExportedThumbnails(root: string): Promise<ThumbnailIma
   const editor = normalizeThumbnailState(raw);
   const allowed = new Set(editor.documents.map((document) => document.id));
   let entries;
-  try { entries = await readdir(directory, { withFileTypes: true }); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
   const items: ThumbnailImageItem[] = [];
   for (const entry of entries) {
     if (!entry.isFile()) continue;
@@ -322,10 +334,13 @@ export async function assertExportedThumbnail(root: string, imagePath: string): 
 }
 
 export async function deleteThumbnailOutputs(root: string, documentId: number): Promise<void> {
-  if (!Number.isSafeInteger(documentId) || documentId < 1) throw new Error('Invalid thumbnail document');
+  if (!Number.isSafeInteger(documentId) || documentId < 1)
+    throw new Error('Invalid thumbnail document');
   const directory = await thumbnailOutputDirectory(root);
   for (const ext of ['png', 'jpg', 'jpeg'])
-    await rm(path.join(directory, `thumbnail-${String(documentId).padStart(2, '0')}.${ext}`), { force: true });
+    await rm(path.join(directory, `thumbnail-${String(documentId).padStart(2, '0')}.${ext}`), {
+      force: true,
+    });
 }
 
 export async function exportThumbnail(

@@ -15,11 +15,24 @@
   overflow-x: auto;
   padding-bottom: 3px;
 }
-.thumbnail-documents button { flex: 0 0 auto; }
-.thumbnail-add-document { flex: 0 0 auto; min-width: 48px; }
-.thumbnail-delete-document { flex: 0 0 auto; }
-.thumbnail-delete-confirm { margin-bottom: 14px; }
-.thumbnail-delete-confirm label { display: flex; gap: 8px; align-items: center; }
+.thumbnail-documents button {
+  flex: 0 0 auto;
+}
+.thumbnail-add-document {
+  flex: 0 0 auto;
+  min-width: 48px;
+}
+.thumbnail-delete-document {
+  flex: 0 0 auto;
+}
+.thumbnail-delete-confirm {
+  margin-bottom: 14px;
+}
+.thumbnail-delete-confirm label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .thumbnail-documents button {
   min-width: 48px;
   font-weight: 700;

@@ -303,7 +303,8 @@ contextBridge.exposeInMainWorld('batchStudio', {
     generate: (r, s, w, p) => ipcRenderer.invoke(I.MARKETPLACE_GENERATE, r, s, w, p),
     generateZip: (r, f, s) => ipcRenderer.invoke(I.MARKETPLACE_GENERATE_ZIP, r, f, s),
     exportCustom: (r, s, w, p) => ipcRenderer.invoke(I.MARKETPLACE_EXPORT_CUSTOM, r, s, w, p),
-    renderPng: (r, p, c, w, h, s, t) => ipcRenderer.invoke(I.MARKETPLACE_RENDER_PNG, r, p, c, w, h, s, t),
+    renderPng: (r, p, c, w, h, s, t) =>
+      ipcRenderer.invoke(I.MARKETPLACE_RENDER_PNG, r, p, c, w, h, s, t),
     openPicker: (r, p, t) => ipcRenderer.invoke(I.MARKETPLACE_PICKER_OPEN, r, p, t),
     pickerContext: () => ipcRenderer.invoke(I.MARKETPLACE_PICKER_CONTEXT),
     previewPicker: (p) => ipcRenderer.invoke(I.MARKETPLACE_PICKER_PREVIEW, p),

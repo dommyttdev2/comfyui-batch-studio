@@ -697,7 +697,12 @@ async function validateMarketplacePickerImage(
     : assertFinalArtifactImage(state.root, imagePath);
 }
 
-function openMarketplacePickerWindow(opener: WebContents, root: string, currentImagePath: string, sourceType: MarketplaceSourceType) {
+function openMarketplacePickerWindow(
+  opener: WebContents,
+  root: string,
+  currentImagePath: string,
+  sourceType: MarketplaceSourceType,
+) {
   for (const existing of marketplacePickerWindows.values()) {
     if (existing.opener.id === opener.id) existing.window.close();
   }
@@ -3136,18 +3141,30 @@ function register() {
     validRoot(root);
     return listExportedThumbnails(root);
   });
-  ipcMain.handle(IPC.MARKETPLACE_READ_SOURCE, (_e, root: unknown, imagePath: unknown, sourceType: unknown) => {
-    validRoot(root);
-    if (typeof imagePath !== 'string' || (sourceType !== 'thumbnail' && sourceType !== 'final-artifact'))
-      throw new Error('Invalid marketplace source');
-    return readMarketplaceSource(root, imagePath, sourceType);
-  });
-  ipcMain.handle(IPC.MARKETPLACE_READ_SOURCE_PREVIEW, (_e, root: unknown, imagePath: unknown, sourceType: unknown) => {
-    validRoot(root);
-    if (typeof imagePath !== 'string' || (sourceType !== 'thumbnail' && sourceType !== 'final-artifact'))
-      throw new Error('Invalid marketplace source');
-    return readMarketplaceSourcePreview(root, imagePath, sourceType);
-  });
+  ipcMain.handle(
+    IPC.MARKETPLACE_READ_SOURCE,
+    (_e, root: unknown, imagePath: unknown, sourceType: unknown) => {
+      validRoot(root);
+      if (
+        typeof imagePath !== 'string' ||
+        (sourceType !== 'thumbnail' && sourceType !== 'final-artifact')
+      )
+        throw new Error('Invalid marketplace source');
+      return readMarketplaceSource(root, imagePath, sourceType);
+    },
+  );
+  ipcMain.handle(
+    IPC.MARKETPLACE_READ_SOURCE_PREVIEW,
+    (_e, root: unknown, imagePath: unknown, sourceType: unknown) => {
+      validRoot(root);
+      if (
+        typeof imagePath !== 'string' ||
+        (sourceType !== 'thumbnail' && sourceType !== 'final-artifact')
+      )
+        throw new Error('Invalid marketplace source');
+      return readMarketplaceSourcePreview(root, imagePath, sourceType);
+    },
+  );
   ipcMain.handle(IPC.MARKETPLACE_TARGETS, () => getMarketplaceImageTargets());
   ipcMain.handle(IPC.MARKETPLACE_LOAD, (_e, root: unknown) => {
     validRoot(root);
@@ -3205,7 +3222,11 @@ function register() {
       sourceType: unknown,
     ) => {
       validRoot(root);
-      if (typeof sourceType !== 'undefined' && sourceType !== 'thumbnail' && sourceType !== 'final-artifact')
+      if (
+        typeof sourceType !== 'undefined' &&
+        sourceType !== 'thumbnail' &&
+        sourceType !== 'final-artifact'
+      )
         throw new Error('Invalid marketplace source type');
       if (typeof sourceImagePath !== 'string') throw new Error('Invalid marketplace image path');
       if (!crop || typeof crop !== 'object') throw new Error('Invalid marketplace crop');
@@ -3222,12 +3243,16 @@ function register() {
       );
     },
   );
-  ipcMain.handle(IPC.MARKETPLACE_PICKER_OPEN, (event, root: unknown, currentImagePath: unknown, sourceType: unknown) => {
-    validRoot(root);
-    if (typeof currentImagePath !== 'string') throw new Error('Invalid marketplace image path');
-    if (sourceType !== 'thumbnail' && sourceType !== 'final-artifact') throw new Error('Invalid marketplace source');
-    return openMarketplacePickerWindow(event.sender, root, currentImagePath, sourceType);
-  });
+  ipcMain.handle(
+    IPC.MARKETPLACE_PICKER_OPEN,
+    (event, root: unknown, currentImagePath: unknown, sourceType: unknown) => {
+      validRoot(root);
+      if (typeof currentImagePath !== 'string') throw new Error('Invalid marketplace image path');
+      if (sourceType !== 'thumbnail' && sourceType !== 'final-artifact')
+        throw new Error('Invalid marketplace source');
+      return openMarketplacePickerWindow(event.sender, root, currentImagePath, sourceType);
+    },
+  );
   ipcMain.handle(IPC.MARKETPLACE_PICKER_CONTEXT, (event) => {
     const state = marketplacePickerForSender(event.sender);
     return {

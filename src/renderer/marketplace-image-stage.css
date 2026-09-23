@@ -28,7 +28,9 @@
   align-items: center;
   gap: 8px;
 }
-.marketplace-source-actions button { flex: 0 0 auto; }
+.marketplace-source-actions button {
+  flex: 0 0 auto;
+}
 
 .marketplace-preview-head h3,
 .marketplace-inspector h3 {

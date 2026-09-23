@@ -1337,8 +1337,16 @@ export interface BatchStudioApi {
   marketplace: {
     targets: () => Promise<MarketplaceImageTarget[]>;
     listThumbnailImages: (root: string) => Promise<FinalArtifactImageItem[]>;
-    readSource: (root: string, imagePath: string, sourceType: MarketplaceSourceType) => Promise<FinalArtifactImageSource | null>;
-    readSourcePreview: (root: string, imagePath: string, sourceType: MarketplaceSourceType) => Promise<FinalArtifactImageSource | null>;
+    readSource: (
+      root: string,
+      imagePath: string,
+      sourceType: MarketplaceSourceType,
+    ) => Promise<FinalArtifactImageSource | null>;
+    readSourcePreview: (
+      root: string,
+      imagePath: string,
+      sourceType: MarketplaceSourceType,
+    ) => Promise<FinalArtifactImageSource | null>;
     load: (root: string) => Promise<MarketplaceImageEditorState>;
     save: (
       root: string,
@@ -1370,7 +1378,11 @@ export interface BatchStudioApi {
       sourcePngDataUrl?: string,
       sourceType?: MarketplaceSourceType,
     ) => Promise<string>;
-    openPicker: (root: string, currentImagePath: string, sourceType: MarketplaceSourceType) => Promise<MarketplacePickerSession>;
+    openPicker: (
+      root: string,
+      currentImagePath: string,
+      sourceType: MarketplaceSourceType,
+    ) => Promise<MarketplacePickerSession>;
     pickerContext: () => Promise<MarketplacePickerContext>;
     previewPicker: (imagePath: string) => Promise<void>;
     commitPicker: (imagePath: string) => Promise<void>;

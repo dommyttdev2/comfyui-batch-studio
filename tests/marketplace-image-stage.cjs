@@ -134,8 +134,16 @@ matchCode(
   /finalArtifact\.listImages\(nextContext\.root\)/,
   'marketplace picker must list Final Artifact images',
 );
-matchCode(picker, /marketplace\.listThumbnailImages\(nextContext\.root\)/, 'picker must list exported thumbnails');
-matchCode(picker, /marketplace\.readSourcePreview\(root, item\.path, sourceType\)/, 'preview must validate its source type');
+matchCode(
+  picker,
+  /marketplace\.listThumbnailImages\(nextContext\.root\)/,
+  'picker must list exported thumbnails',
+);
+matchCode(
+  picker,
+  /marketplace\.readSourcePreview\(root, item\.path, sourceType\)/,
+  'preview must validate its source type',
+);
 matchCode(picker, /marketplace\.previewPicker/, 'first picker click must preview the image');
 matchCode(picker, /marketplace[\s\S]*commitPicker/, 'second picker click must commit the image');
 matchCode(

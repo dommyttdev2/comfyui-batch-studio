@@ -315,7 +315,14 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       const isCurrent = () =>
         pickerGenerationRef.current.isPreviewCurrent(selection.sessionId, token);
       void run(async () => {
-        const nextState = await applySource(selection.imagePath, base, targets, false, isCurrent, pickerSourceTypeRef.current);
+        const nextState = await applySource(
+          selection.imagePath,
+          base,
+          targets,
+          false,
+          isCurrent,
+          pickerSourceTypeRef.current,
+        );
         if (!nextState || !isCurrent()) return;
         pickerReadyPreviewRef.current = { path: selection.imagePath, state: nextState };
         setNotice('画像を仮適用しています。同じ画像をもう一度選択すると確定します。');
@@ -342,7 +349,14 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
               ? state?.sourceImagePath === selection.imagePath
                 ? state
                 : ready.state
-              : await applySource(selection.imagePath, base, targets, false, isCurrent, pickerSourceTypeRef.current);
+              : await applySource(
+                  selection.imagePath,
+                  base,
+                  targets,
+                  false,
+                  isCurrent,
+                  pickerSourceTypeRef.current,
+                );
           if (!nextState || !isCurrent()) return;
           await saveNow(nextState);
           if (!isCurrent()) return;
@@ -672,9 +686,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     return (
       <section className="panel">
         <h3>販売サイト用画像</h3>
-        <p>
-          最終成果物か、サムネイル工程で出力した画像を入力にします。
-        </p>
+        <p>最終成果物か、サムネイル工程で出力した画像を入力にします。</p>
         <div className="issue warning">
           ⚠ 最終成果物か出力済みサムネイルを1枚以上用意してください。
         </div>
@@ -694,7 +706,11 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
             </small>
           </div>
           <div className="marketplace-source-actions">
-            <button className="primary" disabled={finalArtifact.state !== 'ready'} onClick={() => openPicker('final-artifact')}>
+            <button
+              className="primary"
+              disabled={finalArtifact.state !== 'ready'}
+              onClick={() => openPicker('final-artifact')}
+            >
               最終成果物から画像を選択
             </button>
             <button disabled={!hasExportedThumbnails} onClick={() => openPicker('thumbnail')}>
@@ -784,7 +800,12 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         <section className="panel">
           <h3>入力画像</h3>
           <p className="marketplace-path">{state.sourceImagePath || '画像未選択'}</p>
-          <small>入力元: {state.sourceType === 'thumbnail' ? '出力済みサムネイル' : (finalArtifact.directory ?? '最終成果物ディレクトリ未設定')}</small>
+          <small>
+            入力元:{' '}
+            {state.sourceType === 'thumbnail'
+              ? '出力済みサムネイル'
+              : (finalArtifact.directory ?? '最終成果物ディレクトリ未設定')}
+          </small>
         </section>
 
         <section className="panel">

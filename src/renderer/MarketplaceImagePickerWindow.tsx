@@ -29,9 +29,10 @@ export function MarketplaceImagePickerWindow() {
     void (async () => {
       try {
         const nextContext = await window.batchStudio.marketplace.pickerContext();
-        const nextItems = nextContext.sourceType === 'thumbnail'
-          ? await window.batchStudio.marketplace.listThumbnailImages(nextContext.root)
-          : await window.batchStudio.finalArtifact.listImages(nextContext.root);
+        const nextItems =
+          nextContext.sourceType === 'thumbnail'
+            ? await window.batchStudio.marketplace.listThumbnailImages(nextContext.root)
+            : await window.batchStudio.finalArtifact.listImages(nextContext.root);
         if (cancelled) return;
         setContext(nextContext);
         setItems(nextItems);
@@ -73,7 +74,8 @@ export function MarketplaceImagePickerWindow() {
             <span className="eyebrow">ComfyUI Batch Studio</span>
             <h1>販売サイト用画像を選択</h1>
             <small>
-              {context?.sourceType === 'thumbnail' ? '出力済みサムネイル' : '最終成果物'}から選択します。1回目でプレビューへ仮適用し、同じ画像をもう一度選択すると確定してWindowを閉じます。
+              {context?.sourceType === 'thumbnail' ? '出力済みサムネイル' : '最終成果物'}
+              から選択します。1回目でプレビューへ仮適用し、同じ画像をもう一度選択すると確定してWindowを閉じます。
             </small>
           </div>
         </header>
