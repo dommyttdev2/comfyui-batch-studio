@@ -433,7 +433,9 @@ export async function startExecutionRun(
   return withProjectLock(root, async () => {
     const current = await getCurrentExecutionRun(root);
     if (current?.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED')
-      throw new Error('生成済みPromptの画像回収が未確定です。「既存Runの状態を再確認」または安全なRun破棄を行ってください。');
+      throw new Error(
+        '生成済みPromptの画像回収が未確定です。「既存Runの状態を再確認」または安全なRun破棄を行ってください。',
+      );
     if (current && !terminalLifecycle(current.lifecycle))
       throw new Error(`Execution Run ${current.runId} is already active for this project.`);
     const before = await captureSnapshot(root, {
@@ -704,8 +706,10 @@ export async function resumeExecutionRun(
     if (!run) throw new Error(`Execution Run ${runId} was not found.`);
     if (!resumableLifecycle(run.lifecycle))
       throw new Error(`Execution Run ${runId} is not resumable from ${run.lifecycle}.`);
-    if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ||
-        run.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED')
+    if (
+      run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ||
+      run.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED'
+    )
       throw new Error(
         'Execution Run has an unaccounted accepted Prompt or failed output collection. Reconcile the exact Prompt before resuming; automatic re-submission is disabled.',
       );
