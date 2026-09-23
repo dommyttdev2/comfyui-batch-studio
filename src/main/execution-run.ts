@@ -611,7 +611,7 @@ export async function discardExecutionRun(root: string, runId: string): Promise<
     const e = {
       code: 'EXECUTION_RUN_DISCARDED',
       message:
-        'Execution Run was discarded to restart generation from scratch. Local collected artifacts are preserved.',
+        'Execution Run was discarded. Locally generated and collected artifacts are preserved.',
       phase: run.phase,
       at,
       retryable: false,

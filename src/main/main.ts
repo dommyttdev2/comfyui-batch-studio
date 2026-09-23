@@ -1549,7 +1549,7 @@ async function confirmOfflineLocalRunDiscard(
   throw new Error('ComfyUIが再起動されました。Queue/Historyを再確認してから破棄してください。');
 }
 
-async function discardRunForModelReselection(root: string, runId: string, owner: BaseWindow) {
+async function discardCurrentExecutionRun(root: string, runId: string, owner: BaseWindow) {
   const current = await getCurrentExecutionRun(root);
   if (!current || current.runId !== runId) throw new Error('現在のRunのみ破棄できます。');
   if (current.lifecycle === 'COMPLETED' || current.lifecycle === 'DISCARDED')
@@ -3123,17 +3123,17 @@ function register() {
     const owner = projectWindowForSender(event.sender).window;
     const decision = await dialog.showMessageBox(owner, {
       type: 'warning',
-      title: '現在のRunを破棄してモデル選定へ戻る',
+      title: '現在のRunを破棄',
       message: '現在のRunを破棄しますか？',
       detail:
-        '現在のRunのResumeはできなくなります。生成済みのローカル画像は削除しません。Remoteの未回収画像は失われる可能性があります。新しいRunはモデル選定の変更後に開始してください。',
+        '現在のRunは再開できなくなります。生成済みのローカル画像は削除しません。Remoteの未回収画像は失われる可能性があります。破棄後は任意の工程を変更して、実行工程のStartから新しいRunを開始できます。',
       buttons: ['キャンセル', 'Runを破棄する'],
       defaultId: 0,
       cancelId: 0,
       noLink: true,
     });
     if (decision.response !== 1) return null;
-    return discardRunForModelReselection(root, runId, owner);
+    return discardCurrentExecutionRun(root, runId, owner);
   });
   ipcMain.handle(IPC.EXECUTION_RECONCILE, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
@@ -3394,7 +3394,7 @@ function register() {
       )
     )
       throw new Error(
-        '復旧不確定なRunを自動で再実行できません。「現在のRunを破棄してモデル選定へ戻る」でQueue/HistoryまたはRemote停止の確認を行ってください。',
+        '復旧不確定なRunを自動で再実行できません。「現在のRunを破棄」でQueue/HistoryまたはRemote停止の確認を行ってください。',
       );
     const unsafeRemote = restartable.find(
       (candidate) =>

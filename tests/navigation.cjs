@@ -45,19 +45,15 @@ matchCode(
 );
 matchCode(
   executionSource,
-  /\{canStopScheduling&&\(<button/,
-  'Only show Stop scheduling when it is available for the current Run',
+  /\{\(canStopScheduling\|\|pauseRequestInFlight\)&&current&&\(<button/,
+  'Only show pause when available, retaining feedback while the request is in flight',
 );
 matchCode(
   executionSource,
   /\{canForceInterrupt&&\(<button/,
   'Only show Force interrupt during an interruptible generation phase',
 );
-matchCode(
-  executionSource,
-  /<details className="execution-advanced-actions">/,
-  'Replacement Run actions must be secondary to normal execution controls',
-);
+assert.doesNotMatch(executionSource, /<details className="execution-advanced-actions">/);
 matchCode(
   executionSource,
   /<details className="execution-technical-details">/,
@@ -73,12 +69,12 @@ matchCode(
   /cloudInstanceStatusMessage\(current\)&&\(/,
   'Remote cloud instance state must stay visible outside technical details',
 );
-matchCode(executionSource, /Stop scheduling/);
+matchCode(executionSource, /一時停止/);
 matchCode(executionSource, /Force interrupt/);
 matchCode(
   executionSource,
-  /current\.controls\.scheduling!=='STOPPED'/,
-  'Stop scheduling must remain available until the Run has actually stopped scheduling',
+  /current\.controls\.scheduling==='ACTIVE'/,
+  'Pause can be requested only before one has already been requested',
 );
 matchCode(
   executionSource,
@@ -162,34 +158,19 @@ matchCode(
 );
 matchCode(
   executionSource,
-  /const remoteInstanceChanged=Boolean/,
-  'Execution UI must detect when Project selection differs from the active Run Instance',
+  /readyForNewRun/,
+  'Execution UI must make Start available after safe discard without navigating',
 );
 matchCode(
   executionSource,
-  /別Instanceで新しく実行/,
-  'Execution UI must expose a distinct replacement-Run action',
+  /現在のRunを破棄/,
+  'Execution UI must expose discard as an independent action',
 );
-matchCode(
-  executionSource,
-  /execution\.restartRemote/,
-  'replacement action must use dedicated IPC rather than mutating the existing Run',
-);
-matchCode(
-  executionSource,
-  /最新のPrompt Planで最初から実行/,
-  'Execution UI must expose a latest-Prompt-Plan restart action',
-);
-matchCode(
-  executionSource,
-  /execution\.restartFromScratch/,
-  'fresh restart must use a dedicated IPC action',
-);
-matchCode(
-  executionSource,
-  /canRestartFromScratch/,
-  'fresh restart availability must be derived explicitly',
-);
+assert.doesNotMatch(executionSource, /別のRunとして実行する/);
+assert.doesNotMatch(executionSource, /execution\.restartRemote/);
+assert.doesNotMatch(executionSource, /execution\.restartFromScratch/);
+matchCode(executionSource, /一時停止を要求中…/, 'Pause action must provide immediate feedback');
+matchCode(executionSource, /再開/, 'Resume action must use the user-facing Japanese label');
 matchCode(
   mainSource,
   /IPC\.EXECUTION_RESTART_FROM_SCRATCH/,
@@ -288,12 +269,12 @@ matchCode(
 matchCode(executionSource, /Startできない理由/, 'blocked Preflight reason must be visible');
 matchCode(
   executionSource,
-  /既存Runが実行中です/,
+  /生成中です。「一時停止」/,
   'READY banner must not claim Start is possible while a Run is active',
 );
 matchCode(
   executionSource,
-  /既存Runが未完了です。新規StartではなくResumeで再開してください/,
+  /既存Runは未完了です。生成を続ける場合は「再開」/,
   'paused or interrupted Runs must direct the user to Resume',
 );
 matchCode(
