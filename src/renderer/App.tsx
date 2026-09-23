@@ -588,10 +588,6 @@ function App() {
                         setProject={setProject}
                         run={run}
                         resetFrom={resetFrom}
-                        onDiscarded={() => {
-                          setStage('モデル選定');
-                          void refresh();
-                        }}
                       />
                     </ImportNoticeContext.Provider>
                   </StageErrorBoundary>
@@ -925,7 +921,6 @@ function StageView(props: {
   setProject: (p: ProjectSummary) => void;
   run: Runner;
   resetFrom: (scope: ResetScope) => Promise<void>;
-  onDiscarded: () => void;
 }) {
   switch (props.stage) {
     case '概要':
