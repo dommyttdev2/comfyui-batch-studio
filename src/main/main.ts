@@ -350,7 +350,7 @@ async function setWindowProject(state: ProjectWindowState, root: string | null) 
     throw new Error('このプロジェクトは既に別のWindowで開かれています。');
   }
   state.projectRoot = resolved;
-  await stateStore().rememberProject(resolved);
+  await rememberProjectAndRefreshMenu(resolved);
 }
 async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
   const dev = process.env.VITE_DEV_SERVER_URL;
@@ -428,8 +428,11 @@ async function rememberMostRecentOpenProject(clearIfNone = true) {
   const candidate = [...projectWindows.values()]
     .filter((state) => Boolean(state.projectRoot))
     .sort((a, b) => b.lastFocusedAt - a.lastFocusedAt)[0];
-  if (candidate?.projectRoot) await stateStore().rememberProject(candidate.projectRoot);
-  else if (clearIfNone) await stateStore().clearProject();
+  if (candidate?.projectRoot) await rememberProjectAndRefreshMenu(candidate.projectRoot);
+  else if (clearIfNone) {
+    await stateStore().clearProject();
+    await refreshRecentProjectMenu();
+  }
 }
 function createProjectWindow(
   options: {
@@ -514,7 +517,10 @@ function createProjectWindow(
   window.on('focus', () => {
     state.lastFocusedAt = ++projectWindowFocusSequence;
     lastFocusedProjectWindowId = windowId;
-    if (state.projectRoot) void stateStore().rememberProject(state.projectRoot);
+    if (state.projectRoot)
+      void rememberProjectAndRefreshMenu(state.projectRoot).catch((error) =>
+        console.warn('Recent project menu update failed:', error),
+      );
   });
   window.on('resize', () => layoutProjectWindow(state));
   window.on('closed', () => {
@@ -748,6 +754,36 @@ async function chooseProjectOpeningTarget() {
   if (current && result.response === 1) return { mode: 'current' as const, state: current };
   return { mode: 'new' as const, state: null };
 }
+type ProjectOpeningTarget = NonNullable<Awaited<ReturnType<typeof chooseProjectOpeningTarget>>>;
+
+async function openProjectRootInTarget(root: string, target: ProjectOpeningTarget) {
+  const resolved = path.resolve(root);
+  const existing = projectWindowForRoot(resolved, target.state ?? undefined);
+  if (existing) {
+    focusProjectWindow(existing);
+    return;
+  }
+  const project = await scanWithCatalog(resolved);
+  if (target.mode === 'new') {
+    await rememberProjectAndRefreshMenu(resolved);
+    createProjectWindow({ initialProjectRoot: resolved });
+    return;
+  }
+  const state = target.state;
+  if (!state) return;
+  await setWindowProject(state, resolved);
+  focusProjectWindow(state);
+  state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'open', project);
+}
+async function openRecentProjectFromMenu(root: string) {
+  const existing = projectWindowForRoot(root);
+  if (existing) {
+    focusProjectWindow(existing);
+    return;
+  }
+  const target = await chooseProjectOpeningTarget();
+  if (target) await openProjectRootInTarget(root, target);
+}
 async function handleProjectMenuAction(command: 'new' | 'open') {
   const target = await chooseProjectOpeningTarget();
   if (!target) return;
@@ -765,24 +801,8 @@ async function handleProjectMenuAction(command: 'new' | 'open') {
     defaultPath: defaultPath ?? undefined,
     properties: ['openDirectory'],
   });
-  if (selected.canceled || !selected.filePaths[0]) return;
-  const root = path.resolve(selected.filePaths[0]),
-    existing = projectWindowForRoot(root, target.state ?? undefined);
-  if (existing) {
-    focusProjectWindow(existing);
-    return;
-  }
-  if (target.mode === 'new') {
-    await stateStore().rememberProject(root);
-    createProjectWindow({ initialProjectRoot: root });
-    return;
-  }
-  const state = target.state;
-  if (!state) return;
-  const project = await scanWithCatalog(root);
-  await setWindowProject(state, root);
-  focusProjectWindow(state);
-  state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'open', project);
+  if (!selected.canceled && selected.filePaths[0])
+    await openProjectRootInTarget(selected.filePaths[0], target);
 }
 function sendProjectMenuCommand(command: 'settings' | 'close') {
   const state = lastFocusedProjectWindow();
@@ -801,7 +821,34 @@ async function openCurrentProjectFolderFromMenu() {
       message: err,
     });
 }
-function installApplicationMenu() {
+const RECENT_PROJECT_MENU_LIMIT = 5;
+let recentProjectMenuRevision = 0;
+async function refreshRecentProjectMenu() {
+  const revision = ++recentProjectMenuRevision;
+  const recentRoots = await stateStore().recentProjectPaths();
+  if (revision === recentProjectMenuRevision) installApplicationMenu(recentRoots);
+}
+async function rememberProjectAndRefreshMenu(root: string) {
+  await stateStore().rememberProject(root);
+  await refreshRecentProjectMenu();
+}
+function installApplicationMenu(recentRoots: string[]) {
+  const recentProjectSubmenu: MenuItemConstructorOptions[] = recentRoots
+    .slice(0, RECENT_PROJECT_MENU_LIMIT)
+    .map((root) => ({
+      label: root,
+      click: () => {
+        void openRecentProjectFromMenu(root).catch(async (error) => {
+          await refreshRecentProjectMenu();
+          await dialog.showMessageBox({
+            type: 'error',
+            title: 'プロジェクトを開けません',
+            message: `プロジェクトを開けませんでした。\\n${root}`,
+            detail: error instanceof Error ? error.message : String(error),
+          });
+        });
+      },
+    }));
   const windowMenu: MenuItemConstructorOptions[] = [
     { label: 'R2 File Manager', click: () => openStandaloneToolWindow('r2') },
     { label: 'Civit Explorer', click: () => openStandaloneToolWindow('civit') },
@@ -813,6 +860,12 @@ function installApplicationMenu() {
   const fileMenu: MenuItemConstructorOptions[] = [
     { label: '新規プロジェクト…', click: () => void handleProjectMenuAction('new') },
     { label: 'プロジェクトを開く…', click: () => void handleProjectMenuAction('open') },
+    {
+      label: '最近開いたプロジェクト',
+      submenu: recentProjectSubmenu.length
+        ? recentProjectSubmenu
+        : [{ label: '最近開いたプロジェクトはありません', enabled: false }],
+    },
     { type: 'separator' },
     {
       label: '現在のフォルダを開く',
@@ -2241,7 +2294,7 @@ function register() {
     try {
       const project = await scanWithCatalog(root);
       state.projectRoot = path.resolve(root);
-      await stateStore().rememberProject(state.projectRoot);
+      await rememberProjectAndRefreshMenu(state.projectRoot);
       return project;
     } catch {
       state.projectRoot = null;
@@ -2260,6 +2313,7 @@ function register() {
   ipcMain.handle(IPC.PROJECT_REMOVE_RECENT, async (_e, root: unknown) => {
     validRoot(root);
     await stateStore().removeRecentProject(root);
+    await refreshRecentProjectMenu();
   });
   ipcMain.handle(IPC.PROJECT_OPEN, async (event, root: unknown) => {
     validRoot(root);
@@ -3652,7 +3706,7 @@ async function initializeApplication() {
   const initial = civitaiCatalog.status();
   if (initial.state === 'idle' && initial.apiKeyConfigured) void civitaiCatalog.startSync();
   register();
-  installApplicationMenu();
+  await refreshRecentProjectMenu();
   createProjectWindow({ restoreLastProject: true });
   app.on('activate', () => {
     const existing = lastFocusedProjectWindow();
