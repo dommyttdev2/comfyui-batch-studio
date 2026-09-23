@@ -171,8 +171,8 @@ matchCode(
   'Execution UI must expose discard as an independent action',
 );
 assert.doesNotMatch(executionSource, /別のRunとして実行する/);
-assert.doesNotMatch(executionSource, /execution\\.restartRemote/);
-assert.doesNotMatch(executionSource, /execution\\.restartFromScratch/);
+assert.doesNotMatch(executionSource, /execution\.restartRemote/);
+assert.doesNotMatch(executionSource, /execution\.restartFromScratch/);
 matchCode(
   executionSource,
   /一時停止を要求中…/,
