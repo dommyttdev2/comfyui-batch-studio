@@ -67,7 +67,7 @@ assert.match(
 );
 assert.match(
   app,
-  /disabled=\{paneProviderRoot !== providerKey \|\| switchingProvider \|\| temporaryGrokKey === providerKey\}/,
+  /disabled=\{\s*paneProviderRoot !== providerKey \|\|\s*switchingProvider \|\|\s*temporaryGrokKey === providerKey\s*\}/,
   'Temporary Grok must not be silently persisted through the provider selector',
 );
 assert.match(boundary, /getDerivedStateFromError/);
