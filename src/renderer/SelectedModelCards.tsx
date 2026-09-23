@@ -241,7 +241,7 @@ function SelectionCard({
             </div>
             {placementError && (
               <small className="issue warning">配置確認失敗: {placementError}</small>
-            )
+            )}
             {selection.reason && (
               <details className="selected-model-reason">
                 <summary>選定理由</summary>
