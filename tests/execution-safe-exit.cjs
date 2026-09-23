@@ -31,6 +31,13 @@ assert.match(
   /restartable\.some\(\(candidate\) => candidate\.error\?\.code === 'EXECUTION_RECOVERY_UNCERTAIN'\)/,
 );
 assert.match(main, /executionCoordinator\.releaseReservation/);
+assert.match(main, /isDirectLocalComfyRefused/);
+assert.match(main, /url\.protocol !== 'http:'/);
+assert.match(main, /\['127\.0\.0\.1', '\[::1\]'\]/);
+assert.match(main, /run\.lifecycle === 'RUNNING' \|\| executionCoordinator\.hasActive\(ref\)/);
+assert.match(main, /await comfy\.health\(\)/);
+assert.match(main, /confirmOfflineLocalRunDiscard\(root, run, comfy, error, owner\)/);
+
 assert.match(app, /await window\.batchStudio\.execution\.leave\(project\.rootPath\)/);
 assert.match(app, /onDiscarded=\{\(\) => \{/);
 assert.match(execution, /現在のRunを破棄してモデル選定へ戻る/);
