@@ -624,7 +624,15 @@ function deliveryStatus(run: ExecutionRun) {
   return { packaging, r2, download, verify };
 }
 
-export function ExecutionStage({ project, run }: { project: ProjectSummary; run: Runner }) {
+export function ExecutionStage({
+  project,
+  run,
+  onDiscarded,
+}: {
+  project: ProjectSummary;
+  run: Runner;
+  onDiscarded?: () => void;
+}) {
   const [current, setCurrent] = useState<ExecutionRun | null>(null),
     [preflight, setPreflight] = useState<PreflightResult | null>(null),
     [checking, setChecking] = useState(true),
@@ -695,6 +703,9 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
     current &&
       !recoveryUncertain &&
       ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
+  );
+  const canDiscardForEdit = Boolean(
+    current && current.lifecycle !== 'COMPLETED' && current.lifecycle !== 'DISCARDED',
   );
   const canStopScheduling = Boolean(
     current &&
@@ -834,6 +845,37 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
               既存Runの状態を再確認
             </button>
           )}
+          {canDiscardForEdit && current && (
+            <button
+              className="danger"
+              onClick={() =>
+                void run(async () => {
+                  const discarded = await window.batchStudio.execution.discardForEdit(
+                    project.rootPath,
+                    current.runId,
+                  );
+                  if (discarded) {
+                    setCurrent(discarded);
+                    onDiscarded?.();
+                  }
+                  return discarded;
+                })
+              }
+            >
+              現在のRunを破棄してモデル選定へ戻る
+            </button>
+          )}
+          {current?.lifecycle === 'RUNNING' && (
+            <button
+              onClick={() =>
+                void apply(() =>
+                  window.batchStudio.execution.stopForEdit(project.rootPath, current.runId, false),
+                )
+              }
+            >
+              生成を停止して編集可能にする
+            </button>
+          )}
           {current?.lifecycle === 'COMPLETED' && (
             <button
               disabled={current?.lifecycle !== 'COMPLETED'}
@@ -847,7 +889,7 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
           <details className="execution-advanced-actions">
             <summary>別のRunとして実行する</summary>
             <p className="hint">
-              現在のRunを再開する操作とは異なります。既存の実行を破棄して最初から生成する場合に使用します。
+              現在のRunを再開する操作とは異なります。モデルを再選定する場合は上の「現在のRunを破棄してモデル選定へ戻る」を使用してください。
             </p>
             <div className="actions">
               {canRestartRemote && (

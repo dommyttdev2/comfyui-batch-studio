@@ -209,6 +209,43 @@ async function scenario(lifecycle, states) {
   }
 
   {
+    // Stop-for-edit must remain resumable even if the Instance was originally
+    // running before Batch Studio used it.
+    const { root, client, service } = await scenario(lifecycle, [
+      instance('stopped'),
+      instance('starting'),
+      ready(),
+    ]);
+    await execution.mutateExecutionRun(root, runId, (r) => {
+      r.remoteLifecycle.initialStatus = 'running';
+      r.remoteLifecycle.startedByBatchStudio = false;
+      r.remoteLifecycle.latest = { status: 'stopped' };
+      r.remoteLifecycle.finalizedAt = new Date().toISOString();
+      r.resume.attempts = 1;
+    });
+    const result = await service.prepare(root, runId);
+    assert.equal(result.status, 'running');
+    assert.equal(client.starts, 1, 'explicitly stopped Instance must restart on Resume');
+    const run = await execution.getExecutionRun(root, runId);
+    assert.equal(run.remoteLifecycle.initialStatus, 'stopped');
+    assert.equal(run.remoteLifecycle.startedByBatchStudio, true);
+    assert.equal(run.remoteLifecycle.latest.status, 'running');
+  }
+
+  {
+    // An unexpected provider stop is not equivalent to Batch Studio's
+    // confirmed stop-for-edit; never silently restart without that evidence.
+    const { root, client, service } = await scenario(lifecycle, [instance('stopped')]);
+    await execution.mutateExecutionRun(root, runId, (r) => {
+      r.remoteLifecycle.initialStatus = 'running';
+      r.remoteLifecycle.latest = { status: 'stopped' };
+      r.resume.attempts = 1;
+    });
+    await assert.rejects(() => service.prepare(root, runId), /became stopped/);
+    assert.equal(client.starts, 0, 'unconfirmed stop must not restart the Instance');
+  }
+
+  {
     const { root, client, service } = await scenario(lifecycle, [ready()]);
     await service.prepare(root, runId);
     assert.equal(client.starts, 0);

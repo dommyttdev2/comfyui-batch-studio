@@ -131,6 +131,21 @@ function App() {
   const seenAutoImports = useRef(new Set<string>());
   const currentProjectRoot = useRef(project?.rootPath);
   currentProjectRoot.current = project?.rootPath;
+  const navigationPending = useRef(false);
+  const navigateStage = async (next: Stage) => {
+    if (!project || next === stage || navigationPending.current) return;
+    navigationPending.current = true;
+    setError('');
+    try {
+      if (next !== '実行' && !(await window.batchStudio.execution.leave(project.rootPath))) return;
+      setTool(null);
+      setStage(next);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      navigationPending.current = false;
+    }
+  };
   const refresh = async () =>
     project && setProject(await window.batchStudio.project.scan(project.rootPath));
   const notifyImported = async (notice: ImportNoticeInput) => {
@@ -461,10 +476,7 @@ function App() {
               <button
                 key={s}
                 className={!tool && stage === s ? 'active' : ''}
-                onClick={() => {
-                  setTool(null);
-                  setStage(s);
-                }}
+                onClick={() => void navigateStage(s)}
               >
                 {s}
                 {statusDot(project, s)}
@@ -576,6 +588,10 @@ function App() {
                         setProject={setProject}
                         run={run}
                         resetFrom={resetFrom}
+                        onDiscarded={() => {
+                          setStage('モデル選定');
+                          void refresh();
+                        }}
                       />
                     </ImportNoticeContext.Provider>
                   </StageErrorBoundary>
@@ -909,6 +925,7 @@ function StageView(props: {
   setProject: (p: ProjectSummary) => void;
   run: Runner;
   resetFrom: (scope: ResetScope) => Promise<void>;
+  onDiscarded: () => void;
 }) {
   switch (props.stage) {
     case '概要':

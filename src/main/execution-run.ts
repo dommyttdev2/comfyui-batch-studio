@@ -286,7 +286,9 @@ export async function readExecutionWorkflow(root: string, run: ExecutionRun) {
     apiSha256 !== workflow.apiSha256 ||
     hashCanonicalJson({ uiSha256, apiSha256 }) !== workflow.workflowIdentity
   )
-    throw new Error('EXECUTION_SNAPSHOT_HASH_MISMATCH: saved Run workflow was modified.');
+    throw new Error(
+      `EXECUTION_SNAPSHOT_HASH_MISMATCH: saved Run workflow was modified. UI expected=${workflow.uiSha256} actual=${uiSha256}; API expected=${workflow.apiSha256} actual=${apiSha256}; identity expected=${workflow.workflowIdentity} actual=${hashCanonicalJson({ uiSha256, apiSha256 })}. The original Run snapshot must be restored; never rewrite expected hashes.`,
+    );
   if (workflow.immutable) {
     const plan = await readJson<unknown>(path.join(root, workflow.immutable.planPath));
     const models = await readJson<unknown>(path.join(root, workflow.immutable.modelsPath));

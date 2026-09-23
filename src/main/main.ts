@@ -80,6 +80,7 @@ import {
   validatedExecutionEvidence,
 } from './execution-run.js';
 import { LocalExecutionService, verifyLocalOutputs } from './local-execution.js';
+import { ComfyUiClient } from './comfyui-client.js';
 import { ExecutionCoordinator } from './execution-coordinator.js';
 import {
   canonicalGrokConversationUrl,
@@ -250,6 +251,8 @@ const thumbnailPickerWindows = new Map<number, ThumbnailPickerWindowState>();
 const marketplacePickerWindows = new Map<number, MarketplacePickerWindowState>();
 const executionCoordinator = new ExecutionCoordinator();
 const executionRecoveryChecks = new Map<string, Promise<void>>();
+const approvedWindowCloses = new Set<number>();
+const pendingWindowCloses = new Set<number>();
 type ProjectWindowState = {
   window: BaseWindow;
   localView: WebContentsView;
@@ -373,6 +376,12 @@ async function setWindowProject(state: ProjectWindowState, root: string | null) 
     focusProjectWindow(existing);
     throw new Error('このプロジェクトは既に別のWindowで開かれています。');
   }
+  if (
+    state.projectRoot &&
+    projectRootKey(state.projectRoot) !== projectRootKey(resolved) &&
+    !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, 'プロジェクトを切り替える'))
+  )
+    throw new Error('Runの停止がキャンセルされました。');
   state.projectRoot = resolved;
   await rememberProjectAndRefreshMenu(resolved);
 }
@@ -547,7 +556,33 @@ function createProjectWindow(
       );
   });
   window.on('resize', () => layoutProjectWindow(state));
+  window.on('close', (event) => {
+    if (quitApproved || approvedWindowCloses.has(windowId)) return;
+    event.preventDefault();
+    if (pendingWindowCloses.has(windowId)) return;
+    pendingWindowCloses.add(windowId);
+    void (async () => {
+      try {
+        if (
+          state.projectRoot &&
+          !(await confirmRunStopBeforeLeave(state.projectRoot, window, 'Windowを閉じる'))
+        )
+          return;
+        approvedWindowCloses.add(windowId);
+        window.close();
+      } catch (error) {
+        await dialog.showMessageBox(window, {
+          type: 'error',
+          title: 'Windowを閉じられません',
+          message: safeExecutionError(error),
+        });
+      } finally {
+        pendingWindowCloses.delete(windowId);
+      }
+    })();
+  });
   window.on('closed', () => {
+    approvedWindowCloses.delete(windowId);
     for (const picker of thumbnailPickerWindows.values()) {
       if (picker.opener.id === localView.webContents.id) picker.window.close();
     }
@@ -1190,6 +1225,273 @@ async function markExecutionRecoveryUncertain(root: string, runId: string, reaso
     run.controls.scheduling = 'STOPPED';
     // Preserve current.promptId, progress and evidence for manual reconciliation.
   });
+}
+
+type ExitMode = 'graceful' | 'interrupt';
+const EXIT_SETTLE_POLLS = 240;
+const exitChecks = new Map<string, Promise<boolean>>();
+
+async function stopVastInstanceForExit(run: ExecutionRun, root: string) {
+  const id = Number(run.remote?.instanceId);
+  if (!Number.isInteger(id) || id < 1) throw new Error('Remote Run has no Vast.ai Instance ID.');
+  const client = vastClient();
+  let instance: Awaited<ReturnType<VastAiClient['getInstance']>>;
+  try {
+    instance = await client.getInstance(id);
+  } catch (error) {
+    if (error instanceof VastAiInstanceNotFoundError) return;
+    throw error;
+  }
+  if (instance.id !== id) throw new Error('Vast.ai Instance identity mismatch.');
+  if (instance.status !== 'stopped') await client.stopInstance(id);
+  for (let attempt = 0; attempt < EXIT_SETTLE_POLLS; attempt++) {
+    instance = await client.getInstance(id);
+    if (instance.id !== id) throw new Error('Vast.ai Instance identity mismatch.');
+    if (instance.status === 'stopped') {
+      await mutateExecutionRun(root, run.runId, (current) => {
+        if (!current.remoteLifecycle) return;
+        current.remoteLifecycle.latest = {
+          provider: 'vastai',
+          instanceId: id,
+          status: instance.status,
+          rawStatus: instance.rawStatus,
+          intendedStatus: instance.intendedStatus,
+          curState: instance.curState,
+          nextState: instance.nextState,
+          statusMessage: instance.statusMessage,
+          sshHost: instance.sshHost,
+          sshPort: instance.sshPort,
+          comfyUiPort: instance.comfyUiPort,
+          resolvedAt: new Date().toISOString(),
+        };
+        current.remoteLifecycle.finalizedAt = new Date().toISOString();
+      });
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(
+    `Vast.ai Instance #${id} の停止完了を確認できません。課金状態を確認してください。`,
+  );
+}
+
+// The main process owns this guard. Renderer-only navigation checks cannot protect
+// the native window close / File > Quit paths.
+async function stopRunForExit(root: string, runId: string, mode: ExitMode) {
+  let run = await getExecutionRun(root, runId);
+  if (!run) throw new Error('Execution Run disappeared during stop.');
+  if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
+    throw new Error(
+      '復旧状態が不確定です。実行画面でQueue/Historyを確認し、Runを安全に破棄してください。',
+    );
+  if (run.lifecycle === 'RUNNING') {
+    if (
+      run.executionTarget === 'remote' &&
+      !isRemotePreGenerationPhase(run.phase) &&
+      run.phase !== 'EXECUTING'
+    )
+      throw new Error('Remote成果物の処理中です。処理完了後に工程を移動してください。');
+    if (run.executionTarget === 'remote' && isRemotePreGenerationPhase(run.phase)) {
+      await mutateExecutionRun(root, runId, (current) => {
+        if (current.lifecycle !== 'RUNNING') return;
+        current.lifecycle = 'PAUSED';
+        current.controls.scheduling = 'STOPPED';
+        current.controls.interrupt = 'IDLE';
+      });
+      await executionCoordinator.waitForSettled({ projectRoot: path.resolve(root), runId });
+    } else {
+      await requestStopScheduling(root, runId);
+      if (run.executionTarget === 'remote') {
+        await remoteSceneExecutor().stopScheduling(root, runId);
+        if (mode === 'interrupt') {
+          await requestForceInterrupt(root, runId);
+          await remoteSceneExecutor().forceInterrupt(root, runId);
+        }
+      } else if (mode === 'interrupt') {
+        await requestForceInterrupt(root, runId);
+        await localExecutor().forceInterrupt(root, runId);
+      }
+      for (let attempt = 0; attempt < EXIT_SETTLE_POLLS; attempt++) {
+        run = await getExecutionRun(root, runId);
+        if (!run || run.lifecycle !== 'RUNNING') break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      run = await getExecutionRun(root, runId);
+      if (!run || run.lifecycle === 'RUNNING')
+        throw new Error('Runの停止完了を確認できません。実行画面から停止状態を確認してください。');
+      if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
+        throw new Error('Promptの状態が不確定です。自動的に安全な停止と判定できません。');
+      await executionCoordinator.waitForSettled({ projectRoot: path.resolve(root), runId });
+    }
+  }
+  run = await getExecutionRun(root, runId);
+  if (!run || run.lifecycle === 'RUNNING') throw new Error('Run is still running.');
+  if (run.executionTarget === 'remote' && run.lifecycle !== 'DISCARDED')
+    await stopVastInstanceForExit(run, root);
+  return (await getExecutionRun(root, runId))!;
+}
+
+async function runRequiresExitGuard(root: string) {
+  const runs = await listExecutionRuns(root);
+  for (const run of runs) {
+    if (run.lifecycle === 'RUNNING' || run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
+      return true;
+    if (
+      run.executionTarget === 'remote' &&
+      (['PAUSED', 'INTERRUPTED'].includes(run.lifecycle) ||
+        (run.lifecycle === 'FAILED' && run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED'))
+    ) {
+      if (run.remoteLifecycle?.finalizedAt && run.remoteLifecycle.latest?.status === 'stopped')
+        continue;
+      if (!run.remote?.instanceId) return true;
+      try {
+        const instance = await vastClient().getInstance(Number(run.remote.instanceId));
+        if (instance.status !== 'stopped') return true;
+      } catch (error) {
+        if (!(error instanceof VastAiInstanceNotFoundError)) throw error;
+      }
+    }
+  }
+  return false;
+}
+
+async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action: string) {
+  const key = path.resolve(root);
+  const pending = exitChecks.get(key);
+  if (pending) return pending;
+  const task = (async () => {
+    await reconcilePersistedExecutionRuns(root);
+    if (!(await runRequiresExitGuard(root))) return true;
+    const result = await dialog.showMessageBox(owner, {
+      type: 'warning',
+      title: '実行中のRunがあります',
+      message: `${action}前にRunを停止してください。`,
+      detail:
+        '生成済みのローカル画像とRunの進捗は保持します。復旧不確定なRunは実行画面から安全な破棄操作が必要です。',
+      buttons: ['キャンセル', '生成を停止して続行', '生成を中断して続行'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (result.response === 0) return false;
+    const mode: ExitMode = result.response === 1 ? 'graceful' : 'interrupt';
+    for (const run of await listExecutionRuns(root)) {
+      if (
+        run.lifecycle === 'RUNNING' ||
+        run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ||
+        (run.executionTarget === 'remote' &&
+          (['PAUSED', 'INTERRUPTED'].includes(run.lifecycle) ||
+            (run.lifecycle === 'FAILED' && run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED')))
+      )
+        await stopRunForExit(root, run.runId, mode);
+    }
+    if (await runRequiresExitGuard(root))
+      throw new Error(
+        'RunまたはVast.ai Instanceの停止を確認できません。移動・終了を中止しました。',
+      );
+    return true;
+  })().finally(() => exitChecks.delete(key));
+  exitChecks.set(key, task);
+  return task;
+}
+
+// Refusing a direct loopback connection is evidence that the configured local
+// API is not listening. Do not apply this exception to remote or tunneled hosts.
+function isDirectLocalComfyRefused(endpoint: string, error: unknown) {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(url.hostname)) return false;
+  const refused = (value: unknown): boolean => {
+    if (!(value instanceof Error)) return false;
+    if (value instanceof AggregateError)
+      return value.errors.length > 0 && value.errors.every(refused);
+    if ((value as NodeJS.ErrnoException).code === 'ECONNREFUSED') return true;
+    return refused(value.cause);
+  };
+  return refused(error);
+}
+
+async function confirmOfflineLocalRunDiscard(
+  root: string,
+  run: ExecutionRun,
+  comfy: ComfyUiClient,
+  error: unknown,
+  owner: BaseWindow,
+) {
+  const ref = { projectRoot: path.resolve(root), runId: run.runId };
+  if (
+    !isDirectLocalComfyRefused(comfy.endpoint, error) ||
+    run.lifecycle === 'RUNNING' ||
+    executionCoordinator.hasActive(ref)
+  )
+    throw error;
+  const answer = await dialog.showMessageBox(owner, {
+    type: 'warning',
+    title: '停止したローカルComfyUIの確認',
+    message: 'ローカルComfyUIのAPI接続が拒否され、Queue/Historyを取得できません。',
+    detail:
+      '設定先のローカルComfyUIが完全に停止し、別ポートや転送先で旧Promptが実行されていないことを確認してください。Runの再開履歴は破棄しますが、ローカル保存済み画像は残します。確認できない場合はキャンセルしてください。',
+    buttons: ['キャンセル', '停止を確認してRunを破棄'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+  if (answer.response !== 1) return false;
+  // Recheck at the moment of discard; a newly restarted ComfyUI must be
+  // inspected through Queue/History instead of this offline exception.
+  try {
+    await comfy.health();
+  } catch (retry) {
+    if (isDirectLocalComfyRefused(comfy.endpoint, retry)) return true;
+    throw retry;
+  }
+  throw new Error('ComfyUIが再起動されました。Queue/Historyを再確認してから破棄してください。');
+}
+
+async function discardRunForModelReselection(root: string, runId: string, owner: BaseWindow) {
+  const current = await getCurrentExecutionRun(root);
+  if (!current || current.runId !== runId) throw new Error('現在のRunのみ破棄できます。');
+  if (current.lifecycle === 'COMPLETED' || current.lifecycle === 'DISCARDED')
+    throw new Error('既に終了したRunは破棄対象ではありません。');
+  if (current.lifecycle === 'RUNNING') await stopRunForExit(root, runId, 'interrupt');
+  const run = await getExecutionRun(root, runId);
+  if (!run) throw new Error('Execution Run disappeared.');
+  if (run.executionTarget === 'local') {
+    const settings = await settingsStore().status();
+    const comfy = new ComfyUiClient(settings.comfyUiApiEndpoint);
+    try {
+      let promptId = run.current.promptId ?? run.submission?.promptId ?? null;
+      if (!promptId && run.submission?.status === 'sending')
+        promptId = await comfy.findPromptBySubmissionId(run.submission.attemptId);
+      if (!promptId && ['sending', 'acknowledged'].includes(run.submission?.status ?? ''))
+        throw new Error('送信済みPromptのIDを確認できません。Queue/Historyの確認が必要です。');
+      if (promptId) {
+        if (await comfy.isPromptQueued(promptId))
+          throw new Error(
+            `Prompt ${promptId} がComfyUIのQueueに残っています。停止してから破棄してください。`,
+          );
+        const history = await comfy.history(promptId);
+        if (comfy.historyState(history, promptId) === 'pending')
+          throw new Error(
+            `Prompt ${promptId} の完了または失敗をHistoryで確認できません。破棄を中止しました。`,
+          );
+      }
+    } catch (error) {
+      if (!(await confirmOfflineLocalRunDiscard(root, run, comfy, error, owner))) return null;
+    }
+  } else {
+    // Even an unreachable Remote Worker can no longer submit once the provider
+    // confirms that its entire GPU Instance is stopped.
+    await stopVastInstanceForExit(run, root);
+    remoteExecutor().disconnect(root, runId);
+  }
+  const discarded = await discardExecutionRun(root, runId);
+  executionCoordinator.releaseReservation({ projectRoot: path.resolve(root), runId });
+  return discarded;
 }
 
 async function recoverRemoteFinalization(root: string, runId: string) {
@@ -2322,6 +2624,16 @@ function register() {
       return null;
     }
     const project = await scanWithCatalog(root);
+    if (
+      state.projectRoot &&
+      state.projectRoot !== root &&
+      !(await confirmRunStopBeforeLeave(
+        state.projectRoot,
+        state.window,
+        'プロジェクトを切り替える',
+      ))
+    )
+      return null;
     await setWindowProject(state, root);
     return project;
   });
@@ -2377,6 +2689,11 @@ function register() {
   });
   ipcMain.handle(IPC.PROJECT_CLOSE, async (event) => {
     const state = projectWindowForSender(event.sender);
+    if (
+      state.projectRoot &&
+      !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, 'プロジェクトを閉じる'))
+    )
+      throw new Error('Runの停止がキャンセルされました。');
     state.projectRoot = null;
     state.activeGrokContext = null;
     state.codexContext = null;
@@ -2397,8 +2714,13 @@ function register() {
   });
   ipcMain.handle(IPC.PROJECT_CREATE, async (event, parent: unknown, brief: ProjectBriefInput) => {
     if (typeof parent !== 'string') throw new Error('Invalid parent path');
-    const state = projectWindowForSender(event.sender),
-      root = await createProject(parent, brief),
+    const state = projectWindowForSender(event.sender);
+    if (
+      state.projectRoot &&
+      !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, '新規プロジェクトの作成'))
+    )
+      throw new Error('Runの停止がキャンセルされました。');
+    const root = await createProject(parent, brief),
       existing = projectWindowForRoot(root, state);
     if (existing) {
       focusProjectWindow(existing);
@@ -2673,6 +2995,38 @@ function register() {
     await reconcilePersistedExecutionRuns(root);
     return getCurrentExecutionRun(root);
   });
+  ipcMain.handle(IPC.EXECUTION_LEAVE, async (event, root: unknown) => {
+    validRoot(root);
+    const state = projectWindowForSender(event.sender);
+    if (state.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
+    return confirmRunStopBeforeLeave(root, state.window, '他工程への移動');
+  });
+  ipcMain.handle(
+    IPC.EXECUTION_STOP_FOR_EDIT,
+    async (_e, root: unknown, runId: unknown, interrupt: unknown) => {
+      validRoot(root);
+      if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
+      return stopRunForExit(root, runId, interrupt === true ? 'interrupt' : 'graceful');
+    },
+  );
+  ipcMain.handle(IPC.EXECUTION_DISCARD_FOR_EDIT, async (event, root: unknown, runId: unknown) => {
+    validRoot(root);
+    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
+    const owner = projectWindowForSender(event.sender).window;
+    const decision = await dialog.showMessageBox(owner, {
+      type: 'warning',
+      title: '現在のRunを破棄してモデル選定へ戻る',
+      message: '現在のRunを破棄しますか？',
+      detail:
+        '現在のRunのResumeはできなくなります。生成済みのローカル画像は削除しません。Remoteの未回収画像は失われる可能性があります。新しいRunはモデル選定の変更後に開始してください。',
+      buttons: ['キャンセル', 'Runを破棄する'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (decision.response !== 1) return null;
+    return discardRunForModelReselection(root, runId, owner);
+  });
   ipcMain.handle(IPC.EXECUTION_RECONCILE, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
@@ -2912,6 +3266,10 @@ function register() {
         ['RUNNING', 'PAUSED', 'INTERRUPTED'].includes(candidate.lifecycle) ||
         (candidate.runId === runId && candidate.lifecycle === 'FAILED'),
     );
+    if (restartable.some((candidate) => candidate.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN'))
+      throw new Error(
+        '復旧不確定なRunを自動で再実行できません。「現在のRunを破棄してモデル選定へ戻る」でQueue/HistoryまたはRemote停止の確認を行ってください。',
+      );
     const unsafeRemote = restartable.find(
       (candidate) =>
         candidate.executionTarget === 'remote' &&
@@ -3822,27 +4180,37 @@ function maybeQuitAfterExecution() {
 }
 
 app.on('before-quit', (event) => {
-  if (quitApproved || !executionCoordinator.hasActiveRuns()) return;
+  if (quitApproved) return;
   event.preventDefault();
   if (quitPromptOpen) return;
   quitPromptOpen = true;
-  void dialog
-    .showMessageBox({
-      type: 'warning',
-      title: '実行中のRunがあります',
-      message: '実行中のRunがあります。Batch Studioを終了しますか？',
-      detail: 'Applicationを終了すると、Windowを閉じる場合と異なり実行中Runも停止します。',
-      buttons: ['キャンセル', '終了'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    })
-    .then((result) => {
-      quitPromptOpen = false;
-      if (result.response !== 1) return;
+  void (async () => {
+    try {
+      for (const state of projectWindows.values()) {
+        if (
+          state.projectRoot &&
+          !(await confirmRunStopBeforeLeave(
+            state.projectRoot,
+            state.window,
+            'アプリケーションを終了する',
+          ))
+        )
+          return;
+      }
+      if (executionCoordinator.hasActiveRuns())
+        throw new Error('実行中のWorkerが残っています。終了を中止しました。');
       quitApproved = true;
       app.quit();
-    });
+    } catch (error) {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'アプリケーションを終了できません',
+        message: safeExecutionError(error),
+      });
+    } finally {
+      quitPromptOpen = false;
+    }
+  })();
 });
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
