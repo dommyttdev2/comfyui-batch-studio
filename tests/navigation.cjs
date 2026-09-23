@@ -269,12 +269,12 @@ matchCode(
 matchCode(executionSource, /Startできない理由/, 'blocked Preflight reason must be visible');
 matchCode(
   executionSource,
-  /既存Runが実行中です/,
+  /生成中です。「一時停止」/,
   'READY banner must not claim Start is possible while a Run is active',
 );
 matchCode(
   executionSource,
-  /既存Runが未完了です。新規StartではなくResumeで再開してください/,
+  /既存Runは未完了です。生成を続ける場合は「再開」/,
   'paused or interrupted Runs must direct the user to Resume',
 );
 matchCode(
