@@ -1282,8 +1282,12 @@ async function stopUncertainLocalRunForEdit(root: string, runId: string, mode: E
   await localExecutor().waitForSettled(runId);
   await executionCoordinator.waitForSettled(ref);
   const run = await getExecutionRun(root, runId);
-  if (!run || run.executionTarget !== 'local' ||
-      run.lifecycle !== 'FAILED' || run.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN')
+  if (
+    !run ||
+    run.executionTarget !== 'local' ||
+    run.lifecycle !== 'FAILED' ||
+    run.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN'
+  )
     throw new Error('実行状態が変わりました。Runを再確認してください。');
   const settings = await settingsStore().status();
   const comfy = new ComfyUiClient(settings.comfyUiApiEndpoint);
@@ -1291,14 +1295,18 @@ async function stopUncertainLocalRunForEdit(root: string, runId: string, mode: E
   if (!promptId && run.submission?.status === 'sending')
     promptId = await comfy.findPromptBySubmissionId(run.submission.attemptId);
   if (!promptId)
-    throw new Error('受理された可能性のあるPrompt IDを特定できません。Runの破棄またはQueue/Historyの確認が必要です。');
+    throw new Error(
+      '受理された可能性のあるPrompt IDを特定できません。Runの破棄またはQueue/Historyの確認が必要です。',
+    );
   for (let poll = 0; poll < EXIT_SETTLE_POLLS; poll++) {
     const running = await comfy.isPromptRunning(promptId);
     const queued = running || (await comfy.isPromptQueued(promptId));
     if (queued) {
       if (mode === 'interrupt') {
         if (!running)
-          throw new Error('既存PromptがQueue待機中です。他のPromptを消さずに停止できません。ComfyUI上で対象Promptを取り除いてください。');
+          throw new Error(
+            '既存PromptがQueue待機中です。他のPromptを消さずに停止できません。ComfyUI上で対象Promptを取り除いてください。',
+          );
         await comfy.interrupt();
       }
     } else {
@@ -1306,20 +1314,24 @@ async function stopUncertainLocalRunForEdit(root: string, runId: string, mode: E
       const state = comfy.historyState(history, promptId);
       if (state === 'success' || state === 'error') {
         const stopped = await mutateExecutionRun(root, runId, (current) => {
-          if (current.lifecycle !== 'FAILED' ||
-              current.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN')
+          if (
+            current.lifecycle !== 'FAILED' ||
+            current.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN'
+          )
             throw new Error('Run changed during stop verification.');
           current.current.promptId = promptId;
           current.controls.scheduling = 'STOPPED';
           current.controls.interrupt = state === 'error' ? 'INTERRUPTED' : 'IDLE';
-          const code = state === 'success'
-            ? 'LOCAL_OUTPUT_COLLECTION_FAILED'
-            : 'LOCAL_RECOVERED_PROMPT_FAILED';
+          const code =
+            state === 'success'
+              ? 'LOCAL_OUTPUT_COLLECTION_FAILED'
+              : 'LOCAL_RECOVERED_PROMPT_FAILED';
           const error = {
             code,
-            message: state === 'success'
-              ? 'Promptの完了をHistoryで確認しました。保存済み画像は未回収です。「既存Runの状態を再確認」で回収するかRunを破棄してください。'
-              : '既存Promptの失敗をHistoryで確認しました。新しいPromptは送信していません。',
+            message:
+              state === 'success'
+                ? 'Promptの完了をHistoryで確認しました。保存済み画像は未回収です。「既存Runの状態を再確認」で回収するかRunを破棄してください。'
+                : '既存Promptの失敗をHistoryで確認しました。新しいPromptは送信していません。',
             phase: current.phase,
             at: new Date().toISOString(),
             retryable: false,
@@ -1333,7 +1345,9 @@ async function stopUncertainLocalRunForEdit(root: string, runId: string, mode: E
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error('既存Promptの終了を確認できません。新しいPromptを投入せず、停止操作を中止しました。');
+  throw new Error(
+    '既存Promptの終了を確認できません。新しいPromptを投入せず、停止操作を中止しました。',
+  );
 }
 
 // The main process owns this guard. Renderer-only navigation checks cannot protect
@@ -1342,8 +1356,7 @@ async function stopRunForExit(root: string, runId: string, mode: ExitMode) {
   let run = await getExecutionRun(root, runId);
   if (!run) throw new Error('Execution Run disappeared during stop.');
   if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN') {
-    if (run.executionTarget === 'local')
-      return stopUncertainLocalRunForEdit(root, runId, mode);
+    if (run.executionTarget === 'local') return stopUncertainLocalRunForEdit(root, runId, mode);
     throw new Error(
       'Remote Workerの復旧状態が不確定です。Vast.ai Instanceの停止を確認してからRunを破棄してください。',
     );
@@ -3102,7 +3115,9 @@ function register() {
         previous.error?.code ?? '',
       )
     )
-      throw new Error('Only a previously uncertain or output-collection-failed Run can be rechecked.');
+      throw new Error(
+        'Only a previously uncertain or output-collection-failed Run can be rechecked.',
+      );
     const ref = { projectRoot: path.resolve(root), runId };
     if (executionCoordinator.hasActive(ref)) return previous;
     await mutateExecutionRun(root, runId, (current) => {
@@ -3110,7 +3125,8 @@ function register() {
         !['EXECUTION_RECOVERY_UNCERTAIN', 'LOCAL_OUTPUT_COLLECTION_FAILED'].includes(
           current.error?.code ?? '',
         )
-      ) return;
+      )
+        return;
       current.lifecycle = 'RUNNING';
       current.error = null;
       current.controls.scheduling = 'ACTIVE';
@@ -3339,9 +3355,13 @@ function register() {
         ['RUNNING', 'PAUSED', 'INTERRUPTED'].includes(candidate.lifecycle) ||
         (candidate.runId === runId && candidate.lifecycle === 'FAILED'),
     );
-    if (restartable.some((candidate) =>
-      ['EXECUTION_RECOVERY_UNCERTAIN', 'LOCAL_OUTPUT_COLLECTION_FAILED'].includes(candidate.error?.code ?? ''),
-    ))
+    if (
+      restartable.some((candidate) =>
+        ['EXECUTION_RECOVERY_UNCERTAIN', 'LOCAL_OUTPUT_COLLECTION_FAILED'].includes(
+          candidate.error?.code ?? '',
+        ),
+      )
+    )
       throw new Error(
         '復旧不確定なRunを自動で再実行できません。「現在のRunを破棄してモデル選定へ戻る」でQueue/HistoryまたはRemote停止の確認を行ってください。',
       );
