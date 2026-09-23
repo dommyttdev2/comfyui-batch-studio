@@ -26,7 +26,10 @@ assert.match(main, /if \(await runRequiresExitGuard\(root\)\)/);
 assert.match(main, /comfy\.isPromptQueued\(promptId\)/);
 assert.match(main, /comfy\.historyState\(history, promptId\) === 'pending'/);
 assert.match(main, /await discardExecutionRun\(root, runId\)/);
-assert.match(main, /restartable\.some\(\(candidate\) => candidate\.error\?\.code === 'EXECUTION_RECOVERY_UNCERTAIN'\)/);
+assert.match(
+  main,
+  /restartable\.some\(\(candidate\) => candidate\.error\?\.code === 'EXECUTION_RECOVERY_UNCERTAIN'\)/,
+);
 assert.match(main, /executionCoordinator\.releaseReservation/);
 assert.match(app, /await window\.batchStudio\.execution\.leave\(project\.rootPath\)/);
 assert.match(app, /onDiscarded=\{\(\) => \{/);
