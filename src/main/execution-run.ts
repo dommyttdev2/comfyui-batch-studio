@@ -702,9 +702,10 @@ export async function resumeExecutionRun(
     if (!run) throw new Error(`Execution Run ${runId} was not found.`);
     if (!resumableLifecycle(run.lifecycle))
       throw new Error(`Execution Run ${runId} is not resumable from ${run.lifecycle}.`);
-    if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
+    if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ||
+        run.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED')
       throw new Error(
-        'Execution Run recovery is uncertain. Resolve the old ComfyUI Prompt/Remote Worker before resuming; automatic re-submission is disabled.',
+        'Execution Run has an unaccounted accepted Prompt or failed output collection. Reconcile the exact Prompt before resuming; automatic re-submission is disabled.',
       );
     const placeholder: PreflightResult = {
       state: 'READY',
