@@ -189,7 +189,10 @@ const writeJson = (file, value) => {
   assert.equal(status.stale, false);
   assert.equal(fs.readFileSync(captionPath, 'utf8'), originalCaption);
 
-  status = await caption.savePixivTitle(root, { ja: '新しいPixivタイトル', en: 'Another Pixiv Title' });
+  status = await caption.savePixivTitle(root, {
+    ja: '新しいPixivタイトル',
+    en: 'Another Pixiv Title',
+  });
   assert.equal(status.state, 'generated', 'Pixiv edits must not invalidate caption.txt');
   assert.equal(status.stale, false);
   assert.equal(fs.readFileSync(captionPath, 'utf8'), originalCaption);
