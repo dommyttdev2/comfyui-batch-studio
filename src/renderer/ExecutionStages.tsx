@@ -670,6 +670,16 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
     current?.lifecycle === 'RUNNING' ||
     current?.lifecycle === 'PAUSED' ||
     current?.lifecycle === 'INTERRUPTED';
+  const selectedProjectRemoteInstanceId =
+    project.meta?.settings.remoteProvider === 'vastai'
+      ? project.meta.settings.remoteInstanceId
+      : null;
+  const remoteInstanceChanged = Boolean(
+    current?.executionTarget === 'remote' &&
+      Number.isInteger(selectedProjectRemoteInstanceId) &&
+      Number(selectedProjectRemoteInstanceId) > 0 &&
+      Number(current.remote?.instanceId) !== Number(selectedProjectRemoteInstanceId),
+  );
   const recoveryUncertain = current?.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN';
   const outputUncollected = current?.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED';
   const requiresRecovery = recoveryUncertain || outputUncollected;
