@@ -10,7 +10,6 @@ const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 const modelStageUi = fs.readFileSync(path.join(repo, 'src/renderer/GrokStages.tsx'), 'utf8');
 const explorerUi = fs.readFileSync(path.join(repo, 'src/renderer/CivitExplorerStage.tsx'), 'utf8');
 const modelPickerUi = fs.readFileSync(path.join(repo, 'src/renderer/ModelPicker.tsx'), 'utf8');
-const loraHistoryUi = fs.readFileSync(path.join(repo, 'src/renderer/GrokLoraHistory.tsx'), 'utf8');
 const selectedCardsUi = fs.readFileSync(
   path.join(repo, 'src/renderer/SelectedModelCards.tsx'),
   'utf8',
@@ -101,9 +100,9 @@ assert.match(
   'selected Checkpoint summary must show Base Model',
 );
 assert.match(
-  loraHistoryUi,
-  /Base Model:\s*\{catalogMatch\?\.baseModel\s*\?\?\s*['"]—['"]\}/,
-  'Grok LoRA history must show Base Model',
+  selectedCardsUi,
+  /<span>Base Model<\/span>/,
+  'selected LoRA cards must show Base Model',
 );
 execFileSync(
   process.execPath,

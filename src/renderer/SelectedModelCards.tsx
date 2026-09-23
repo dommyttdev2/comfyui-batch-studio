@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type {
   CatalogItem,
+  LoraFileAvailability,
+  LoraSelection,
   ModelCatalog,
   ModelFamily,
   ModelSelectionBase,
@@ -27,11 +29,17 @@ function SelectionCard({
   catalog,
   family,
   onSave,
+  placement,
+  placementLoading = false,
+  placementError = '',
 }: {
   entry: SelectionEntry;
-  catalog: ModelCatalog;
+  catalog: ModelCatalog | null;
   family?: ModelFamily;
   onSave: (current: ModelSelectionBase, next: ModelSelectionBase) => Promise<void>;
+  placement?: LoraFileAvailability;
+  placementLoading?: boolean;
+  placementError?: string;
 }) {
   const { selection, role, label } = entry;
   const [pending, setPending] = useState<PendingChoice>({
@@ -45,7 +53,9 @@ function SelectionCard({
     setError('');
   }, [selection.versionId, selection.fileId, selection.modelId]);
 
-  const item: CatalogItem | null = catalogItemForSelection(catalog, selection, role, family);
+  const item: CatalogItem | null = catalog
+    ? catalogItemForSelection(catalog, selection, role, family)
+    : null;
   const matches = item ? candidateVersions(item, role, family) : [];
   const match = matches.find((candidate) => candidate.version.versionId === pending.versionId);
   const file = match?.files.find((candidate) => candidate.id === pending.fileId);
@@ -54,11 +64,20 @@ function SelectionCard({
   const trained =
     match?.version.trainedWords ??
     (match?.version.versionId === item?.versionId ? item?.trainedWords : undefined) ??
-    [];
+    selection.trainedWords;
   const modelUrl = `https://civitai.com/models/${selection.modelId}?modelVersionId=${match?.version.versionId ?? selection.versionId}`;
   const baseline =
     match?.version.strengthBaseline ??
-    (match?.version.versionId === item?.versionId ? item?.strengthBaseline : undefined);
+    (match?.version.versionId === item?.versionId ? item?.strengthBaseline : undefined) ??
+    (role === 'lora' ? (selection as LoraSelection).strengthBaseline : undefined);
+  const selectedVersion = matches.find(
+    (candidate) => candidate.version.versionId === selection.versionId,
+  );
+  const inCivitai = Boolean(
+    selectedVersion?.files.some(
+      (candidate) => candidate.id === selection.fileId && candidate.name === selection.fileName,
+    ),
+  );
 
   const save = async () => {
     if (!item || !match || !file || !changed || saving) return;
@@ -191,10 +210,42 @@ function SelectionCard({
           </>
         ) : (
           <div className="issue warning">
-            このモデルの使用可能なバージョンがカタログにありません。Civitaiモデルカタログを同期してください。
+            <div>現在の選定: {selection.versionName} / {selection.fileName}</div>
+            Civitaiモデルカタログに選定中のバージョンがありません。カタログを同期してください。
           </div>
         )}
-        {error && <div className="issue error">✕ {error}</div>}
+        {role === 'lora' && (
+          <>
+            <div className="grok-lora-indicators" aria-label="LoRAの配置状態">
+              <span
+                className={`grok-lora-indicator ${placement?.local ? 'active local' : 'inactive'}`}
+              >
+                {placement?.local ? '✓' : '—'} ローカル
+              </span>
+              <span className={`grok-lora-indicator ${placement?.r2 ? 'active r2' : 'inactive'}`}>
+                {placement?.r2 ? '✓' : '—'} R2
+              </span>
+              <span className={`grok-lora-indicator ${inCivitai ? 'active civit' : 'inactive'}`}>
+                {inCivitai ? '✓' : '—'} Civitai Collection
+              </span>
+              {placementLoading && (
+                <span className="grok-lora-indicator checking">… 配置確認中</span>
+              )}
+              {!placementLoading && !placementError && !placement?.local && !placement?.r2 &&
+                !inCivitai && (
+                  <span className="grok-lora-indicator missing">✕ いずれにもない</span>
+                )}
+            </div>
+            {placementError && <small className="issue warning">配置確認失敗: {placementError}</small>}
+            {selection.reason && (
+              <details className="selected-model-reason">
+                <summary>選定理由</summary>
+                <p>{selection.reason}</p>
+              </details>
+            )}
+          </>
+        )}
+        {error && <div className="issue error">✕ {error}</div>
       </div>
     </article>
   );
@@ -203,53 +254,99 @@ function SelectionCard({
 export function SelectedModelCards({
   models,
   catalog,
+  projectRoot,
   onSave,
 }: {
   models: ModelsArtifact;
-  catalog: ModelCatalog;
+  catalog: ModelCatalog | null;
+  projectRoot: string;
   onSave: (current: ModelSelectionBase, next: ModelSelectionBase) => Promise<void>;
 }) {
+  const [placements, setPlacements] = useState<LoraFileAvailability[] | null>(null);
+  const [placementError, setPlacementError] = useState('');
+  const fileNamesKey = models.loras.map((selection) => selection.fileName).join('\0');
+  useEffect(() => {
+    let cancelled = false;
+    setPlacements(null);
+    setPlacementError('');
+    const fileNames = [...new Set(models.loras.map((selection) => selection.fileName))];
+    if (!fileNames.length) {
+      setPlacements([]);
+      return;
+    }
+    void window.batchStudio.availability
+      .checkLoraFiles(projectRoot, fileNames)
+      .then((next) => {
+        if (!cancelled) setPlacements(next);
+      })
+      .catch((cause) => {
+        if (cancelled) return;
+        setPlacements([]);
+        setPlacementError(cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRoot, fileNamesKey, catalog?.generation, catalog?.generatedAt]);
+
+  const placementByFile = new Map((placements ?? []).map((value) => [value.fileName, value]));
   const base = models.modelFamily === 'anima' ? models.diffusionModel : models.checkpoint;
-  const entries: SelectionEntry[] = [
-    ...(base
-      ? [
-          {
-            selection: base,
-            role: 'checkpoint' as const,
-            label: models.modelFamily === 'anima' ? 'Diffusion Model' : 'Checkpoint',
-          },
-        ]
-      : []),
-    ...models.loras.map((selection) => ({
-      selection,
-      role: 'lora' as const,
-      label: 'LoRA',
-    })),
-  ];
-  if (!entries.length) return null;
+  const baseEntry: SelectionEntry | null = base
+    ? {
+        selection: base,
+        role: 'checkpoint',
+        label: models.modelFamily === 'anima' ? 'Diffusion Model' : 'Checkpoint',
+      }
+    : null;
   return (
-    <section className="panel selected-models">
-      <div className="panelhead">
-        <div>
-          <h3>選定済みモデル</h3>
-          <p>
-            バージョンとファイルを後から手動で指定できます。
-            変更はmodels.jsonの下書きへ保存され、確定時に後工程の整合性を更新します。
-          </p>
+    <>
+      {baseEntry && (
+        <section className="panel selected-models">
+          <div className="panelhead">
+            <div>
+              <h3>基盤モデル</h3>
+              <p>基盤モデルのバージョンとファイルは従来どおり変更できます。</p>
+            </div>
+          </div>
+          <div className="civit-model-grid">
+            <SelectionCard
+              entry={baseEntry}
+              catalog={catalog}
+              family={models.modelFamily}
+              onSave={onSave}
+            />
+          </div>
+        </section>
+      )}
+      <section className="panel selected-models">
+        <div className="panelhead">
+          <div>
+            <h3>最終選定LoRA</h3>
+            <p>
+              現在のmodels.jsonに保存されたLoRAのみを表示します。
+              変更は下書きへ保存され、確定後に後工程の整合性を更新します。
+            </p>
+          </div>
+          <strong>{models.loras.length}件</strong>
         </div>
-        <strong>{entries.length}件</strong>
-      </div>
-      <div className="civit-model-grid">
-        {entries.map((entry) => (
-          <SelectionCard
-            key={entry.selection.ref}
-            entry={entry}
-            catalog={catalog}
-            family={entry.role === 'checkpoint' ? models.modelFamily : undefined}
-            onSave={onSave}
-          />
-        ))}
-      </div>
-    </section>
+        {models.loras.length ? (
+          <div className="civit-model-grid">
+            {models.loras.map((selection) => (
+              <SelectionCard
+                key={selection.ref}
+                entry={{ selection, role: 'lora', label: 'LoRA' }}
+                catalog={catalog}
+                onSave={onSave}
+                placement={placementByFile.get(selection.fileName)}
+                placementLoading={placements === null}
+                placementError={placementError}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="selected-models-empty">LoRAは未選定です。選定結果を取り込むとここに表示されます。</p>
+        )}
+      </section>
+    </>
   );
 }

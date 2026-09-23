@@ -21,7 +21,7 @@ import type { Runner } from './ui';
 import { issuesView } from './ui';
 import { ModelPicker } from './ModelPicker';
 import { ModelFilePicker } from './ModelFilePicker';
-import { GrokLoraHistory } from './GrokLoraHistory';
+import { useImportNotice } from './ArtifactImportToast';
 import { SelectedModelCards } from './SelectedModelCards';
 import { StageResetMenu, type ResetScope } from './StageResetMenu';
 import './model-selection.css';
@@ -108,6 +108,7 @@ export function GrokBridge({
   const fileInput = useRef<HTMLInputElement | null>(null),
     isFix = stage.endsWith('-fix'),
     returnFile = GROK_RETURN_FILES[stage];
+  const announceImport = useImportNotice();
   const selectReturnFile = (file: File | null) => {
     setResult(null);
     setFileIssue('');
@@ -127,13 +128,26 @@ export function GrokBridge({
     }
     setSelectedFile(file);
   };
+  const importManually = async (content: string) => {
+    if (!onImport) return;
+    const imported = await onImport(content);
+    setResult(imported);
+    if (imported.validation.valid && imported.missingRequirements.length === 0)
+      await announceImport({
+        root: project.rootPath,
+        stage,
+        provider,
+        fileName: returnFile?.name ?? '成果物',
+        summary: imported.summary,
+      });
+  };
   const importReturnFile = () =>
     selectedFile &&
     onImport &&
     run(async () => {
       const content = await selectedFile.text();
       if (!content.trim()) throw new Error(`${selectedFile.name} は空です。`);
-      setResult(await onImport(content));
+      await importManually(content);
     });
   return (
     <section className="panel">
@@ -395,7 +409,7 @@ export function GrokBridge({
               <button
                 className="primary"
                 disabled={!raw.trim() || !onImport}
-                onClick={() => onImport && run(async () => setResult(await onImport(raw)))}
+                onClick={() => onImport && run(() => importManually(raw))}
               >
                 結果を解析・取り込む
               </button>
@@ -666,7 +680,6 @@ export function ModelsStage({
     [picker, setPicker] = useState<'base_model' | 'text_encoder' | 'vae' | null>(null),
     [baseDirty, setBaseDirty] = useState(false),
     [migrationNeeded, setMigrationNeeded] = useState(false),
-    [historyRevision, setHistoryRevision] = useState(0),
     [syncStatus, setSyncStatus] = useState<CivitaiCatalogStatus | null>(null),
     [hasInitialSelection, setHasInitialSelection] = useState(false);
   const hydrate = (content: string | null) => {
@@ -921,8 +934,7 @@ export function ModelsStage({
     const next = await window.batchStudio.artifact.read(project.rootPath, 'models', 'draft');
     setDoc(next);
     hydrate(next.content);
-    if (stage === 'models') setHasInitialSelection(true);
-    setHistoryRevision((x) => x + 1);
+    if (stage === 'models' && r.validation.valid) setHasInitialSelection(true);
     return r;
   };
   return (
@@ -1041,8 +1053,13 @@ export function ModelsStage({
           )}
         </div>
       </section>
-      {catalog && current && current.schemaVersion >= 2 && (
-        <SelectedModelCards models={current} catalog={catalog} onSave={saveManualSelection} />
+      {current && current.schemaVersion >= 2 && (
+        <SelectedModelCards
+          models={current}
+          catalog={catalog}
+          projectRoot={project.rootPath}
+          onSave={saveManualSelection}
+        />
       )}
       {baseConfigured && (
         <>
@@ -1065,14 +1082,7 @@ export function ModelsStage({
               setDoc(next);
               hydrate(next.content);
               setHasInitialSelection(true);
-              setHistoryRevision((value) => value + 1);
             }}
-          />
-          <GrokLoraHistory
-            project={project}
-            stage="models"
-            catalog={catalog}
-            revision={historyRevision}
           />
         </>
       )}{' '}
@@ -1096,14 +1106,7 @@ export function ModelsStage({
               );
               setDoc(next);
               hydrate(next.content);
-              setHistoryRevision((value) => value + 1);
             }}
-          />
-          <GrokLoraHistory
-            project={project}
-            stage="models-fix"
-            catalog={catalog}
-            revision={historyRevision}
           />
         </>
       )}
