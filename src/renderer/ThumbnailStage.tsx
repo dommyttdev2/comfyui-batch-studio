@@ -10,6 +10,7 @@ import type {
   ThumbnailTextState,
 } from '../shared/types';
 import { useEditorAutosave } from './use-editor-autosave';
+import { cachedEditorImage } from './thumbnail-image-memory-cache';
 import type { Runner } from './ui';
 import './thumbnail-stage.css';
 
@@ -383,34 +384,70 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
       const loaded = await window.batchStudio.thumbnail.load(project.rootPath);
       if (cancelled) return;
       setState(loaded);
-      const paths = [
-        ...new Set(
-          loaded.documents.flatMap((document) =>
-            Object.values(document.slots)
-              .map((slot) => slot.imagePath)
-              .filter(Boolean),
-          ),
-        ),
-      ];
-      const sources = await Promise.all(
-        paths.map((imagePath) => window.batchStudio.thumbnail.readImage(imagePath)),
-      );
-      const next: LoadedImages = {};
-      for (const source of sources) {
-        if (!source || cancelled) continue;
-        try {
-          next[source.path] = await loadBrowserImage(source);
-        } catch {}
-      }
-      if (!cancelled) {
-        setImages(next);
-        loadedStateRef.current = true;
-      }
-    });
+      // Do not block the editor on images belonging to other documents.
+      loadedStateRef.current = true;
+        });
     return () => {
       cancelled = true;
     };
   }, [project.rootPath]);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const paths = [...new Set(slotsFor(active.pattern)
+      .map((slot) => active.slots[slot]?.imagePath).filter((value): value is string => Boolean(value)))];
+    void Promise.all(paths.map(async (imagePath) => {
+      try {
+        const source = await window.batchStudio.thumbnail.readEditorImage(imagePath);
+        if (!source) throw new Error('画像を読み込めませんでした。');
+        const image = await cachedEditorImage(source);
+        if (!cancelled) setImages((current) => ({ ...current, [source.path]: image }));
+      } catch {
+        if (!cancelled) setImages((current) => {
+          const next = { ...current };
+          delete next[imagePath];
+          return next;
+        });
+      }
+    }));
+    return () => { cancelled = true; };
+  }, [project.rootPath, active?.id, active?.pattern, active?.slots]);
+
+  // Prepare images for the remaining documents after the active document is displayed.
+  useEffect(() => {
+    if (!state || !active) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      const paths = [...new Set(state.documents
+        .filter((document) => document.id !== active.id)
+        .flatMap((document) => Object.values(document.slots).map((slot) => slot.imagePath))
+        .filter(Boolean))];
+      void (async () => {
+        for (const imagePath of paths) {
+          if (cancelled) break;
+          try {
+            const source = await window.batchStudio.thumbnail.readEditorImage(imagePath);
+            if (!source) continue;
+            const image = await cachedEditorImage(source);
+            if (!cancelled) setImages((current) => ({ ...current, [source.path]: image }));
+          } catch { /* A missing image must not block the active editor. */ }
+        }
+      })();
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [project.rootPath, state?.documents, active?.id]);
+
+  const fullResolutionImages = async (document: ThumbnailDocument): Promise<LoadedImages> => {
+    const entries = await Promise.all([...new Set(slotsFor(document.pattern)
+      .map((slot) => document.slots[slot]?.imagePath)
+      .filter((value): value is string => Boolean(value)))].map(async (imagePath) => {
+      const source = await window.batchStudio.thumbnail.readImage(imagePath);
+      if (!source) throw new Error(`出力用の元画像を読み込めませんでした: ${imagePath}`);
+      return [source.path, await loadBrowserImage(source)] as const;
+    }));
+    return Object.fromEntries(entries);
+  };
 
   useEffect(() => {
     if (!displayActive || !canvasRef.current) return;
@@ -539,9 +576,9 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
         return;
       pickerPreviewPathRef.current = selection.imagePath;
       void run(async () => {
-        const source = await window.batchStudio.thumbnail.readImage(selection.imagePath);
+        const source = await window.batchStudio.thumbnail.readEditorImage(selection.imagePath);
         if (!source) throw new Error('画像を読み込めませんでした。');
-        const image = await loadBrowserImage(source);
+        const image = await cachedEditorImage(source);
         if (
           pickerSessionRef.current?.sessionId !== selection.sessionId ||
           pickerPreviewPathRef.current !== selection.imagePath
@@ -557,9 +594,9 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
         return;
       pickerPreviewPathRef.current = null;
       void run(async () => {
-        const source = await window.batchStudio.thumbnail.readImage(selection.imagePath);
+        const source = await window.batchStudio.thumbnail.readEditorImage(selection.imagePath);
         if (!source) throw new Error('画像を読み込めませんでした。');
-        const image = await loadBrowserImage(source);
+        const image = await cachedEditorImage(source);
         if (pickerSessionRef.current?.sessionId !== selection.sessionId) return;
         setImages((current) => ({ ...current, [source.path]: image }));
         updateSlot(selection.slot, {
@@ -622,7 +659,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
       const canvas = window.document.createElement('canvas');
       canvas.width = WIDTH;
       canvas.height = HEIGHT;
-      renderThumbnail(canvas, active, images, overlay);
+      renderThumbnail(canvas, active, await fullResolutionImages(active), overlay);
       const mime = format === 'png' ? 'image/png' : 'image/jpeg';
       const dataUrl = canvas.toDataURL(mime, 0.94);
       const result = await window.batchStudio.thumbnail.exportImage(
@@ -648,7 +685,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
         const canvas = window.document.createElement('canvas');
         canvas.width = WIDTH;
         canvas.height = HEIGHT;
-        renderThumbnail(canvas, thumbnail, images, overlay);
+        renderThumbnail(canvas, thumbnail, await fullResolutionImages(thumbnail), overlay);
         const mime = format === 'png' ? 'image/png' : 'image/jpeg';
         const result = await window.batchStudio.thumbnail.exportImage(
           project.rootPath,
