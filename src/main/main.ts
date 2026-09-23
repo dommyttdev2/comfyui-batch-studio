@@ -1432,6 +1432,20 @@ async function runRequiresExitGuard(root: string) {
   return false;
 }
 
+async function ensureProjectWritable(root: string) {
+  const runs = await listExecutionRuns(root);
+  if (
+    runs.some(
+      (run) =>
+        run.lifecycle === 'RUNNING' ||
+        (run.executionTarget === 'remote' &&
+          (run.lifecycle === 'PAUSED' || run.lifecycle === 'INTERRUPTED')) ||
+        run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN',
+    )
+  )
+    throw new Error('実行中のRunがあるため、この工程は閲覧専用です。編集はRunの停止後に行ってください。');
+}
+
 async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action: string) {
   const key = path.resolve(root);
   const pending = exitChecks.get(key);
@@ -3076,7 +3090,9 @@ function register() {
     validRoot(root);
     const state = projectWindowForSender(event.sender);
     if (state.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
-    return confirmRunStopBeforeLeave(root, state.window, '他工程への移動');
+    // Stage browsing does not leave the project and must not stop a Run.
+    // Window close, project switch and app exit retain their stop confirmation.
+    return true;
   });
   ipcMain.handle(
     IPC.EXECUTION_STOP_FOR_EDIT,
