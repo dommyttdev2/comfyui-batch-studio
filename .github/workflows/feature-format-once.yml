@@ -1,0 +1,29 @@
+name: Feature branch format (temporary)
+on:
+  push:
+    branches: [feat/thumbnail-image-cache-marketplace-output]
+permissions:
+  contents: write
+jobs:
+  format:
+    if: github.repository == 'dommyttdev2/comfyui-batch-studio'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/thumbnail-image-cache-marketplace-output
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+      - run: npm install --no-audit --no-fund
+      - run: npm run format
+      - name: Push formatted source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src scripts tests
+          if ! git diff --cached --quiet; then
+            git commit -m "style: format thumbnail cache and marketplace output changes"
+            git push origin HEAD:feat/thumbnail-image-cache-marketplace-output
+          fi
