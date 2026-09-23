@@ -2834,12 +2834,14 @@ function register() {
     IPC.PROJECT_SAVE_SETTINGS,
     async (_e, root: unknown, settings: ProjectSettings) => {
       validRoot(root);
+      await ensureProjectWritable(root);
       await saveProjectSettings(root, settings);
       return scanProject(root);
     },
   );
   ipcMain.handle(IPC.PROJECT_SAVE_BRIEF, async (_e, root: unknown, brief: ProjectBriefInput) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     await saveProjectBrief(root, brief);
     return scanProject(root);
   });
@@ -2847,19 +2849,22 @@ function register() {
     validRoot(root);
     return readArtifact(root, key, source);
   });
-  ipcMain.handle(IPC.ARTIFACT_BEGIN_EDIT, (_e, root: unknown, key: any) => {
+  ipcMain.handle(IPC.ARTIFACT_BEGIN_EDIT, async (_e, root: unknown, key: any) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     return beginEditArtifact(root, key);
   });
-  ipcMain.handle(IPC.ARTIFACT_SAVE_DRAFT, (_e, root: unknown, key: any, content: unknown) => {
+  ipcMain.handle(IPC.ARTIFACT_SAVE_DRAFT, async (_e, root: unknown, key: any, content: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     if (typeof content !== 'string') throw new Error('Invalid content');
     return saveDraft(root, key, content);
   });
   ipcMain.handle(
     IPC.ARTIFACT_IMPORT_GROK,
-    (_e, root: unknown, key: any, raw: unknown, stage: unknown) => {
+    async (_e, root: unknown, key: any, raw: unknown, stage: unknown) => {
       validRoot(root);
+      await ensureProjectWritable(root);
       if (typeof raw !== 'string') throw new Error('Invalid Grok response');
       if (stage !== undefined && stage !== 'models' && stage !== 'models-fix')
         throw new Error('Invalid Grok response stage');
@@ -2868,6 +2873,7 @@ function register() {
   );
   ipcMain.handle(IPC.ARTIFACT_CONFIRM, async (_e, root: unknown, key: any) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     await confirmArtifact(root, key);
     return scanProject(root);
   });
@@ -2877,12 +2883,14 @@ function register() {
   });
   ipcMain.handle(IPC.ARTIFACT_RESET_FROM, async (_e, root: unknown, scope: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     validManualResetScope(scope);
     await manualResetFrom(root, scope);
     return scanProject(root);
   });
-  ipcMain.handle(IPC.PROMPT_PLAN_SAVE, (_e, root: unknown, plan: PromptPlanArtifact) => {
+  ipcMain.handle(IPC.PROMPT_PLAN_SAVE, async (_e, root: unknown, plan: PromptPlanArtifact) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     return savePromptPlan(root, plan);
   });
   ipcMain.handle(IPC.AUTO_ARTIFACT_GROK_ARM, (event, root: unknown, stage: unknown) => {
@@ -3045,8 +3053,9 @@ function register() {
     async (_e, id: unknown): Promise<VastAiSshEndpoint> =>
       resolveVastSshEndpoint(validInstanceId(id)),
   );
-  ipcMain.handle(IPC.WORKFLOW_COMPILE, (_e, root: unknown) => {
+  ipcMain.handle(IPC.WORKFLOW_COMPILE, async (_e, root: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     return compileWorkflow(root);
   });
   ipcMain.handle(IPC.AVAILABILITY_CHECK, async (_e, root: unknown) => {
@@ -3481,8 +3490,9 @@ function register() {
     validRoot(root);
     return getFinalArtifactStatus(root);
   });
-  ipcMain.handle(IPC.FINAL_ARTIFACT_SELECT_DIRECTORY, (_e, root: unknown) => {
+  ipcMain.handle(IPC.FINAL_ARTIFACT_SELECT_DIRECTORY, async (_e, root: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     return selectFinalArtifactDirectory(root);
   });
   ipcMain.handle(IPC.FINAL_ARTIFACT_LIST_IMAGES, (_e, root: unknown) => {
@@ -3505,20 +3515,24 @@ function register() {
   });
   ipcMain.handle(IPC.CAPTION_SELECT_SOURCE_DIRECTORY, async (_e, root: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     await selectFinalArtifactDirectory(root);
     return getCaptionStatus(root);
   });
-  ipcMain.handle(IPC.CAPTION_IMPORT_GROK, (_e, root: unknown, raw: unknown) => {
+  ipcMain.handle(IPC.CAPTION_IMPORT_GROK, async (_e, root: unknown, raw: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     if (typeof raw !== 'string') throw new Error('Invalid Grok caption response');
     return importCaptionGrok(root, raw);
   });
-  ipcMain.handle(IPC.CAPTION_GENERATE, (_e, root: unknown) => {
+  ipcMain.handle(IPC.CAPTION_GENERATE, async (_e, root: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     return generateCaption(root);
   });
-  ipcMain.handle(IPC.CAPTION_SAVE_PIXIV_TITLE, (_e, root: unknown, title: unknown) => {
+  ipcMain.handle(IPC.CAPTION_SAVE_PIXIV_TITLE, async (_e, root: unknown, title: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     return savePixivTitle(root, title);
   });
   ipcMain.handle(IPC.THUMBNAIL_FONTS, () => listThumbnailFonts());
@@ -3526,8 +3540,9 @@ function register() {
     validRoot(root);
     return loadThumbnailState(root);
   });
-  ipcMain.handle(IPC.THUMBNAIL_SAVE, (_e, root: unknown, state: unknown) => {
+  ipcMain.handle(IPC.THUMBNAIL_SAVE, async (_e, root: unknown, state: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     return saveThumbnailState(root, state);
   });
   ipcMain.handle(IPC.THUMBNAIL_SELECT_IMAGE, async (_e, root: unknown) => {
@@ -3709,6 +3724,7 @@ function register() {
   });
   ipcMain.handle(IPC.THUMBNAIL_PICKER_COMMIT, async (event, imagePath: unknown) => {
     const state = thumbnailPickerForSender(event.sender);
+    await ensureProjectWritable(state.root);
     const resolved = await validateThumbnailPickerImage(state, imagePath);
     state.committed = true;
     if (!state.opener.isDestroyed())
@@ -3721,8 +3737,9 @@ function register() {
   });
   ipcMain.handle(
     IPC.THUMBNAIL_EXPORT,
-    (_e, root: unknown, documentId: unknown, format: unknown, dataUrl: unknown) => {
+    async (_e, root: unknown, documentId: unknown, format: unknown, dataUrl: unknown) => {
       validRoot(root);
+      await ensureProjectWritable(root);
       if (typeof documentId !== 'number' || !Number.isSafeInteger(documentId) || documentId < 1)
         throw new Error('Invalid thumbnail document');
       if (format !== 'png' && format !== 'jpeg') throw new Error('Invalid thumbnail format');
@@ -3730,8 +3747,9 @@ function register() {
       return exportThumbnail(root, documentId, format, dataUrl);
     },
   );
-  ipcMain.handle(IPC.THUMBNAIL_DELETE_OUTPUTS, (_e, root: unknown, documentId: unknown) => {
+  ipcMain.handle(IPC.THUMBNAIL_DELETE_OUTPUTS, async (_e, root: unknown, documentId: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     if (typeof documentId !== 'number' || !Number.isSafeInteger(documentId) || documentId < 1)
       throw new Error('Invalid thumbnail document');
     return deleteThumbnailOutputs(root, documentId);
@@ -3769,14 +3787,16 @@ function register() {
     validRoot(root);
     return loadMarketplaceImageState(root);
   });
-  ipcMain.handle(IPC.MARKETPLACE_SAVE, (_e, root: unknown, state: unknown) => {
+  ipcMain.handle(IPC.MARKETPLACE_SAVE, async (_e, root: unknown, state: unknown) => {
     validRoot(root);
+      await ensureProjectWritable(root);
     return saveMarketplaceImageState(root, state);
   });
   ipcMain.handle(
     IPC.MARKETPLACE_GENERATE,
-    (_e, root: unknown, state: unknown, webpDataUrls: unknown, sourcePngDataUrl: unknown) => {
+    async (_e, root: unknown, state: unknown, webpDataUrls: unknown, sourcePngDataUrl: unknown) => {
       validRoot(root);
+      await ensureProjectWritable(root);
       const data =
         webpDataUrls && typeof webpDataUrls === 'object'
           ? (webpDataUrls as Record<string, string>)
@@ -3872,6 +3892,7 @@ function register() {
   });
   ipcMain.handle(IPC.MARKETPLACE_PICKER_COMMIT, async (event, imagePath: unknown) => {
     const state = marketplacePickerForSender(event.sender);
+    await ensureProjectWritable(state.root);
     const resolved = await validateMarketplacePickerImage(state, imagePath);
     state.committed = true;
     if (!state.opener.isDestroyed())
