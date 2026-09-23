@@ -3,6 +3,7 @@ import type {
   FinalArtifactImageItem,
   FinalArtifactImageSource,
   MarketplacePickerContext,
+  MarketplaceSourceType,
 } from '../shared/types';
 import './thumbnail-stage.css';
 
@@ -28,7 +29,9 @@ export function MarketplaceImagePickerWindow() {
     void (async () => {
       try {
         const nextContext = await window.batchStudio.marketplace.pickerContext();
-        const nextItems = await window.batchStudio.finalArtifact.listImages(nextContext.root);
+        const nextItems = nextContext.sourceType === 'thumbnail'
+          ? await window.batchStudio.marketplace.listThumbnailImages(nextContext.root)
+          : await window.batchStudio.finalArtifact.listImages(nextContext.root);
         if (cancelled) return;
         setContext(nextContext);
         setItems(nextItems);
@@ -70,7 +73,7 @@ export function MarketplaceImagePickerWindow() {
             <span className="eyebrow">ComfyUI Batch Studio</span>
             <h1>販売サイト用画像を選択</h1>
             <small>
-              最終成果物から選択します。1回目でプレビューへ仮適用し、同じ画像をもう一度選択すると確定してWindowを閉じます。
+              {context?.sourceType === 'thumbnail' ? '出力済みサムネイル' : '最終成果物'}から選択します。1回目でプレビューへ仮適用し、同じ画像をもう一度選択すると確定してWindowを閉じます。
             </small>
           </div>
         </header>
@@ -114,6 +117,7 @@ export function MarketplaceImagePickerWindow() {
               <MarketplacePickerChoice
                 key={item.path}
                 root={context?.root ?? ''}
+                sourceType={context?.sourceType ?? 'final-artifact'}
                 item={item}
                 tentative={tentativePath === item.path}
                 current={context?.currentImagePath === item.path}
@@ -125,7 +129,9 @@ export function MarketplaceImagePickerWindow() {
           <div className="thumbnail-image-picker-message">
             {items.length
               ? '条件に一致する画像はありません。'
-              : '最終成果物ディレクトリに選択できる画像がありません。'}
+              : context?.sourceType === 'thumbnail'
+                ? '出力済みのサムネイルがありません。サムネイル工程で画像を出力してください。'
+                : '最終成果物ディレクトリに選択できる画像がありません。'}
           </div>
         )}
       </section>
@@ -135,12 +141,14 @@ export function MarketplaceImagePickerWindow() {
 
 function MarketplacePickerChoice({
   root,
+  sourceType,
   item,
   tentative,
   current,
   onSelect,
 }: {
   root: string;
+  sourceType: MarketplaceSourceType;
   item: FinalArtifactImageItem;
   tentative: boolean;
   current: boolean;
@@ -158,8 +166,8 @@ function MarketplacePickerChoice({
       (entries) => {
         if (!entries.some((entry) => entry.isIntersecting)) return;
         observer.disconnect();
-        void window.batchStudio.finalArtifact
-          .readPreview(root, item.path)
+        void window.batchStudio.marketplace
+          .readSourcePreview(root, item.path, sourceType)
           .then((source) => {
             if (cancelled) return;
             if (source) setPreview(source);
@@ -176,7 +184,7 @@ function MarketplacePickerChoice({
       cancelled = true;
       observer.disconnect();
     };
-  }, [item.path, root]);
+  }, [item.path, root, sourceType]);
 
   return (
     <button
