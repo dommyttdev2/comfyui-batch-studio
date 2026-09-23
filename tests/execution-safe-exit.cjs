@@ -44,14 +44,14 @@ const leaveHandler = main.slice(
   main.indexOf('ipcMain.handle(IPC.EXECUTION_LEAVE'),
   main.indexOf('ipcMain.handle(IPC.EXECUTION_STOP_FOR_EDIT'),
 );
-assert.match(leaveHandler, /return true;/, 'stage browsing must always be allowed');
-assert.doesNotMatch(leaveHandler, /confirmRunStopBeforeLeave/, 'stage browsing must not stop a Run');
-assert.match(app, /<ReadOnlyStage readOnly=\\{viewOnly\\}>/);
-assert.match(app, /stage !== '実行'/);
-assert.match(app, /batchStudio\\.execution\\.status\\(project\\.rootPath\\)/);
-assert.match(app, /window\\.setInterval\\(\\(\\) => void inspect\\(\\), 3000\\)/);
-assert.match(app, /resetScope && !viewOnly/, 'reset actions must not be available while running');
-assert.match(main, /async function ensureProjectWritable\\(root: string\\)/);
+assert.ok(leaveHandler.includes('return true;'), 'stage browsing must always be allowed');
+assert.ok(!leaveHandler.includes('confirmRunStopBeforeLeave'), 'browsing must not stop a Run');
+assert.ok(app.includes('<ReadOnlyStage readOnly={viewOnly}>'));
+assert.ok(app.includes("stage !== '実行'"));
+assert.ok(app.includes('window.batchStudio.execution.status(project.rootPath)'));
+assert.ok(app.includes('window.setInterval(() => void inspect(), 3000)'));
+assert.ok(app.includes('resetScope && !viewOnly'), 'reset actions must be hidden while running');
+assert.ok(main.includes('async function ensureProjectWritable(root: string)'));
 for (const channel of [
   'PROJECT_SAVE_SETTINGS',
   'PROJECT_SAVE_BRIEF',
@@ -66,8 +66,11 @@ for (const channel of [
   'MARKETPLACE_SAVE',
   'MARKETPLACE_GENERATE',
 ]) {
-  const match = main.match(new RegExp('IPC\\\\.' + channel + ',[\\\\s\\\\S]*?await ensureProjectWritable\\\\(root\\\\);'));
-  assert.ok(match, channel + ' must reject writes while a Run is active');
+  const start = main.indexOf('IPC.' + channel + ',');
+  assert.ok(start >= 0, channel + ' handler is missing');
+  const end = main.indexOf('ipcMain.handle(', start + channel.length);
+  const handler = main.slice(start, end < 0 ? undefined : end);
+  assert.ok(handler.includes('await ensureProjectWritable(root);'), channel + ' must reject writes');
 }
 assert.match(app, /onDiscarded=\{\(\) => \{/);
 assert.match(execution, /現在のRunを破棄してモデル選定へ戻る/);
