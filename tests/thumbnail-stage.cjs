@@ -94,6 +94,38 @@ matchCode(
   'thumbnail API must expose system fonts',
 );
 matchCode(main, /IPC\.THUMBNAIL_FONTS/, 'main process must handle font enumeration');
+const cache = fs.readFileSync(path.join(repo, 'src', 'main', 'thumbnail-image-cache.ts'), 'utf8');
+const memoryCache = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'thumbnail-image-memory-cache.ts'),
+  'utf8',
+);
+matchCode(
+  cache,
+  /MAX_EDGE:[\s\S]*editor: 2048, gallery: 320/,
+  'editor and gallery caches must have distinct resolutions',
+);
+matchCode(
+  cache,
+  /info\.size, info\.mtimeMs, info\.ctimeMs/,
+  'cache keys must invalidate replaced source files',
+);
+matchCode(cache, /MAX_CONCURRENT = 2/, 'cache generation must bound concurrent image decodes');
+matchCode(cache, /LIMIT_BYTES = 512/, 'disk cache must have a size limit');
+matchCode(memoryCache, /const LIMIT = 128/, 'decoded image cache must have a memory limit');
+matchCode(stage, /readEditorImage\(imagePath\)/, 'editor must load persistent image cache');
+matchCode(
+  stage,
+  /fullResolutionImages\(active\)/,
+  'single export must use original image resolution',
+);
+matchCode(
+  stage,
+  /fullResolutionImages\(thumbnail\)/,
+  'batch export must use original image resolution',
+);
+matchCode(picker, /storeWebpPreview/, 'gallery must persist Chromium-scaled WebP previews');
+matchCode(main, /IPC\.THUMBNAIL_READ_EDITOR_IMAGE/, 'Main must expose editor cache');
+
 matchCode(
   main,
   /THUMBNAIL_SELECT_IMAGE[\s\S]*getFinalArtifactStatus\(root\)[\s\S]*defaultPath:\s*finalArtifact\.exists/,

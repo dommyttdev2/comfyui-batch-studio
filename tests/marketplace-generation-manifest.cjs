@@ -149,7 +149,7 @@ execFileSync(
   assert.match(service, /validateMarketplaceGeneration\(manifest, state, targets, source\)/);
   assert.match(service, /verifiedMarketplaceOutput\(/);
   assert.match(service, /storedZip\(entries\)/);
-  assert.match(service, /writeJsonAtomic\(generationManifestPath\(root\), manifest\)/);
+  assert.match(service, /writeJsonAtomic\(generationManifestPath\(outputDirectory\), manifest\)/);
   console.log('Marketplace generation manifest tests passed.');
 })().catch((error) => {
   console.error(error);

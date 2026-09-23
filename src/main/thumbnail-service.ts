@@ -226,12 +226,15 @@ export function normalizeThumbnailState(
 }
 
 export async function loadThumbnailState(root: string): Promise<ThumbnailEditorState> {
-  const [stored, fonts] = await Promise.all([
-    readJson<unknown>(statePath(root)),
-    listThumbnailFonts(),
-  ]);
-  const defaultFontFamily = fonts.includes('Meiryo UI') ? 'Meiryo UI' : 'Times New Roman';
-  return normalizeThumbnailState(stored, defaultFontFamily);
+  const stored = await readJson<unknown>(statePath(root));
+  // Font enumeration launches PowerShell on Windows. Existing projects carry
+  // their selected fonts in the saved editor state, so do not block image display on it.
+  if (stored) return normalizeThumbnailState(stored);
+  const fonts = await listThumbnailFonts();
+  return normalizeThumbnailState(
+    null,
+    fonts.includes('Meiryo UI') ? 'Meiryo UI' : 'Times New Roman',
+  );
 }
 
 export async function saveThumbnailState(

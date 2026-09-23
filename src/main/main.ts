@@ -174,6 +174,7 @@ import {
   readThumbnailTemplate,
   saveThumbnailState,
 } from './thumbnail-service.js';
+import { readCachedThumbnailImage, storeWebpThumbnailPreview } from './thumbnail-image-cache.js';
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
@@ -3057,7 +3058,21 @@ function register() {
   });
   ipcMain.handle(IPC.THUMBNAIL_READ_PREVIEW, (_e, imagePath: unknown) => {
     if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
-    return readThumbnailPreview(imagePath);
+    return readCachedThumbnailImage(app.getPath('userData'), imagePath, 'gallery').then(
+      (cached) => cached ?? readThumbnailPreview(imagePath),
+    );
+  });
+  ipcMain.handle(IPC.THUMBNAIL_READ_EDITOR_IMAGE, async (_e, imagePath: unknown) => {
+    if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
+    return (
+      (await readCachedThumbnailImage(app.getPath('userData'), imagePath, 'editor')) ??
+      readThumbnailImage(imagePath)
+    );
+  });
+  ipcMain.handle(IPC.THUMBNAIL_STORE_WEBP_PREVIEW, (_e, imagePath: unknown, dataUrl: unknown) => {
+    if (typeof imagePath !== 'string' || typeof dataUrl !== 'string')
+      throw new Error('Invalid thumbnail preview data');
+    return storeWebpThumbnailPreview(app.getPath('userData'), imagePath, dataUrl);
   });
   ipcMain.handle(IPC.THUMBNAIL_READ_TEMPLATE, (_e, pattern: unknown) =>
     readThumbnailTemplate(
