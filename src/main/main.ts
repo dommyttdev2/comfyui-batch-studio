@@ -376,8 +376,11 @@ async function setWindowProject(state: ProjectWindowState, root: string | null) 
     focusProjectWindow(existing);
     throw new Error('このプロジェクトは既に別のWindowで開かれています。');
   }
-  if (state.projectRoot && projectRootKey(state.projectRoot) !== projectRootKey(resolved) &&
-      !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, 'プロジェクトを切り替える')))
+  if (
+    state.projectRoot &&
+    projectRootKey(state.projectRoot) !== projectRootKey(resolved) &&
+    !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, 'プロジェクトを切り替える'))
+  )
     throw new Error('Runの停止がキャンセルされました。');
   state.projectRoot = resolved;
   await rememberProjectAndRefreshMenu(resolved);
@@ -560,7 +563,11 @@ function createProjectWindow(
     pendingWindowCloses.add(windowId);
     void (async () => {
       try {
-        if (state.projectRoot && !(await confirmRunStopBeforeLeave(state.projectRoot, window, 'Windowを閉じる'))) return;
+        if (
+          state.projectRoot &&
+          !(await confirmRunStopBeforeLeave(state.projectRoot, window, 'Windowを閉じる'))
+        )
+          return;
         approvedWindowCloses.add(windowId);
         window.close();
       } catch (error) {
@@ -1220,7 +1227,6 @@ async function markExecutionRecoveryUncertain(root: string, runId: string, reaso
   });
 }
 
-
 type ExitMode = 'graceful' | 'interrupt';
 const EXIT_SETTLE_POLLS = 240;
 const exitChecks = new Map<string, Promise<boolean>>();
@@ -1258,7 +1264,9 @@ async function stopVastInstanceForExit(run: ExecutionRun, root: string) {
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  throw new Error(`Vast.ai Instance #${id} の停止完了を確認できません。課金状態を確認してください。`);
+  throw new Error(
+    `Vast.ai Instance #${id} の停止完了を確認できません。課金状態を確認してください。`,
+  );
 }
 
 // The main process owns this guard. Renderer-only navigation checks cannot protect
@@ -1267,9 +1275,15 @@ async function stopRunForExit(root: string, runId: string, mode: ExitMode) {
   let run = await getExecutionRun(root, runId);
   if (!run) throw new Error('Execution Run disappeared during stop.');
   if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
-    throw new Error('復旧状態が不確定です。実行画面でQueue/Historyを確認し、Runを安全に破棄してください。');
+    throw new Error(
+      '復旧状態が不確定です。実行画面でQueue/Historyを確認し、Runを安全に破棄してください。',
+    );
   if (run.lifecycle === 'RUNNING') {
-    if (run.executionTarget === 'remote' && !isRemotePreGenerationPhase(run.phase) && run.phase !== 'EXECUTING')
+    if (
+      run.executionTarget === 'remote' &&
+      !isRemotePreGenerationPhase(run.phase) &&
+      run.phase !== 'EXECUTING'
+    )
       throw new Error('Remote成果物の処理中です。処理完了後に工程を移動してください。');
     if (run.executionTarget === 'remote' && isRemotePreGenerationPhase(run.phase)) {
       await mutateExecutionRun(root, runId, (current) => {
@@ -1336,7 +1350,8 @@ async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action
       type: 'warning',
       title: '実行中のRunがあります',
       message: `${action}前にRunを停止してください。`,
-      detail: '生成済みのローカル画像とRunの進捗は保持します。復旧不確定なRunは実行画面から安全な破棄操作が必要です。',
+      detail:
+        '生成済みのローカル画像とRunの進捗は保持します。復旧不確定なRunは実行画面から安全な破棄操作が必要です。',
       buttons: ['キャンセル', '生成を停止して続行', '生成を中断して続行'],
       defaultId: 0,
       cancelId: 0,
@@ -1345,12 +1360,17 @@ async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action
     if (result.response === 0) return false;
     const mode: ExitMode = result.response === 1 ? 'graceful' : 'interrupt';
     for (const run of await listExecutionRuns(root)) {
-      if (run.lifecycle === 'RUNNING' || run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ||
-          (run.executionTarget === 'remote' && ['PAUSED', 'INTERRUPTED'].includes(run.lifecycle)))
+      if (
+        run.lifecycle === 'RUNNING' ||
+        run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ||
+        (run.executionTarget === 'remote' && ['PAUSED', 'INTERRUPTED'].includes(run.lifecycle))
+      )
         await stopRunForExit(root, run.runId, mode);
     }
     if (await runRequiresExitGuard(root))
-      throw new Error('RunまたはVast.ai Instanceの停止を確認できません。移動・終了を中止しました。');
+      throw new Error(
+        'RunまたはVast.ai Instanceの停止を確認できません。移動・終了を中止しました。',
+      );
     return true;
   })().finally(() => exitChecks.delete(key));
   exitChecks.set(key, task);
@@ -1359,8 +1379,7 @@ async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action
 
 async function discardRunForModelReselection(root: string, runId: string) {
   const current = await getCurrentExecutionRun(root);
-  if (!current || current.runId !== runId)
-    throw new Error('現在のRunのみ破棄できます。');
+  if (!current || current.runId !== runId) throw new Error('現在のRunのみ破棄できます。');
   if (current.lifecycle === 'COMPLETED' || current.lifecycle === 'DISCARDED')
     throw new Error('既に終了したRunは破棄対象ではありません。');
   if (current.lifecycle === 'RUNNING') await stopRunForExit(root, runId, 'interrupt');
@@ -1376,10 +1395,14 @@ async function discardRunForModelReselection(root: string, runId: string) {
       throw new Error('送信済みPromptのIDを確認できません。Queue/Historyの確認が必要です。');
     if (promptId) {
       if (await comfy.isPromptQueued(promptId))
-        throw new Error(`Prompt ${promptId} がComfyUIのQueueに残っています。停止してから破棄してください。`);
+        throw new Error(
+          `Prompt ${promptId} がComfyUIのQueueに残っています。停止してから破棄してください。`,
+        );
       const history = await comfy.history(promptId);
       if (comfy.historyState(history, promptId) === 'pending')
-        throw new Error(`Prompt ${promptId} の完了または失敗をHistoryで確認できません。破棄を中止しました。`);
+        throw new Error(
+          `Prompt ${promptId} の完了または失敗をHistoryで確認できません。破棄を中止しました。`,
+        );
     }
   } else {
     // Even an unreachable Remote Worker can no longer submit once the provider
@@ -2522,8 +2545,15 @@ function register() {
       return null;
     }
     const project = await scanWithCatalog(root);
-    if (state.projectRoot && state.projectRoot !== root &&
-        !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, 'プロジェクトを切り替える')))
+    if (
+      state.projectRoot &&
+      state.projectRoot !== root &&
+      !(await confirmRunStopBeforeLeave(
+        state.projectRoot,
+        state.window,
+        'プロジェクトを切り替える',
+      ))
+    )
       return null;
     await setWindowProject(state, root);
     return project;
@@ -2580,7 +2610,10 @@ function register() {
   });
   ipcMain.handle(IPC.PROJECT_CLOSE, async (event) => {
     const state = projectWindowForSender(event.sender);
-    if (state.projectRoot && !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, 'プロジェクトを閉じる')))
+    if (
+      state.projectRoot &&
+      !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, 'プロジェクトを閉じる'))
+    )
       throw new Error('Runの停止がキャンセルされました。');
     state.projectRoot = null;
     state.activeGrokContext = null;
@@ -2603,7 +2636,10 @@ function register() {
   ipcMain.handle(IPC.PROJECT_CREATE, async (event, parent: unknown, brief: ProjectBriefInput) => {
     if (typeof parent !== 'string') throw new Error('Invalid parent path');
     const state = projectWindowForSender(event.sender);
-    if (state.projectRoot && !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, '新規プロジェクトの作成')))
+    if (
+      state.projectRoot &&
+      !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, '新規プロジェクトの作成'))
+    )
       throw new Error('Runの停止がキャンセルされました。');
     const root = await createProject(parent, brief),
       existing = projectWindowForRoot(root, state);
@@ -2886,11 +2922,14 @@ function register() {
     if (state.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
     return confirmRunStopBeforeLeave(root, state.window, '他工程への移動');
   });
-  ipcMain.handle(IPC.EXECUTION_STOP_FOR_EDIT, async (_e, root: unknown, runId: unknown, interrupt: unknown) => {
-    validRoot(root);
-    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    return stopRunForExit(root, runId, interrupt === true ? 'interrupt' : 'graceful');
-  });
+  ipcMain.handle(
+    IPC.EXECUTION_STOP_FOR_EDIT,
+    async (_e, root: unknown, runId: unknown, interrupt: unknown) => {
+      validRoot(root);
+      if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
+      return stopRunForExit(root, runId, interrupt === true ? 'interrupt' : 'graceful');
+    },
+  );
   ipcMain.handle(IPC.EXECUTION_DISCARD_FOR_EDIT, async (event, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
@@ -2899,7 +2938,8 @@ function register() {
       type: 'warning',
       title: '現在のRunを破棄してモデル選定へ戻る',
       message: '現在のRunを破棄しますか？',
-      detail: '現在のRunのResumeはできなくなります。生成済みのローカル画像は削除しません。Remoteの未回収画像は失われる可能性があります。新しいRunはモデル選定の変更後に開始してください。',
+      detail:
+        '現在のRunのResumeはできなくなります。生成済みのローカル画像は削除しません。Remoteの未回収画像は失われる可能性があります。新しいRunはモデル選定の変更後に開始してください。',
       buttons: ['キャンセル', 'Runを破棄する'],
       defaultId: 0,
       cancelId: 0,
