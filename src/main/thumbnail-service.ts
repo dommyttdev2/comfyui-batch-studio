@@ -163,7 +163,7 @@ export function normalizeThumbnailState(
   const sourceDocuments =
     Array.isArray(input.documents) && input.documents.length ? input.documents : defaults.documents;
   const seenIds = new Set<number>();
-  const documents = sourceDocuments
+  const validDocuments = sourceDocuments
     .filter((candidate): candidate is ThumbnailDocument => {
       if (
         !candidate ||
