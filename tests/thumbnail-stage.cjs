@@ -34,9 +34,15 @@ const runtimeCopy = fs.readFileSync(path.join(repo, 'scripts', 'copy-runtime.cjs
 
 matchCode(ui, /'キャプション',\s*'サムネイル'/, 'thumbnail stage must follow caption');
 matchCode(app, /case 'サムネイル':\s*return <ThumbnailStage/, 'thumbnail stage must render');
-matchCode(service, /Array\.from\(\{ length: 6 \}/, 'editor must create six thumbnail documents');
+matchCode(service, /Array\.from\(\{ length: 5 \}/, 'new projects must create five thumbnail documents');
+matchCode(service, /sourceDocuments\.filter[\s\S]*\.map\(\(candidate\)/, 'saved thumbnail documents must be normalized without truncation');
+matchCode(stage, /const addDocument = \(\)/, 'editor must support adding documents');
+matchCode(stage, /const confirmDeleteDocument = \(\)/, 'editor must support deleting documents');
+matchCode(stage, /state\.documents\.length <= 1/, 'editor must retain at least one document');
 matchCode(service, /thumbnail-editor\.json/, 'thumbnail settings must persist in the project');
-matchCode(service, /path\.join\(root, 'thumbnails'\)/, 'exports must stay in the project');
+matchCode(service, /meta\?\.settings\.artifactOutputPath[\s\S]*path\.join\(path\.resolve\(base\), 'thumbnails'\)/, 'exports must be written to the configured artifact output root');
+matchCode(main, /Number\.isSafeInteger\(documentId\)/, 'thumbnail export must support dynamically allocated document IDs');
+matchCode(service, /listExportedThumbnails/, 'exported thumbnails must be available to downstream selection');
 matchCode(stage, /'3-images'/, 'three-image PSD layout must be available');
 matchCode(stage, /'4-images-left-split'/, 'left-split PSD layout must be available');
 matchCode(stage, /'4-images-right-split'/, 'right-split PSD layout must be available');
