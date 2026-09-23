@@ -174,7 +174,8 @@ import {
   readThumbnailTemplate,
   saveThumbnailState,
 } from './thumbnail-service.js';
-import { readCachedThumbnailImage, storeWebpThumbnailPreview } from './thumbnail-image-cache.js';
+import { readCachedThumbnailImage, storeWebpThumbnailPreview, type ThumbnailCacheTiming } from './thumbnail-image-cache.js';
+import { logThumbnailPickerPerformance, type PickerMetrics } from './thumbnail-picker-perf.js';
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
@@ -210,6 +211,8 @@ type RendererWindowTool =
   | 'codex-pane';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
+  openedAt: number;
+  previewCount: number;
   window: BaseWindow;
   view: WebContentsView;
   opener: WebContents;
@@ -629,6 +632,7 @@ function openThumbnailPickerWindow(
   slot: ThumbnailSlotKey,
   currentImagePath: string,
 ) {
+  const openedAt = performance.now();
   for (const existing of thumbnailPickerWindows.values()) {
     if (existing.opener.id === opener.id) existing.window.close();
   }
@@ -650,6 +654,8 @@ function openThumbnailPickerWindow(
     }),
     sessionId = randomUUID(),
     state: ThumbnailPickerWindowState = {
+      openedAt,
+      previewCount: 0,
       window,
       view,
       opener,
@@ -661,6 +667,14 @@ function openThumbnailPickerWindow(
     },
     contentsId = view.webContents.id;
   thumbnailPickerWindows.set(contentsId, state);
+  logThumbnailPickerPerformance(app.getPath('userData'), sessionId, 'window_opened', {
+    setupMs: performance.now() - openedAt,
+  });
+  view.webContents.on('did-finish-load', () => {
+    logThumbnailPickerPerformance(app.getPath('userData'), sessionId, 'renderer_loaded', {
+      sinceOpenMs: performance.now() - openedAt,
+    });
+  });
   window.removeMenu();
   window.setMenuBarVisibility(false);
   window.contentView.addChildView(view);
@@ -673,6 +687,11 @@ function openThumbnailPickerWindow(
     if (!state.committed && !state.opener.isDestroyed())
       state.opener.send(IPC.THUMBNAIL_PICKER_CANCELLED, { sessionId: state.sessionId });
     if (!view.webContents.isDestroyed()) view.webContents.close();
+    logThumbnailPickerPerformance(app.getPath('userData'), sessionId, 'window_closed', {
+      sinceOpenMs: performance.now() - openedAt,
+      previewRequests: state.previewCount,
+      committed: state.committed,
+    });
     thumbnailPickerWindows.delete(contentsId);
   });
   resize();
@@ -3046,21 +3065,62 @@ function register() {
     if (result.canceled || !result.filePaths[0]) return null;
     return readThumbnailImage(result.filePaths[0]);
   });
-  ipcMain.handle(IPC.THUMBNAIL_LIST_IMAGES, async (_e, root: unknown) => {
+  ipcMain.handle(IPC.THUMBNAIL_LIST_IMAGES, async (event, root: unknown) => {
     validRoot(root);
+    const started = performance.now();
     const finalArtifact = await getFinalArtifactStatus(root);
-    if (!finalArtifact.exists || !finalArtifact.directory) return [];
-    return listThumbnailImages(finalArtifact.directory);
+    const statusMs = performance.now() - started;
+    const images = finalArtifact.exists && finalArtifact.directory
+      ? await listThumbnailImages(finalArtifact.directory) : [];
+    const state = thumbnailPickerWindows.get(event.sender.id);
+    if (state) logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'list_images', {
+      count: images.length,
+      statusMs,
+      listMs: performance.now() - started - statusMs,
+      totalMs: performance.now() - started,
+      sinceOpenMs: performance.now() - state.openedAt,
+    });
+    return images;
   });
   ipcMain.handle(IPC.THUMBNAIL_READ_IMAGE, (_e, imagePath: unknown) => {
     if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
     return readThumbnailImage(imagePath);
   });
-  ipcMain.handle(IPC.THUMBNAIL_READ_PREVIEW, (_e, imagePath: unknown) => {
+  ipcMain.handle(IPC.THUMBNAIL_READ_PREVIEW, async (event, imagePath: unknown) => {
     if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
-    return readCachedThumbnailImage(app.getPath('userData'), imagePath, 'gallery').then(
-      (cached) => cached ?? readThumbnailPreview(imagePath),
-    );
+    const started = performance.now();
+    const timing: ThumbnailCacheTiming = {};
+    const state = thumbnailPickerWindows.get(event.sender.id);
+    if (state) state.previewCount++;
+    try {
+      const cached = await readCachedThumbnailImage(app.getPath('userData'), imagePath, 'gallery', timing);
+      const fallbackStarted = performance.now();
+      const source = cached ?? await readThumbnailPreview(imagePath);
+      const elapsed = performance.now() - started;
+      if (state && (state.previewCount <= 40 || state.previewCount % 25 === 0 || elapsed > 100 || !timing.hit)) {
+        const details: PickerMetrics = {
+          requestNumber: state.previewCount,
+          totalMs: elapsed,
+          sinceOpenMs: performance.now() - state.openedAt,
+          cacheHit: timing.hit === true,
+          usedFallback: !cached,
+          fallbackMs: cached ? 0 : performance.now() - fallbackStarted,
+          transferKB: source ? source.dataUrl.length * 0.75 / 1024 : 0,
+          sourceWidth: source?.width ?? 0,
+          sourceHeight: source?.height ?? 0,
+        };
+        for (const [key, value] of Object.entries(timing)) {
+          if (typeof value === 'number' || typeof value === 'boolean') details[key] = value;
+        }
+        logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'preview_read', details);
+      }
+      return source;
+    } catch (error) {
+      if (state) logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'preview_error', {
+        totalMs: performance.now() - started,
+      });
+      throw error;
+    }
   });
   ipcMain.handle(IPC.THUMBNAIL_READ_EDITOR_IMAGE, async (_e, imagePath: unknown) => {
     if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
@@ -3106,12 +3166,30 @@ function register() {
   );
   ipcMain.handle(IPC.THUMBNAIL_PICKER_CONTEXT, (event) => {
     const state = thumbnailPickerForSender(event.sender);
+    logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'context_requested', {
+      sinceOpenMs: performance.now() - state.openedAt,
+    });
     return {
       sessionId: state.sessionId,
       root: state.root,
       slot: state.slot,
       currentImagePath: state.currentImagePath,
     };
+  });
+  ipcMain.handle(IPC.THUMBNAIL_PICKER_PERF, (event, name: unknown, metrics: unknown) => {
+    const state = thumbnailPickerForSender(event.sender);
+    if (typeof name !== 'string' || !/^[a-z_]{1,40}$/.test(name)) return;
+    if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) return;
+    const safe: PickerMetrics = {};
+    for (const [key, value] of Object.entries(metrics).slice(0, 20)) {
+      if (!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key)) continue;
+      if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) safe[key] = value;
+      else if (key === 'displaySize' && (value === 'large' || value === 'medium' || value === 'small')) safe[key] = value;
+    }
+    logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, name, {
+      ...safe,
+      sinceOpenMs: performance.now() - state.openedAt,
+    });
   });
   ipcMain.handle(IPC.THUMBNAIL_PICKER_PREVIEW, async (event, imagePath: unknown) => {
     const state = thumbnailPickerForSender(event.sender);
