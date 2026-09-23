@@ -843,7 +843,7 @@ function installApplicationMenu(recentRoots: string[]) {
           await dialog.showMessageBox({
             type: 'error',
             title: 'プロジェクトを開けません',
-            message: `プロジェクトを開けませんでした。\\n${root}`,
+            message: `プロジェクトを開けませんでした。\n${root}`,
             detail: error instanceof Error ? error.message : String(error),
           });
         });
