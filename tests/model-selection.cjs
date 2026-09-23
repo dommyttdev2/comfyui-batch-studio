@@ -19,6 +19,23 @@ assert.match(
   /<SelectedModelCards/,
   'model stage must expose editable current selections',
 );
+assert.match(modelStageUi, /view="base"/, 'base-model cards remain below base selection');
+assert.equal(
+  (modelStageUi.match(/view="loras"/g) ?? []).length,
+  1,
+  'final LoRA list must have only one component instance',
+);
+assert.match(
+  modelStageUi,
+  /latestSelectionStage !== 'models-fix' && finalLoraList/,
+  'initial selection displays the single final LoRA list directly below its stage',
+);
+assert.match(
+  modelStageUi,
+  /latestSelectionStage === 'models-fix' && finalLoraList/,
+  'reselection moves that same list directly below its stage',
+);
+assert.match(modelStageUi, /history\.at\(-1\)\?\.stage/, 'latest history determines list position');
 assert.match(
   selectedCardsUi,
   /変更を下書きへ保存/,
