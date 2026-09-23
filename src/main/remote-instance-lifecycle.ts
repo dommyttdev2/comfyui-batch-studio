@@ -121,9 +121,9 @@ export class RemoteInstanceLifecycleService {
     // was originally running. Resume may restart only the same Instance when
     // the prior stop was recorded and the Run has an explicit Resume attempt.
     const resumeAfterConfirmedStop =
-      existing?.resume.attempts > 0 &&
-      existing.remoteLifecycle?.finalizedAt != null &&
-      existing.remoteLifecycle.latest?.status === 'stopped' &&
+      (existing?.resume.attempts ?? 0) > 0 &&
+      existing?.remoteLifecycle?.finalizedAt != null &&
+      existing?.remoteLifecycle?.latest?.status === 'stopped' &&
       current.status === 'stopped';
     const startupBaseline: CloudInstanceStatus = resumeAfterConfirmedStop
       ? 'stopped'
