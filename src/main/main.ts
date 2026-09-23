@@ -38,6 +38,7 @@ import type {
   CodexModelSelection,
   CodexModelSettings,
   ThumbnailSlotKey,
+  MarketplaceSourceType,
   R2ConnectionInput,
   ValidationIssue,
   VastAiConnectionInput,
@@ -157,9 +158,14 @@ import {
   loadMarketplaceImageState,
   renderMarketplacePng,
   saveMarketplaceImageState,
+  readMarketplaceSource,
+  readMarketplaceSourcePreview,
 } from './marketplace-image-service.js';
 import {
   exportThumbnail,
+  deleteThumbnailOutputs,
+  listExportedThumbnails,
+  assertExportedThumbnail,
   listThumbnailFonts,
   listThumbnailImages,
   loadThumbnailState,
@@ -213,6 +219,7 @@ type ThumbnailPickerWindowState = {
   committed: boolean;
 };
 type MarketplacePickerWindowState = {
+  sourceType: MarketplaceSourceType;
   window: BaseWindow;
   view: WebContentsView;
   opener: WebContents;
@@ -685,10 +692,12 @@ async function validateMarketplacePickerImage(
   imagePath: unknown,
 ) {
   if (typeof imagePath !== 'string') throw new Error('Invalid marketplace image path');
-  return assertFinalArtifactImage(state.root, imagePath);
+  return state.sourceType === 'thumbnail'
+    ? assertExportedThumbnail(state.root, imagePath)
+    : assertFinalArtifactImage(state.root, imagePath);
 }
 
-function openMarketplacePickerWindow(opener: WebContents, root: string, currentImagePath: string) {
+function openMarketplacePickerWindow(opener: WebContents, root: string, currentImagePath: string, sourceType: MarketplaceSourceType) {
   for (const existing of marketplacePickerWindows.values()) {
     if (existing.opener.id === opener.id) existing.window.close();
   }
@@ -710,6 +719,7 @@ function openMarketplacePickerWindow(opener: WebContents, root: string, currentI
     }),
     sessionId = randomUUID(),
     state: MarketplacePickerWindowState = {
+      sourceType,
       window,
       view,
       opener,
@@ -3109,13 +3119,35 @@ function register() {
     IPC.THUMBNAIL_EXPORT,
     (_e, root: unknown, documentId: unknown, format: unknown, dataUrl: unknown) => {
       validRoot(root);
-      if (typeof documentId !== 'number' || documentId < 1 || documentId > 6)
+      if (typeof documentId !== 'number' || !Number.isSafeInteger(documentId) || documentId < 1)
         throw new Error('Invalid thumbnail document');
       if (format !== 'png' && format !== 'jpeg') throw new Error('Invalid thumbnail format');
       if (typeof dataUrl !== 'string') throw new Error('Invalid thumbnail image data');
       return exportThumbnail(root, documentId, format, dataUrl);
     },
   );
+  ipcMain.handle(IPC.THUMBNAIL_DELETE_OUTPUTS, (_e, root: unknown, documentId: unknown) => {
+    validRoot(root);
+    if (typeof documentId !== 'number' || !Number.isSafeInteger(documentId) || documentId < 1)
+      throw new Error('Invalid thumbnail document');
+    return deleteThumbnailOutputs(root, documentId);
+  });
+  ipcMain.handle(IPC.MARKETPLACE_LIST_THUMBNAILS, (_e, root: unknown) => {
+    validRoot(root);
+    return listExportedThumbnails(root);
+  });
+  ipcMain.handle(IPC.MARKETPLACE_READ_SOURCE, (_e, root: unknown, imagePath: unknown, sourceType: unknown) => {
+    validRoot(root);
+    if (typeof imagePath !== 'string' || (sourceType !== 'thumbnail' && sourceType !== 'final-artifact'))
+      throw new Error('Invalid marketplace source');
+    return readMarketplaceSource(root, imagePath, sourceType);
+  });
+  ipcMain.handle(IPC.MARKETPLACE_READ_SOURCE_PREVIEW, (_e, root: unknown, imagePath: unknown, sourceType: unknown) => {
+    validRoot(root);
+    if (typeof imagePath !== 'string' || (sourceType !== 'thumbnail' && sourceType !== 'final-artifact'))
+      throw new Error('Invalid marketplace source');
+    return readMarketplaceSourcePreview(root, imagePath, sourceType);
+  });
   ipcMain.handle(IPC.MARKETPLACE_TARGETS, () => getMarketplaceImageTargets());
   ipcMain.handle(IPC.MARKETPLACE_LOAD, (_e, root: unknown) => {
     validRoot(root);
@@ -3170,8 +3202,11 @@ function register() {
       width: unknown,
       height: unknown,
       sourcePngDataUrl: unknown,
+      sourceType: unknown,
     ) => {
       validRoot(root);
+      if (typeof sourceType !== 'undefined' && sourceType !== 'thumbnail' && sourceType !== 'final-artifact')
+        throw new Error('Invalid marketplace source type');
       if (typeof sourceImagePath !== 'string') throw new Error('Invalid marketplace image path');
       if (!crop || typeof crop !== 'object') throw new Error('Invalid marketplace crop');
       if (typeof width !== 'number' || typeof height !== 'number')
@@ -3183,13 +3218,15 @@ function register() {
         width,
         height,
         typeof sourcePngDataUrl === 'string' ? sourcePngDataUrl : undefined,
+        sourceType as MarketplaceSourceType | undefined,
       );
     },
   );
-  ipcMain.handle(IPC.MARKETPLACE_PICKER_OPEN, (event, root: unknown, currentImagePath: unknown) => {
+  ipcMain.handle(IPC.MARKETPLACE_PICKER_OPEN, (event, root: unknown, currentImagePath: unknown, sourceType: unknown) => {
     validRoot(root);
     if (typeof currentImagePath !== 'string') throw new Error('Invalid marketplace image path');
-    return openMarketplacePickerWindow(event.sender, root, currentImagePath);
+    if (sourceType !== 'thumbnail' && sourceType !== 'final-artifact') throw new Error('Invalid marketplace source');
+    return openMarketplacePickerWindow(event.sender, root, currentImagePath, sourceType);
   });
   ipcMain.handle(IPC.MARKETPLACE_PICKER_CONTEXT, (event) => {
     const state = marketplacePickerForSender(event.sender);
@@ -3197,6 +3234,7 @@ function register() {
       sessionId: state.sessionId,
       root: state.root,
       currentImagePath: state.currentImagePath,
+      sourceType: state.sourceType,
     };
   });
   ipcMain.handle(IPC.MARKETPLACE_PICKER_PREVIEW, async (event, imagePath: unknown) => {
