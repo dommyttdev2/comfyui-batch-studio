@@ -14,7 +14,7 @@ const active = runningBatchStudioPids({
     assert.ok(args.includes('-NonInteractive'));
     assert.match(
       args.at(-1),
-      /\\$ErrorActionPreference = 'Stop';\\s+\\$expected = [^;]+;\\s+Get-CimInstance/,
+      /\$ErrorActionPreference = 'Stop';\s+\$expected = [^;]+;\s+Get-CimInstance/,
       'PowerShell statements must be separated before the process-discovery pipeline',
     );
     assert.match(args.at(-1), /Get-CimInstance/);
