@@ -165,7 +165,7 @@ const writeJson = (file, value) => {
   assert.equal(
     caption.validateCaptionContent({
       ...v2,
-      pixivTitle: { ...v2.pixivTitle, ja: 'first\\nsecond' },
+      pixivTitle: { ...v2.pixivTitle, ja: 'first\nsecond' },
     }).valid,
     false,
     'newlines must be rejected',
