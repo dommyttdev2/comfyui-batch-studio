@@ -685,17 +685,17 @@ function App() {
                     <ImportNoticeContext.Provider value={notifyImported}>
                       <ReadOnlyStage readOnly={viewOnly}>
                         <StageView
-                        project={project}
-                        stage={stage}
-                        provider={paneProvider}
-                        refresh={refresh}
-                        setProject={setProject}
-                        run={run}
-                        resetFrom={resetFrom}
-                        onDiscarded={() => {
-                          setStage('モデル選定');
-                          void refresh();
-                        }}
+                          project={project}
+                          stage={stage}
+                          provider={paneProvider}
+                          refresh={refresh}
+                          setProject={setProject}
+                          run={run}
+                          resetFrom={resetFrom}
+                          onDiscarded={() => {
+                            setStage('モデル選定');
+                            void refresh();
+                          }}
                         />
                       </ReadOnlyStage>
                     </ImportNoticeContext.Provider>
