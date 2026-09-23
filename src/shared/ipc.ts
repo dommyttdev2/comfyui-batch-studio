@@ -81,6 +81,8 @@ export const IPC = {
   THUMBNAIL_LIST_IMAGES: 'thumbnail:list-images',
   THUMBNAIL_READ_IMAGE: 'thumbnail:read-image',
   THUMBNAIL_READ_PREVIEW: 'thumbnail:read-preview',
+  THUMBNAIL_READ_EDITOR_IMAGE: 'thumbnail:read-editor-image',
+  THUMBNAIL_STORE_WEBP_PREVIEW: 'thumbnail:store-webp-preview',
   THUMBNAIL_READ_TEMPLATE: 'thumbnail:read-template',
   THUMBNAIL_EXPORT: 'thumbnail:export',
   THUMBNAIL_DELETE_OUTPUTS: 'thumbnail:delete-outputs',
