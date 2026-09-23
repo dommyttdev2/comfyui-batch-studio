@@ -1235,7 +1235,7 @@ async function stopVastInstanceForExit(run: ExecutionRun, root: string) {
   const id = Number(run.remote?.instanceId);
   if (!Number.isInteger(id) || id < 1) throw new Error('Remote Run has no Vast.ai Instance ID.');
   const client = vastClient();
-  let instance;
+  let instance: Awaited<ReturnType<VastAiClient['getInstance']>>;
   try {
     instance = await client.getInstance(id);
   } catch (error) {
