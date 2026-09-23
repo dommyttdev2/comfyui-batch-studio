@@ -67,6 +67,7 @@ export function marketplaceInputSignature(
   return JSON.stringify({
     targetCatalogVersion: 1,
     sourceImagePath: path.resolve(state.sourceImagePath),
+    sourceType: state.sourceType ?? 'final-artifact',
     format: state.format,
     targets: targets.map((target) => ({
       id: target.id,
