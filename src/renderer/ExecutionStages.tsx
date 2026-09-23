@@ -624,13 +624,7 @@ function deliveryStatus(run: ExecutionRun) {
   return { packaging, r2, download, verify };
 }
 
-export function ExecutionStage({
-  project,
-  run,
-}: {
-  project: ProjectSummary;
-  run: Runner;
-}) {
+export function ExecutionStage({ project, run }: { project: ProjectSummary; run: Runner }) {
   const [current, setCurrent] = useState<ExecutionRun | null>(null),
     [preflight, setPreflight] = useState<PreflightResult | null>(null),
     [checking, setChecking] = useState(true),
@@ -708,24 +702,24 @@ export function ExecutionStage({
     : checking
       ? { state: 'CHECKING', message: 'Preflightを確認しています。' }
       : preflight?.state !== 'READY'
-          ? {
-              state: preflight?.state ?? 'UNKNOWN',
-              message: current
-                ? 'Startには実行前チェックのREADYが必要です。前工程を変更した場合はワークフローを再生成し、実行前チェックを完了してください。'
-                : 'StartにはPreflight READYが必要です',
-            }
-          : active
-            ? current?.lifecycle === 'RUNNING'
-              ? {
-                  state: 'RUN RUNNING',
-                  message:
-                    '生成中です。「一時停止」は現在の画像の生成が完了した後に停止します。新しいRunを開始する場合は現在のRunを破棄してください。',
-                }
-              : {
-                  state: `RUN ${current?.lifecycle ?? 'ACTIVE'}`,
-                  message: '既存Runは未完了です。生成を続ける場合は「再開」、新しいRunを開始する場合は「現在のRunを破棄」を使用してください。',
-                }
-            : { state: 'READY', message: 'Start可能です' };
+        ? {
+            state: preflight?.state ?? 'UNKNOWN',
+            message: current
+              ? 'Startには実行前チェックのREADYが必要です。前工程を変更した場合はワークフローを再生成し、実行前チェックを完了してください。'
+              : 'StartにはPreflight READYが必要です',
+          }
+        : active
+          ? current?.lifecycle === 'RUNNING'
+            ? {
+                state: 'RUN RUNNING',
+                message:
+                  '生成中です。「一時停止」は現在の画像の生成が完了した後に停止します。新しいRunを開始する場合は現在のRunを破棄してください。',
+              }
+            : {
+                state: `RUN ${current?.lifecycle ?? 'ACTIVE'}`,
+                message: '既存Runは未完了です。生成を続ける場合は「再開」、新しいRunを開始する場合は「現在のRunを破棄」を使用してください。',
+              }
+          : { state: 'READY', message: 'Start可能です' };
   if (outputUncollected)
     startBanner = {
       state: 'OUTPUT RECOVERY REQUIRED',
@@ -778,14 +772,15 @@ export function ExecutionStage({
               Start
             </button>
           )}
-          {current?.lifecycle === 'RUNNING' &&
-            current.controls.scheduling === 'STOP_REQUESTED' && (
-              <p className="hint" role="status">
-                一時停止を受け付けました。現在の画像の生成完了を待っています。
-              </p>
-            )}
+          {current?.lifecycle === 'RUNNING' && current.controls.scheduling === 'STOP_REQUESTED' && (
+            <p className="hint" role="status">
+              一時停止を受け付けました。現在の画像の生成完了を待っています。
+            </p>
+          )}
           {current?.lifecycle === 'PAUSED' && (
-            <p className="hint" role="status">一時停止中です。「再開」で生成を続けられます。</p>
+            <p className="hint" role="status">
+              一時停止中です。「再開」で生成を続けられます。
+            </p>
           )}
           {(canStopScheduling || pauseRequestInFlight) && current && (
             <button
