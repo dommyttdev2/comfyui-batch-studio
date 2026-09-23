@@ -96,7 +96,27 @@ doesNotMatchCode(
   'caption UI must not own final artifact directory selection',
 );
 matchCode(stage, /caption\.status/, 'caption UI must rescan the shared final artifact input');
-matchCode(stage, /<h3>2\. caption\.txt<\/h3>/, 'caption.txt must become the second caption step');
+matchCode(
+  stage,
+  /<h3>2\. Pixiv用タイトル<\/h3>/,
+  'Pixiv title editor must be the second caption step',
+);
+matchCode(stage, /<h3>3\. caption\.txt<\/h3>/, 'caption.txt must become the third caption step');
+matchCode(stage, /caption\.savePixivTitle/, 'Pixiv title edits must persist via IPC');
+matchCode(stage, /clipboard\.writeText\(pixivJa\)/, 'Japanese Pixiv title must be copyable');
+matchCode(stage, /clipboard\.writeText\(pixivEn\)/, 'English Pixiv title must be copyable');
 matchCode(stage, /caption\.generate/, 'caption UI must generate caption.txt deterministically');
 
+matchCode(
+  grok,
+  /"pixivTitle": \{ "ja": "\.\.\.", "en": "\.\.\." \}/,
+  'Grok must request two localized Pixiv titles',
+);
+matchCode(
+  grok,
+  /pixivTitle\.ja \/ pixivTitle\.en は各32文字以内/,
+  'Grok must enforce 32 characters',
+);
+matchCode(service, /captionBodyContent\(content\)/, 'Pixiv title must not invalidate caption.txt');
+matchCode(service, /export async function savePixivTitle/, 'Pixiv title edit service must exist');
 console.log('Caption stage contract tests passed.');

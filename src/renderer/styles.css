@@ -381,6 +381,26 @@ textarea {
   grid-template-columns: 190px 1fr;
   text-align: left;
 }
+.caption-pixiv-fields {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.caption-pixiv-field {
+  display: grid;
+  gap: 8px;
+}
+.caption-pixiv-field input {
+  width: 100%;
+  min-width: 0;
+}
+.caption-pixiv-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));

@@ -33,8 +33,15 @@ function sha256(value: string) {
   return createHash('sha256').update(Buffer.from(value, 'utf8')).digest('hex');
 }
 
+function captionBodyContent(content: CaptionContent): CaptionContent {
+  if (content.schemaVersion === 1) return content;
+  // v2 Pixiv titles are independent of caption.txt and its build fingerprints.
+  const { pixivTitle: _pixivTitle, ...body } = content;
+  return { ...body, schemaVersion: 1 };
+}
+
 function contentHash(content: CaptionContent) {
-  return sha256(JSON.stringify(content));
+  return sha256(JSON.stringify(captionBodyContent(content)));
 }
 
 // Increment when fixed text, formatting, or localization in renderCaption changes.
@@ -49,7 +56,7 @@ function renderInputHash(
   return sha256(
     JSON.stringify({
       templateVersion: CAPTION_TEMPLATE_VERSION,
-      content,
+      content: captionBodyContent(content),
       imageCount,
       sourceDirectory: path.resolve(sourceDirectory),
       copyrightedCharacter,
@@ -82,6 +89,45 @@ function nonEmptyStringArray(value: unknown) {
   );
 }
 
+export function validatePixivTitle(value: unknown): ValidationIssue[] {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    !onlyKeys(value as Record<string, unknown>, ['ja', 'en'])
+  ) {
+    return [
+      {
+        severity: 'error',
+        code: 'CAPTION_PIXIV_TITLE',
+        message: 'pixivTitle.ja / pixivTitle.en を指定してください。',
+      },
+    ];
+  }
+  const title = value as Record<string, unknown>;
+  const issues: ValidationIssue[] = [];
+  for (const lang of ['ja', 'en'] as const) {
+    const text = title[lang];
+    if (
+      typeof text !== 'string' ||
+      !text.trim() ||
+      /[\r\n\u2028\u2029]/.test(text) ||
+      Array.from(text).length > 32
+    ) {
+      issues.push({
+        severity: 'error',
+        code: 'CAPTION_PIXIV_TITLE_' + lang.toUpperCase(),
+        message:
+          'pixivTitle.' +
+          lang +
+          ' は改行を含まない1～32文字で指定してください。' +
+          (typeof text === 'string' ? ' 現在 ' + Array.from(text).length + '文字。' : ''),
+      });
+    }
+  }
+  return issues;
+}
+
 export function validateCaptionContent(value: unknown): ValidationResult {
   const issues: ValidationIssue[] = [];
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -97,18 +143,25 @@ export function validateCaptionContent(value: unknown): ValidationResult {
     };
   }
   const root = value as Record<string, unknown>;
-  if (!onlyKeys(root, ['schemaVersion', 'title', 'description', 'contents']))
+  if (!onlyKeys(root, ['schemaVersion', 'title', 'pixivTitle', 'description', 'contents']))
     issues.push({
       severity: 'error',
       code: 'CAPTION_CONTENT_FIELDS',
       message: 'caption_content.json に未定義fieldがあります。',
     });
-  if (root.schemaVersion !== 1)
+  if (root.schemaVersion !== 1 && root.schemaVersion !== 2)
     issues.push({
       severity: 'error',
       code: 'CAPTION_CONTENT_SCHEMA_VERSION',
-      message: 'caption_content.json の schemaVersion は 1 である必要があります。',
+      message: 'caption_content.json の schemaVersion は 1 または 2 である必要があります。',
     });
+  if (root.schemaVersion === 1 && root.pixivTitle !== undefined)
+    issues.push({
+      severity: 'error',
+      code: 'CAPTION_CONTENT_LEGACY_PIXIV_TITLE',
+      message: 'schemaVersion 1 に pixivTitle は指定できません。',
+    });
+  if (root.schemaVersion === 2) issues.push(...validatePixivTitle(root.pixivTitle));
 
   const title = root.title;
   if (
@@ -325,12 +378,15 @@ export async function importCaptionGrok(
     };
   }
   const validation = validateCaptionContent(parsed);
-  if (!options.automatic || validation.valid) await writeJsonAtomic(draftPath(root), parsed);
+  // Invalid manual or automatic imports must not replace a previously valid draft.
+  if (validation.valid) await writeJsonAtomic(draftPath(root), parsed);
   const summary: ImportResult['summary'] = {};
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
     const value = parsed as Partial<CaptionContent>;
     summary.titleJa = value.title?.ja ?? null;
     summary.titleEn = value.title?.en ?? null;
+    summary.pixivTitleJa = value.pixivTitle?.ja ?? null;
+    summary.pixivTitleEn = value.pixivTitle?.en ?? null;
     summary.descriptionJa = Array.isArray(value.description?.ja) ? value.description.ja.length : 0;
     summary.descriptionEn = Array.isArray(value.description?.en) ? value.description.en.length : 0;
     summary.contentsJa = Array.isArray(value.contents?.ja) ? value.contents.ja.length : 0;
@@ -342,6 +398,31 @@ export async function importCaptionGrok(
     summary,
     missingRequirements: [],
   };
+}
+
+export async function savePixivTitle(root: string, value: unknown): Promise<CaptionStatus> {
+  const draft = await readDraft(root);
+  if (!draft.content) throw new Error('有効な caption_content.json の下書きがありません。');
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('日本語と英語のPixiv用タイトルを指定してください。');
+  const incoming = value as Record<string, unknown>;
+  const title = {
+    ja: typeof incoming.ja === 'string' ? incoming.ja.trim() : incoming.ja,
+    en: typeof incoming.en === 'string' ? incoming.en.trim() : incoming.en,
+  };
+  const issues = validatePixivTitle(title);
+  if (issues.length) throw new Error(issues.map((issue) => issue.message).join(' / '));
+
+  const next: CaptionContent = {
+    ...draft.content,
+    schemaVersion: 2,
+    pixivTitle: title as { ja: string; en: string },
+  };
+  const validation = validateCaptionContent(next);
+  if (!validation.valid)
+    throw new Error(validation.issues.map((issue) => issue.message).join(' / '));
+  await writeJsonAtomic(draftPath(root), next);
+  return getCaptionStatus(root);
 }
 
 export async function generateCaption(root: string): Promise<CaptionStatus> {

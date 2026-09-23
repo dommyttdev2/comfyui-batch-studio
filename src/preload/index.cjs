@@ -74,6 +74,7 @@ const I = {
   CAPTION_SELECT_SOURCE_DIRECTORY: 'caption:select-source-directory',
   CAPTION_IMPORT_GROK: 'caption:import-grok',
   CAPTION_GENERATE: 'caption:generate',
+  CAPTION_SAVE_PIXIV_TITLE: 'caption:save-pixiv-title',
   THUMBNAIL_FONTS: 'thumbnail:fonts',
   THUMBNAIL_LOAD: 'thumbnail:load',
   THUMBNAIL_SAVE: 'thumbnail:save',
@@ -255,6 +256,7 @@ contextBridge.exposeInMainWorld('batchStudio', {
     selectSourceDirectory: (r) => ipcRenderer.invoke(I.CAPTION_SELECT_SOURCE_DIRECTORY, r),
     importGrok: (r, x) => ipcRenderer.invoke(I.CAPTION_IMPORT_GROK, r, x),
     generate: (r) => ipcRenderer.invoke(I.CAPTION_GENERATE, r),
+    savePixivTitle: (r, title) => ipcRenderer.invoke(I.CAPTION_SAVE_PIXIV_TITLE, r, title),
   },
   thumbnail: {
     fonts: () => ipcRenderer.invoke(I.THUMBNAIL_FONTS),
