@@ -871,6 +871,18 @@ export function ExecutionStage({
               現在のRunを破棄してモデル選定へ戻る
             </button>
           )}
+          {recoveryUncertain && current?.executionTarget === 'local' && (
+            <button
+              className="danger"
+              onClick={() =>
+                void apply(() =>
+                  window.batchStudio.execution.stopForEdit(project.rootPath, current.runId, true),
+                )
+              }
+            >
+              既存Promptを確認して中断
+            </button>
+          )}
           {(current?.lifecycle === 'RUNNING' ||
             (recoveryUncertain && current.executionTarget === 'local')) && (
             <button
