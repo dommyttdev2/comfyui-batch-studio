@@ -681,7 +681,10 @@ export function ModelsStage({
     [baseDirty, setBaseDirty] = useState(false),
     [migrationNeeded, setMigrationNeeded] = useState(false),
     [syncStatus, setSyncStatus] = useState<CivitaiCatalogStatus | null>(null),
-    [hasInitialSelection, setHasInitialSelection] = useState(false);
+    [hasInitialSelection, setHasInitialSelection] = useState(false),
+    [latestSelectionStage, setLatestSelectionStage] = useState<'models' | 'models-fix' | null>(
+      null,
+    );
   const hydrate = (content: string | null) => {
     const m = parseModelsArtifact(content);
     if (!m || m.schemaVersion === 1) return false;
@@ -725,6 +728,11 @@ export function ModelsStage({
     setCat(nextCat);
     setCatalog(nextCatalog);
   };
+  const refreshSelectionHistory = async () => {
+    const history = await window.batchStudio.artifact.grokLoraHistory(project.rootPath);
+    setHasInitialSelection(history.some((entry) => entry.stage === 'models'));
+    setLatestSelectionStage(history.at(-1)?.stage ?? null);
+  };
   const load = () =>
     run(async () => {
       const [nextCat, nextCatalog, nextSync, history] = await Promise.all([
@@ -737,6 +745,7 @@ export function ModelsStage({
       setCatalog(nextCatalog);
       setSyncStatus(nextSync);
       setHasInitialSelection(history.some((x) => x.stage === 'models'));
+      setLatestSelectionStage(history.at(-1)?.stage ?? null);
       const draft = await window.batchStudio.artifact.read(project.rootPath, 'models', 'draft');
       const confirmed = draft.exists
         ? draft
@@ -935,9 +944,19 @@ export function ModelsStage({
     const next = await window.batchStudio.artifact.read(project.rootPath, 'models', 'draft');
     setDoc(next);
     hydrate(next.content);
-    if (stage === 'models' && r.validation.valid) setHasInitialSelection(true);
+    await refreshSelectionHistory();
     return r;
   };
+  const finalLoraList =
+    current && current.schemaVersion >= 2 && current.loras.length > 0 ? (
+      <SelectedModelCards
+        view="loras"
+        models={current}
+        catalog={catalog}
+        projectRoot={project.rootPath}
+        onSave={saveManualSelection}
+      />
+    ) : null;
   return (
     <>
       <section className="panel">
@@ -1056,6 +1075,7 @@ export function ModelsStage({
       </section>
       {current && current.schemaVersion >= 2 && (
         <SelectedModelCards
+          view="base"
           models={current}
           catalog={catalog}
           projectRoot={project.rootPath}
@@ -1082,9 +1102,10 @@ export function ModelsStage({
               );
               setDoc(next);
               hydrate(next.content);
-              setHasInitialSelection(true);
+              await refreshSelectionHistory();
             }}
           />
+          {latestSelectionStage !== 'models-fix' && finalLoraList}
         </>
       )}{' '}
       {baseConfigured && hasInitialSelection && (
@@ -1107,8 +1128,10 @@ export function ModelsStage({
               );
               setDoc(next);
               hydrate(next.content);
+              await refreshSelectionHistory();
             }}
           />
+          {latestSelectionStage === 'models-fix' && finalLoraList}
         </>
       )}
       <section className="panel">
