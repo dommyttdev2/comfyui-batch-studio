@@ -28,7 +28,7 @@ assert.match(main, /comfy\.historyState\(history, promptId\) === 'pending'/);
 assert.match(main, /await discardExecutionRun\(root, runId\)/);
 assert.match(
   main,
-  /restartable\.some\(\(candidate\) => candidate\.error\?\.code === 'EXECUTION_RECOVERY_UNCERTAIN'\)/,
+  /restartable\.some\(\(candidate\) =>[\s\S]*?EXECUTION_RECOVERY_UNCERTAIN[\s\S]*?LOCAL_OUTPUT_COLLECTION_FAILED/,
 );
 assert.match(main, /executionCoordinator\.releaseReservation/);
 assert.match(main, /isDirectLocalComfyRefused/);

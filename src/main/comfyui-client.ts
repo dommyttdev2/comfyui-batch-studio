@@ -116,6 +116,22 @@ export class ComfyUiClient {
       );
     return [...ids][0] ?? null;
   }
+  // The ComfyUI API, not the configured installation path, knows the actual
+  // output directory (Desktop and --output-directory may redirect it).
+  async outputImage(filename: string, subfolder: string): Promise<Buffer> {
+    const query = new URLSearchParams({ filename, subfolder, type: 'output' });
+    const response = await this.request(`/view?${query.toString()}`);
+    if (!response.ok)
+      throw new Error(`ComfyUI output image request failed (HTTP ${response.status}).`);
+    const size = Number(response.headers.get('content-length') ?? 0);
+    if (size > 200 * 1024 * 1024)
+      throw new Error('ComfyUI output image exceeds the 200 MiB safety limit.');
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > 200 * 1024 * 1024)
+      throw new Error('ComfyUI output image is empty or exceeds the 200 MiB safety limit.');
+    return bytes;
+  }
+
   async history(promptId: string) {
     const response = await this.request(`/history/${encodeURIComponent(promptId)}`);
     return readJson(response, 'ComfyUI history failed');

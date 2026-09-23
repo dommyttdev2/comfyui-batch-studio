@@ -432,6 +432,10 @@ export async function startExecutionRun(
 ): Promise<ExecutionRun> {
   return withProjectLock(root, async () => {
     const current = await getCurrentExecutionRun(root);
+    if (current?.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED')
+      throw new Error(
+        '生成済みPromptの画像回収が未確定です。「既存Runの状態を再確認」または安全なRun破棄を行ってください。',
+      );
     if (current && !terminalLifecycle(current.lifecycle))
       throw new Error(`Execution Run ${current.runId} is already active for this project.`);
     const before = await captureSnapshot(root, {
@@ -702,9 +706,12 @@ export async function resumeExecutionRun(
     if (!run) throw new Error(`Execution Run ${runId} was not found.`);
     if (!resumableLifecycle(run.lifecycle))
       throw new Error(`Execution Run ${runId} is not resumable from ${run.lifecycle}.`);
-    if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
+    if (
+      run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ||
+      run.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED'
+    )
       throw new Error(
-        'Execution Run recovery is uncertain. Resolve the old ComfyUI Prompt/Remote Worker before resuming; automatic re-submission is disabled.',
+        'Execution Run recovery is uncertain or output collection failed. Reconcile the exact accepted Prompt before resuming; automatic re-submission is disabled.',
       );
     const placeholder: PreflightResult = {
       state: 'READY',
