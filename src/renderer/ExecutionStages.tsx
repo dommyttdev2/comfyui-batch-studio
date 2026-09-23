@@ -627,16 +627,15 @@ function deliveryStatus(run: ExecutionRun) {
 export function ExecutionStage({
   project,
   run,
-  onDiscarded,
 }: {
   project: ProjectSummary;
   run: Runner;
-  onDiscarded?: () => void;
 }) {
   const [current, setCurrent] = useState<ExecutionRun | null>(null),
     [preflight, setPreflight] = useState<PreflightResult | null>(null),
     [checking, setChecking] = useState(true),
-    [monitorError, setMonitorError] = useState('');
+    [monitorError, setMonitorError] = useState(''),
+    [pauseRequestInFlight, setPauseRequestInFlight] = useState(false);
   const refreshPreflight = async () => {
     setChecking(true);
     try {
@@ -677,30 +676,12 @@ export function ExecutionStage({
     current?.lifecycle === 'RUNNING' ||
     current?.lifecycle === 'PAUSED' ||
     current?.lifecycle === 'INTERRUPTED';
-  const selectedProjectRemoteInstanceId =
-    project.meta?.settings.remoteProvider === 'vastai'
-      ? project.meta.settings.remoteInstanceId
-      : null;
-  const remoteInstanceChanged = Boolean(
-    current?.executionTarget === 'remote' &&
-      Number.isInteger(selectedProjectRemoteInstanceId) &&
-      Number(selectedProjectRemoteInstanceId) > 0 &&
-      Number(current.remote?.instanceId) !== Number(selectedProjectRemoteInstanceId),
-  );
-  const canRestartRemote = Boolean(
-    active && remoteInstanceChanged && phaseIndex(current!.phase) < phaseIndex('EXECUTING'),
-  );
   const recoveryUncertain = current?.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN';
   const outputUncollected = current?.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED';
   const requiresRecovery = recoveryUncertain || outputUncollected;
-  const canRestartFromScratch = Boolean(
-    current &&
-      !requiresRecovery &&
-      (current.lifecycle !== 'RUNNING' ||
-        current.executionTarget === 'local' ||
-        phaseIndex(current.phase) <= phaseIndex('EXECUTING')),
-  );
-  const canStart = preflight?.state === 'READY' && !active && !requiresRecovery;
+  const readyForNewRun =
+    !current || current.lifecycle === 'COMPLETED' || current.lifecycle === 'DISCARDED';
+  const canStart = preflight?.state === 'READY' && readyForNewRun && !requiresRecovery;
   const canResume = Boolean(
     current && !requiresRecovery && ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
   );
@@ -710,7 +691,8 @@ export function ExecutionStage({
   const canStopScheduling = Boolean(
     current &&
       current.lifecycle === 'RUNNING' &&
-      current.controls.scheduling !== 'STOPPED' &&
+      current.controls.scheduling === 'ACTIVE' &&
+      !pauseRequestInFlight &&
       !reached(current.phase, 'EXECUTION_COMPLETED'),
   );
   const canForceInterrupt = Boolean(
@@ -722,20 +704,15 @@ export function ExecutionStage({
   let startBanner = recoveryUncertain
     ? {
         state: 'RECOVERY REQUIRED',
-        message: `既存Prompt/Workerの状態が未確定のため、自動生成とResumeを停止しています。「状態を再確認」は既存処理の確認のみ行い、新しいPromptを投入しません。Remoteの場合はVast.ai Instanceの課金状態も確認してください。`,
+        message: `既存Prompt/Workerの状態が未確定のため、自動生成と再開を停止しています。「状態を再確認」は既存処理の確認のみ行い、新しいPromptを投入しません。Remoteの場合はVast.ai Instanceの課金状態も確認してください。`,
       }
     : checking
       ? { state: 'CHECKING', message: 'Preflightを確認しています。' }
-      : canRestartRemote
-        ? {
-            state: 'INSTANCE CHANGED',
-            message: `現在のRunは Vast.ai Instance #${current?.remote?.instanceId ?? '-'} を使用しています。Projectでは #${selectedProjectRemoteInstanceId ?? '-'} が選択されています。「別Instanceで新しく実行」で新しいRunを開始できます。`,
-          }
-        : preflight?.state !== 'READY'
+      : preflight?.state !== 'READY'
           ? {
               state: preflight?.state ?? 'UNKNOWN',
               message: current
-                ? '通常のStartにはPreflight READYが必要です。prompt_plan変更後は「最新のPrompt Planで最初から実行」でWorkflowを再生成して新しいRunを開始できます。'
+                ? 'Startには実行前チェックのREADYが必要です。前工程を変更した場合はワークフローを再生成し、実行前チェックを完了してください。'
                 : 'StartにはPreflight READYが必要です',
             }
           : active
@@ -743,11 +720,11 @@ export function ExecutionStage({
               ? {
                   state: 'RUN RUNNING',
                   message:
-                    '既存Runが実行中です。通常の停止はStop scheduling / Force interrupt、prompt_plan変更後の再実行は「最新のPrompt Planで最初から実行」を使用してください。',
+                    '生成中です。「一時停止」は現在の画像の生成が完了した後に停止します。新しいRunを開始する場合は現在のRunを破棄してください。',
                 }
               : {
                   state: `RUN ${current?.lifecycle ?? 'ACTIVE'}`,
-                  message: '既存Runが未完了です。新規StartではなくResumeで再開してください。',
+                  message: '既存Runは未完了です。生成を続ける場合は「再開」、新しいRunを開始する場合は「現在のRunを破棄」を使用してください。',
                 }
             : { state: 'READY', message: 'Start可能です' };
   if (outputUncollected)
@@ -793,7 +770,7 @@ export function ExecutionStage({
           </>
         )}
         <div className="actions execution-actions">
-          {(!current || current.lifecycle === 'COMPLETED' || canStart) && (
+          {readyForNewRun && (
             <button
               className="primary"
               disabled={!canStart}
@@ -802,16 +779,33 @@ export function ExecutionStage({
               Start
             </button>
           )}
-          {canStopScheduling && (
+          {current?.lifecycle === 'RUNNING' &&
+            current.controls.scheduling === 'STOP_REQUESTED' && (
+              <p className="hint" role="status">
+                一時停止を受け付けました。現在の画像の生成完了を待っています。
+              </p>
+            )}
+          {current?.lifecycle === 'PAUSED' && (
+            <p className="hint" role="status">一時停止中です。「再開」で生成を続けられます。</p>
+          )}
+          {canStopScheduling && current && (
             <button
+              disabled={pauseRequestInFlight}
               onClick={() =>
-                current &&
-                void apply(() =>
-                  window.batchStudio.execution.stopScheduling(project.rootPath, current.runId),
-                )
+                void (async () => {
+                  setPauseRequestInFlight(true);
+                  try {
+                    await apply(() =>
+                      window.batchStudio.execution.stopScheduling(project.rootPath, current.runId),
+                    );
+                  } finally {
+                    setPauseRequestInFlight(false);
+                  }
+                })()
               }
+              title="現在の画像の生成が完了した後、新しい画像の生成を開始せずに一時停止します。"
             >
-              Stop scheduling
+              {pauseRequestInFlight ? '一時停止を要求中…' : '一時停止'}
             </button>
           )}
           {canForceInterrupt && (
@@ -837,7 +831,7 @@ export function ExecutionStage({
                 )
               }
             >
-              Resume
+              再開
             </button>
           )}
           {requiresRecovery && current && (
@@ -862,13 +856,13 @@ export function ExecutionStage({
                   );
                   if (discarded) {
                     setCurrent(discarded);
-                    onDiscarded?.();
+                    await refreshPreflight();
                   }
                   return discarded;
                 })
               }
             >
-              現在のRunを破棄してモデル選定へ戻る
+              現在のRunを破棄
             </button>
           )}
           {recoveryUncertain && current?.executionTarget === 'local' && (
@@ -904,42 +898,6 @@ export function ExecutionStage({
             </button>
           )}
         </div>
-        {current && (canRestartRemote || canRestartFromScratch) && (
-          <details className="execution-advanced-actions">
-            <summary>別のRunとして実行する</summary>
-            <p className="hint">
-              現在のRunを再開する操作とは異なります。モデルを再選定する場合は上の「現在のRunを破棄してモデル選定へ戻る」を使用してください。
-            </p>
-            <div className="actions">
-              {canRestartRemote && (
-                <button
-                  onClick={() =>
-                    void apply(() =>
-                      window.batchStudio.execution.restartRemote(project.rootPath, current.runId),
-                    )
-                  }
-                >
-                  別Instanceで新しく実行
-                </button>
-              )}
-              {canRestartFromScratch && (
-                <button
-                  className="danger"
-                  onClick={() =>
-                    void apply(() =>
-                      window.batchStudio.execution.restartFromScratch(
-                        project.rootPath,
-                        current.runId,
-                      ),
-                    )
-                  }
-                >
-                  最新のPrompt Planで最初から実行
-                </button>
-              )}
-            </div>
-          </details>
-        )}
       </section>
 
       {!current ? (
