@@ -1,6 +1,6 @@
 import { createHash, randomInt, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { realpath, stat } from 'node:fs/promises';
+import { mkdir, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ExecutionError, ExecutionRun } from '../shared/types.js';
 import {
@@ -25,6 +25,15 @@ type SettingsProvider = () => Promise<LocalExecutionSettings>;
 type BranchBinding = { branchId: string; leafIds: string[]; expandNodeId: string };
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const LOCAL_FILE_SCOPE = 'local-generated-file';
+const LOCAL_OUTPUT_COLLECTION_FAILED = 'LOCAL_OUTPUT_COLLECTION_FAILED';
+
+class LocalOutputCollectionError extends Error {
+  constructor(cause: unknown) {
+    super(`ComfyUIの生成完了をHistoryで確認しましたが、画像の回収に失敗しました。新しいPromptは送信しません: ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = 'LocalOutputCollectionError';
+  }
+}
+
 function localRunOutputRelative(run: ExecutionRun) {
   if (!/^[A-Za-z0-9_-]+$/.test(run.projectId) || !/^[0-9a-f-]{36}$/i.test(run.runId))
     throw new Error('Invalid project or Run ID for isolated Local output.');
@@ -65,6 +74,7 @@ async function recordPromptOutputs(
   promptId: string,
   history: any,
   saveNodeIds: string[],
+  comfy: ComfyUiClient,
 ) {
   const outputBase = path.join(installPath, 'output'),
     runRoot = localRunOutputRoot(installPath, run),
@@ -85,8 +95,33 @@ async function recordPromptOutputs(
     const file = path.resolve(outputBase, image.subfolder, image.filename);
     if (!within(runRoot, file))
       throw new Error(`ComfyUI prompt ${promptId} reported an image outside its Run output.`);
-    const actualRoot = await realpath(runRoot),
+
+    // ComfyUI Desktop and --output-directory can save outside
+    // <installPath>/output. A validated History reference can be fetched from
+    // /view and mirrored into Batch Studio's isolated, locally verified output.
+    let actualFile: string;
+    try {
       actualFile = await realpath(file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      const imageBytes = await comfy.outputImage(image.filename, image.subfolder);
+      await mkdir(path.dirname(file), { recursive: true });
+      const actualRoot = await realpath(runRoot),
+        actualOutputBase = await realpath(outputBase),
+        actualParent = await realpath(path.dirname(file));
+      if (
+        !within(actualOutputBase, actualRoot) ||
+        (actualParent !== actualRoot && !within(actualRoot, actualParent))
+      )
+        throw new Error('Generated image destination contains a symlink outside its Run output.');
+      try {
+        await writeFile(file, imageBytes, { flag: 'wx' });
+      } catch (writeError) {
+        if ((writeError as NodeJS.ErrnoException).code !== 'EEXIST') throw writeError;
+      }
+      actualFile = await realpath(file);
+    }
+    const actualRoot = await realpath(runRoot);
     if (!within(actualRoot, actualFile))
       throw new Error(`ComfyUI prompt ${promptId} reported a symlink outside its Run output.`);
     const relativePath = path.relative(runRoot, file);
@@ -217,21 +252,23 @@ function errorOf(
 }
 async function failRun(root: string, runId: string, code: string, error: unknown) {
   return mutateExecutionRun(root, runId, (run) => {
+    const outputCollectionFailed = error instanceof LocalOutputCollectionError;
     const uncertain =
-      run.submission?.status === 'sending' || run.submission?.status === 'acknowledged';
+      !outputCollectionFailed &&
+      (run.submission?.status === 'sending' || run.submission?.status === 'acknowledged');
     const next = errorOf(
       run,
-      uncertain ? 'EXECUTION_RECOVERY_UNCERTAIN' : code,
+      uncertain ? 'EXECUTION_RECOVERY_UNCERTAIN' : outputCollectionFailed ? LOCAL_OUTPUT_COLLECTION_FAILED : code,
       uncertain
         ? `Existing ComfyUI submission may have been accepted. No further POST is allowed until the exact attempt is reconciled: ${error instanceof Error ? error.message : String(error)}`
         : error,
-      !uncertain,
+      !uncertain && !outputCollectionFailed,
     );
     run.error = next;
     run.errorHistory.push(next);
     run.lifecycle = 'FAILED';
     run.controls.scheduling = 'STOPPED';
-    if (!uncertain) {
+    if (!uncertain && !outputCollectionFailed) {
       run.current.promptId = null;
       clearCurrentGenerationTiming(run);
     }
@@ -320,9 +357,10 @@ export class LocalExecutionService {
       .catch(async (error) => {
         await mutateExecutionRun(root, runId, (run) => {
           if (run.lifecycle !== 'RUNNING') return;
+          const outputCollectionFailed = error instanceof LocalOutputCollectionError;
           const failure = errorOf(
             run,
-            'EXECUTION_RECOVERY_UNCERTAIN',
+            outputCollectionFailed ? LOCAL_OUTPUT_COLLECTION_FAILED : 'EXECUTION_RECOVERY_UNCERTAIN',
             `既存Promptの状態を確認できません。重複生成を防ぐため自動Resumeを禁止しました。ComfyUI Queue/Historyと保存済み画像を確認してください: ${error instanceof Error ? error.message : String(error)}`,
             false,
           );
@@ -407,7 +445,11 @@ export class LocalExecutionService {
       );
     const sliced = sliceSceneBranchGraph(graph, binding.expandNodeId),
       saveNodeIds = isolateBranchSavePaths(sliced, run, binding.branchId);
-    await recordPromptOutputs(root, run, settings.installPath, promptId, history, saveNodeIds);
+    try {
+      await recordPromptOutputs(root, run, settings.installPath, promptId, history, saveNodeIds, comfy);
+    } catch (error) {
+      throw new LocalOutputCollectionError(error);
+    }
     await mutateExecutionRun(root, runId, (current) => {
       if (current.lifecycle !== 'RUNNING' || current.current.promptId !== promptId)
         throw new Error('Run state changed while recovering the persisted prompt.');
@@ -591,14 +633,19 @@ export class LocalExecutionService {
             }
             throw new Error(`ComfyUI prompt ${lastPromptId} failed.`);
           }
-          await recordPromptOutputs(
-            root,
-            run,
-            settings.installPath,
-            lastPromptId,
-            terminalHistory,
-            saveNodeIds,
-          );
+          try {
+            await recordPromptOutputs(
+              root,
+              run,
+              settings.installPath,
+              lastPromptId,
+              terminalHistory,
+              saveNodeIds,
+              comfy,
+            );
+          } catch (error) {
+            throw new LocalOutputCollectionError(error);
+          }
           await mutateExecutionRun(root, runId, (r) => {
             const bp = r.progress.branches.find((x) => x.branchId === binding.branchId);
             if (bp) bp.completed = Math.min(bp.total, bp.completed + 1);
