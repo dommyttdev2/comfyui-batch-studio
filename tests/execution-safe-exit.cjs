@@ -40,8 +40,13 @@ assert.match(main, /await comfy\.health\(\)/);
 assert.match(main, /confirmOfflineLocalRunDiscard\(root, run, comfy, error, owner\)/);
 
 assert.match(app, /await window\.batchStudio\.execution\.leave\(project\.rootPath\)/);
-assert.match(app, /onDiscarded=\{\(\) => \{/);
-assert.match(execution, /現在のRunを破棄してモデル選定へ戻る/);
+assert.doesNotMatch(app, /onDiscarded=\\{\\(\\) => \\{/);
+assert.match(execution, /現在のRunを破棄/);
+assert.doesNotMatch(execution, /現在のRunを破棄してモデル選定へ戻る/);
+assert.doesNotMatch(execution, /別のRunとして実行する/);
+assert.match(execution, /一時停止を要求中…/);
+assert.match(execution, /一時停止中です/);
+assert.match(execution, /再開/);
 assert.match(execution, /batchStudio\.execution\.discardForEdit\(/);
 assert.match(ipc, /EXECUTION_DISCARD_FOR_EDIT/);
 assert.match(preload, /discardForEdit: \(r, id\)/);
