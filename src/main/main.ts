@@ -1393,7 +1393,64 @@ async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action
   return task;
 }
 
-async function discardRunForModelReselection(root: string, runId: string) {
+// Refusing a direct loopback connection is evidence that the configured local
+// API is not listening. Do not apply this exception to remote or tunneled hosts.
+function isDirectLocalComfyRefused(endpoint: string, error: unknown) {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (
+    url.protocol !== 'http:' ||
+    !['127.0.0.1', '[::1]'].includes(url.hostname)
+  )
+    return false;
+  const refused = (value: unknown): boolean => {
+    if (!(value instanceof Error)) return false;
+    if (value instanceof AggregateError)
+      return value.errors.length > 0 && value.errors.every(refused);
+    if ((value as NodeJS.ErrnoException).code === 'ECONNREFUSED') return true;
+    return refused(value.cause);
+  };
+  return refused(error);
+}
+
+async function confirmOfflineLocalRunDiscard(
+  root: string,
+  run: ExecutionRun,
+  comfy: ComfyUiClient,
+  error: unknown,
+  owner: BaseWindow,
+) {
+  const ref = { projectRoot: path.resolve(root), runId: run.runId };
+  if (!isDirectLocalComfyRefused(comfy.endpoint, error) ||
+      run.lifecycle === 'RUNNING' || executionCoordinator.hasActive(ref))
+    throw error;
+  const answer = await dialog.showMessageBox(owner, {
+    type: 'warning',
+    title: '停止したローカルComfyUIの確認',
+    message: 'ローカルComfyUIのAPI接続が拒否され、Queue/Historyを取得できません。',
+    detail: '設定先のローカルComfyUIが完全に停止し、別ポートや転送先で旧Promptが実行されていないことを確認してください。Runの再開履歴は破棄しますが、ローカル保存済み画像は残します。確認できない場合はキャンセルしてください。',
+    buttons: ['キャンセル', '停止を確認してRunを破棄'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+  if (answer.response !== 1) return false;
+  // Recheck at the moment of discard; a newly restarted ComfyUI must be
+  // inspected through Queue/History instead of this offline exception.
+  try {
+    await comfy.health();
+  } catch (retry) {
+    if (isDirectLocalComfyRefused(comfy.endpoint, retry)) return true;
+    throw retry;
+  }
+  throw new Error('ComfyUIが再起動されました。Queue/Historyを再確認してから破棄してください。');
+}
+
+async function discardRunForModelReselection(root: string, runId: string, owner: BaseWindow) {
   const current = await getCurrentExecutionRun(root);
   if (!current || current.runId !== runId) throw new Error('現在のRunのみ破棄できます。');
   if (current.lifecycle === 'COMPLETED' || current.lifecycle === 'DISCARDED')
@@ -1404,21 +1461,25 @@ async function discardRunForModelReselection(root: string, runId: string) {
   if (run.executionTarget === 'local') {
     const settings = await settingsStore().status();
     const comfy = new ComfyUiClient(settings.comfyUiApiEndpoint);
-    let promptId = run.current.promptId ?? run.submission?.promptId ?? null;
-    if (!promptId && run.submission?.status === 'sending')
-      promptId = await comfy.findPromptBySubmissionId(run.submission.attemptId);
-    if (!promptId && ['sending', 'acknowledged'].includes(run.submission?.status ?? ''))
-      throw new Error('送信済みPromptのIDを確認できません。Queue/Historyの確認が必要です。');
-    if (promptId) {
-      if (await comfy.isPromptQueued(promptId))
-        throw new Error(
-          `Prompt ${promptId} がComfyUIのQueueに残っています。停止してから破棄してください。`,
-        );
-      const history = await comfy.history(promptId);
-      if (comfy.historyState(history, promptId) === 'pending')
-        throw new Error(
-          `Prompt ${promptId} の完了または失敗をHistoryで確認できません。破棄を中止しました。`,
-        );
+    try {
+      let promptId = run.current.promptId ?? run.submission?.promptId ?? null;
+      if (!promptId && run.submission?.status === 'sending')
+        promptId = await comfy.findPromptBySubmissionId(run.submission.attemptId);
+      if (!promptId && ['sending', 'acknowledged'].includes(run.submission?.status ?? ''))
+        throw new Error('送信済みPromptのIDを確認できません。Queue/Historyの確認が必要です。');
+      if (promptId) {
+        if (await comfy.isPromptQueued(promptId))
+          throw new Error(
+            `Prompt ${promptId} がComfyUIのQueueに残っています。停止してから破棄してください。`,
+          );
+        const history = await comfy.history(promptId);
+        if (comfy.historyState(history, promptId) === 'pending')
+          throw new Error(
+            `Prompt ${promptId} の完了または失敗をHistoryで確認できません。破棄を中止しました。`,
+          );
+      }
+    } catch (error) {
+      if (!(await confirmOfflineLocalRunDiscard(root, run, comfy, error, owner))) return null;
     }
   } else {
     // Even an unreachable Remote Worker can no longer submit once the provider
@@ -2962,7 +3023,7 @@ function register() {
       noLink: true,
     });
     if (decision.response !== 1) return null;
-    return discardRunForModelReselection(root, runId);
+    return discardRunForModelReselection(root, runId, owner);
   });
   ipcMain.handle(IPC.EXECUTION_RECONCILE, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
