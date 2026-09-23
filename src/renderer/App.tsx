@@ -432,22 +432,22 @@ function App() {
                     </div>
                   )}
                   <StageErrorBoundary
-                  key={`${project.rootPath}:${stage}:${resetRevision}:${stageReloadRevision}`}
-                  stage={stage}
-                  onRetry={() => {
-                    setError('');
-                    setStageReloadRevision((revision) => revision + 1);
-                  }}
-                >
-                  <StageView
-                    project={project}
+                    key={`${project.rootPath}:${stage}:${resetRevision}:${stageReloadRevision}`}
                     stage={stage}
-                    provider={paneProvider}
-                    refresh={refresh}
-                    setProject={setProject}
-                    run={run}
-                    resetFrom={resetFrom}
-                  />
+                    onRetry={() => {
+                      setError('');
+                      setStageReloadRevision((revision) => revision + 1);
+                    }}
+                  >
+                    <StageView
+                      project={project}
+                      stage={stage}
+                      provider={paneProvider}
+                      refresh={refresh}
+                      setProject={setProject}
+                      run={run}
+                      resetFrom={resetFrom}
+                    />
                   </StageErrorBoundary>
                 </>
               )}
