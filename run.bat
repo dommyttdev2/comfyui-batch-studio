@@ -79,7 +79,7 @@ rem ------------------------------------------------------------
 echo [INFO] Checking for an existing Batch Studio process...
 node scripts\check-running-batch-studio.cjs
 if errorlevel 1 (
-    echo [ERROR] Close the running Batch Studio instance before updating.
+    echo [ERROR] Process check failed. Review the diagnostic above before retrying.
     pause
     exit /b 1
 )

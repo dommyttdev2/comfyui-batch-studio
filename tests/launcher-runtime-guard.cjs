@@ -12,6 +12,11 @@ const active = runningBatchStudioPids({
     calls++;
     assert.equal(command, 'powershell.exe');
     assert.ok(args.includes('-NonInteractive'));
+    assert.match(
+      args.at(-1),
+      /\$ErrorActionPreference = 'Stop';\s+\$expected = [^;]+;\s+Get-CimInstance/,
+      'PowerShell statements must be separated before the process-discovery pipeline',
+    );
     assert.match(args.at(-1), /Get-CimInstance/);
     assert.match(args.at(-1), /ExecutablePath/);
     assert.match(args.at(-1), /OrdinalIgnoreCase/);
@@ -20,6 +25,16 @@ const active = runningBatchStudioPids({
   },
 });
 assert.deepEqual(active, [4312, 4028]);
+if (process.platform === 'win32') {
+  assert.doesNotThrow(
+    () =>
+      runningBatchStudioPids({
+        platform: 'win32',
+        executable: path.join(process.env.TEMP || process.cwd(), 'nonexistent-batch-studio.exe'),
+      }),
+    'Validate the actual PowerShell command on Windows, not only a mocked process list',
+  );
+}
 assert.equal(calls, 1);
 assert.deepEqual(
   runningBatchStudioPids({
