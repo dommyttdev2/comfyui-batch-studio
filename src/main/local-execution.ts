@@ -29,7 +29,9 @@ const LOCAL_OUTPUT_COLLECTION_FAILED = 'LOCAL_OUTPUT_COLLECTION_FAILED';
 
 class LocalOutputCollectionError extends Error {
   constructor(cause: unknown) {
-    super(`ComfyUIの生成完了をHistoryで確認しましたが、画像の回収に失敗しました。新しいPromptは送信しません: ${cause instanceof Error ? cause.message : String(cause)}`);
+    super(
+      `ComfyUIの生成完了をHistoryで確認しましたが、画像の回収に失敗しました。新しいPromptは送信しません: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
     this.name = 'LocalOutputCollectionError';
   }
 }
@@ -258,7 +260,11 @@ async function failRun(root: string, runId: string, code: string, error: unknown
       (run.submission?.status === 'sending' || run.submission?.status === 'acknowledged');
     const next = errorOf(
       run,
-      uncertain ? 'EXECUTION_RECOVERY_UNCERTAIN' : outputCollectionFailed ? LOCAL_OUTPUT_COLLECTION_FAILED : code,
+      uncertain
+        ? 'EXECUTION_RECOVERY_UNCERTAIN'
+        : outputCollectionFailed
+          ? LOCAL_OUTPUT_COLLECTION_FAILED
+          : code,
       uncertain
         ? `Existing ComfyUI submission may have been accepted. No further POST is allowed until the exact attempt is reconciled: ${error instanceof Error ? error.message : String(error)}`
         : error,
@@ -360,7 +366,9 @@ export class LocalExecutionService {
           const outputCollectionFailed = error instanceof LocalOutputCollectionError;
           const failure = errorOf(
             run,
-            outputCollectionFailed ? LOCAL_OUTPUT_COLLECTION_FAILED : 'EXECUTION_RECOVERY_UNCERTAIN',
+            outputCollectionFailed
+              ? LOCAL_OUTPUT_COLLECTION_FAILED
+              : 'EXECUTION_RECOVERY_UNCERTAIN',
             `既存Promptの状態を確認できません。重複生成を防ぐため自動Resumeを禁止しました。ComfyUI Queue/Historyと保存済み画像を確認してください: ${error instanceof Error ? error.message : String(error)}`,
             false,
           );
@@ -446,7 +454,15 @@ export class LocalExecutionService {
     const sliced = sliceSceneBranchGraph(graph, binding.expandNodeId),
       saveNodeIds = isolateBranchSavePaths(sliced, run, binding.branchId);
     try {
-      await recordPromptOutputs(root, run, settings.installPath, promptId, history, saveNodeIds, comfy);
+      await recordPromptOutputs(
+        root,
+        run,
+        settings.installPath,
+        promptId,
+        history,
+        saveNodeIds,
+        comfy,
+      );
     } catch (error) {
       throw new LocalOutputCollectionError(error);
     }
