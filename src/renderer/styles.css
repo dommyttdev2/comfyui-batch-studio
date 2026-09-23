@@ -1083,7 +1083,7 @@ input[readonly] {
 .stage-readonly-content textarea,
 .stage-readonly-content select,
 .stage-readonly-content [contenteditable],
-.stage-readonly-content [role='button'] {
+.stage-readonly-content [role="button"] {
   pointer-events: none;
   cursor: not-allowed;
 }
