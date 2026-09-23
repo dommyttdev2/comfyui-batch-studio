@@ -266,8 +266,8 @@ LoRA_15_damon-slayer_kocho-shinobu.json
 | 実行 | READY Project + executionTarget | Execution Run / Local成果物 | Localは生成+成果物確認、Remoteは生成+R2経由Local回収+hash検証成功 |
 | 最終成果物 | ユーザーが選定・処理した画像ディレクトリ | 最終成果物directory設定 | directoryが存在し画像を1枚以上含む |
 | キャプション | 最終成果物、Grok caption content | `caption.txt` | caption content有効、最終成果物の実画像枚数をBatch Studioが取得可能 |
-| サムネイル | 最終成果物画像 | Project内thumbnail outputs | 必要な画像を選択・編集して書き出し可能 |
-| 販売サイト用画像 | 最終成果物画像 | `marketplace/FANZA/*`, `marketplace/DLsite/*`, ZIP | FANZA / DLsite各ターゲットのcropが有効で生成可能 |
+| サムネイル | 最終成果物画像 | 成果物フォルダ内 `thumbnails/*` | 必要な画像を選択・編集して書き出し可能 |
+| 販売サイト用画像 | 最終成果物画像 | 成果物フォルダ内 `marketplace/FANZA/*`, `marketplace/DLsite/*`, ZIP | FANZA / DLsite各ターゲットのcropが有効で生成可能 |
 
 ## 6. UI工程ナビゲーション
 
