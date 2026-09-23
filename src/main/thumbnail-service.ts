@@ -123,6 +123,7 @@ export function createDefaultThumbnailState(
   return {
     schemaVersion: 1,
     activeDocumentId: 1,
+    nextDocumentId: 6,
     documents: Array.from({ length: 5 }, (_, index) =>
       createThumbnailDocument(index + 1, defaultFontFamily),
     ),
@@ -202,6 +203,11 @@ export function normalizeThumbnailState(
       ? input.activeDocumentId as number
       : documents[0]?.id ?? 1,
     documents,
+    nextDocumentId: Math.max(
+      ...documents.map((document) => document.id + 1),
+      Number.isSafeInteger(input.nextDocumentId) && (input.nextDocumentId as number) > 0
+        ? input.nextDocumentId as number : 1,
+    ),
     ...(typeof input.saveRevision === 'number' &&
     Number.isSafeInteger(input.saveRevision) &&
     input.saveRevision >= 0
