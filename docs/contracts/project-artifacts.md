@@ -40,6 +40,14 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 
 ### 3.1 Post-processing state / generated outputs
 
+### キャプション / Pixiv用タイトル
+
+- Grok / Codex は `caption_content.json` を `._batch_studio/drafts/` に取り込み、Batch Studio が検証・保存する。新規生成は `schemaVersion: 2` とし、既存の `title` / `description` / 任意の `contents` に加えて `pixivTitle: { ja, en }` を必須とする。
+- `pixivTitle.ja` / `pixivTitle.en` は改行を含まない非空の32 Unicodeコードポイント以内とする。UIから個別編集・保存・コピーが可能である。
+- 旧 `schemaVersion: 1` の下書きは Pixiv用タイトルなしでも有効。手動保存でv2へ移行するか、Grok / Codexで再生成できる。
+- `caption.txt` は既存の `title` / `description` / `contents`、最終成果物の実測枚数、定型注意書きから作る。Pixiv用タイトルは含めず、Pixiv用タイトルだけの編集は `caption.txt` のstale判定を変えない。
+
+
 後処理工程の編集状態・生成物はStory / Models / Prompt Plan等の意味Artifactとは分離する。
 
 販売サイト用画像:
