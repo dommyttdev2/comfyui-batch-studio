@@ -221,7 +221,7 @@ function App() {
       previous?.key === key ? previous : key ? { key, count: 0 } : null,
     );
     if (root && context && key) {
-      void window.batchStudio.codex
+      void window.batchStudio.assistant
         .getProvider(context)
         .then((provider) => {
           if (cancelled) return;
@@ -235,7 +235,9 @@ function App() {
           setProviderRestoreFailure({
             key,
             message,
-            missingHandler: /No handler registered for ['"]?codex:get-provider/.test(message),
+            missingHandler: /No handler registered for ['"]?(?:assistant|codex):get-provider/.test(
+              message,
+            ),
           });
         });
     }
@@ -259,7 +261,7 @@ function App() {
     setSwitchingProvider(true);
     setError('');
     try {
-      await window.batchStudio.codex.setProvider(provider, contextStage);
+      await window.batchStudio.assistant.setProvider(provider, contextStage);
       if (activeProviderKey.current === selectedKey) setPaneProvider(provider);
     } catch (e) {
       if (activeProviderKey.current === selectedKey)
