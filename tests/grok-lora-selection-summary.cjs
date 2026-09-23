@@ -29,6 +29,16 @@ matchCode(
   /const merged:any=\{\.\.\.base,loras:payload\.loras\}/,
   'each import must replace the prior selection rather than append to it',
 );
+matchCode(
+  artifactService,
+  /options\.automatic\|\|key==='models'/,
+  'invalid manual LoRA imports must retain the previously selected models draft',
+);
+matchCode(
+  stages,
+  /if\(!r\.validation\.valid\)return r;/,
+  'invalid manual LoRA imports must not replace the visible current selection',
+);
 matchCode(cards, /models\.loras\.map\(/, 'cards must show current models.json selections only');
 matchCode(cards, /最終選定LoRA/, 'the single current LoRA list must have a clear heading');
 matchCode(

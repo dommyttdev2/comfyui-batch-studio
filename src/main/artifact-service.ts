@@ -488,9 +488,10 @@ export async function importGrok(
     if (miss.length) merged.missingRequirements = miss;
     extracted = JSON.stringify(merged, null, 2);
   }
-  // Automatic imports must not overwrite a working draft with incomplete or
-  // invalid output. Manual imports retain their existing editable-draft flow.
-  if (options.automatic) {
+  // A failed LoRA re-selection must not replace the current models draft,
+  // including when the return file is imported manually.
+  // Other manual artifacts retain their existing editable-draft flow.
+  if (options.automatic || key === 'models') {
     const checked = await validateContent(root, key, extracted);
     if (!checked.valid || miss.length)
       return {

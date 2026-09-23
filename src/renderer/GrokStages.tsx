@@ -930,6 +930,7 @@ export function ModelsStage({
   };
   const importModels = async (raw: string, stage: 'models' | 'models-fix') => {
     const r = await window.batchStudio.artifact.importGrok(project.rootPath, 'models', raw, stage);
+    if (!r.validation.valid) return r;
     setEditing(true);
     const next = await window.batchStudio.artifact.read(project.rootPath, 'models', 'draft');
     setDoc(next);
