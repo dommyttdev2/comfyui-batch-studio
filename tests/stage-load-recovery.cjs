@@ -52,8 +52,33 @@ assert.match(
 );
 assert.match(
   app,
+  /if \(providerRestoreFailure\.missingHandler\) return;/,
+  'Do not offer a futile IPC retry when the main process has no handler',
+);
+assert.match(
+  app,
+  /!providerRestoreFailure\.missingHandler && \([\s\S]*?onClick=\{retryProviderRestore\}/,
+  'Only retry transient errors, not main-process version mismatches',
+);
+assert.match(
+  app,
   /setProviderRestoreRevision\(\(revision\) => revision \+ 1\)/,
-  'A failed provider lookup must be retryable without restarting the renderer',
+  'Retryable provider lookup failures must trigger a new request',
+);
+assert.match(
+  app,
+  /providerRestoreAttempts\.count > 0[\s\S]*?AIエージェントを再試行中/,
+  'Show visible progress when reattempting a transient failure',
+);
+assert.match(
+  app,
+  /再試行\$\{providerRestoreAttempts\.count\}回目も失敗しました/,
+  'Show a distinct, counted retry failure when the request fails again',
+);
+assert.match(
+  app,
+  /このエラーは再試行では解消しません/,
+  'Tell the user that restarting the main process is required for missing IPC handlers',
 );
 assert.match(
   app,
