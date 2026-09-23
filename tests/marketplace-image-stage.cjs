@@ -69,8 +69,8 @@ matchCode(
 );
 matchCode(
   service,
-  /path\.join\(root, 'marketplace'\)/,
-  'marketplace outputs must be written under the project',
+  /path\.join\(path\.resolve\(base\), 'marketplace'\)/,
+  'marketplace outputs must be written under the configured artifact directory',
 );
 matchCode(
   service,
