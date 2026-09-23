@@ -66,6 +66,12 @@ prompt_plan.json
 
 Story の初回検討のような対話用回答は Project Artifact ではないため、この file envelope の対象外とする。
 
+### キャプション成果物
+
+- キャプション工程では `caption_content.json` を返す。新規生成は schemaVersion 2、既存 `title`・`description`・任意 `contents` と `pixivTitle: { ja, en }` を持つ。
+- Pixiv用タイトルは日本語・英語を別々に生成し、各32文字以内とする。単純な切り詰めではなく、作品内容を踏まえて各言語で自然なタイトルを作る。
+- Batch Studioが最終成果物の画像枚数と定型注意書きを `caption.txt` へ付加する。Pixiv用タイトルは独立して保存し、`caption.txt` には含めない。
+
 ## 3. Prompt Composition
 
 工程別依頼は原則として次の順に組み立てる。
