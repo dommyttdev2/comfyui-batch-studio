@@ -691,17 +691,19 @@ export function ExecutionStage({
     active && remoteInstanceChanged && phaseIndex(current!.phase) < phaseIndex('EXECUTING'),
   );
   const recoveryUncertain = current?.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN';
+  const outputUncollected = current?.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED';
+  const requiresRecovery = recoveryUncertain || outputUncollected;
   const canRestartFromScratch = Boolean(
     current &&
-      !recoveryUncertain &&
+      !requiresRecovery &&
       (current.lifecycle !== 'RUNNING' ||
         current.executionTarget === 'local' ||
         phaseIndex(current.phase) <= phaseIndex('EXECUTING')),
   );
-  const canStart = preflight?.state === 'READY' && !active && !recoveryUncertain;
+  const canStart = preflight?.state === 'READY' && !active && !requiresRecovery;
   const canResume = Boolean(
     current &&
-      !recoveryUncertain &&
+      !requiresRecovery &&
       ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
   );
   const canDiscardForEdit = Boolean(
@@ -719,7 +721,12 @@ export function ExecutionStage({
       current.phase === 'EXECUTING' &&
       current.controls.interrupt !== 'INTERRUPTED',
   );
-  const startBanner = recoveryUncertain
+  const startBanner = outputUncollected
+    ? {
+        state: 'OUTPUT RECOVERY REQUIRED',
+        message: 'ComfyUI Historyで既存Promptの生成は確認されましたが、画像のローカル回収が未完了です。再確認で画像を回収するか、Runを破棄してください。新しいPromptは送信しません。',
+      }
+    : recoveryUncertain
     ? {
         state: 'RECOVERY REQUIRED',
         message: `既存Prompt/Workerの状態が未確定のため、自動生成とResumeを停止しています。「状態を再確認」は既存処理の確認のみ行い、新しいPromptを投入しません。Remoteの場合はVast.ai Instanceの課金状態も確認してください。`,
@@ -834,7 +841,7 @@ export function ExecutionStage({
               Resume
             </button>
           )}
-          {recoveryUncertain && current && (
+          {requiresRecovery && current && (
             <button
               onClick={() =>
                 void apply(() =>
@@ -865,7 +872,8 @@ export function ExecutionStage({
               現在のRunを破棄してモデル選定へ戻る
             </button>
           )}
-          {current?.lifecycle === 'RUNNING' && (
+          {(current?.lifecycle === 'RUNNING' ||
+            (recoveryUncertain && current.executionTarget === 'local')) && (
             <button
               onClick={() =>
                 void apply(() =>
@@ -873,7 +881,7 @@ export function ExecutionStage({
                 )
               }
             >
-              生成を停止して編集可能にする
+              {recoveryUncertain ? '既存Promptを確認して停止' : '生成を停止して編集可能にする'}
             </button>
           )}
           {current?.lifecycle === 'COMPLETED' && (
