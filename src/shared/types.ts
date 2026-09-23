@@ -723,8 +723,9 @@ export interface FinalArtifactStatus {
 }
 
 export interface CaptionContent {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   title: { ja: string; en: string };
+  pixivTitle?: { ja: string; en: string };
   description: { ja: string[]; en: string[] };
   contents?: { ja: string[]; en: string[] };
 }
@@ -1298,6 +1299,7 @@ export interface BatchStudioApi {
     selectSourceDirectory: (root: string) => Promise<CaptionStatus>;
     importGrok: (root: string, raw: string) => Promise<ImportResult>;
     generate: (root: string) => Promise<CaptionStatus>;
+    savePixivTitle: (root: string, title: { ja: string; en: string }) => Promise<CaptionStatus>;
   };
   thumbnail: {
     fonts: () => Promise<string[]>;
