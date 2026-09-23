@@ -103,7 +103,7 @@ const deferred = () => {
   const source = fs.readFileSync(path.join(repo, 'src/renderer/MarketplaceImageStage.tsx'), 'utf8');
   assert.match(
     source,
-    /const nextSource = await window\.batchStudio\.finalArtifact\.readImage[\s\S]*if \(!isCurrent\(\)\) return null/,
+    /const nextSource = await window\.batchStudio\.marketplace\.readSource[\s\S]*if \(!isCurrent\(\)\) return null/,
   );
   assert.match(
     source,
