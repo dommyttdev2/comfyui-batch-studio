@@ -692,7 +692,6 @@ export function ExecutionStage({
     current &&
       current.lifecycle === 'RUNNING' &&
       current.controls.scheduling === 'ACTIVE' &&
-      !pauseRequestInFlight &&
       !reached(current.phase, 'EXECUTION_COMPLETED'),
   );
   const canForceInterrupt = Boolean(
@@ -788,7 +787,7 @@ export function ExecutionStage({
           {current?.lifecycle === 'PAUSED' && (
             <p className="hint" role="status">一時停止中です。「再開」で生成を続けられます。</p>
           )}
-          {canStopScheduling && current && (
+          {(canStopScheduling || pauseRequestInFlight) && current && (
             <button
               disabled={pauseRequestInFlight}
               onClick={() =>
