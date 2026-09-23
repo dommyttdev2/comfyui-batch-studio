@@ -166,6 +166,7 @@ function startServer(install, options = {}) {
       finalizes: [],
       releases: [],
       interrupts: 0,
+      viewRequests: [],
     },
     history = new Map(),
     submissionIds = new Map(),
@@ -173,6 +174,7 @@ function startServer(install, options = {}) {
     running = new Set(),
     claimedHandles = new Map();
   let holdFirst = Boolean(options.holdFirst);
+  let viewUnavailable = Boolean(options.viewUnavailable);
   const server = http.createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
@@ -221,7 +223,10 @@ function startServer(install, options = {}) {
           images: [{ filename: `${promptId}.png`, subfolder: save.inputs.path, type: 'output' }],
         },
       });
-      const target = path.join(install, 'output', String(save.inputs.path));
+      const target = path.join(
+        options.actualOutputRoot ?? path.join(install, 'output'),
+        String(save.inputs.path),
+      );
       fs.mkdirSync(target, { recursive: true });
       fs.writeFileSync(path.join(target, `${promptId}.png`), 'png');
       if (!(holdFirst && calls.prompts.length === 1)) {
@@ -248,6 +253,23 @@ function startServer(install, options = {}) {
     if (req.url === '/scene_prompt/runs/release') {
       calls.releases.push(body);
       return json(200, { released: true });
+    }
+    if (req.url?.startsWith('/view?')) {
+      const url = new URL(req.url, 'http://localhost');
+      const filename = url.searchParams.get('filename');
+      const subfolder = url.searchParams.get('subfolder');
+      calls.viewRequests.push({ filename, subfolder });
+      if (url.searchParams.get('type') !== 'output' || !filename || !subfolder || viewUnavailable)
+        return json(404, { error: 'missing image' });
+      const target = path.join(
+        options.actualOutputRoot ?? path.join(install, 'output'),
+        subfolder,
+        filename,
+      );
+      if (!fs.existsSync(target)) return json(404, { error: 'missing image' });
+      res.writeHead(200, { 'content-type': 'image/png' });
+      res.end(fs.readFileSync(target));
+      return;
     }
     if (req.url === '/queue')
       return json(200, {
@@ -302,6 +324,9 @@ function startServer(install, options = {}) {
         history,
         running,
         endpoint: `http://127.0.0.1:${server.address().port}`,
+        allowView() {
+          viewUnavailable = false;
+        },
         releaseFirst() {
           holdFirst = false;
           const id = calls.prompts[0]?.promptId;
@@ -424,6 +449,88 @@ function startServer(install, options = {}) {
       mock.server.close();
     }
   }
+  {
+    // ComfyUI Desktop and --output-directory may route generated images to a
+    // different folder from the configured ComfyUI installation.
+    const { root, install, run } = await makeProject(
+        execution,
+        hashCanonicalJson,
+        'redirect-output-project',
+      ),
+      mock = await startServer(install, {
+        actualOutputRoot: path.join(root, 'actual-comfy-output'),
+      });
+    try {
+      const service = new LocalExecutionService(async () => ({
+        endpoint: mock.endpoint,
+        installPath: install,
+      }));
+      await service.start(root, run.runId);
+      const completed = await execution.getExecutionRun(root, run.runId);
+      assert.equal(completed.lifecycle, 'COMPLETED');
+      assert.equal(completed.progress.overall.completed, 3);
+      assert.equal(mock.calls.prompts.length, 3);
+      assert.equal(mock.calls.viewRequests.length, 3);
+      assert.equal((await verifyLocalOutputs(install, completed)).count, 3);
+      assert.equal(
+        fs.existsSync(path.join(install, 'output', mock.calls.prompts[0].path, 'prompt-1.png')),
+        true,
+        'redirected ComfyUI images must be mirrored into the Run-owned local output',
+      );
+    } finally {
+      mock.server.close();
+    }
+  }
+  {
+    // A valid completed prompt whose /view download failed is not an unknown
+    // submission. It may be observed again but must not be re-POSTed.
+    const { root, install, run, ready } = await makeProject(
+        execution,
+        hashCanonicalJson,
+        'recover-output-project',
+      ),
+      mock = await startServer(install, {
+        actualOutputRoot: path.join(root, 'actual-comfy-output'),
+        viewUnavailable: true,
+      });
+    try {
+      const service = new LocalExecutionService(async () => ({
+        endpoint: mock.endpoint,
+        installPath: install,
+      }));
+      await service.start(root, run.runId);
+      const failed = await execution.getExecutionRun(root, run.runId);
+      assert.equal(failed.lifecycle, 'FAILED');
+      assert.equal(failed.error.code, 'LOCAL_OUTPUT_COLLECTION_FAILED');
+      assert.equal(failed.current.promptId, 'prompt-1');
+      await assert.rejects(
+        () => execution.startExecutionRun(root, async () => ready),
+        /画像回収が未確定/,
+      );
+      assert.equal(mock.calls.prompts.length, 1);
+      mock.allowView();
+      await execution.mutateExecutionRun(root, run.runId, (current) => {
+        current.lifecycle = 'RUNNING';
+        current.controls.scheduling = 'STOP_REQUESTED';
+        current.error = null;
+      });
+      await service.recover(root, run.runId);
+      const paused = await execution.getExecutionRun(root, run.runId);
+      assert.equal(paused.lifecycle, 'PAUSED');
+      assert.equal(paused.progress.overall.completed, 1);
+      assert.equal(mock.calls.prompts.length, 1);
+      const resumed = await execution.resumeExecutionRun(root, run.runId, async () => ready);
+      assert.equal(resumed.lifecycle, 'RUNNING');
+      await service.start(root, run.runId);
+      const completed = await execution.getExecutionRun(root, run.runId);
+      assert.equal(completed.lifecycle, 'COMPLETED');
+      assert.equal(completed.progress.overall.completed, 3);
+      assert.equal(mock.calls.prompts.length, 3);
+    } finally {
+      mock.server.close();
+    }
+  }
+
   {
     const { root, install, run, ready } = await makeProject(
         execution,
