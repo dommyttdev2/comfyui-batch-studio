@@ -61,6 +61,10 @@ matchCode(
 );
 matchCode(stage, /サムネイルから画像を選択/, 'stage must allow exported thumbnail selection');
 matchCode(service, /assertExportedThumbnail/, 'marketplace must validate thumbnail input scope');
+matchCode(service, /marketplaceOutputDirectory\\(root\\)/, 'marketplace output must resolve artifact directory');
+matchCode(service, /generationManifestPath\\(outputDirectory\\)/, 'generation manifest must move together with marketplace images');
+matchCode(service, /const outputDirectory = await marketplaceOutputDirectory\\(root\\)/, 'ZIP must resolve current artifact directory');
+
 matchCode(service, /state\.sourceType/, 'generation must use the selected source type');
 matchCode(
   service,
