@@ -1381,8 +1381,7 @@ async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action
         run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ||
         (run.executionTarget === 'remote' &&
           (['PAUSED', 'INTERRUPTED'].includes(run.lifecycle) ||
-            (run.lifecycle === 'FAILED' &&
-              run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED')))
+            (run.lifecycle === 'FAILED' && run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED')))
       )
         await stopRunForExit(root, run.runId, mode);
     }
