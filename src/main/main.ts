@@ -3032,12 +3032,21 @@ function register() {
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     await reconcilePersistedExecutionRuns(root);
     const previous = await getExecutionRun(root, runId);
-    if (!previous || previous.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN')
-      throw new Error('Only a previously uncertain Run can be rechecked.');
+    if (
+      !previous ||
+      !['EXECUTION_RECOVERY_UNCERTAIN', 'LOCAL_OUTPUT_COLLECTION_FAILED'].includes(
+        previous.error?.code ?? '',
+      )
+    )
+      throw new Error('Only a previously uncertain or output-collection-failed Run can be rechecked.');
     const ref = { projectRoot: path.resolve(root), runId };
     if (executionCoordinator.hasActive(ref)) return previous;
     await mutateExecutionRun(root, runId, (current) => {
-      if (current.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN') return;
+      if (
+        !['EXECUTION_RECOVERY_UNCERTAIN', 'LOCAL_OUTPUT_COLLECTION_FAILED'].includes(
+          current.error?.code ?? '',
+        )
+      ) return;
       current.lifecycle = 'RUNNING';
       current.error = null;
       current.controls.scheduling = 'ACTIVE';
@@ -3266,7 +3275,9 @@ function register() {
         ['RUNNING', 'PAUSED', 'INTERRUPTED'].includes(candidate.lifecycle) ||
         (candidate.runId === runId && candidate.lifecycle === 'FAILED'),
     );
-    if (restartable.some((candidate) => candidate.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN'))
+    if (restartable.some((candidate) =>
+      ['EXECUTION_RECOVERY_UNCERTAIN', 'LOCAL_OUTPUT_COLLECTION_FAILED'].includes(candidate.error?.code ?? ''),
+    ))
       throw new Error(
         '復旧不確定なRunを自動で再実行できません。「現在のRunを破棄してモデル選定へ戻る」でQueue/HistoryまたはRemote停止の確認を行ってください。',
       );
