@@ -132,7 +132,11 @@ export class RemoteInstanceLifecycleService {
 
     let startRequestedThisPrepare = false;
     const requestStartIfNeeded = async () => {
-      if (current.status !== 'stopped' || startupBaseline !== 'stopped' || startRequestedThisPrepare)
+      if (
+        current.status !== 'stopped' ||
+        startupBaseline !== 'stopped' ||
+        startRequestedThisPrepare
+      )
         return;
       await mutateExecutionRun(root, runId, (state) => {
         const lifecycle = state.remoteLifecycle ?? defaultLifecycle();
