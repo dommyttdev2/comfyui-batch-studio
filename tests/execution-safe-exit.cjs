@@ -70,7 +70,10 @@ for (const channel of [
   assert.ok(start >= 0, channel + ' handler is missing');
   const end = main.indexOf('ipcMain.handle(', start + channel.length);
   const handler = main.slice(start, end < 0 ? undefined : end);
-  assert.ok(handler.includes('await ensureProjectWritable(root);'), channel + ' must reject writes');
+  assert.ok(
+    handler.includes('await ensureProjectWritable(root);'),
+    channel + ' must reject writes',
+  );
 }
 assert.match(app, /onDiscarded=\{\(\) => \{/);
 assert.match(execution, /現在のRunを破棄してモデル選定へ戻る/);
