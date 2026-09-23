@@ -245,7 +245,7 @@ function SelectionCard({
             )}
           </>
         )}
-        {error && <div className="issue error">✕ {error}</div>
+        {error && <div className="issue error">✕ {error}</div>}
       </div>
     </article>
   );

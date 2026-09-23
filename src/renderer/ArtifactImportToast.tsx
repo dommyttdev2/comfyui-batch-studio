@@ -13,9 +13,9 @@ export interface ImportNotice extends ImportNoticeInput {
   id: number;
 }
 
-export const ImportNoticeContext = createContext<
-  (notice: ImportNoticeInput) => Promise<void>
->(async () => {});
+export const ImportNoticeContext = createContext<(notice: ImportNoticeInput) => Promise<void>>(
+  async () => {},
+);
 
 export function useImportNotice() {
   return useContext(ImportNoticeContext);

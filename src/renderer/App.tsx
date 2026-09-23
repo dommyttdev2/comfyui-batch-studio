@@ -450,7 +450,9 @@ function App() {
       {error && <div className="errorbar">{error}</div>}
       <ImportToastStack
         notices={importNotices}
-        onDismiss={(id) => setImportNotices((previous) => previous.filter((item) => item.id !== id))}
+        onDismiss={(id) =>
+          setImportNotices((previous) => previous.filter((item) => item.id !== id))
+        }
       />
       <div className="body">
         {project ? (
