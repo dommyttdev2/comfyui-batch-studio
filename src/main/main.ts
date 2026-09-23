@@ -1443,7 +1443,9 @@ async function ensureProjectWritable(root: string) {
         run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN',
     )
   )
-    throw new Error('実行中のRunがあるため、この工程は閲覧専用です。編集はRunの停止後に行ってください。');
+    throw new Error(
+      '実行中のRunがあるため、この工程は閲覧専用です。編集はRunの停止後に行ってください。',
+    );
 }
 
 async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action: string) {
@@ -2841,7 +2843,7 @@ function register() {
   );
   ipcMain.handle(IPC.PROJECT_SAVE_BRIEF, async (_e, root: unknown, brief: ProjectBriefInput) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     await saveProjectBrief(root, brief);
     return scanProject(root);
   });
@@ -2851,12 +2853,12 @@ function register() {
   });
   ipcMain.handle(IPC.ARTIFACT_BEGIN_EDIT, async (_e, root: unknown, key: any) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     return beginEditArtifact(root, key);
   });
   ipcMain.handle(IPC.ARTIFACT_SAVE_DRAFT, async (_e, root: unknown, key: any, content: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     if (typeof content !== 'string') throw new Error('Invalid content');
     return saveDraft(root, key, content);
   });
@@ -2873,7 +2875,7 @@ function register() {
   );
   ipcMain.handle(IPC.ARTIFACT_CONFIRM, async (_e, root: unknown, key: any) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     await confirmArtifact(root, key);
     return scanProject(root);
   });
@@ -2883,14 +2885,14 @@ function register() {
   });
   ipcMain.handle(IPC.ARTIFACT_RESET_FROM, async (_e, root: unknown, scope: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     validManualResetScope(scope);
     await manualResetFrom(root, scope);
     return scanProject(root);
   });
   ipcMain.handle(IPC.PROMPT_PLAN_SAVE, async (_e, root: unknown, plan: PromptPlanArtifact) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     return savePromptPlan(root, plan);
   });
   ipcMain.handle(IPC.AUTO_ARTIFACT_GROK_ARM, (event, root: unknown, stage: unknown) => {
@@ -3055,7 +3057,7 @@ function register() {
   );
   ipcMain.handle(IPC.WORKFLOW_COMPILE, async (_e, root: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     return compileWorkflow(root);
   });
   ipcMain.handle(IPC.AVAILABILITY_CHECK, async (_e, root: unknown) => {
@@ -3492,7 +3494,7 @@ function register() {
   });
   ipcMain.handle(IPC.FINAL_ARTIFACT_SELECT_DIRECTORY, async (_e, root: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     return selectFinalArtifactDirectory(root);
   });
   ipcMain.handle(IPC.FINAL_ARTIFACT_LIST_IMAGES, (_e, root: unknown) => {
@@ -3515,24 +3517,24 @@ function register() {
   });
   ipcMain.handle(IPC.CAPTION_SELECT_SOURCE_DIRECTORY, async (_e, root: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     await selectFinalArtifactDirectory(root);
     return getCaptionStatus(root);
   });
   ipcMain.handle(IPC.CAPTION_IMPORT_GROK, async (_e, root: unknown, raw: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     if (typeof raw !== 'string') throw new Error('Invalid Grok caption response');
     return importCaptionGrok(root, raw);
   });
   ipcMain.handle(IPC.CAPTION_GENERATE, async (_e, root: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     return generateCaption(root);
   });
   ipcMain.handle(IPC.CAPTION_SAVE_PIXIV_TITLE, async (_e, root: unknown, title: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     return savePixivTitle(root, title);
   });
   ipcMain.handle(IPC.THUMBNAIL_FONTS, () => listThumbnailFonts());
@@ -3542,7 +3544,7 @@ function register() {
   });
   ipcMain.handle(IPC.THUMBNAIL_SAVE, async (_e, root: unknown, state: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     return saveThumbnailState(root, state);
   });
   ipcMain.handle(IPC.THUMBNAIL_SELECT_IMAGE, async (_e, root: unknown) => {
@@ -3749,7 +3751,7 @@ function register() {
   );
   ipcMain.handle(IPC.THUMBNAIL_DELETE_OUTPUTS, async (_e, root: unknown, documentId: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     if (typeof documentId !== 'number' || !Number.isSafeInteger(documentId) || documentId < 1)
       throw new Error('Invalid thumbnail document');
     return deleteThumbnailOutputs(root, documentId);
@@ -3789,7 +3791,7 @@ function register() {
   });
   ipcMain.handle(IPC.MARKETPLACE_SAVE, async (_e, root: unknown, state: unknown) => {
     validRoot(root);
-      await ensureProjectWritable(root);
+    await ensureProjectWritable(root);
     return saveMarketplaceImageState(root, state);
   });
   ipcMain.handle(
