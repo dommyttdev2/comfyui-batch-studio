@@ -465,15 +465,12 @@ const writeJson = (file, value) => {
       restartHandler.indexOf('await startExecutionRun(root, async () => preflight);'),
     'latest prompt_plan workflow compilation must happen before the replacement Run starts',
   );
-  const restartFlagStart = uiSource.indexOf('const canRestartFromScratch');
-  const restartFlagEnd = uiSource.indexOf('const canStart', restartFlagStart);
-  assert.ok(restartFlagStart >= 0 && restartFlagEnd > restartFlagStart);
-  assert.equal(
-    uiSource.slice(restartFlagStart, restartFlagEnd).includes("preflight?.state === 'READY'"),
-    false,
-    'stale Preflight must not remove the prompt-plan restart path',
-  );
-  assert.equal(uiSource.includes('最新のPrompt Planで最初から実行'), true);
+  assert.equal(uiSource.includes('const readyForNewRun'), true);
+  assert.equal(uiSource.includes('canRestartFromScratch'), false);
+  assert.equal(uiSource.includes('別のRunとして実行する'), false);
+  assert.equal(uiSource.includes('現在のRunを破棄'), true);
+  assert.equal(uiSource.includes('一時停止'), true);
+  assert.equal(uiSource.includes('再開'), true);
 
   console.log('Persistent Execution Run tests passed.');
 })().catch((error) => {
