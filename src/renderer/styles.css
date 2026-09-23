@@ -1067,3 +1067,30 @@ input[readonly] {
   color: #fcd34d;
   font-size: 12px;
 }
+
+.stage-readonly-notice {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--border, #475569);
+  border-radius: 8px;
+  background: var(--panel, #1f2937);
+  color: var(--text, #e5e7eb);
+  font-size: 13px;
+}
+
+.stage-readonly-content button,
+.stage-readonly-content input,
+.stage-readonly-content textarea,
+.stage-readonly-content select,
+.stage-readonly-content [contenteditable],
+.stage-readonly-content [role='button'] {
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.stage-readonly-content button,
+.stage-readonly-content input,
+.stage-readonly-content textarea,
+.stage-readonly-content select {
+  opacity: 0.7;
+}
