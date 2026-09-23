@@ -8,7 +8,7 @@ import {
   shell,
   WebContentsView,
 } from 'electron';
-import type { MenuItemConstructorOptions, WebContents } from 'electron';
+import type { IpcMainInvokeEvent, MenuItemConstructorOptions, WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -3528,7 +3528,7 @@ function register() {
     if (typeof text !== 'string') throw new Error('Clipboard text must be string');
     clipboard.writeText(text);
   });
-  ipcMain.handle(IPC.CODEX_GET_PROVIDER, async (event, stage: unknown) => {
+  const getAssistantProvider = async (event: IpcMainInvokeEvent, stage: unknown) => {
     const state = projectWindowForSender(event.sender);
     validGrokContextStage(stage);
     const generation = ++state.assistantSelectionGeneration;
@@ -3565,13 +3565,20 @@ function register() {
     state.paneProvider = provider;
     layoutProjectWindow(state);
     return provider;
-  });
-  ipcMain.handle(IPC.CODEX_SET_PROVIDER, async (event, provider: unknown, stage: unknown) => {
+  };
+  // Legacy Codex-named channels are retained for existing preload consumers.
+  ipcMain.handle(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider);
+  ipcMain.handle(IPC.CODEX_GET_PROVIDER, getAssistantProvider);
+  const setAssistantProvider = async (
+    event: IpcMainInvokeEvent,
+    provider: unknown,
+    stage: unknown,
+  ) => {
     const state = projectWindowForSender(event.sender);
     validGrokContextStage(stage);
     const generation = ++state.assistantSelectionGeneration;
     if (event.sender.id !== state.localView.webContents.id)
-      throw new Error('Codex pane cannot change its parent window.');
+      throw new Error('Only the project window may select the assistant.');
     if (provider !== 'grok' && provider !== 'codex') throw new Error('Invalid AI provider.');
     if (!state.projectRoot || !assistantProviderState) throw new Error('No active project.');
     const root = state.projectRoot;
@@ -3581,7 +3588,9 @@ function register() {
     state.paneProvider = provider;
     layoutProjectWindow(state);
     return paneState(state);
-  });
+  };
+  ipcMain.handle(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider);
+  ipcMain.handle(IPC.CODEX_SET_PROVIDER, setAssistantProvider);
   ipcMain.handle(IPC.CODEX_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
     const state = projectWindowForSender(event.sender);
     if (event.sender.id !== state.localView.webContents.id)

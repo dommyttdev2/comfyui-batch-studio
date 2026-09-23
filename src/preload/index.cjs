@@ -138,6 +138,8 @@ const I = {
   R2_DELETE_TEMPLATE: 'r2:delete-template',
   R2_METRICS: 'r2:metrics',
   CLIPBOARD_WRITE_TEXT: 'clipboard:write-text',
+  ASSISTANT_GET_PROVIDER: 'assistant:get-provider',
+  ASSISTANT_SET_PROVIDER: 'assistant:set-provider',
   CODEX_GET_PROVIDER: 'codex:get-provider',
   CODEX_SET_PROVIDER: 'codex:set-provider',
   CODEX_SET_CONTEXT: 'codex:set-context',
@@ -367,6 +369,10 @@ contextBridge.exposeInMainWorld('batchStudio', {
       ipcRenderer.on(I.AUTO_ARTIFACT_EVENT, handler);
       return () => ipcRenderer.removeListener(I.AUTO_ARTIFACT_EVENT, handler);
     },
+  },
+  assistant: {
+    getProvider: (stage) => ipcRenderer.invoke(I.ASSISTANT_GET_PROVIDER, stage),
+    setProvider: (provider, stage) => ipcRenderer.invoke(I.ASSISTANT_SET_PROVIDER, provider, stage),
   },
   codex: {
     getProvider: (stage) => ipcRenderer.invoke(I.CODEX_GET_PROVIDER, stage),

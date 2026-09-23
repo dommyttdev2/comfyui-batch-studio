@@ -75,6 +75,10 @@ function App() {
       missingHandler: boolean;
     } | null>(null),
     [providerRestoreRevision, setProviderRestoreRevision] = useState(0),
+    [providerRestoreAttempts, setProviderRestoreAttempts] = useState<{
+      key: string;
+      count: number;
+    } | null>(null),
     [temporaryGrokKey, setTemporaryGrokKey] = useState<string | null>(null),
     [switchingProvider, setSwitchingProvider] = useState(false),
     [ratio, setRatio] = useState(0.45),
@@ -213,13 +217,17 @@ function App() {
     setPaneProviderRoot(null);
     setProviderRestoreFailure(null);
     setTemporaryGrokKey(null);
+    setProviderRestoreAttempts((previous) =>
+      previous?.key === key ? previous : key ? { key, count: 0 } : null,
+    );
     if (root && context && key) {
-      void window.batchStudio.codex
+      void window.batchStudio.assistant
         .getProvider(context)
         .then((provider) => {
           if (cancelled) return;
           setPaneProvider(provider);
           setPaneProviderRoot(key);
+          setProviderRestoreAttempts(null);
         })
         .catch((e) => {
           if (cancelled) return;
@@ -227,7 +235,9 @@ function App() {
           setProviderRestoreFailure({
             key,
             message,
-            missingHandler: /No handler registered for ['"]?codex:get-provider/.test(message),
+            missingHandler: /No handler registered for ['"]?(?:assistant|codex):get-provider/.test(
+              message,
+            ),
           });
         });
     }
@@ -235,13 +245,23 @@ function App() {
       cancelled = true;
     };
   }, [project?.rootPath, stage, providerRestoreRevision]);
+  const retryProviderRestore = () => {
+    if (!providerKey || providerRestoreFailure?.key !== providerKey) return;
+    // Repeating an IPC lookup cannot register a missing main-process handler.
+    if (providerRestoreFailure.missingHandler) return;
+    setProviderRestoreAttempts((previous) => ({
+      key: providerKey,
+      count: previous?.key === providerKey ? previous.count + 1 : 1,
+    }));
+    setProviderRestoreRevision((revision) => revision + 1);
+  };
   const changeProvider = async (provider: AssistantPaneProvider) => {
     if (!project || !contextStage || paneProviderRoot !== providerKey || switchingProvider) return;
     const selectedKey = providerKey;
     setSwitchingProvider(true);
     setError('');
     try {
-      await window.batchStudio.codex.setProvider(provider, contextStage);
+      await window.batchStudio.assistant.setProvider(provider, contextStage);
       if (activeProviderKey.current === selectedKey) setPaneProvider(provider);
     } catch (e) {
       if (activeProviderKey.current === selectedKey)
@@ -390,18 +410,27 @@ function App() {
                 providerRestoreFailure?.key === providerKey ? (
                   <section className="panel" role="alert">
                     <h3>AIエージェントの復元に失敗しました</h3>
-                    <p>
-                      {providerRestoreFailure.missingHandler
-                        ? '実行中のアプリと画面のバージョンが異なる可能性があります。すべてのBatch Studioウィンドウと実行中のRunを確認してアプリを完全に終了し、最新のコードをビルドして起動してください。'
-                        : '工程のAIエージェントを取得できませんでした。再試行するか、アプリの状態を確認してください。'}
-                    </p>
+                    {providerRestoreFailure.missingHandler ? (
+                      <p>
+                        このエラーは再試行では解消しません。実行中のRunを確認したうえでBatch
+                        Studioを完全終了し、残っているBatch StudioのElectronプロセスがないことを
+                        確認してから、run.batで再ビルド・起動してください。
+                        他のアプリのElectronプロセスは終了しないでください。
+                      </p>
+                    ) : (
+                      <p>
+                        工程のAIエージェントを取得できませんでした。通信状態を確認し、再試行してください。
+                        {providerRestoreAttempts?.key === providerKey &&
+                          providerRestoreAttempts.count > 0 &&
+                          `（再試行${providerRestoreAttempts.count}回目も失敗しました）`}
+                      </p>
+                    )}
                     <div className="issue error">{providerRestoreFailure.message}</div>
-                    <button
-                      type="button"
-                      onClick={() => setProviderRestoreRevision((revision) => revision + 1)}
-                    >
-                      復元を再試行
-                    </button>
+                    {!providerRestoreFailure.missingHandler && (
+                      <button type="button" onClick={retryProviderRestore}>
+                        復元を再試行
+                      </button>
+                    )}
                     {providerRestoreFailure.missingHandler && (
                       <button
                         type="button"
@@ -419,7 +448,10 @@ function App() {
                   </section>
                 ) : (
                   <div className="panel" role="status">
-                    この工程のAIエージェントを復元中…
+                    {providerRestoreAttempts?.key === providerKey &&
+                    providerRestoreAttempts.count > 0
+                      ? `AIエージェントを再試行中…（${providerRestoreAttempts.count}回目）`
+                      : 'この工程のAIエージェントを復元中…'}
                   </div>
                 )
               ) : (
@@ -427,12 +459,7 @@ function App() {
                   {temporaryGrokKey === providerKey && (
                     <div className="issue error" role="alert">
                       AIエージェント設定を取得できないため、保存済みの選択を変更せずGrokで一時表示しています。
-                      <button
-                        type="button"
-                        onClick={() => setProviderRestoreRevision((revision) => revision + 1)}
-                      >
-                        復元を再試行
-                      </button>
+                      設定を復元するには、Batch Studioを完全終了してから再起動してください。
                     </div>
                   )}
                   <StageErrorBoundary

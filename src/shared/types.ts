@@ -1451,6 +1451,13 @@ export interface BatchStudioApi {
     deleteTemplate: (id: string) => Promise<R2BatchDownloadTemplate[]>;
     metrics: () => Promise<R2Metrics>;
   };
+  assistant: {
+    getProvider: (stage: GrokContextStage) => Promise<AssistantPaneProvider>;
+    setProvider: (
+      provider: AssistantPaneProvider,
+      stage: GrokContextStage,
+    ) => Promise<GrokPaneState>;
+  };
   codex: {
     getProvider: (stage: GrokContextStage) => Promise<AssistantPaneProvider>;
     setProvider: (
