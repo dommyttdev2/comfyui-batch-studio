@@ -610,6 +610,7 @@ export interface ThumbnailDocument {
 
 export interface ThumbnailEditorState {
   schemaVersion: 1;
+  nextDocumentId?: number;
   saveRevision?: number;
   activeDocumentId: number;
   documents: ThumbnailDocument[];
