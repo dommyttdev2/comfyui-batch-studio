@@ -117,16 +117,27 @@ export class RemoteInstanceLifecycleService {
     const existing = await getExecutionRun(root, runId);
     const initialStatus: CloudInstanceStatus =
       existing?.remoteLifecycle?.initialStatus ?? current.status;
+    // A stop-for-edit deliberately stops the provider even if the Instance
+    // was originally running. Resume may restart only the same Instance when
+    // the prior stop was recorded and the Run has an explicit Resume attempt.
+    const resumeAfterConfirmedStop =
+      existing?.resume.attempts > 0 &&
+      existing.remoteLifecycle?.finalizedAt != null &&
+      existing.remoteLifecycle.latest?.status === 'stopped' &&
+      current.status === 'stopped';
+    const startupBaseline: CloudInstanceStatus = resumeAfterConfirmedStop
+      ? 'stopped'
+      : initialStatus;
     await this.persistSnapshot(root, runId, current, 'CLOUD_INSTANCE_RESOLVING');
 
     let startRequestedThisPrepare = false;
     const requestStartIfNeeded = async () => {
-      if (current.status !== 'stopped' || initialStatus !== 'stopped' || startRequestedThisPrepare)
+      if (current.status !== 'stopped' || startupBaseline !== 'stopped' || startRequestedThisPrepare)
         return;
       await mutateExecutionRun(root, runId, (state) => {
         const lifecycle = state.remoteLifecycle ?? defaultLifecycle();
         lifecycle.startedByBatchStudio = true;
-        lifecycle.initialStatus = initialStatus;
+        lifecycle.initialStatus = startupBaseline;
         state.remoteLifecycle = lifecycle;
         state.phase = 'CLOUD_INSTANCE_STARTING';
       });
@@ -155,7 +166,7 @@ export class RemoteInstanceLifecycleService {
       // Scheduling after our accepted start request is a transient state.
       // Only reject an Instance that was already scheduling before this Run
       // and therefore did not receive a start request from Batch Studio.
-      if (current.status === 'scheduling' && initialStatus !== 'stopped') {
+      if (current.status === 'scheduling' && startupBaseline !== 'stopped') {
         await this.persistSnapshot(root, runId, current, 'CLOUD_INSTANCE_STARTING');
         throw new Error(
           `Vast.ai Instance ${instanceId} is scheduling; Execution Run cannot continue.`,
@@ -168,7 +179,7 @@ export class RemoteInstanceLifecycleService {
         });
         return current;
       }
-      if (current.status === 'stopped' && initialStatus !== 'stopped') {
+      if (current.status === 'stopped' && startupBaseline !== 'stopped') {
         throw new Error(
           `Vast.ai Instance ${instanceId} became stopped while its initial state was ${initialStatus}.`,
         );
