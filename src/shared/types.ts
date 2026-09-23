@@ -628,7 +628,7 @@ export interface FinalArtifactImageSource extends FinalArtifactImageItem {
 }
 
 export type ThumbnailImageItem = FinalArtifactImageItem;
-export type ThumbnailImageSource = FinalArtifactImageSource;
+export type ThumbnailImageSource = FinalArtifactImageSource & { cacheVersion?: string };
 
 export interface ThumbnailPickerSession {
   sessionId: string;
@@ -1314,6 +1314,8 @@ export interface BatchStudioApi {
     listImages: (root: string) => Promise<ThumbnailImageItem[]>;
     readImage: (imagePath: string) => Promise<ThumbnailImageSource | null>;
     readPreview: (imagePath: string) => Promise<ThumbnailImageSource | null>;
+    readEditorImage: (imagePath: string) => Promise<ThumbnailImageSource | null>;
+    storeWebpPreview: (imagePath: string, dataUrl: string) => Promise<void>;
     readTemplate: (pattern: ThumbnailPattern) => Promise<ThumbnailTemplateSource>;
     openPicker: (
       root: string,
