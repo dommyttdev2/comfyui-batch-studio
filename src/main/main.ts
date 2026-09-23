@@ -136,7 +136,12 @@ import { RemoteModelStager } from './remote-model-stager.js';
 import { RemoteEnvironmentBootstrap } from './remote-environment-bootstrap.js';
 import { RemoteExecutionService } from './remote-execution.js';
 import { RemoteInstanceLifecycleService } from './remote-instance-lifecycle.js';
-import { generateCaption, getCaptionStatus, importCaptionGrok } from './caption-service.js';
+import {
+  generateCaption,
+  getCaptionStatus,
+  importCaptionGrok,
+  savePixivTitle,
+} from './caption-service.js';
 import { getFinalArtifactStatus } from './final-artifact-service.js';
 import {
   assertFinalArtifactImage,
@@ -2999,6 +3004,10 @@ function register() {
   ipcMain.handle(IPC.CAPTION_GENERATE, (_e, root: unknown) => {
     validRoot(root);
     return generateCaption(root);
+  });
+  ipcMain.handle(IPC.CAPTION_SAVE_PIXIV_TITLE, (_e, root: unknown, title: unknown) => {
+    validRoot(root);
+    return savePixivTitle(root, title);
   });
   ipcMain.handle(IPC.THUMBNAIL_FONTS, () => listThumbnailFonts());
   ipcMain.handle(IPC.THUMBNAIL_LOAD, (_e, root: unknown) => {
