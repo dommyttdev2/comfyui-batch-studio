@@ -717,7 +717,8 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
               }
             : {
                 state: `RUN ${current?.lifecycle ?? 'ACTIVE'}`,
-                message: '既存Runは未完了です。生成を続ける場合は「再開」、新しいRunを開始する場合は「現在のRunを破棄」を使用してください。',
+                message:
+                  '既存Runは未完了です。生成を続ける場合は「再開」、新しいRunを開始する場合は「現在のRunを破棄」を使用してください。',
               }
           : { state: 'READY', message: 'Start可能です' };
   if (outputUncollected)
