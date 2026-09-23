@@ -724,7 +724,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
                     .includes(`thumbnail-${String(active.id).padStart(2, '0')}.`)
                 )
                   setDeleteWarning(
-                    'このサムネイルは販売サイト用画像の入力元として使用中です。出力済み画像も削除すると再選択が必要になります。',
+                    'このサムネイルは販売サイト用画像の入力元として使用中です。編集データを削除すると、出力済み画像を残しても入力元の再選択が必要になります。',
                   );
               })
               .catch(() => undefined);
