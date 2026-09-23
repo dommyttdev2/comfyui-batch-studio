@@ -318,7 +318,11 @@ function App() {
             <select
               aria-label="AIアシスタント"
               value={paneProvider}
-              disabled={paneProviderRoot !== providerKey || switchingProvider || temporaryGrokKey === providerKey}
+              disabled={
+                paneProviderRoot !== providerKey ||
+                switchingProvider ||
+                temporaryGrokKey === providerKey
+              }
               onChange={(event) => void changeProvider(event.target.value as AssistantPaneProvider)}
             >
               <option value="grok">Grok</option>
