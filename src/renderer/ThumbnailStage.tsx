@@ -436,7 +436,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   const addDocument = () => {
     setState((current) => {
       if (!current) return current;
-      const id = Math.max(...current.documents.map((document) => document.id)) + 1;
+      const id = Math.max(current.nextDocumentId ?? 1, ...current.documents.map((document) => document.id + 1));
       if (!Number.isSafeInteger(id)) return current;
       const previous = current.documents[current.documents.length - 1];
       const document: ThumbnailDocument = {
@@ -446,7 +446,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
         title: { ...previous.title, text: `Scene ${String(id).padStart(2, '0')}` },
         subtitle: { ...previous.subtitle, text: 'Midnight Elegance' },
       };
-      return { ...current, activeDocumentId: id, documents: [...current.documents, document] };
+      return { ...current, activeDocumentId: id, nextDocumentId: id + 1, documents: [...current.documents, document] };
     });
     setDeletingId(null);
   };
