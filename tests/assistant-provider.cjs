@@ -69,8 +69,8 @@ matchCode(
 
 matchCode(
   read('src/renderer/App.tsx'),
-  /\[project\?\.rootPath, stage\]/,
-  'Returning to a stage must reload its own last selected agent',
+  /\[project\?\.rootPath, stage, providerRestoreRevision\]/,
+  'Returning to a stage or retrying must reload its own last selected agent',
 );
 matchCode(
   read('src/renderer/App.tsx'),

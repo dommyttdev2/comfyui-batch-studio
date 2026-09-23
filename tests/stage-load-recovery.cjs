@@ -35,6 +35,41 @@ const boundary = source('src/renderer/StageErrorBoundary.tsx');
 assert.match(app, /<StageErrorBoundary/);
 assert.match(app, /<StageView[\s\S]+?<\/StageErrorBoundary>/);
 assert.match(app, /setStageReloadRevision\(\(revision\) => revision \+ 1\)/);
+assert.match(
+  source('src/main/main.ts'),
+  /ipcMain\.handle\(IPC\.CODEX_GET_PROVIDER/,
+  'The main process must register the provider lookup channel',
+);
+assert.match(
+  app,
+  /missingHandler: \/No handler registered for/,
+  'A missing provider IPC handler should be recognized as a version mismatch',
+);
+assert.match(
+  app,
+  /providerRestoreFailure\?\.key === providerKey/,
+  'Provider restoration failure must replace the infinite loading indicator',
+);
+assert.match(
+  app,
+  /setProviderRestoreRevision\(\(revision\) => revision \+ 1\)/,
+  'A failed provider lookup must be retryable without restarting the renderer',
+);
+assert.match(
+  app,
+  /setTemporaryGrokKey\(providerKey\)/,
+  'An outdated main process must allow a temporary, explicit Grok stage view',
+);
+assert.match(
+  app,
+  /temporaryGrokKey === providerKey/,
+  'Temporary Grok must be scoped to the current project stage',
+);
+assert.match(
+  app,
+  /disabled=\{\s*paneProviderRoot !== providerKey \|\|\s*switchingProvider \|\|\s*temporaryGrokKey === providerKey\s*\}/,
+  'Temporary Grok must not be silently persisted through the provider selector',
+);
 assert.match(boundary, /getDerivedStateFromError/);
 assert.match(boundary, /this\.props\.onRetry/);
 

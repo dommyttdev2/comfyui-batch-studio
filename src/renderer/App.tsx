@@ -69,6 +69,13 @@ function App() {
     [grok, setGrok] = useState(false),
     [paneProvider, setPaneProvider] = useState<AssistantPaneProvider>('grok'),
     [paneProviderRoot, setPaneProviderRoot] = useState<string | null>(null),
+    [providerRestoreFailure, setProviderRestoreFailure] = useState<{
+      key: string;
+      message: string;
+      missingHandler: boolean;
+    } | null>(null),
+    [providerRestoreRevision, setProviderRestoreRevision] = useState(0),
+    [temporaryGrokKey, setTemporaryGrokKey] = useState<string | null>(null),
     [switchingProvider, setSwitchingProvider] = useState(false),
     [ratio, setRatio] = useState(0.45),
     [createOpen, setCreateOpen] = useState(false),
@@ -202,23 +209,32 @@ function App() {
     let cancelled = false;
     const root = project?.rootPath ?? null;
     const context = grokContextStage(stage);
+    const key = root && context ? root + '\0' + context : null;
     setPaneProviderRoot(null);
-    if (root && context) {
+    setProviderRestoreFailure(null);
+    setTemporaryGrokKey(null);
+    if (root && context && key) {
       void window.batchStudio.codex
         .getProvider(context)
         .then((provider) => {
           if (cancelled) return;
           setPaneProvider(provider);
-          setPaneProviderRoot(root + '\0' + context);
+          setPaneProviderRoot(key);
         })
         .catch((e) => {
-          if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+          if (cancelled) return;
+          const message = e instanceof Error ? e.message : String(e);
+          setProviderRestoreFailure({
+            key,
+            message,
+            missingHandler: /No handler registered for ['"]?codex:get-provider/.test(message),
+          });
         });
     }
     return () => {
       cancelled = true;
     };
-  }, [project?.rootPath, stage]);
+  }, [project?.rootPath, stage, providerRestoreRevision]);
   const changeProvider = async (provider: AssistantPaneProvider) => {
     if (!project || !contextStage || paneProviderRoot !== providerKey || switchingProvider) return;
     const selectedKey = providerKey;
@@ -302,7 +318,11 @@ function App() {
             <select
               aria-label="AIアシスタント"
               value={paneProvider}
-              disabled={paneProviderRoot !== providerKey || switchingProvider}
+              disabled={
+                paneProviderRoot !== providerKey ||
+                switchingProvider ||
+                temporaryGrokKey === providerKey
+              }
               onChange={(event) => void changeProvider(event.target.value as AssistantPaneProvider)}
             >
               <option value="grok">Grok</option>
@@ -367,28 +387,73 @@ function App() {
                 {resetScope && <StageResetMenu scope={resetScope} onReset={resetFrom} />}
               </div>
               {contextStage && paneProviderRoot !== providerKey ? (
-                <div className="panel" role="status">
-                  この工程のAIエージェントを復元中…
-                </div>
+                providerRestoreFailure?.key === providerKey ? (
+                  <section className="panel" role="alert">
+                    <h3>AIエージェントの復元に失敗しました</h3>
+                    <p>
+                      {providerRestoreFailure.missingHandler
+                        ? '実行中のアプリと画面のバージョンが異なる可能性があります。すべてのBatch Studioウィンドウと実行中のRunを確認してアプリを完全に終了し、最新のコードをビルドして起動してください。'
+                        : '工程のAIエージェントを取得できませんでした。再試行するか、アプリの状態を確認してください。'}
+                    </p>
+                    <div className="issue error">{providerRestoreFailure.message}</div>
+                    <button
+                      type="button"
+                      onClick={() => setProviderRestoreRevision((revision) => revision + 1)}
+                    >
+                      復元を再試行
+                    </button>
+                    {providerRestoreFailure.missingHandler && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // This is a temporary renderer-only choice: never overwrite the
+                          // saved stage provider when the main process cannot be queried.
+                          setPaneProvider('grok');
+                          setTemporaryGrokKey(providerKey);
+                          setPaneProviderRoot(providerKey);
+                        }}
+                      >
+                        Grokで一時的に工程を開く
+                      </button>
+                    )}
+                  </section>
+                ) : (
+                  <div className="panel" role="status">
+                    この工程のAIエージェントを復元中…
+                  </div>
+                )
               ) : (
-                <StageErrorBoundary
-                  key={`${project.rootPath}:${stage}:${resetRevision}:${stageReloadRevision}`}
-                  stage={stage}
-                  onRetry={() => {
-                    setError('');
-                    setStageReloadRevision((revision) => revision + 1);
-                  }}
-                >
-                  <StageView
-                    project={project}
+                <>
+                  {temporaryGrokKey === providerKey && (
+                    <div className="issue error" role="alert">
+                      AIエージェント設定を取得できないため、保存済みの選択を変更せずGrokで一時表示しています。
+                      <button
+                        type="button"
+                        onClick={() => setProviderRestoreRevision((revision) => revision + 1)}
+                      >
+                        復元を再試行
+                      </button>
+                    </div>
+                  )}
+                  <StageErrorBoundary
+                    key={`${project.rootPath}:${stage}:${resetRevision}:${stageReloadRevision}`}
                     stage={stage}
-                    provider={paneProvider}
-                    refresh={refresh}
-                    setProject={setProject}
-                    run={run}
-                    resetFrom={resetFrom}
-                  />
-                </StageErrorBoundary>
+                    onRetry={() => {
+                      setError('');
+                      setStageReloadRevision((revision) => revision + 1);
+                    }}
+                  >
+                    <StageView
+                      project={project}
+                      stage={stage}
+                      provider={paneProvider}
+                      refresh={refresh}
+                      setProject={setProject}
+                      run={run}
+                      resetFrom={resetFrom}
+                    />
+                  </StageErrorBoundary>
+                </>
               )}
             </>
           )}
