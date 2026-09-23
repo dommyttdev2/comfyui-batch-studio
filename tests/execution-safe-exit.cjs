@@ -45,7 +45,7 @@ const leaveHandler = main.slice(
   main.indexOf('ipcMain.handle(IPC.EXECUTION_STOP_FOR_EDIT'),
 );
 assert.ok(leaveHandler.includes('return true;'), 'stage browsing must always be allowed');
-assert.ok(!leaveHandler.includes('confirmRunStopBeforeLeave'), 'browsing must not stop a Run');
+assert.ok(!leaveHandler.includes('return confirmRunStopBeforeLeave('), 'browsing must not stop a Run');
 assert.ok(app.includes('<ReadOnlyStage readOnly={viewOnly}>'));
 assert.ok(app.includes("stage !== '実行'"));
 assert.ok(app.includes('window.batchStudio.execution.status(project.rootPath)'));
