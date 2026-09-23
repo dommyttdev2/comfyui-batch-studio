@@ -11,7 +11,7 @@ import {
 import type { MenuItemConstructorOptions, WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { IPC } from '../shared/ipc.js';
 import type {
@@ -175,7 +175,7 @@ import {
   saveThumbnailState,
 } from './thumbnail-service.js';
 import { readCachedThumbnailImage, storeWebpThumbnailPreview, type ThumbnailCacheTiming } from './thumbnail-image-cache.js';
-import { logThumbnailPickerPerformance, type PickerMetrics } from './thumbnail-picker-perf.js';
+import { logThumbnailPickerPerformance, pickerPerformanceLogPath, type PickerMetrics } from './thumbnail-picker-perf.js';
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
@@ -3091,15 +3091,15 @@ function register() {
     const started = performance.now();
     const timing: ThumbnailCacheTiming = {};
     const state = thumbnailPickerWindows.get(event.sender.id);
-    if (state) state.previewCount++;
+    const requestNumber = state ? ++state.previewCount : 0;
     try {
       const cached = await readCachedThumbnailImage(app.getPath('userData'), imagePath, 'gallery', timing);
       const fallbackStarted = performance.now();
       const source = cached ?? await readThumbnailPreview(imagePath);
       const elapsed = performance.now() - started;
-      if (state && (state.previewCount <= 40 || state.previewCount % 25 === 0 || elapsed > 100 || !timing.hit)) {
+      if (state && (requestNumber <= 40 || requestNumber % 25 === 0 || elapsed > 100 || !timing.hit)) {
         const details: PickerMetrics = {
-          requestNumber: state.previewCount,
+          requestNumber,
           totalMs: elapsed,
           sinceOpenMs: performance.now() - state.openedAt,
           cacheHit: timing.hit === true,
@@ -3175,6 +3175,13 @@ function register() {
       slot: state.slot,
       currentImagePath: state.currentImagePath,
     };
+  });
+  ipcMain.handle(IPC.THUMBNAIL_PICKER_PERF_OPEN, async (event) => {
+    thumbnailPickerForSender(event.sender);
+    const directory = path.dirname(pickerPerformanceLogPath(app.getPath('userData')));
+    await mkdir(directory, { recursive: true });
+    const error = await shell.openPath(directory);
+    if (error) throw new Error(error);
   });
   ipcMain.handle(IPC.THUMBNAIL_PICKER_PERF, (event, name: unknown, metrics: unknown) => {
     const state = thumbnailPickerForSender(event.sender);
