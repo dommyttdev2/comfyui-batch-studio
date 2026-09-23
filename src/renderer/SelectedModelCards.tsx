@@ -328,35 +328,35 @@ export function SelectedModelCards({
       )}
       {view !== 'base' && (
         <section className="panel selected-models">
-        <div className="panelhead">
-          <div>
-            <h3>最終選定LoRA</h3>
-            <p>
-              現在のmodels.jsonに保存されたLoRAのみを表示します。
-              変更は下書きへ保存され、確定後に後工程の整合性を更新します。
+          <div className="panelhead">
+            <div>
+              <h3>最終選定LoRA</h3>
+              <p>
+                現在のmodels.jsonに保存されたLoRAのみを表示します。
+                変更は下書きへ保存され、確定後に後工程の整合性を更新します。
+              </p>
+            </div>
+            <strong>{models.loras.length}件</strong>
+          </div>
+          {models.loras.length ? (
+            <div className="civit-model-grid">
+              {models.loras.map((selection) => (
+                <SelectionCard
+                  key={selection.ref}
+                  entry={{ selection, role: 'lora', label: 'LoRA' }}
+                  catalog={catalog}
+                  onSave={onSave}
+                  placement={placementByFile.get(selection.fileName)}
+                  placementLoading={placements === null}
+                  placementError={placementError}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="selected-models-empty">
+              LoRAは未選定です。選定結果を取り込むとここに表示されます。
             </p>
-          </div>
-          <strong>{models.loras.length}件</strong>
-        </div>
-        {models.loras.length ? (
-          <div className="civit-model-grid">
-            {models.loras.map((selection) => (
-              <SelectionCard
-                key={selection.ref}
-                entry={{ selection, role: 'lora', label: 'LoRA' }}
-                catalog={catalog}
-                onSave={onSave}
-                placement={placementByFile.get(selection.fileName)}
-                placementLoading={placements === null}
-                placementError={placementError}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="selected-models-empty">
-            LoRAは未選定です。選定結果を取り込むとここに表示されます。
-          </p>
-        )}
+          )}
         </section>
       )}
     </>
