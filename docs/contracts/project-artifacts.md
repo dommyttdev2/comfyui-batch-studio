@@ -50,11 +50,11 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 
 後処理工程の編集状態・生成物はStory / Models / Prompt Plan等の意味Artifactとは分離する。
 
-販売サイト用画像:
+販売サイト用画像（生成物は成果物フォルダ、編集設定のみProject内）:
 
 ```text
-{project_root}/
-├─ marketplace/
+{artifactOutputPath}/
+└─ marketplace/
 │  ├─ FANZA/
 │  │  ├─ package.<ext>
 │  │  └─ thumbnail.<ext>
@@ -64,8 +64,8 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 │  ├─ custom/
 │  │  └─ custom-output.<ext>
 │  └─ marketplace-images.zip
-└─ ._batch_studio/
-   └─ marketplace-images.json
+
+{project_root}/._batch_studio/marketplace-images.json
 ```
 
 - `marketplace-images.json` はsource image、mode、target別crop、出力形式、custom resize設定を保持するeditor stateであり、Grok Artifactではない。
@@ -73,6 +73,8 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 - `sourceType: thumbnail` のsource imageは `project_meta.json.settings.artifactOutputPath/thumbnails/` 内に出力済みで、現在のthumbnail editor stateにIDが存在するPNG/JPEG画像から選択する。
 - サムネイル編集データは新規projectで5枚を初期生成し、追加・削除可能とする。既存projectの保存済み枚数は読み込み時に維持する。削除後も既存IDを詰め直さない。
 - サムネイルの単体・一括出力先は `project_meta.json.settings.artifactOutputPath/thumbnails/` とする。入力用の最終成果物directoryとは分離する。
+- サムネイル編集用と画像一覧用の縮小画像はアプリのユーザーデータ領域にキャッシュし、元画像のサイズ・更新日時等の変化で無効化する。出力時には元画像を使用する。
+- 販売サイト用画像とZIP、生成マニフェストは `settings.artifactOutputPath/marketplace/` に出力する。未設定ならエラーとし、旧 `{project_root}/marketplace/` は自動移行しない。
 - FANZA / DLsiteの同寸法targetも別crop stateと別renderを持つ。
 - target size / service / filenameの定義は `src/shared/marketplace-image-targets.json` が機械可読正本である。
 - JPEG / PNG / WebPを出力でき、JPEG / WebPの品質設定は100固定とする。
