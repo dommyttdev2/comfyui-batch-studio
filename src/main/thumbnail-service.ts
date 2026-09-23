@@ -204,6 +204,7 @@ export function normalizeThumbnailState(
         subtitle: cleanText(candidate.subtitle, fallback.subtitle),
       };
     });
+  const documents = validDocuments.length ? validDocuments : defaults.documents;
   return {
     schemaVersion: 1,
     activeDocumentId: documents.some((document) => document.id === input.activeDocumentId)
