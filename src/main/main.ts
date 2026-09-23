@@ -3203,6 +3203,10 @@ function register() {
         ['RUNNING', 'PAUSED', 'INTERRUPTED'].includes(candidate.lifecycle) ||
         (candidate.runId === runId && candidate.lifecycle === 'FAILED'),
     );
+    if (restartable.some((candidate) => candidate.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN'))
+      throw new Error(
+        '復旧不確定なRunを自動で再実行できません。「現在のRunを破棄してモデル選定へ戻る」でQueue/HistoryまたはRemote停止の確認を行ってください。',
+      );
     const unsafeRemote = restartable.find(
       (candidate) =>
         candidate.executionTarget === 'remote' &&
