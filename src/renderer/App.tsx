@@ -612,7 +612,9 @@ function App() {
             <>
               <div className="stagehead">
                 <h2>{stage}</h2>
-                {resetScope && !viewOnly && <StageResetMenu scope={resetScope} onReset={resetFrom} />}
+                {resetScope && !viewOnly && (
+                  <StageResetMenu scope={resetScope} onReset={resetFrom} />
+                )}
               </div>
               {viewOnly && (
                 <div className="stage-readonly-notice" role="status">
