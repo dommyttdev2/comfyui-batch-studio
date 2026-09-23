@@ -109,7 +109,14 @@ function protectsProjectInputs(run: ExecutionRun | null): boolean {
     run &&
       (run.lifecycle === 'RUNNING' ||
         (run.executionTarget === 'remote' &&
-          (run.lifecycle === 'PAUSED' || run.lifecycle === 'INTERRUPTED')) ||
+          !(
+            run.remoteLifecycle?.finalizedAt &&
+            run.remoteLifecycle.latest?.status === 'stopped'
+          ) &&
+          (run.lifecycle === 'PAUSED' ||
+            run.lifecycle === 'INTERRUPTED' ||
+            (run.lifecycle === 'FAILED' &&
+              run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED'))) ||
         run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN'),
   );
 }
