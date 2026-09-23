@@ -1119,6 +1119,7 @@ export interface AutoArtifactEvent {
   rawResponsePath?: string;
   message?: string;
   issues?: ValidationIssue[];
+  summary?: ImportResult['summary'];
 }
 export interface CodexMessage {
   id: string;
