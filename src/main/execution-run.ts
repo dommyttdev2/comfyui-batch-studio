@@ -432,6 +432,8 @@ export async function startExecutionRun(
 ): Promise<ExecutionRun> {
   return withProjectLock(root, async () => {
     const current = await getCurrentExecutionRun(root);
+    if (current?.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED')
+      throw new Error('生成済みPromptの画像回収が未確定です。「既存Runの状態を再確認」または安全なRun破棄を行ってください。');
     if (current && !terminalLifecycle(current.lifecycle))
       throw new Error(`Execution Run ${current.runId} is already active for this project.`);
     const before = await captureSnapshot(root, {
