@@ -15,7 +15,8 @@ function decode(source: ThumbnailImageSource): Promise<HTMLImageElement> {
 }
 
 export async function cachedEditorImage(source: ThumbnailImageSource): Promise<HTMLImageElement> {
-  const version = source.cacheVersion ?? source.dataUrl.length.toString();
+  if (!source.cacheVersion) return decode(source);
+  const version = source.cacheVersion;
   const key = `${source.path}\0${version}`;
   const existing = loaded.get(key);
   if (existing) {
