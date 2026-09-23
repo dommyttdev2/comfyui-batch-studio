@@ -90,24 +90,37 @@ function nonEmptyStringArray(value: unknown) {
 }
 
 export function validatePixivTitle(value: unknown): ValidationIssue[] {
-  if (!value || typeof value !== 'object' || Array.isArray(value) ||
-      !onlyKeys(value as Record<string, unknown>, ['ja', 'en'])) {
-    return [{
-      severity: 'error',
-      code: 'CAPTION_PIXIV_TITLE',
-      message: 'pixivTitle.ja / pixivTitle.en を指定してください。',
-    }];
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    !onlyKeys(value as Record<string, unknown>, ['ja', 'en'])
+  ) {
+    return [
+      {
+        severity: 'error',
+        code: 'CAPTION_PIXIV_TITLE',
+        message: 'pixivTitle.ja / pixivTitle.en を指定してください。',
+      },
+    ];
   }
   const title = value as Record<string, unknown>;
   const issues: ValidationIssue[] = [];
   for (const lang of ['ja', 'en'] as const) {
     const text = title[lang];
-    if (typeof text !== 'string' || !text.trim() || /[\r\n\u2028\u2029]/.test(text) ||
-        Array.from(text).length > 32) {
+    if (
+      typeof text !== 'string' ||
+      !text.trim() ||
+      /[\r\n\u2028\u2029]/.test(text) ||
+      Array.from(text).length > 32
+    ) {
       issues.push({
         severity: 'error',
         code: 'CAPTION_PIXIV_TITLE_' + lang.toUpperCase(),
-        message: 'pixivTitle.' + lang + ' は改行を含まない1～32文字で指定してください。' +
+        message:
+          'pixivTitle.' +
+          lang +
+          ' は改行を含まない1～32文字で指定してください。' +
           (typeof text === 'string' ? ' 現在 ' + Array.from(text).length + '文字。' : ''),
       });
     }
@@ -406,7 +419,8 @@ export async function savePixivTitle(root: string, value: unknown): Promise<Capt
     pixivTitle: title as { ja: string; en: string },
   };
   const validation = validateCaptionContent(next);
-  if (!validation.valid) throw new Error(validation.issues.map((issue) => issue.message).join(' / '));
+  if (!validation.valid)
+    throw new Error(validation.issues.map((issue) => issue.message).join(' / '));
   await writeJsonAtomic(draftPath(root), next);
   return getCaptionStatus(root);
 }
