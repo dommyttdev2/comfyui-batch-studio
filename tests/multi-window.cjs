@@ -39,6 +39,35 @@ matchCode(main, /label: 'Vast.ai'/);
 matchCode(main, /label: '現在のフォルダを開く'/);
 matchCode(main, /label: '設定'/);
 matchCode(main, /label: 'プロジェクトを閉じる'/);
+matchCode(main, /RECENT_PROJECT_MENU_LIMIT=5/, 'ネイティブの履歴メニューは最大5件');
+matchCode(
+  main,
+  /recentRoots\.slice\(0,RECENT_PROJECT_MENU_LIMIT\)/,
+  '保存件数とは独立して5件に制限する',
+);
+matchCode(
+  main,
+  /label:'最近開いたプロジェクト',submenu:recentProjectSubmenu\.length\?recentProjectSubmenu/,
+  '「最近開いたプロジェクト」は右側に展開するネイティブサブメニューとする',
+);
+matchCode(main, /最近開いたプロジェクトはありません.*?enabled:false/, '履歴が空なら無効状態を表示');
+matchCode(main, /openRecentProjectFromMenu\(root\)/, '履歴からプロジェクトを開く');
+matchCode(
+  main,
+  /projectWindowForRoot\(root\).*?focusProjectWindow\(existing\)/s,
+  '既存のWindowに切り替える',
+);
+matchCode(main, /chooseProjectOpeningTarget\(\)/, '既存のWindow選択方法を共用する');
+matchCode(
+  main,
+  /await refreshRecentProjectMenu\(\);createProjectWindow\(\{restoreLastProject:true\}\)/,
+  '起動時に履歴メニューを表示',
+);
+matchCode(
+  main,
+  /IPC\.PROJECT_REMOVE_RECENT.*?refreshRecentProjectMenu\(\)/s,
+  'ホームの履歴削除をメニューへ反映',
+);
 doesNotMatchCode(main, /role: 'viewMenu'/, 'View menu must be explicitly localized');
 doesNotMatchCode(main, /toggleDevTools/, 'Developer Tools must not be exposed in the native menu');
 matchCode(app, /command === 'settings'/);
