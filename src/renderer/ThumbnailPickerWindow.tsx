@@ -173,6 +173,9 @@ export function ThumbnailPickerWindow() {
           <span>
             {filteredItems.length} / {items.length} 枚
           </span>
+          <button type="button" title="計測ログが保存されるフォルダーを開く" onClick={() => {
+            void window.batchStudio.thumbnail.openPickerPerfLog().catch(() => undefined);
+          }}>計測ログを開く</button>
         </div>
         {error && <div className="thumbnail-image-picker-error">{error}</div>}
         {loading ? (
