@@ -131,7 +131,97 @@ const writeJson = (file, value) => {
   );
   status = await caption.generateCaption(root);
   assert.equal(status.state, 'generated');
-  console.log('Caption stale build and file integrity tests passed.');
+  const originalCaption = fs.readFileSync(captionPath, 'utf8');
+  const v2 = {
+    ...content,
+    schemaVersion: 2,
+    pixivTitle: { ja: 'あ'.repeat(32), en: 'A'.repeat(32) },
+  };
+  assert.equal(caption.validateCaptionContent(v2).valid, true, '32 code points are valid');
+  assert.equal(
+    caption.validateCaptionContent({
+      ...v2,
+      pixivTitle: { ...v2.pixivTitle, ja: 'あ'.repeat(33) },
+    }).valid,
+    false,
+    '33 Japanese characters must be rejected',
+  );
+  assert.equal(
+    caption.validateCaptionContent({
+      ...v2,
+      pixivTitle: { ...v2.pixivTitle, en: 'A'.repeat(33) },
+    }).valid,
+    false,
+    '33 English characters must be rejected',
+  );
+  assert.equal(
+    caption.validateCaptionContent({
+      ...v2,
+      pixivTitle: { ja: '😀'.repeat(32), en: 'Hello' },
+    }).valid,
+    true,
+    'surrogate pairs must count as one Unicode code point',
+  );
+  assert.equal(
+    caption.validateCaptionContent({
+      ...v2,
+      pixivTitle: { ...v2.pixivTitle, ja: 'first\\nsecond' },
+    }).valid,
+    false,
+    'newlines must be rejected',
+  );
+  assert.equal(
+    caption.validateCaptionContent({ ...v2, pixivTitle: undefined }).valid,
+    false,
+    'v2 must require Pixiv titles',
+  );
+  assert.equal(
+    caption.validateCaptionContent({ ...content, pixivTitle: v2.pixivTitle }).valid,
+    false,
+    'v1 must reject Pixiv fields without schema migration',
+  );
+  assert.equal(caption.validateCaptionContent(content).valid, true, 'v1 is compatible');
+
+  status = await caption.savePixivTitle(root, { ja: ' 初めての夜 ', en: ' A New Night ' });
+  assert.equal(status.content.schemaVersion, 2, 'manual save upgrades legacy v1');
+  assert.deepEqual(status.content.pixivTitle, { ja: '初めての夜', en: 'A New Night' });
+  assert.equal(status.state, 'generated', 'Pixiv-only migration must preserve built caption');
+  assert.equal(status.stale, false);
+  assert.equal(fs.readFileSync(captionPath, 'utf8'), originalCaption);
+
+  status = await caption.savePixivTitle(root, { ja: '新しいPixivタイトル', en: 'Another Pixiv Title' });
+  assert.equal(status.state, 'generated', 'Pixiv edits must not invalidate caption.txt');
+  assert.equal(status.stale, false);
+  assert.equal(fs.readFileSync(captionPath, 'utf8'), originalCaption);
+
+  const beforeInvalid = fs.readFileSync(draftPath, 'utf8');
+  await assert.rejects(
+    caption.savePixivTitle(root, { ja: 'あ'.repeat(33), en: 'Valid' }),
+    /32文字/,
+  );
+  assert.equal(fs.readFileSync(draftPath, 'utf8'), beforeInvalid);
+  const manualImport = await caption.importCaptionGrok(
+    root,
+    JSON.stringify({ ...v2, pixivTitle: { ja: 'あ'.repeat(33), en: 'Valid' } }),
+  );
+  assert.equal(manualImport.validation.valid, false);
+  assert.equal(fs.readFileSync(draftPath, 'utf8'), beforeInvalid);
+  assert.equal((await caption.getCaptionStatus(root)).state, 'generated');
+
+  content.description.ja[0] = 'キャプション本文変更';
+  const changedCaption = {
+    ...content,
+    schemaVersion: 2,
+    pixivTitle: { ja: '新しいPixivタイトル', en: 'Another Pixiv Title' },
+  };
+  writeJson(draftPath, changedCaption);
+  assert.equal(
+    (await caption.getCaptionStatus(root)).state,
+    'stale',
+    'changes to caption text must still invalidate the existing caption',
+  );
+
+  console.log('Caption stale build, Pixiv titles and file integrity tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;
