@@ -90,6 +90,7 @@ const I = {
   THUMBNAIL_PICKER_OPEN: 'thumbnail-picker:open',
   THUMBNAIL_PICKER_CONTEXT: 'thumbnail-picker:context',
   THUMBNAIL_PICKER_PERF: 'thumbnail-picker:perf',
+  THUMBNAIL_PICKER_PERF_OPEN: 'thumbnail-picker:perf-open',
   THUMBNAIL_PICKER_PREVIEW: 'thumbnail-picker:preview',
   THUMBNAIL_PICKER_COMMIT: 'thumbnail-picker:commit',
   THUMBNAIL_PICKER_PREVIEWED: 'thumbnail-picker:previewed',
@@ -279,6 +280,7 @@ contextBridge.exposeInMainWorld('batchStudio', {
     openPicker: (r, s, p) => ipcRenderer.invoke(I.THUMBNAIL_PICKER_OPEN, r, s, p),
     pickerContext: () => ipcRenderer.invoke(I.THUMBNAIL_PICKER_CONTEXT),
     logPickerPerf: (event, metrics) => ipcRenderer.invoke(I.THUMBNAIL_PICKER_PERF, event, metrics),
+    openPickerPerfLog: () => ipcRenderer.invoke(I.THUMBNAIL_PICKER_PERF_OPEN),
     previewPicker: (p) => ipcRenderer.invoke(I.THUMBNAIL_PICKER_PREVIEW, p),
     commitPicker: (p) => ipcRenderer.invoke(I.THUMBNAIL_PICKER_COMMIT, p),
     onPickerPreview: (listener) => {
