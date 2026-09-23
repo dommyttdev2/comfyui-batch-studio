@@ -17,21 +17,17 @@ function runningBatchStudioPids({
   if (platform !== 'win32') return [];
   const script = [
     "$ErrorActionPreference = 'Stop'",
-    "$expected = [System.IO.Path]::GetFullPath($env:BATCH_STUDIO_ELECTRON_EXE)",
-    "Get-CimInstance -ClassName Win32_Process -Filter \"Name = 'electron.exe'\" |",
-    "  Where-Object { $_.ExecutablePath -and $_.ExecutablePath.Equals($expected, [System.StringComparison]::OrdinalIgnoreCase) } |",
+    '$expected = [System.IO.Path]::GetFullPath($env:BATCH_STUDIO_ELECTRON_EXE)',
+    'Get-CimInstance -ClassName Win32_Process -Filter "Name = \'electron.exe\'" |',
+    '  Where-Object { $_.ExecutablePath -and $_.ExecutablePath.Equals($expected, [System.StringComparison]::OrdinalIgnoreCase) } |',
     '  Select-Object -ExpandProperty ProcessId',
   ].join(' ');
-  const output = exec(
-    'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-Command', script],
-    {
-      cwd: root,
-      encoding: 'utf8',
-      windowsHide: true,
-      env: { ...process.env, BATCH_STUDIO_ELECTRON_EXE: path.resolve(executable) },
-    },
-  );
+  const output = exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    cwd: root,
+    encoding: 'utf8',
+    windowsHide: true,
+    env: { ...process.env, BATCH_STUDIO_ELECTRON_EXE: path.resolve(executable) },
+  });
   return output
     .trim()
     .split(/\r?\n/)
