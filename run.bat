@@ -74,6 +74,17 @@ if errorlevel 1 (
 echo.
 
 rem ------------------------------------------------------------
+rem Refuse to rebuild files used by an existing Main Process
+rem ------------------------------------------------------------
+echo [INFO] Checking for an existing Batch Studio process...
+node scripts\check-running-batch-studio.cjs
+if errorlevel 1 (
+    echo [ERROR] Close the running Batch Studio instance before updating.
+    pause
+    exit /b 1
+)
+
+rem ------------------------------------------------------------
 rem Install dependencies
 rem ------------------------------------------------------------
 echo [1/3] Installing dependencies...
