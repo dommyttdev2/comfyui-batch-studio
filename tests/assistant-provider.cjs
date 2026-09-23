@@ -43,12 +43,12 @@ matchCode(
 );
 matchCode(
   read('src/renderer/App.tsx'),
-  /codex\.getProvider\(context\)/,
+  /assistant\.getProvider\(context\)/,
   'App must load the project-specific choice before opening a stage',
 );
 matchCode(
   read('src/renderer/App.tsx'),
-  /codex\.setProvider\(provider, contextStage\)/,
+  /assistant\.setProvider\(provider, contextStage\)/,
   'Switching agents must persist the selected provider',
 );
 matchCode(
@@ -91,6 +91,21 @@ matchCode(
   read('src/main/main.ts'),
   /assistantSelectionGeneration !== generation/,
   "Out-of-order restores must not select the previous stage's provider",
+);
+matchCode(
+  read('src/main/main.ts'),
+  /ipcMain\\.handle\\(IPC\\.ASSISTANT_GET_PROVIDER, getAssistantProvider\\)/,
+  'Provider selection must work independently of the Codex IPC namespace',
+);
+matchCode(
+  read('src/main/main.ts'),
+  /ipcMain\\.handle\\(IPC\\.ASSISTANT_SET_PROVIDER, setAssistantProvider\\)/,
+  'Switching between Grok and Codex must use the shared assistant IPC',
+);
+matchCode(
+  read('src/preload/index.cjs'),
+  /assistant: \\{[\\s\\S]*?getProvider: \\(stage\\) => ipcRenderer\\.invoke\\(I\\.ASSISTANT_GET_PROVIDER/,
+  'Grok must not require a Codex-specific API just to load its selection',
 );
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
