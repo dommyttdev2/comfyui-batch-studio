@@ -326,7 +326,8 @@ export function SelectedModelCards({
           </div>
         </section>
       )}
-      {view !== 'base' && <section className="panel selected-models">
+      {view !== 'base' && (
+        <section className="panel selected-models">
         <div className="panelhead">
           <div>
             <h3>最終選定LoRA</h3>
@@ -356,7 +357,8 @@ export function SelectedModelCards({
             LoRAは未選定です。選定結果を取り込むとここに表示されます。
           </p>
         )}
-      </section>}
+        </section>
+      )}
     </>
   );
 }
