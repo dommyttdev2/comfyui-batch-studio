@@ -173,16 +173,8 @@ matchCode(
 assert.doesNotMatch(executionSource, /別のRunとして実行する/);
 assert.doesNotMatch(executionSource, /execution\.restartRemote/);
 assert.doesNotMatch(executionSource, /execution\.restartFromScratch/);
-matchCode(
-  executionSource,
-  /一時停止を要求中…/,
-  'Pause action must provide immediate feedback',
-);
-matchCode(
-  executionSource,
-  /再開/,
-  'Resume action must use the user-facing Japanese label',
-);
+matchCode(executionSource, /一時停止を要求中…/, 'Pause action must provide immediate feedback');
+matchCode(executionSource, /再開/, 'Resume action must use the user-facing Japanese label');
 matchCode(
   mainSource,
   /IPC\.EXECUTION_RESTART_FROM_SCRATCH/,
