@@ -34,7 +34,7 @@ function runningBatchStudioPids({
   );
   return output
     .trim()
-    .split(/\\r?\\n/)
+    .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => Number(line.trim()))
     .filter((pid) => Number.isSafeInteger(pid) && pid > 0);
