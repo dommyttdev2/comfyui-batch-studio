@@ -39,7 +39,7 @@ assert.match(main, /run\.lifecycle === 'RUNNING'\s*\|\|\s*executionCoordinator\.
 assert.match(main, /await comfy\.health\(\)/);
 assert.match(main, /confirmOfflineLocalRunDiscard\(root, run, comfy, error, owner\)/);
 
-assert.match(app, /await window\\.batchStudio\\.execution\\.leave\\(project\\.rootPath\\)/);
+assert.ok(app.includes('await window.batchStudio.execution.leave(project.rootPath)'));
 const leaveHandler = main.slice(
   main.indexOf('ipcMain.handle(IPC.EXECUTION_LEAVE'),
   main.indexOf('ipcMain.handle(IPC.EXECUTION_STOP_FOR_EDIT'),
