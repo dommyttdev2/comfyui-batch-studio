@@ -4104,7 +4104,14 @@ app.on('before-quit', (event) => {
   void (async () => {
     try {
       for (const state of projectWindows.values()) {
-        if (state.projectRoot && !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, 'アプリケーションを終了する')))
+        if (
+          state.projectRoot &&
+          !(await confirmRunStopBeforeLeave(
+            state.projectRoot,
+            state.window,
+            'アプリケーションを終了する',
+          ))
+        )
           return;
       }
       if (executionCoordinator.hasActiveRuns())
