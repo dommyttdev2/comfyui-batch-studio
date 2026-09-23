@@ -1402,11 +1402,7 @@ function isDirectLocalComfyRefused(endpoint: string, error: unknown) {
   } catch {
     return false;
   }
-  if (
-    url.protocol !== 'http:' ||
-    !['127.0.0.1', '[::1]'].includes(url.hostname)
-  )
-    return false;
+  if (url.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(url.hostname)) return false;
   const refused = (value: unknown): boolean => {
     if (!(value instanceof Error)) return false;
     if (value instanceof AggregateError)
@@ -1425,14 +1421,18 @@ async function confirmOfflineLocalRunDiscard(
   owner: BaseWindow,
 ) {
   const ref = { projectRoot: path.resolve(root), runId: run.runId };
-  if (!isDirectLocalComfyRefused(comfy.endpoint, error) ||
-      run.lifecycle === 'RUNNING' || executionCoordinator.hasActive(ref))
+  if (
+    !isDirectLocalComfyRefused(comfy.endpoint, error) ||
+    run.lifecycle === 'RUNNING' ||
+    executionCoordinator.hasActive(ref)
+  )
     throw error;
   const answer = await dialog.showMessageBox(owner, {
     type: 'warning',
     title: '停止したローカルComfyUIの確認',
     message: 'ローカルComfyUIのAPI接続が拒否され、Queue/Historyを取得できません。',
-    detail: '設定先のローカルComfyUIが完全に停止し、別ポートや転送先で旧Promptが実行されていないことを確認してください。Runの再開履歴は破棄しますが、ローカル保存済み画像は残します。確認できない場合はキャンセルしてください。',
+    detail:
+      '設定先のローカルComfyUIが完全に停止し、別ポートや転送先で旧Promptが実行されていないことを確認してください。Runの再開履歴は破棄しますが、ローカル保存済み画像は残します。確認できない場合はキャンセルしてください。',
     buttons: ['キャンセル', '停止を確認してRunを破棄'],
     defaultId: 0,
     cancelId: 0,
