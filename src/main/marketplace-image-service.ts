@@ -9,9 +9,11 @@ import type {
   MarketplaceImageEditorState,
   MarketplaceImageTarget,
   MarketplaceOutputFormat,
+  MarketplaceSourceType,
 } from '../shared/types.js';
 import { readJson, withTemplateStoreLock, writeJsonAtomic } from './fs-utils.js';
-import { assertFinalArtifactImage } from './final-artifact-image-service.js';
+import { assertFinalArtifactImage, readImageSource, readImagePreview } from './final-artifact-image-service.js';
+import { assertExportedThumbnail } from './thumbnail-service.js';
 import {
   fingerprintMarketplaceSource,
   marketplaceInputSignature,
@@ -107,6 +109,7 @@ export async function createDefaultMarketplaceImageState(): Promise<MarketplaceI
   return {
     schemaVersion: 1,
     sourceImagePath: '',
+    sourceType: 'final-artifact',
     mode: 'marketplace',
     activeTargetId: targets[0]?.id ?? '',
     format: 'jpeg',
@@ -155,6 +158,7 @@ export async function normalizeMarketplaceImageState(
       ? { saveRevision: candidate.saveRevision }
       : {}),
     sourceImagePath: typeof candidate.sourceImagePath === 'string' ? candidate.sourceImagePath : '',
+    sourceType: candidate.sourceType === 'thumbnail' ? 'thumbnail' : 'final-artifact',
     mode: candidate.mode === 'custom' ? 'custom' : 'marketplace',
     activeTargetId,
     format,
@@ -232,9 +236,23 @@ function normalizedPngImage(dataUrl: string | undefined) {
   return image;
 }
 
-async function loadSource(root: string, sourceImagePath: string, sourcePngDataUrl?: string) {
+export async function assertMarketplaceSource(root: string, imagePath: string, sourceType: MarketplaceSourceType) {
+  return sourceType === 'thumbnail'
+    ? assertExportedThumbnail(root, imagePath)
+    : assertFinalArtifactImage(root, imagePath);
+}
+
+export async function readMarketplaceSource(root: string, imagePath: string, sourceType: MarketplaceSourceType) {
+  return readImageSource(await assertMarketplaceSource(root, imagePath, sourceType));
+}
+
+export async function readMarketplaceSourcePreview(root: string, imagePath: string, sourceType: MarketplaceSourceType) {
+  return readImagePreview(await assertMarketplaceSource(root, imagePath, sourceType));
+}
+
+async function loadSource(root: string, sourceImagePath: string, sourcePngDataUrl?: string, sourceType: MarketplaceSourceType = 'final-artifact') {
   if (!sourceImagePath) throw new Error('入力画像を選択してください。');
-  const resolved = await assertFinalArtifactImage(root, sourceImagePath);
+  const resolved = await assertMarketplaceSource(root, sourceImagePath, sourceType);
   const info = await stat(resolved);
   if (!info.isFile()) throw new Error('入力画像が見つかりません。');
   if (info.size > MAX_INPUT_BYTES) throw new Error('入力画像は100MB以下にしてください。');
@@ -283,7 +301,7 @@ export async function generateMarketplaceImages(
 ): Promise<MarketplaceGenerationResult> {
   const state = await saveMarketplaceImageState(root, value);
   const targets = await getMarketplaceImageTargets();
-  const { resolved, image, size } = await loadSource(root, state.sourceImagePath, sourcePngDataUrl);
+  const { resolved, image, size } = await loadSource(root, state.sourceImagePath, sourcePngDataUrl, state.sourceType);
   const source = await fingerprintMarketplaceSource(resolved);
   const inputSignature = marketplaceInputSignature(state, targets);
   const outputDirectory = path.join(root, 'marketplace');
@@ -357,7 +375,7 @@ export async function exportCustomMarketplaceImage(
   sourcePngDataUrl?: string,
 ): Promise<MarketplaceGenerationResult> {
   const state = await saveMarketplaceImageState(root, value);
-  const { image, size } = await loadSource(root, state.sourceImagePath, sourcePngDataUrl);
+  const { image, size } = await loadSource(root, state.sourceImagePath, sourcePngDataUrl, state.sourceType);
   const crop = clampCrop(
     state.custom.crop,
     size.width,
@@ -466,10 +484,11 @@ export async function renderMarketplacePng(
   widthValue: number,
   heightValue: number,
   sourcePngDataUrl?: string,
+  sourceType: MarketplaceSourceType = 'final-artifact',
 ) {
   const width = Math.round(finite(widthValue, 1, 1, 20000));
   const height = Math.round(finite(heightValue, 1, 1, 20000));
-  const { image, size } = await loadSource(root, sourceImagePath, sourcePngDataUrl);
+  const { image, size } = await loadSource(root, sourceImagePath, sourcePngDataUrl, sourceType);
   const crop = clampCrop(cropValue, size.width, size.height, width, height);
   return renderLanczosCrop(image, crop, width, height).toDataURL();
 }
@@ -491,7 +510,7 @@ export async function generateMarketplaceZip(
   const manifest = await readJson<MarketplaceGenerationManifest>(generationManifestPath(root));
   if (state.format !== normalizedFormat || !manifest)
     throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
-  const sourcePath = await assertFinalArtifactImage(root, state.sourceImagePath).catch(() => {
+  const sourcePath = await assertMarketplaceSource(root, state.sourceImagePath, state.sourceType).catch(() => {
     throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
   });
   const source = await fingerprintMarketplaceSource(sourcePath).catch(() => {
