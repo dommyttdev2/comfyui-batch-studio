@@ -546,7 +546,9 @@ export async function generateMarketplaceZip(
   const targets = await getMarketplaceImageTargets();
   const extension = FORMAT_EXTENSIONS[normalizedFormat];
   const outputDirectory = await marketplaceOutputDirectory(root);
-  const manifest = await readJson<MarketplaceGenerationManifest>(generationManifestPath(outputDirectory));
+  const manifest = await readJson<MarketplaceGenerationManifest>(
+    generationManifestPath(outputDirectory),
+  );
   if (state.format !== normalizedFormat || !manifest)
     throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
   const sourcePath = await assertMarketplaceSource(

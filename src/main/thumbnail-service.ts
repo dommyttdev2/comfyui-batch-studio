@@ -231,7 +231,10 @@ export async function loadThumbnailState(root: string): Promise<ThumbnailEditorS
   // their selected fonts in the saved editor state, so do not block image display on it.
   if (stored) return normalizeThumbnailState(stored);
   const fonts = await listThumbnailFonts();
-  return normalizeThumbnailState(null, fonts.includes('Meiryo UI') ? 'Meiryo UI' : 'Times New Roman');
+  return normalizeThumbnailState(
+    null,
+    fonts.includes('Meiryo UI') ? 'Meiryo UI' : 'Times New Roman',
+  );
 }
 
 export async function saveThumbnailState(

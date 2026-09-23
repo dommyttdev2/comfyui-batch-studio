@@ -3064,8 +3064,10 @@ function register() {
   });
   ipcMain.handle(IPC.THUMBNAIL_READ_EDITOR_IMAGE, async (_e, imagePath: unknown) => {
     if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
-    return (await readCachedThumbnailImage(app.getPath('userData'), imagePath, 'editor'))
-      ?? readThumbnailImage(imagePath);
+    return (
+      (await readCachedThumbnailImage(app.getPath('userData'), imagePath, 'editor')) ??
+      readThumbnailImage(imagePath)
+    );
   });
   ipcMain.handle(IPC.THUMBNAIL_STORE_WEBP_PREVIEW, (_e, imagePath: unknown, dataUrl: unknown) => {
     if (typeof imagePath !== 'string' || typeof dataUrl !== 'string')

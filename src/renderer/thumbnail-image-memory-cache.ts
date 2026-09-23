@@ -41,5 +41,9 @@ export async function cachedEditorImage(source: ThumbnailImageSource): Promise<H
     return image;
   });
   pending.set(key, task);
-  try { return await task; } finally { pending.delete(key); }
+  try {
+    return await task;
+  } finally {
+    pending.delete(key);
+  }
 }

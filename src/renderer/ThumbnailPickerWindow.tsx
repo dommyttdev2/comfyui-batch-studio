@@ -160,7 +160,10 @@ function ThumbnailPickerChoice({
           .readPreview(item.path)
           .then((source) => {
             if (cancelled) return;
-            if (!source) { setFailed(true); return; }
+            if (!source) {
+              setFailed(true);
+              return;
+            }
             if (!source.dataUrl.startsWith('data:image/webp;')) {
               setPreview(source);
               return;
@@ -175,14 +178,20 @@ function ThumbnailPickerChoice({
               canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));
               canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
               const context = canvas.getContext('2d');
-              if (!context) { setFailed(true); return; }
+              if (!context) {
+                setFailed(true);
+                return;
+              }
               context.drawImage(image, 0, 0, canvas.width, canvas.height);
               const dataUrl = canvas.toDataURL('image/png');
               setPreview({ ...source, width: canvas.width, height: canvas.height, dataUrl });
-              void window.batchStudio.thumbnail.storeWebpPreview(item.path, dataUrl)
+              void window.batchStudio.thumbnail
+                .storeWebpPreview(item.path, dataUrl)
                 .catch(() => undefined);
             };
-            image.onerror = () => { if (!cancelled) setFailed(true); };
+            image.onerror = () => {
+              if (!cancelled) setFailed(true);
+            };
             image.src = source.dataUrl;
           })
           .catch(() => {

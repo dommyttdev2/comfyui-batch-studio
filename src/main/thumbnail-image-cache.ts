@@ -17,8 +17,12 @@ let completed = 0;
 async function limited<T>(action: () => Promise<T>): Promise<T> {
   if (active >= MAX_CONCURRENT) await new Promise<void>((resolve) => queue.push(resolve));
   active++;
-  try { return await action(); }
-  finally { active--; queue.shift()?.(); }
+  try {
+    return await action();
+  } finally {
+    active--;
+    queue.shift()?.();
+  }
 }
 
 function cacheFile(root: string, variant: ThumbnailCacheVariant, key: string, extension: string) {
@@ -29,17 +33,34 @@ async function sourceIdentity(file: string, variant: ThumbnailCacheVariant) {
   const resolved = path.resolve(file);
   const info = await stat(resolved);
   if (!info.isFile()) throw new Error('画像ファイルが存在しません。');
-  const key = createHash('sha256').update(JSON.stringify([
-    process.platform === 'win32' ? resolved.toLowerCase() : resolved,
-    info.size, info.mtimeMs, info.ctimeMs, variant, MAX_EDGE[variant],
-  ])).digest('hex');
+  const key = createHash('sha256')
+    .update(
+      JSON.stringify([
+        process.platform === 'win32' ? resolved.toLowerCase() : resolved,
+        info.size,
+        info.mtimeMs,
+        info.ctimeMs,
+        variant,
+        MAX_EDGE[variant],
+      ]),
+    )
+    .digest('hex');
   return { resolved, info, key };
 }
 
-function toSource(file: string, bytes: Buffer, mime: string, version: string,
-  width: number, height: number): ThumbnailImageSource {
+function toSource(
+  file: string,
+  bytes: Buffer,
+  mime: string,
+  version: string,
+  width: number,
+  height: number,
+): ThumbnailImageSource {
   return {
-    path: file, name: path.basename(file), width, height,
+    path: file,
+    name: path.basename(file),
+    width,
+    height,
     dataUrl: `data:${mime};base64,${bytes.toString('base64')}`,
     cacheVersion: version,
   };
@@ -66,7 +87,9 @@ async function pruneCache(root: string) {
 }
 
 export async function readCachedThumbnailImage(
-  userDataRoot: string, file: string, variant: ThumbnailCacheVariant,
+  userDataRoot: string,
+  file: string,
+  variant: ThumbnailCacheVariant,
 ): Promise<ThumbnailImageSource | null> {
   const { resolved, info, key } = await sourceIdentity(file, variant);
   const jpeg = /\.jpe?g$/i.test(resolved);
@@ -76,7 +99,8 @@ export async function readCachedThumbnailImage(
   const cached = await readFile(target).catch(() => null);
   if (cached) {
     const size = nativeImage.createFromBuffer(cached).getSize();
-    if (size.width && size.height) return toSource(resolved, cached, mime, key, size.width, size.height);
+    if (size.width && size.height)
+      return toSource(resolved, cached, mime, key, size.width, size.height);
     await rm(target, { force: true }).catch(() => undefined);
   }
   const existing = pending.get(target);
@@ -86,7 +110,8 @@ export async function readCachedThumbnailImage(
     const already = await readFile(target).catch(() => null);
     if (already) {
       const size = nativeImage.createFromBuffer(already).getSize();
-      if (size.width && size.height) return toSource(resolved, already, mime, key, size.width, size.height);
+      if (size.width && size.height)
+        return toSource(resolved, already, mime, key, size.width, size.height);
     }
     let image: Electron.NativeImage;
     let width: number;
@@ -103,28 +128,46 @@ export async function readCachedThumbnailImage(
       throw new Error('画像キャッシュを生成できませんでした。');
     }
     const ratio = Math.min(1, MAX_EDGE[variant] / Math.max(width, height));
-    const thumbnail = ratio < 1
-      ? image.resize({ width: Math.max(1, Math.round(width * ratio)),
-        height: Math.max(1, Math.round(height * ratio)), quality: 'good' })
-      : image;
+    const thumbnail =
+      ratio < 1
+        ? image.resize({
+            width: Math.max(1, Math.round(width * ratio)),
+            height: Math.max(1, Math.round(height * ratio)),
+            quality: 'good',
+          })
+        : image;
     const size = thumbnail.getSize();
     const bytes = jpeg ? thumbnail.toJPEG(92) : thumbnail.toPNG();
     const after = await stat(resolved);
-    if (after.size !== info.size || after.mtimeMs !== info.mtimeMs || after.ctimeMs !== info.ctimeMs)
+    if (
+      after.size !== info.size ||
+      after.mtimeMs !== info.mtimeMs ||
+      after.ctimeMs !== info.ctimeMs
+    )
       throw new Error('画像が処理中に変更されました。');
     await mkdir(path.dirname(target), { recursive: true });
     const temp = `${target}.${randomUUID()}.tmp`;
-    try { await writeFile(temp, bytes); await rename(temp, target); }
-    finally { await rm(temp, { force: true }).catch(() => undefined); }
+    try {
+      await writeFile(temp, bytes);
+      await rename(temp, target);
+    } finally {
+      await rm(temp, { force: true }).catch(() => undefined);
+    }
     if (++completed % 32 === 0) void pruneCache(userDataRoot).catch(() => undefined);
     return toSource(resolved, bytes, mime, key, size.width, size.height);
   });
   pending.set(target, job);
-  try { return await job; } finally { pending.delete(target); }
+  try {
+    return await job;
+  } finally {
+    pending.delete(target);
+  }
 }
 
 export async function storeWebpThumbnailPreview(
-  userDataRoot: string, file: string, dataUrl: string,
+  userDataRoot: string,
+  file: string,
+  dataUrl: string,
 ): Promise<void> {
   if (!/\.webp$/i.test(file) || !dataUrl.startsWith('data:image/png;base64,'))
     throw new Error('Invalid WebP preview.');
@@ -141,6 +184,10 @@ export async function storeWebpThumbnailPreview(
   const target = cacheFile(userDataRoot, 'gallery', before.key, 'png');
   await mkdir(path.dirname(target), { recursive: true });
   const temp = `${target}.${randomUUID()}.tmp`;
-  try { await writeFile(temp, bytes); await rename(temp, target); }
-  finally { await rm(temp, { force: true }).catch(() => undefined); }
+  try {
+    await writeFile(temp, bytes);
+    await rename(temp, target);
+  } finally {
+    await rm(temp, { force: true }).catch(() => undefined);
+  }
 }
