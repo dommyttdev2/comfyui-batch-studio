@@ -490,3 +490,24 @@
   align-self: stretch;
   margin-top: auto;
 }
+
+.selected-models-empty {
+  color: #9ba4b1;
+  margin: 14px 0 0;
+}
+.selected-model-reason {
+  padding-top: 8px;
+  border-top: 1px solid #34404d;
+  color: #aab5c5;
+  font-size: 12px;
+}
+.selected-model-reason summary {
+  cursor: pointer;
+}
+.selected-model-reason p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.selected-model-card .grok-lora-indicators {
+  margin-top: 0;
+}

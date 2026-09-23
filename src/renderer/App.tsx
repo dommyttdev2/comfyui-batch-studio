@@ -22,6 +22,12 @@ import { VastAiIntegrationPanel } from './integrations/VastAiIntegrationPanel';
 import { HomeConnectedServices } from './HomeConnectedServices';
 import { StageResetMenu, type ResetScope } from './StageResetMenu';
 import { StageErrorBoundary } from './StageErrorBoundary';
+import {
+  ImportNoticeContext,
+  ImportToastStack,
+  type ImportNotice,
+  type ImportNoticeInput,
+} from './ArtifactImportToast';
 import './divider.css';
 
 const blankBrief: ProjectBriefInput = {
@@ -119,7 +125,12 @@ function App() {
     [restoring, setRestoring] = useState(true),
     [tool, setTool] = useState<StandaloneTool>(null),
     [resetRevision, setResetRevision] = useState(0),
-    [stageReloadRevision, setStageReloadRevision] = useState(0);
+    [stageReloadRevision, setStageReloadRevision] = useState(0),
+    [importNotices, setImportNotices] = useState<ImportNotice[]>([]);
+  const importSequence = useRef(0);
+  const seenAutoImports = useRef(new Set<string>());
+  const currentProjectRoot = useRef(project?.rootPath);
+  currentProjectRoot.current = project?.rootPath;
   const navigationPending = useRef(false);
   const navigateStage = async (next: Stage) => {
     if (!project || next === stage || navigationPending.current) return;
@@ -137,15 +148,37 @@ function App() {
   };
   const refresh = async () =>
     project && setProject(await window.batchStudio.project.scan(project.rootPath));
+  const notifyImported = async (notice: ImportNoticeInput) => {
+    const next = await window.batchStudio.project.scan(notice.root);
+    if (currentProjectRoot.current !== notice.root) return;
+    setProject((previous) => (previous?.rootPath === notice.root ? next : previous));
+    setImportNotices((previous) => [
+      ...previous.slice(-2),
+      { ...notice, id: ++importSequence.current },
+    ]);
+  };
+  useEffect(() => {
+    setImportNotices([]);
+    seenAutoImports.current.clear();
+  }, [project?.rootPath]);
   useEffect(() => {
     if (!project) return;
     const root = project.rootPath;
     return window.batchStudio.autoArtifact.onEvent((event) => {
       if (event.root !== root || event.phase !== 'imported') return;
-      void window.batchStudio.project
-        .scan(root)
-        .then((next) => setProject((previous) => (previous?.rootPath === root ? next : previous)))
-        .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
+      const key = [event.provider, event.stage, event.sourceId, event.filePath].join(':');
+      if (seenAutoImports.current.has(key)) return;
+      seenAutoImports.current.add(key);
+      void notifyImported({
+        root,
+        stage: event.stage,
+        provider: event.provider,
+        fileName: event.fileName,
+        summary: event.summary,
+      }).catch((cause) => {
+        seenAutoImports.current.delete(key);
+        setError(cause instanceof Error ? cause.message : String(cause));
+      });
     });
   }, [project?.rootPath]);
   const run: Runner = async (fn) => {
@@ -430,6 +463,12 @@ function App() {
         </div>
       </header>
       {error && <div className="errorbar">{error}</div>}
+      <ImportToastStack
+        notices={importNotices}
+        onDismiss={(id) =>
+          setImportNotices((previous) => previous.filter((item) => item.id !== id))
+        }
+      />
       <div className="body">
         {project ? (
           <nav>
@@ -540,19 +579,21 @@ function App() {
                       setStageReloadRevision((revision) => revision + 1);
                     }}
                   >
-                    <StageView
-                      project={project}
-                      stage={stage}
-                      provider={paneProvider}
-                      refresh={refresh}
-                      setProject={setProject}
-                      run={run}
-                      resetFrom={resetFrom}
-                      onDiscarded={() => {
-                        setStage('モデル選定');
-                        void refresh();
-                      }}
-                    />
+                    <ImportNoticeContext.Provider value={notifyImported}>
+                      <StageView
+                        project={project}
+                        stage={stage}
+                        provider={paneProvider}
+                        refresh={refresh}
+                        setProject={setProject}
+                        run={run}
+                        resetFrom={resetFrom}
+                        onDiscarded={() => {
+                          setStage('モデル選定');
+                          void refresh();
+                        }}
+                      />
+                    </ImportNoticeContext.Provider>
                   </StageErrorBoundary>
                 </>
               )}

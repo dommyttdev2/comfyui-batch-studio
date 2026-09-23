@@ -152,6 +152,7 @@ export async function importAutoArtifact(
       ...base,
       phase: 'imported',
       filePath,
+      summary: result.summary,
       message: `${fileName} を検証して下書きに取り込みました。確定は行っていません。`,
     };
     ledger.records[key] = imported;
