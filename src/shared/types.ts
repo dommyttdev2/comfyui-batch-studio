@@ -1323,6 +1323,11 @@ export interface BatchStudioApi {
       currentImagePath: string,
     ) => Promise<ThumbnailPickerSession>;
     pickerContext: () => Promise<ThumbnailPickerContext>;
+    logPickerPerf: (
+      event: string,
+      metrics: Record<string, number | string | boolean>,
+    ) => Promise<void>;
+    openPickerPerfLog: () => Promise<void>;
     previewPicker: (imagePath: string) => Promise<void>;
     commitPicker: (imagePath: string) => Promise<void>;
     onPickerPreview: (listener: (selection: ThumbnailPickerSelection) => void) => () => void;

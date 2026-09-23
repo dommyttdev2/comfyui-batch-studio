@@ -88,6 +88,8 @@ export const IPC = {
   THUMBNAIL_DELETE_OUTPUTS: 'thumbnail:delete-outputs',
   THUMBNAIL_PICKER_OPEN: 'thumbnail-picker:open',
   THUMBNAIL_PICKER_CONTEXT: 'thumbnail-picker:context',
+  THUMBNAIL_PICKER_PERF: 'thumbnail-picker:perf',
+  THUMBNAIL_PICKER_PERF_OPEN: 'thumbnail-picker:perf-open',
   THUMBNAIL_PICKER_PREVIEW: 'thumbnail-picker:preview',
   THUMBNAIL_PICKER_COMMIT: 'thumbnail-picker:commit',
   THUMBNAIL_PICKER_PREVIEWED: 'thumbnail-picker:previewed',

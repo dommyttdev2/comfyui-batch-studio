@@ -6,6 +6,17 @@ import type { ThumbnailImageSource } from '../shared/types.js';
 import { readOrientedNativeImage } from './image-pipeline.js';
 
 export type ThumbnailCacheVariant = 'editor' | 'gallery';
+export type ThumbnailCacheTiming = {
+  hit?: boolean;
+  statMs?: number;
+  diskReadMs?: number;
+  queuedMs?: number;
+  decodeMs?: number;
+  resizeMs?: number;
+  encodeMs?: number;
+  writeMs?: number;
+  sharedMs?: number;
+};
 const MAX_EDGE: Record<ThumbnailCacheVariant, number> = { editor: 2048, gallery: 320 };
 const LIMIT_BYTES = 512 * 1024 * 1024;
 const MAX_CONCURRENT = 2;
@@ -90,34 +101,55 @@ export async function readCachedThumbnailImage(
   userDataRoot: string,
   file: string,
   variant: ThumbnailCacheVariant,
+  timing?: ThumbnailCacheTiming,
 ): Promise<ThumbnailImageSource | null> {
+  const started = performance.now();
   const { resolved, info, key } = await sourceIdentity(file, variant);
+  if (timing) timing.statMs = performance.now() - started;
   const jpeg = /\.jpe?g$/i.test(resolved);
   const extension = jpeg ? 'jpg' : 'png';
   const mime = jpeg ? 'image/jpeg' : 'image/png';
   const target = cacheFile(userDataRoot, variant, key, extension);
+  const readStarted = performance.now();
   const cached = await readFile(target).catch(() => null);
+  if (timing) timing.diskReadMs = performance.now() - readStarted;
   if (cached) {
     const size = nativeImage.createFromBuffer(cached).getSize();
-    if (size.width && size.height)
+    if (size.width && size.height) {
+      if (timing) timing.hit = true;
       return toSource(resolved, cached, mime, key, size.width, size.height);
+    }
     await rm(target, { force: true }).catch(() => undefined);
   }
   const existing = pending.get(target);
-  if (existing) return existing;
+  if (existing) {
+    const sharedStarted = performance.now();
+    const result = await existing;
+    if (timing) {
+      timing.hit = false;
+      timing.sharedMs = performance.now() - sharedStarted;
+    }
+    return result;
+  }
+  const queuedStarted = performance.now();
   const job = limited(async () => {
+    if (timing) timing.queuedMs = performance.now() - queuedStarted;
     // Another request may have populated the file while queued.
     const already = await readFile(target).catch(() => null);
     if (already) {
       const size = nativeImage.createFromBuffer(already).getSize();
-      if (size.width && size.height)
+      if (size.width && size.height) {
+        if (timing) timing.hit = true;
         return toSource(resolved, already, mime, key, size.width, size.height);
+      }
     }
     let image: Electron.NativeImage;
     let width: number;
     let height: number;
     try {
+      const decodeStarted = performance.now();
       const oriented = await readOrientedNativeImage(resolved);
+      if (timing) timing.decodeMs = performance.now() - decodeStarted;
       image = oriented.image;
       width = oriented.width;
       height = oriented.height;
@@ -128,6 +160,7 @@ export async function readCachedThumbnailImage(
       throw new Error('画像キャッシュを生成できませんでした。');
     }
     const ratio = Math.min(1, MAX_EDGE[variant] / Math.max(width, height));
+    const resizeStarted = performance.now();
     const thumbnail =
       ratio < 1
         ? image.resize({
@@ -136,8 +169,11 @@ export async function readCachedThumbnailImage(
             quality: 'good',
           })
         : image;
+    if (timing) timing.resizeMs = performance.now() - resizeStarted;
     const size = thumbnail.getSize();
+    const encodeStarted = performance.now();
     const bytes = jpeg ? thumbnail.toJPEG(92) : thumbnail.toPNG();
+    if (timing) timing.encodeMs = performance.now() - encodeStarted;
     const after = await stat(resolved);
     if (
       after.size !== info.size ||
@@ -145,6 +181,7 @@ export async function readCachedThumbnailImage(
       after.ctimeMs !== info.ctimeMs
     )
       throw new Error('画像が処理中に変更されました。');
+    const writeStarted = performance.now();
     await mkdir(path.dirname(target), { recursive: true });
     const temp = `${target}.${randomUUID()}.tmp`;
     try {
@@ -152,6 +189,10 @@ export async function readCachedThumbnailImage(
       await rename(temp, target);
     } finally {
       await rm(temp, { force: true }).catch(() => undefined);
+    }
+    if (timing) {
+      timing.hit = false;
+      timing.writeMs = performance.now() - writeStarted;
     }
     if (++completed % 32 === 0) void pruneCache(userDataRoot).catch(() => undefined);
     return toSource(resolved, bytes, mime, key, size.width, size.height);
