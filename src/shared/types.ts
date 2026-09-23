@@ -1367,6 +1367,7 @@ export interface BatchStudioApi {
       width: number,
       height: number,
       sourcePngDataUrl?: string,
+      sourceType?: MarketplaceSourceType,
     ) => Promise<string>;
     openPicker: (root: string, currentImagePath: string, sourceType: MarketplaceSourceType) => Promise<MarketplacePickerSession>;
     pickerContext: () => Promise<MarketplacePickerContext>;
