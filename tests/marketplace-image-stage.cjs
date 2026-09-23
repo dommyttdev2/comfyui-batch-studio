@@ -11,9 +11,9 @@ const stage = fs.readFileSync(
   'utf8',
 );
 assert.equal(
-  (stage.match(/onClick=\{openPicker\}/g) ?? []).length,
-  1,
-  'Marketplace editor must expose one image-picker action without duplicate buttons',
+  (stage.match(/onClick=\{\(\) => openPicker\('/g) ?? []).length,
+  2,
+  'Marketplace editor must expose separate Final Artifact and Thumbnail pickers',
 );
 const picker = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'MarketplaceImagePickerWindow.tsx'),
@@ -59,16 +59,9 @@ matchCode(
   /finalArtifact\.status\(project\.rootPath\)/,
   'stage must depend on Final Artifact status',
 );
-matchCode(
-  stage,
-  /サムネイル工程の生成物は使用しません/,
-  'stage must explicitly avoid Thumbnail output as an input source',
-);
-doesNotMatchCode(
-  service,
-  /path\.join\(root, 'thumbnails'/,
-  'marketplace generation must never read Thumbnail output',
-);
+matchCode(stage, /サムネイルから画像を選択/, 'stage must allow exported thumbnail selection');
+matchCode(service, /assertExportedThumbnail/, 'marketplace must validate thumbnail input scope');
+matchCode(service, /state\.sourceType/, 'generation must use the selected source type');
 matchCode(
   service,
   /marketplace-images\.json/,
@@ -133,7 +126,7 @@ matchCode(
 );
 matchCode(
   preload,
-  /generate: \(r, s, w, p\)[\s\S]*renderPng: \(r, p, c, w, h, s\)/,
+  /generate: \(r, s, w, p\)[\s\S]*renderPng: \(r, p, c, w, h, s, t\)/,
   'WebP normalization payload must cross preload explicitly',
 );
 matchCode(
@@ -141,6 +134,8 @@ matchCode(
   /finalArtifact\.listImages\(nextContext\.root\)/,
   'marketplace picker must list Final Artifact images',
 );
+matchCode(picker, /marketplace\.listThumbnailImages\(nextContext\.root\)/, 'picker must list exported thumbnails');
+matchCode(picker, /marketplace\.readSourcePreview\(root, item\.path, sourceType\)/, 'preview must validate its source type');
 matchCode(picker, /marketplace\.previewPicker/, 'first picker click must preview the image');
 matchCode(picker, /marketplace[\s\S]*commitPicker/, 'second picker click must commit the image');
 matchCode(
