@@ -45,19 +45,15 @@ matchCode(
 );
 matchCode(
   executionSource,
-  /\{canStopScheduling&&\(<button/,
-  'Only show Stop scheduling when it is available for the current Run',
+  /\{\(canStopScheduling\|\|pauseRequestInFlight\)&&current&&\(<button/,
+  'Only show pause when available, retaining feedback while the request is in flight',
 );
 matchCode(
   executionSource,
   /\{canForceInterrupt&&\(<button/,
   'Only show Force interrupt during an interruptible generation phase',
 );
-matchCode(
-  executionSource,
-  /<details className="execution-advanced-actions">/,
-  'Replacement Run actions must be secondary to normal execution controls',
-);
+assert.doesNotMatch(executionSource, /<details className="execution-advanced-actions">/);
 matchCode(
   executionSource,
   /<details className="execution-technical-details">/,
@@ -73,12 +69,12 @@ matchCode(
   /cloudInstanceStatusMessage\(current\)&&\(/,
   'Remote cloud instance state must stay visible outside technical details',
 );
-matchCode(executionSource, /Stop scheduling/);
+matchCode(executionSource, /一時停止/);
 matchCode(executionSource, /Force interrupt/);
 matchCode(
   executionSource,
-  /current\.controls\.scheduling!=='STOPPED'/,
-  'Stop scheduling must remain available until the Run has actually stopped scheduling',
+  /current\.controls\.scheduling==='ACTIVE'/,
+  'Pause can be requested only before one has already been requested',
 );
 matchCode(
   executionSource,
