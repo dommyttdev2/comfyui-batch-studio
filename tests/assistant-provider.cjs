@@ -93,11 +93,15 @@ matchCode(
   "Out-of-order restores must not select the previous stage's provider",
 );
 assert.ok(
-  read('src/main/main.ts').includes('ipcMain.handle(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider)'),
+  read('src/main/main.ts').includes(
+    'ipcMain.handle(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider)',
+  ),
   'Provider selection must work independently of the Codex IPC namespace',
 );
 assert.ok(
-  read('src/main/main.ts').includes('ipcMain.handle(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider)'),
+  read('src/main/main.ts').includes(
+    'ipcMain.handle(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider)',
+  ),
   'Switching between Grok and Codex must use the shared assistant IPC',
 );
 assert.ok(
