@@ -43,13 +43,23 @@ matchCode(
 );
 matchCode(
   read('src/renderer/App.tsx'),
-  /assistant\.getProvider\(context\)/,
+  /getAssistantProvider\(context\)/,
   'App must load the project-specific choice before opening a stage',
 );
 matchCode(
   read('src/renderer/App.tsx'),
-  /assistant\.setProvider\(provider, contextStage\)/,
+  /setAssistantProvider\(provider, contextStage\)/,
   'Switching agents must persist the selected provider',
+);
+matchCode(
+  read('src/renderer/App.tsx'),
+  /missingIpcHandler\(error, 'assistant:get-provider'\)[\s\S]*?codex\.getProvider\(stage\)/,
+  'A renderer updated under an older main process must restore through the legacy provider channel',
+);
+matchCode(
+  read('src/renderer/App.tsx'),
+  /missingIpcHandler\(error, 'assistant:set-provider'\)[\s\S]*?codex\.setProvider\(provider, stage\)/,
+  'A renderer updated under an older main process must save through the legacy provider channel',
 );
 matchCode(
   read('src/main/main.ts'),

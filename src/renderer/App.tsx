@@ -61,6 +61,38 @@ function stageResetScope(stage: Stage): ResetScope | null {
   return null;
 }
 
+function missingIpcHandler(error: unknown, channel: string) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('No handler registered for') && message.includes(channel);
+}
+
+async function getAssistantProvider(stage: NonNullable<ReturnType<typeof grokContextStage>>) {
+  const shared = window.batchStudio.assistant;
+  if (!shared?.getProvider) return window.batchStudio.codex.getProvider(stage);
+  try {
+    return await shared.getProvider(stage);
+  } catch (error) {
+    // A main process that survived an on-disk update only knows the legacy
+    // Codex-named channel. It still stores both Grok and Codex selections.
+    if (!missingIpcHandler(error, 'assistant:get-provider')) throw error;
+    return window.batchStudio.codex.getProvider(stage);
+  }
+}
+
+async function setAssistantProvider(
+  provider: AssistantPaneProvider,
+  stage: NonNullable<ReturnType<typeof grokContextStage>>,
+) {
+  const shared = window.batchStudio.assistant;
+  if (!shared?.setProvider) return window.batchStudio.codex.setProvider(provider, stage);
+  try {
+    return await shared.setProvider(provider, stage);
+  } catch (error) {
+    if (!missingIpcHandler(error, 'assistant:set-provider')) throw error;
+    return window.batchStudio.codex.setProvider(provider, stage);
+  }
+}
+
 function App() {
   const [project, setProject] = useState<ProjectSummary | null>(null),
     [recent, setRecent] = useState<ProjectSummary[]>([]),
@@ -221,8 +253,7 @@ function App() {
       previous?.key === key ? previous : key ? { key, count: 0 } : null,
     );
     if (root && context && key) {
-      void window.batchStudio.assistant
-        .getProvider(context)
+      void getAssistantProvider(context)
         .then((provider) => {
           if (cancelled) return;
           setPaneProvider(provider);
@@ -255,13 +286,34 @@ function App() {
     }));
     setProviderRestoreRevision((revision) => revision + 1);
   };
+  const recoverTemporaryProvider = async () => {
+    if (!contextStage || !providerKey || temporaryGrokKey !== providerKey || switchingProvider)
+      return;
+    const selectedKey = providerKey;
+    setSwitchingProvider(true);
+    setError('');
+    try {
+      const provider = await getAssistantProvider(contextStage);
+      if (activeProviderKey.current !== selectedKey) return;
+      setPaneProvider(provider);
+      setPaneProviderRoot(selectedKey);
+      setTemporaryGrokKey(null);
+      setProviderRestoreFailure(null);
+      setProviderRestoreAttempts(null);
+    } catch (e) {
+      if (activeProviderKey.current === selectedKey)
+        setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSwitchingProvider(false);
+    }
+  };
   const changeProvider = async (provider: AssistantPaneProvider) => {
     if (!project || !contextStage || paneProviderRoot !== providerKey || switchingProvider) return;
     const selectedKey = providerKey;
     setSwitchingProvider(true);
     setError('');
     try {
-      await window.batchStudio.assistant.setProvider(provider, contextStage);
+      await setAssistantProvider(provider, contextStage);
       if (activeProviderKey.current === selectedKey) setPaneProvider(provider);
     } catch (e) {
       if (activeProviderKey.current === selectedKey)
@@ -456,10 +508,16 @@ function App() {
                 )
               ) : (
                 <>
-                  {temporaryGrokKey === providerKey && (
+                  {temporaryGrokKey !== null && temporaryGrokKey === providerKey && (
                     <div className="issue error" role="alert">
                       AIエージェント設定を取得できないため、保存済みの選択を変更せずGrokで一時表示しています。
-                      設定を復元するには、Batch Studioを完全終了してから再起動してください。
+                      <button
+                        type="button"
+                        disabled={switchingProvider}
+                        onClick={() => void recoverTemporaryProvider()}
+                      >
+                        {switchingProvider ? '設定を再取得中…' : '設定を再取得'}
+                      </button>
                     </div>
                   )}
                   <StageErrorBoundary
