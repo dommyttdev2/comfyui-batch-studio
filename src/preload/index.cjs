@@ -251,7 +251,8 @@ contextBridge.exposeInMainWorld('batchStudio', {
     status: (r) => ipcRenderer.invoke(I.EXECUTION_STATUS, r),
     reconcile: (r, id) => ipcRenderer.invoke(I.EXECUTION_RECONCILE, r, id),
     leave: (r) => ipcRenderer.invoke(I.EXECUTION_LEAVE, r),
-    stopForEdit: (r, id, interrupt) => ipcRenderer.invoke(I.EXECUTION_STOP_FOR_EDIT, r, id, interrupt),
+    stopForEdit: (r, id, interrupt) =>
+      ipcRenderer.invoke(I.EXECUTION_STOP_FOR_EDIT, r, id, interrupt),
     discardForEdit: (r, id) => ipcRenderer.invoke(I.EXECUTION_DISCARD_FOR_EDIT, r, id),
     get: (r, id) => ipcRenderer.invoke(I.EXECUTION_GET, r, id),
     stopScheduling: (r, id) => ipcRenderer.invoke(I.EXECUTION_STOP_SCHEDULING, r, id),
