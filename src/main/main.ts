@@ -376,6 +376,9 @@ async function setWindowProject(state: ProjectWindowState, root: string | null) 
     focusProjectWindow(existing);
     throw new Error('このプロジェクトは既に別のWindowで開かれています。');
   }
+  if (state.projectRoot && projectRootKey(state.projectRoot) !== projectRootKey(resolved) &&
+      !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, 'プロジェクトを切り替える')))
+    throw new Error('Runの停止がキャンセルされました。');
   state.projectRoot = resolved;
   await rememberProjectAndRefreshMenu(resolved);
 }
@@ -2599,8 +2602,10 @@ function register() {
   });
   ipcMain.handle(IPC.PROJECT_CREATE, async (event, parent: unknown, brief: ProjectBriefInput) => {
     if (typeof parent !== 'string') throw new Error('Invalid parent path');
-    const state = projectWindowForSender(event.sender),
-      root = await createProject(parent, brief),
+    const state = projectWindowForSender(event.sender);
+    if (state.projectRoot && !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, '新規プロジェクトの作成')))
+      throw new Error('Runの停止がキャンセルされました。');
+    const root = await createProject(parent, brief),
       existing = projectWindowForRoot(root, state);
     if (existing) {
       focusProjectWindow(existing);
