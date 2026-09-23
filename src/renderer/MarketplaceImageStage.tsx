@@ -5,6 +5,7 @@ import type {
   MarketplaceCropRect,
   MarketplaceImageEditorState,
   MarketplaceImageTarget,
+  MarketplaceSourceType,
   ProjectSummary,
 } from '../shared/types';
 import { MarketplacePickerGeneration } from '../shared/marketplace-picker-generation';
@@ -130,11 +131,13 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   const [source, setSource] = useState<FinalArtifactImageSource | null>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [finalArtifact, setFinalArtifact] = useState<FinalArtifactStatus | null>(null);
+  const [hasExportedThumbnails, setHasExportedThumbnails] = useState(false);
   const [notice, setNotice] = useState('');
   const [lastPath, setLastPath] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const pickerSessionRef = useRef<string | null>(null);
+  const pickerSourceTypeRef = useRef<MarketplaceSourceType>('final-artifact');
   const pickerBeforeStateRef = useRef<MarketplaceImageEditorState | null>(null);
   const pickerBeforeMediaRef = useRef<{
     source: FinalArtifactImageSource | null;
@@ -192,10 +195,12 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     targetDefinitions: MarketplaceImageTarget[],
     preserveExisting: boolean,
     isCurrent: () => boolean = () => true,
+    sourceType: MarketplaceSourceType = baseState.sourceType,
   ): Promise<MarketplaceImageEditorState | null> => {
-    const nextSource = await window.batchStudio.finalArtifact.readImage(
+    const nextSource = await window.batchStudio.marketplace.readSource(
       project.rootPath,
       imagePath,
+      sourceType,
     );
     if (!isCurrent()) return null;
     if (!nextSource) throw new Error('選択した画像を読み込めませんでした。');
@@ -222,6 +227,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     const nextState = {
       ...baseState,
       sourceImagePath: nextSource.path,
+      sourceType,
       targets: nextTargets,
       custom: { ...baseState.custom, crop: customCrop },
     };
@@ -238,21 +244,24 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     const loadToken = pickerGenerationRef.current.invalidate();
     const isCurrent = () => !cancelled && pickerGenerationRef.current.isCurrent(loadToken);
     void run(async () => {
-      const [nextTargets, nextState, nextFinalArtifact] = await Promise.all([
+      const [nextTargets, nextState, nextFinalArtifact, exportedThumbnails] = await Promise.all([
         window.batchStudio.marketplace.targets(),
         window.batchStudio.marketplace.load(project.rootPath),
         window.batchStudio.finalArtifact.status(project.rootPath),
+        window.batchStudio.marketplace.listThumbnailImages(project.rootPath).catch(() => []),
       ]);
       if (!isCurrent()) return;
       setTargets(nextTargets);
       setFinalArtifact(nextFinalArtifact);
+      setHasExportedThumbnails(exportedThumbnails.length > 0);
       loadedStateRef.current = true;
       setState(nextState);
       if (!nextState.sourceImagePath) return;
       try {
-        const nextSource = await window.batchStudio.finalArtifact.readImage(
+        const nextSource = await window.batchStudio.marketplace.readSource(
           project.rootPath,
           nextState.sourceImagePath,
+          nextState.sourceType,
         );
         if (!nextSource || !isCurrent()) return;
         const nextImage = await loadBrowserImage(nextSource);
@@ -306,7 +315,14 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       const isCurrent = () =>
         pickerGenerationRef.current.isPreviewCurrent(selection.sessionId, token);
       void run(async () => {
-        const nextState = await applySource(selection.imagePath, base, targets, false, isCurrent);
+        const nextState = await applySource(
+          selection.imagePath,
+          base,
+          targets,
+          false,
+          isCurrent,
+          pickerSourceTypeRef.current,
+        );
         if (!nextState || !isCurrent()) return;
         pickerReadyPreviewRef.current = { path: selection.imagePath, state: nextState };
         setNotice('画像を仮適用しています。同じ画像をもう一度選択すると確定します。');
@@ -333,7 +349,14 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
               ? state?.sourceImagePath === selection.imagePath
                 ? state
                 : ready.state
-              : await applySource(selection.imagePath, base, targets, false, isCurrent);
+              : await applySource(
+                  selection.imagePath,
+                  base,
+                  targets,
+                  false,
+                  isCurrent,
+                  pickerSourceTypeRef.current,
+                );
           if (!nextState || !isCurrent()) return;
           await saveNow(nextState);
           if (!isCurrent()) return;
@@ -369,9 +392,10 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         return;
       }
       void run(async () => {
-        const restored = await window.batchStudio.finalArtifact.readImage(
+        const restored = await window.batchStudio.marketplace.readSource(
           project.rootPath,
           before.sourceImagePath,
+          before.sourceType,
         );
         if (!restored || !pickerGenerationRef.current.isCurrent(token)) return;
         const restoredImage = await loadBrowserImage(restored);
@@ -511,7 +535,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         )
       : 1;
 
-  const openPicker = () => {
+  const openPicker = (sourceType: MarketplaceSourceType) => {
     if (
       !state ||
       pickerOpeningRef.current ||
@@ -521,6 +545,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       return;
     const openingToken = pickerGenerationRef.current.invalidate();
     pickerOpeningRef.current = true;
+    pickerSourceTypeRef.current = sourceType;
     pickerBeforeStateRef.current = state;
     pickerBeforeMediaRef.current = { source, image };
     pickerReadyPreviewRef.current = null;
@@ -528,7 +553,8 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       try {
         const session = await window.batchStudio.marketplace.openPicker(
           project.rootPath,
-          state.sourceImagePath,
+          state.sourceType === sourceType ? state.sourceImagePath : '',
+          sourceType,
         );
         if (!pickerGenerationRef.current.isCurrent(openingToken)) return;
         pickerSessionRef.current = session.sessionId;
@@ -594,6 +620,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
             target.width,
             target.height,
             sourcePngDataUrl,
+            state.sourceType,
           );
           webpDataUrls[target.id] = await encodePngAsWebp(png, target.width, target.height);
         }
@@ -636,6 +663,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
                 state.custom.width,
                 state.custom.height,
                 sourcePngDataUrl,
+                state.sourceType,
               ),
               state.custom.width,
               state.custom.height,
@@ -654,15 +682,13 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   if (!state || !finalArtifact)
     return <div className="panel">販売サイト用画像の編集データを読み込んでいます…</div>;
 
-  if (finalArtifact.state !== 'ready')
+  if (finalArtifact.state !== 'ready' && !hasExportedThumbnails)
     return (
       <section className="panel">
         <h3>販売サイト用画像</h3>
-        <p>
-          この工程は「最終成果物」工程で指定した画像を入力にします。サムネイル工程の生成物は使用しません。
-        </p>
+        <p>最終成果物か、サムネイル工程で出力した画像を入力にします。</p>
         <div className="issue warning">
-          ⚠ 最終成果物ディレクトリを設定し、対象画像を1枚以上用意してください。
+          ⚠ 最終成果物か出力済みサムネイルを1枚以上用意してください。
         </div>
       </section>
     );
@@ -676,12 +702,21 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
           <div>
             <h3>プレビュー</h3>
             <small>
-              最終成果物の元画像から直接クロップします。ドラッグで移動、ホイールで拡大できます。
+              選択した元画像から直接クロップします。ドラッグで移動、ホイールで拡大できます。
             </small>
           </div>
-          <button className="primary" onClick={openPicker}>
-            最終成果物から画像を選択
-          </button>
+          <div className="marketplace-source-actions">
+            <button
+              className="primary"
+              disabled={finalArtifact.state !== 'ready'}
+              onClick={() => openPicker('final-artifact')}
+            >
+              最終成果物から画像を選択
+            </button>
+            <button disabled={!hasExportedThumbnails} onClick={() => openPicker('thumbnail')}>
+              サムネイルから画像を選択
+            </button>
+          </div>
         </div>
         <canvas
           ref={canvasRef}
@@ -765,7 +800,12 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         <section className="panel">
           <h3>入力画像</h3>
           <p className="marketplace-path">{state.sourceImagePath || '画像未選択'}</p>
-          <small>入力元: {finalArtifact.directory}（サムネイル工程の出力は参照しません）</small>
+          <small>
+            入力元:{' '}
+            {state.sourceType === 'thumbnail'
+              ? '出力済みサムネイル'
+              : (finalArtifact.directory ?? '最終成果物ディレクトリ未設定')}
+          </small>
         </section>
 
         <section className="panel">

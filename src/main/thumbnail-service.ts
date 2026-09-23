@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   ThumbnailDocument,
@@ -13,6 +13,7 @@ import type {
   ThumbnailTemplateSource,
 } from '../shared/types.js';
 import { readJson, withTemplateStoreLock, writeJsonAtomic } from './fs-utils.js';
+import { readProjectMeta } from './project-meta.js';
 import {
   listImageFiles,
   readImagePreview,
@@ -99,7 +100,7 @@ function defaultText(
   };
 }
 
-function defaultDocument(id: number, fontFamily: string): ThumbnailDocument {
+export function createThumbnailDocument(id: number, fontFamily: string): ThumbnailDocument {
   return {
     id,
     pattern:
@@ -122,8 +123,9 @@ export function createDefaultThumbnailState(
   return {
     schemaVersion: 1,
     activeDocumentId: 1,
-    documents: Array.from({ length: 6 }, (_, index) =>
-      defaultDocument(index + 1, defaultFontFamily),
+    nextDocumentId: 6,
+    documents: Array.from({ length: 5 }, (_, index) =>
+      createThumbnailDocument(index + 1, defaultFontFamily),
     ),
   };
 }
@@ -158,42 +160,63 @@ export function normalizeThumbnailState(
 ): ThumbnailEditorState {
   const defaults = createDefaultThumbnailState(defaultFontFamily);
   const input = value && typeof value === 'object' ? (value as Partial<ThumbnailEditorState>) : {};
-  const sourceDocuments = Array.isArray(input.documents) ? input.documents : [];
-  const documents = defaults.documents.map((fallback) => {
-    const candidate = sourceDocuments.find((item): item is ThumbnailDocument =>
-      Boolean(item && typeof item === 'object' && (item as ThumbnailDocument).id === fallback.id),
-    );
-    if (!candidate) return fallback;
-    const slots: ThumbnailDocument['slots'] = {};
-    if (candidate.slots && typeof candidate.slots === 'object') {
-      for (const [key, raw] of Object.entries(candidate.slots)) {
-        if (!SLOT_KEYS.has(key as ThumbnailSlotKey) || !raw || typeof raw !== 'object') continue;
-        const slot = raw as {
-          imagePath?: unknown;
-          offsetX?: unknown;
-          offsetY?: unknown;
-          scale?: unknown;
-        };
-        slots[key as ThumbnailSlotKey] = {
-          imagePath: typeof slot.imagePath === 'string' ? slot.imagePath : '',
-          offsetX: finite(slot.offsetX, 0, -1600, 1600),
-          offsetY: finite(slot.offsetY, 0, -1200, 1200),
-          scale: finite(slot.scale, 1, 0.1, 8),
-        };
+  const sourceDocuments =
+    Array.isArray(input.documents) && input.documents.length ? input.documents : defaults.documents;
+  const seenIds = new Set<number>();
+  const validDocuments = sourceDocuments
+    .filter((candidate): candidate is ThumbnailDocument => {
+      if (
+        !candidate ||
+        typeof candidate !== 'object' ||
+        !Number.isSafeInteger(candidate.id) ||
+        candidate.id < 1 ||
+        seenIds.has(candidate.id)
+      )
+        return false;
+      seenIds.add(candidate.id);
+      return true;
+    })
+    .map((candidate) => {
+      const fallback = createThumbnailDocument(candidate.id, defaultFontFamily);
+      const slots: ThumbnailDocument['slots'] = {};
+      if (candidate.slots && typeof candidate.slots === 'object') {
+        for (const [key, raw] of Object.entries(candidate.slots)) {
+          if (!SLOT_KEYS.has(key as ThumbnailSlotKey) || !raw || typeof raw !== 'object') continue;
+          const slot = raw as {
+            imagePath?: unknown;
+            offsetX?: unknown;
+            offsetY?: unknown;
+            scale?: unknown;
+          };
+          slots[key as ThumbnailSlotKey] = {
+            imagePath: typeof slot.imagePath === 'string' ? slot.imagePath : '',
+            offsetX: finite(slot.offsetX, 0, -1600, 1600),
+            offsetY: finite(slot.offsetY, 0, -1200, 1200),
+            scale: finite(slot.scale, 1, 0.1, 8),
+          };
+        }
       }
-    }
-    return {
-      id: fallback.id,
-      pattern: PATTERNS.has(candidate.pattern) ? candidate.pattern : fallback.pattern,
-      slots,
-      title: cleanText(candidate.title, fallback.title),
-      subtitle: cleanText(candidate.subtitle, fallback.subtitle),
-    };
-  });
+      return {
+        id: fallback.id,
+        pattern: PATTERNS.has(candidate.pattern) ? candidate.pattern : fallback.pattern,
+        slots,
+        title: cleanText(candidate.title, fallback.title),
+        subtitle: cleanText(candidate.subtitle, fallback.subtitle),
+      };
+    });
+  const documents = validDocuments.length ? validDocuments : defaults.documents;
   return {
     schemaVersion: 1,
-    activeDocumentId: Math.round(finite(input.activeDocumentId, 1, 1, 6)),
+    activeDocumentId: documents.some((document) => document.id === input.activeDocumentId)
+      ? (input.activeDocumentId as number)
+      : (documents[0]?.id ?? 1),
     documents,
+    nextDocumentId: Math.max(
+      ...documents.map((document) => document.id + 1),
+      Number.isSafeInteger(input.nextDocumentId) && (input.nextDocumentId as number) > 0
+        ? (input.nextDocumentId as number)
+        : 1,
+    ),
     ...(typeof input.saveRevision === 'number' &&
     Number.isSafeInteger(input.saveRevision) &&
     input.saveRevision >= 0
@@ -269,6 +292,58 @@ export async function readThumbnailTemplate(
   };
 }
 
+export async function thumbnailOutputDirectory(root: string): Promise<string> {
+  const meta = await readProjectMeta(root);
+  const base = meta?.settings.artifactOutputPath?.trim();
+  if (!base) throw new Error('成果物フォルダを設定してください。');
+  return path.join(path.resolve(base), 'thumbnails');
+}
+
+export async function listExportedThumbnails(root: string): Promise<ThumbnailImageItem[]> {
+  const directory = await thumbnailOutputDirectory(root);
+  // Avoid system-font enumeration for every gallery preview/source validation.
+  const raw = await readJson<unknown>(statePath(root));
+  const editor = normalizeThumbnailState(raw);
+  const allowed = new Set(editor.documents.map((document) => document.id));
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+  const items: ThumbnailImageItem[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const match = /^thumbnail-(\d+)\.(png|jpe?g)$/i.exec(entry.name);
+    if (!match || !allowed.has(Number(match[1]))) continue;
+    items.push({ name: entry.name, path: path.join(directory, entry.name) });
+  }
+  return items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+}
+
+export async function assertExportedThumbnail(root: string, imagePath: string): Promise<string> {
+  const resolved = path.resolve(imagePath);
+  const allowed = (await listExportedThumbnails(root)).some((item) =>
+    process.platform === 'win32'
+      ? path.resolve(item.path).toLowerCase() === resolved.toLowerCase()
+      : path.resolve(item.path) === resolved,
+  );
+  if (!allowed) throw new Error('現在有効なサムネイルの出力済み画像を選択してください。');
+  if (!(await stat(resolved)).isFile()) throw new Error('サムネイル画像が見つかりません。');
+  return resolved;
+}
+
+export async function deleteThumbnailOutputs(root: string, documentId: number): Promise<void> {
+  if (!Number.isSafeInteger(documentId) || documentId < 1)
+    throw new Error('Invalid thumbnail document');
+  const directory = await thumbnailOutputDirectory(root);
+  for (const ext of ['png', 'jpg', 'jpeg'])
+    await rm(path.join(directory, `thumbnail-${String(documentId).padStart(2, '0')}.${ext}`), {
+      force: true,
+    });
+}
+
 export async function exportThumbnail(
   root: string,
   documentId: number,
@@ -282,7 +357,7 @@ export async function exportThumbnail(
   const bytes = Buffer.from(dataUrl.slice(prefix.length), 'base64');
   if (!bytes.length || bytes.length > 50 * 1024 * 1024)
     throw new Error('サムネイル画像データのサイズが正しくありません。');
-  const outputDirectory = path.join(root, 'thumbnails');
+  const outputDirectory = await thumbnailOutputDirectory(root);
   await mkdir(outputDirectory, { recursive: true });
   const extension = format === 'png' ? 'png' : 'jpg';
   const outputPath = path.join(

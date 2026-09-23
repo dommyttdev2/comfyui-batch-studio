@@ -69,8 +69,10 @@ Grok の会話そのものは正本ではない。ファイルシステム上に
 ```
 
 - `marketplace-images.json` はsource image、mode、target別crop、出力形式、custom resize設定を保持するeditor stateであり、Grok Artifactではない。
-- source imageは `project_meta.json.settings.finalArtifactDirectory` で指定された最終成果物directory配下からのみ選択する。
-- `thumbnails/` の生成物を販売サイト用画像のsource候補にはしない。
+- `sourceType: final-artifact` のsource imageは `project_meta.json.settings.finalArtifactDirectory` 内の画像から選択する。
+- `sourceType: thumbnail` のsource imageは `project_meta.json.settings.artifactOutputPath/thumbnails/` 内に出力済みで、現在のthumbnail editor stateにIDが存在するPNG/JPEG画像から選択する。
+- サムネイル編集データは新規projectで5枚を初期生成し、追加・削除可能とする。既存projectの保存済み枚数は読み込み時に維持する。削除後も既存IDを詰め直さない。
+- サムネイルの単体・一括出力先は `project_meta.json.settings.artifactOutputPath/thumbnails/` とする。入力用の最終成果物directoryとは分離する。
 - FANZA / DLsiteの同寸法targetも別crop stateと別renderを持つ。
 - target size / service / filenameの定義は `src/shared/marketplace-image-targets.json` が機械可読正本である。
 - JPEG / PNG / WebPを出力でき、JPEG / WebPの品質設定は100固定とする。

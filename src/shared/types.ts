@@ -610,6 +610,7 @@ export interface ThumbnailDocument {
 
 export interface ThumbnailEditorState {
   schemaVersion: 1;
+  nextDocumentId?: number;
   saveRevision?: number;
   activeDocumentId: number;
   documents: ThumbnailDocument[];
@@ -684,10 +685,13 @@ export interface MarketplaceCustomState {
   crop: MarketplaceCropRect | null;
 }
 
+export type MarketplaceSourceType = 'final-artifact' | 'thumbnail';
+
 export interface MarketplaceImageEditorState {
   schemaVersion: 1;
   saveRevision?: number;
   sourceImagePath: string;
+  sourceType: MarketplaceSourceType;
   mode: MarketplaceEditorMode;
   activeTargetId: string;
   format: MarketplaceOutputFormat;
@@ -707,6 +711,7 @@ export interface MarketplacePickerSession {
 
 export interface MarketplacePickerContext extends MarketplacePickerSession {
   root: string;
+  sourceType: MarketplaceSourceType;
   currentImagePath: string;
 }
 
@@ -1321,6 +1326,7 @@ export interface BatchStudioApi {
     onPickerPreview: (listener: (selection: ThumbnailPickerSelection) => void) => () => void;
     onPickerCommit: (listener: (selection: ThumbnailPickerSelection) => void) => () => void;
     onPickerCancel: (listener: (session: ThumbnailPickerSession) => void) => () => void;
+    deleteOutputs: (root: string, documentId: number) => Promise<void>;
     exportImage: (
       root: string,
       documentId: number,
@@ -1330,6 +1336,17 @@ export interface BatchStudioApi {
   };
   marketplace: {
     targets: () => Promise<MarketplaceImageTarget[]>;
+    listThumbnailImages: (root: string) => Promise<FinalArtifactImageItem[]>;
+    readSource: (
+      root: string,
+      imagePath: string,
+      sourceType: MarketplaceSourceType,
+    ) => Promise<FinalArtifactImageSource | null>;
+    readSourcePreview: (
+      root: string,
+      imagePath: string,
+      sourceType: MarketplaceSourceType,
+    ) => Promise<FinalArtifactImageSource | null>;
     load: (root: string) => Promise<MarketplaceImageEditorState>;
     save: (
       root: string,
@@ -1359,8 +1376,13 @@ export interface BatchStudioApi {
       width: number,
       height: number,
       sourcePngDataUrl?: string,
+      sourceType?: MarketplaceSourceType,
     ) => Promise<string>;
-    openPicker: (root: string, currentImagePath: string) => Promise<MarketplacePickerSession>;
+    openPicker: (
+      root: string,
+      currentImagePath: string,
+      sourceType: MarketplaceSourceType,
+    ) => Promise<MarketplacePickerSession>;
     pickerContext: () => Promise<MarketplacePickerContext>;
     previewPicker: (imagePath: string) => Promise<void>;
     commitPicker: (imagePath: string) => Promise<void>;

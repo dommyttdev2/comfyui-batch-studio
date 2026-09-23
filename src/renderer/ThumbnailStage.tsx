@@ -302,6 +302,9 @@ async function loadPsdOverlay(pattern: ThumbnailPattern): Promise<TemplateOverla
 export function ThumbnailStage({ project, run }: { project: ProjectSummary; run: Runner }) {
   const [state, setState] = useState<ThumbnailEditorState | null>(null);
   const [fontFamilies, setFontFamilies] = useState<string[]>([]);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteOutputFiles, setDeleteOutputFiles] = useState(false);
+  const [deleteWarning, setDeleteWarning] = useState('');
   const [selectedSlot, setSelectedSlot] = useState<ThumbnailSlotKey>('CENTER_MAIN');
   const [images, setImages] = useState<LoadedImages>({});
   const [templates, setTemplates] = useState<Partial<Record<ThumbnailPattern, TemplateOverlay>>>(
@@ -430,6 +433,54 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
     if (active && !visibleSlots.includes(selectedSlot)) setSelectedSlot('CENTER_MAIN');
   }, [active?.pattern]);
 
+  const addDocument = () => {
+    setState((current) => {
+      if (!current) return current;
+      const id = Math.max(
+        current.nextDocumentId ?? 1,
+        ...current.documents.map((document) => document.id + 1),
+      );
+      if (!Number.isSafeInteger(id)) return current;
+      const previous = current.documents[current.documents.length - 1];
+      const document: ThumbnailDocument = {
+        id,
+        pattern: '5-images-both-split',
+        slots: {},
+        title: { ...previous.title, text: `Scene ${String(id).padStart(2, '0')}` },
+        subtitle: { ...previous.subtitle, text: 'Midnight Elegance' },
+      };
+      return {
+        ...current,
+        activeDocumentId: id,
+        nextDocumentId: id + 1,
+        documents: [...current.documents, document],
+      };
+    });
+    setDeletingId(null);
+  };
+  const confirmDeleteDocument = () =>
+    void run(async () => {
+      if (!state || deletingId === null || state.documents.length <= 1) return;
+      const index = state.documents.findIndex((document) => document.id === deletingId);
+      if (index < 0) return;
+      const documents = state.documents.filter((document) => document.id !== deletingId);
+      const next: ThumbnailEditorState = {
+        ...state,
+        documents,
+        activeDocumentId:
+          state.activeDocumentId === deletingId
+            ? (documents[index]?.id ?? documents[index - 1]?.id ?? documents[0].id)
+            : state.activeDocumentId,
+      };
+      await saveNow(next);
+      setState(next);
+      if (deleteOutputFiles)
+        await window.batchStudio.thumbnail.deleteOutputs(project.rootPath, deletingId);
+      setDeletingId(null);
+      setDeleteOutputFiles(false);
+      setDeleteWarning('');
+      setNotice(`サムネイル ${String(deletingId).padStart(2, '0')} を削除しました。`);
+    });
   const updateDocument = (update: (document: ThumbnailDocument) => ThumbnailDocument) => {
     setState(
       (current) =>
@@ -609,7 +660,9 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
       }
       setTemplates(nextTemplates);
       setLastExportPath(lastPath);
-      setNotice(`6枚を出力しました: ${lastPath.replace(/[^\\/]+$/, '')}`);
+      setNotice(
+        `${currentState.documents.length}枚を出力しました: ${lastPath.replace(/[^\\/]+$/, '')}`,
+      );
     });
 
   if (!state || !active)
@@ -630,19 +683,80 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
 
   return (
     <div className="thumbnail-stage">
-      <div className="thumbnail-documents" aria-label="編集するサムネイル">
-        {state.documents.map((document) => (
-          <button
-            key={document.id}
-            className={document.id === active.id ? 'active' : ''}
-            onClick={() =>
-              setState((current) => current && { ...current, activeDocumentId: document.id })
-            }
-          >
-            {String(document.id).padStart(2, '0')}
-          </button>
-        ))}
+      <div className="thumbnail-document-toolbar">
+        <div className="thumbnail-documents" aria-label="編集するサムネイル">
+          {state.documents.map((document) => (
+            <button
+              key={document.id}
+              className={document.id === active.id ? 'active' : ''}
+              onClick={() =>
+                setState((current) => current && { ...current, activeDocumentId: document.id })
+              }
+            >
+              {String(document.id).padStart(2, '0')}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="thumbnail-add-document"
+          onClick={addDocument}
+          aria-label="サムネイルを追加"
+          title="サムネイルを追加"
+        >
+          ＋
+        </button>
+        <button
+          type="button"
+          className="thumbnail-delete-document"
+          disabled={state.documents.length <= 1}
+          onClick={() => {
+            setDeletingId(active.id);
+            setDeleteOutputFiles(false);
+            setDeleteWarning('');
+            void window.batchStudio.marketplace
+              .load(project.rootPath)
+              .then((marketplace) => {
+                if (
+                  marketplace.sourceType === 'thumbnail' &&
+                  marketplace.sourceImagePath
+                    .toLowerCase()
+                    .includes(`thumbnail-${String(active.id).padStart(2, '0')}.`)
+                )
+                  setDeleteWarning(
+                    'このサムネイルは販売サイト用画像の入力元として使用中です。編集データを削除すると、出力済み画像を残しても入力元の再選択が必要になります。',
+                  );
+              })
+              .catch(() => undefined);
+          }}
+        >
+          削除
+        </button>
       </div>
+      {deletingId !== null && (
+        <div
+          className="panel thumbnail-delete-confirm"
+          role="alertdialog"
+          aria-label="サムネイルの削除確認"
+        >
+          <p>サムネイル {String(deletingId).padStart(2, '0')} の編集データを削除しますか？</p>
+          {deleteWarning && <p className="issue warning">{deleteWarning}</p>}
+          <label>
+            <input
+              type="checkbox"
+              checked={deleteOutputFiles}
+              onChange={(event) => setDeleteOutputFiles(event.target.checked)}
+            />{' '}
+            出力済み画像も削除する
+          </label>
+          <button type="button" onClick={() => setDeletingId(null)}>
+            キャンセル
+          </button>
+          <button type="button" className="danger" onClick={confirmDeleteDocument}>
+            削除する
+          </button>
+        </div>
+      )}
       <div className="thumbnail-editor-grid">
         <section className="thumbnail-preview-panel">
           <div className="thumbnail-preview-head">
@@ -811,7 +925,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
             <button className="primary" onClick={exportImage}>
               サムネイル {String(active.id).padStart(2, '0')} を出力
             </button>
-            <button onClick={exportAll}>6枚すべて出力</button>
+            <button onClick={exportAll}>{state.documents.length}枚すべて出力</button>
             {lastExportPath && (
               <button onClick={() => window.batchStudio.file.showInFolder(lastExportPath)}>
                 出力先を開く
