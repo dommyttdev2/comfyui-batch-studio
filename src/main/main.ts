@@ -14,6 +14,7 @@ import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { IPC } from '../shared/ipc.js';
+import { PickerSelectionGate } from './picker-selection-gate.js';
 import type {
   AppSettingsSaveInput,
   CatalogSelectionTemplateInput,
@@ -226,6 +227,8 @@ type RendererWindowTool =
   | 'codex-pane';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
+  selection: PickerSelectionGate;
+  previewRequestId: number;
   openedAt: number;
   previewCount: number;
   window: BaseWindow;
@@ -238,6 +241,8 @@ type ThumbnailPickerWindowState = {
   committed: boolean;
 };
 type MarketplacePickerWindowState = {
+  selection: PickerSelectionGate;
+  previewRequestId: number;
   sourceType: MarketplaceSourceType;
   window: BaseWindow;
   view: WebContentsView;
@@ -703,6 +708,8 @@ function openThumbnailPickerWindow(
     }),
     sessionId = randomUUID(),
     state: ThumbnailPickerWindowState = {
+      selection: new PickerSelectionGate(),
+      previewRequestId: 0,
       openedAt,
       previewCount: 0,
       window,
@@ -716,6 +723,8 @@ function openThumbnailPickerWindow(
     },
     contentsId = view.webContents.id;
   thumbnailPickerWindows.set(contentsId, state);
+  const cancelOnOpenerDestroyed = () => state.selection.cancel();
+  opener.once('destroyed', cancelOnOpenerDestroyed);
   logThumbnailPickerPerformance(app.getPath('userData'), sessionId, 'window_opened', {
     setupMs: performance.now() - openedAt,
   });
@@ -733,6 +742,8 @@ function openThumbnailPickerWindow(
   };
   window.on('resize', resize);
   window.on('closed', () => {
+    opener.removeListener('destroyed', cancelOnOpenerDestroyed);
+    state.selection.cancel();
     if (!state.committed && !state.opener.isDestroyed())
       state.opener.send(IPC.THUMBNAIL_PICKER_CANCELLED, { sessionId: state.sessionId });
     if (!view.webContents.isDestroyed()) view.webContents.close();
@@ -793,6 +804,8 @@ function openMarketplacePickerWindow(
     }),
     sessionId = randomUUID(),
     state: MarketplacePickerWindowState = {
+      selection: new PickerSelectionGate(),
+      previewRequestId: 0,
       sourceType,
       window,
       view,
@@ -804,6 +817,8 @@ function openMarketplacePickerWindow(
     },
     contentsId = view.webContents.id;
   marketplacePickerWindows.set(contentsId, state);
+  const cancelOnOpenerDestroyed = () => state.selection.cancel();
+  opener.once('destroyed', cancelOnOpenerDestroyed);
   window.removeMenu();
   window.setMenuBarVisibility(false);
   window.contentView.addChildView(view);
@@ -813,6 +828,8 @@ function openMarketplacePickerWindow(
   };
   window.on('resize', resize);
   window.on('closed', () => {
+    opener.removeListener('destroyed', cancelOnOpenerDestroyed);
+    state.selection.cancel();
     if (!state.committed && !state.opener.isDestroyed())
       state.opener.send(IPC.MARKETPLACE_PICKER_CANCELLED, { sessionId: state.sessionId });
     if (!view.webContents.isDestroyed()) view.webContents.close();
@@ -3785,27 +3802,77 @@ function register() {
   });
   ipcMain.handle(IPC.THUMBNAIL_PICKER_PREVIEW, async (event, imagePath: unknown) => {
     const state = thumbnailPickerForSender(event.sender);
+    const requestId = ++state.previewRequestId;
     const resolved = await validateThumbnailPickerImage(state, imagePath);
-    if (!state.opener.isDestroyed())
-      state.opener.send(IPC.THUMBNAIL_PICKER_PREVIEWED, {
-        sessionId: state.sessionId,
-        slot: state.slot,
-        imagePath: resolved,
-      });
+    if (requestId !== state.previewRequestId) throw new Error('新しい画像が選択されました。');
+    if (state.opener.isDestroyed()) throw new Error('親Windowが閉じられました。');
+    const ready = state.selection.beginPreview(resolved);
+    state.opener.send(IPC.THUMBNAIL_PICKER_PREVIEWED, {
+      sessionId: state.sessionId,
+      slot: state.slot,
+      imagePath: resolved,
+      previewGeneration: requestId,
+    });
+    return ready;
   });
+  ipcMain.handle(
+    IPC.THUMBNAIL_PICKER_PREVIEW_RESULT,
+    (
+      event,
+      sessionId: unknown,
+      imagePath: unknown,
+      generation: unknown,
+      ok: unknown,
+      message: unknown,
+    ) => {
+      const state = [...thumbnailPickerWindows.values()].find(
+        (item) => item.sessionId === sessionId && item.opener.id === event.sender.id,
+      );
+      if (
+        !state ||
+        generation !== state.previewRequestId ||
+        typeof imagePath !== 'string' ||
+        typeof ok !== 'boolean'
+      )
+        return false;
+      return state.selection.previewResult(
+        imagePath,
+        ok,
+        typeof message === 'string' ? message : undefined,
+      );
+    },
+  );
   ipcMain.handle(IPC.THUMBNAIL_PICKER_COMMIT, async (event, imagePath: unknown) => {
     const state = thumbnailPickerForSender(event.sender);
     await ensureProjectWritable(state.root);
     const resolved = await validateThumbnailPickerImage(state, imagePath);
+    if (state.opener.isDestroyed()) throw new Error('親Windowが閉じられました。');
+    const committed = state.selection.beginCommit(resolved);
+    state.opener.send(IPC.THUMBNAIL_PICKER_COMMITTED, {
+      sessionId: state.sessionId,
+      slot: state.slot,
+      imagePath: resolved,
+    });
+    await committed;
     state.committed = true;
-    if (!state.opener.isDestroyed())
-      state.opener.send(IPC.THUMBNAIL_PICKER_COMMITTED, {
-        sessionId: state.sessionId,
-        slot: state.slot,
-        imagePath: resolved,
-      });
     state.window.close();
   });
+  ipcMain.handle(
+    IPC.THUMBNAIL_PICKER_COMMIT_RESULT,
+    (event, sessionId: unknown, imagePath: unknown, ok: unknown, message: unknown) => {
+      const state = [...thumbnailPickerWindows.values()].find(
+        (item) => item.sessionId === sessionId && item.opener.id === event.sender.id,
+      );
+      if (!state || typeof imagePath !== 'string' || typeof ok !== 'boolean') return false;
+      const accepted = state.selection.commitResult(
+        imagePath,
+        ok,
+        typeof message === 'string' ? message : undefined,
+      );
+      if (accepted && ok) state.committed = true;
+      return accepted;
+    },
+  );
   ipcMain.handle(
     IPC.THUMBNAIL_EXPORT,
     async (_e, root: unknown, documentId: unknown, format: unknown, dataUrl: unknown) => {
@@ -3990,25 +4057,75 @@ function register() {
   });
   ipcMain.handle(IPC.MARKETPLACE_PICKER_PREVIEW, async (event, imagePath: unknown) => {
     const state = marketplacePickerForSender(event.sender);
+    const requestId = ++state.previewRequestId;
     const resolved = await validateMarketplacePickerImage(state, imagePath);
-    if (!state.opener.isDestroyed())
-      state.opener.send(IPC.MARKETPLACE_PICKER_PREVIEWED, {
-        sessionId: state.sessionId,
-        imagePath: resolved,
-      });
+    if (requestId !== state.previewRequestId) throw new Error('新しい画像が選択されました。');
+    if (state.opener.isDestroyed()) throw new Error('親Windowが閉じられました。');
+    const ready = state.selection.beginPreview(resolved);
+    state.opener.send(IPC.MARKETPLACE_PICKER_PREVIEWED, {
+      sessionId: state.sessionId,
+      imagePath: resolved,
+      previewGeneration: requestId,
+    });
+    return ready;
   });
+  ipcMain.handle(
+    IPC.MARKETPLACE_PICKER_PREVIEW_RESULT,
+    (
+      event,
+      sessionId: unknown,
+      imagePath: unknown,
+      generation: unknown,
+      ok: unknown,
+      message: unknown,
+    ) => {
+      const state = [...marketplacePickerWindows.values()].find(
+        (item) => item.sessionId === sessionId && item.opener.id === event.sender.id,
+      );
+      if (
+        !state ||
+        generation !== state.previewRequestId ||
+        typeof imagePath !== 'string' ||
+        typeof ok !== 'boolean'
+      )
+        return false;
+      return state.selection.previewResult(
+        imagePath,
+        ok,
+        typeof message === 'string' ? message : undefined,
+      );
+    },
+  );
   ipcMain.handle(IPC.MARKETPLACE_PICKER_COMMIT, async (event, imagePath: unknown) => {
     const state = marketplacePickerForSender(event.sender);
     await ensureProjectWritable(state.root);
     const resolved = await validateMarketplacePickerImage(state, imagePath);
+    if (state.opener.isDestroyed()) throw new Error('親Windowが閉じられました。');
+    const committed = state.selection.beginCommit(resolved);
+    state.opener.send(IPC.MARKETPLACE_PICKER_COMMITTED, {
+      sessionId: state.sessionId,
+      imagePath: resolved,
+    });
+    await committed;
     state.committed = true;
-    if (!state.opener.isDestroyed())
-      state.opener.send(IPC.MARKETPLACE_PICKER_COMMITTED, {
-        sessionId: state.sessionId,
-        imagePath: resolved,
-      });
     state.window.close();
   });
+  ipcMain.handle(
+    IPC.MARKETPLACE_PICKER_COMMIT_RESULT,
+    (event, sessionId: unknown, imagePath: unknown, ok: unknown, message: unknown) => {
+      const state = [...marketplacePickerWindows.values()].find(
+        (item) => item.sessionId === sessionId && item.opener.id === event.sender.id,
+      );
+      if (!state || typeof imagePath !== 'string' || typeof ok !== 'boolean') return false;
+      const accepted = state.selection.commitResult(
+        imagePath,
+        ok,
+        typeof message === 'string' ? message : undefined,
+      );
+      if (accepted && ok) state.committed = true;
+      return accepted;
+    },
+  );
   ipcMain.handle(IPC.R2_SETTINGS, () => r2().settings());
   ipcMain.handle(IPC.R2_ENVIRONMENT, () => r2().environment());
   ipcMain.handle(IPC.R2_TEST, (_e, input: R2ConnectionInput) => r2().test(input));

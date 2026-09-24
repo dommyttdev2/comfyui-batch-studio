@@ -23,6 +23,10 @@ export function ThumbnailPickerWindow() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const tentativeRef = useRef<string | null>(null);
+  const selectionPhaseRef = useRef<
+    'idle' | 'preview-loading' | 'preview-ready' | 'committing' | 'committed'
+  >('idle');
+  const selectionGenerationRef = useRef(0);
   const mountedAt = useRef(performance.now());
   const imageStats = useRef({ loaded: 0, totalIpcMs: 0, totalDecodeMs: 0, maxImageMs: 0 });
   const listReceivedAt = useRef(0);
@@ -133,20 +137,41 @@ export function ThumbnailPickerWindow() {
   const selectImage = (item: ThumbnailImageItem) => {
     setError('');
     if (tentativeRef.current === item.path) {
+      if (selectionPhaseRef.current !== 'preview-ready') {
+        if (selectionPhaseRef.current === 'preview-loading')
+          setError('プレビューを読み込んでいます。表示後にもう一度選択してください。');
+        return;
+      }
+      selectionPhaseRef.current = 'committing';
       void window.batchStudio.thumbnail
         .commitPicker(item.path)
-        .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+        .then(() => {
+          selectionPhaseRef.current = 'committed';
+        })
+        .catch((e: unknown) => {
+          selectionPhaseRef.current = 'preview-ready';
+          setError(e instanceof Error ? e.message : String(e));
+        });
       return;
     }
+    const generation = ++selectionGenerationRef.current;
     tentativeRef.current = item.path;
+    selectionPhaseRef.current = 'preview-loading';
     setTentativePath(item.path);
-    void window.batchStudio.thumbnail.previewPicker(item.path).catch((e: unknown) => {
-      if (tentativeRef.current === item.path) {
-        tentativeRef.current = null;
-        setTentativePath('');
-      }
-      setError(e instanceof Error ? e.message : String(e));
-    });
+    void window.batchStudio.thumbnail
+      .previewPicker(item.path)
+      .then(() => {
+        if (selectionGenerationRef.current === generation)
+          selectionPhaseRef.current = 'preview-ready';
+      })
+      .catch((e: unknown) => {
+        if (selectionGenerationRef.current === generation) {
+          tentativeRef.current = null;
+          selectionPhaseRef.current = 'idle';
+          setTentativePath('');
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      });
   };
 
   return (

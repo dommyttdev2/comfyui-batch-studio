@@ -336,6 +336,8 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
     moved: boolean;
   } | null>(null);
   const loadedStateRef = useRef(false);
+  const currentStateRef = useRef<ThumbnailEditorState | null>(null);
+  currentStateRef.current = state;
   const { saveStatus, saveError, saveNow, retrySave } = useEditorAutosave(
     project.rootPath,
     'thumbnail',
@@ -605,44 +607,128 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   useEffect(() => {
     const removePreview = window.batchStudio.thumbnail.onPickerPreview((selection) => {
       const session = pickerSessionRef.current;
-      if (!session || session.sessionId !== selection.sessionId || session.slot !== selection.slot)
+      if (
+        !session ||
+        session.sessionId !== selection.sessionId ||
+        session.slot !== selection.slot
+      ) {
+        void window.batchStudio.thumbnail
+          .previewResult(
+            selection.sessionId,
+            selection.imagePath,
+            selection.previewGeneration ?? -1,
+            false,
+            '画像選択セッションが終了しました。',
+          )
+          .catch(() => undefined);
         return;
+      }
       pickerPreviewPathRef.current = selection.imagePath;
-      void run(async () => {
-        const source = await window.batchStudio.thumbnail.readEditorImage(selection.imagePath);
-        if (!source) throw new Error('画像を読み込めませんでした。');
-        const image = await cachedEditorImage(source);
-        if (
-          pickerSessionRef.current?.sessionId !== selection.sessionId ||
-          pickerPreviewPathRef.current !== selection.imagePath
-        )
-          return;
-        setImages((current) => ({ ...current, [source.path]: image }));
-        setPickerPreview(selection);
-      });
+      void (async () => {
+        try {
+          const source = await window.batchStudio.thumbnail.readEditorImage(selection.imagePath);
+          if (!source) throw new Error('画像を読み込めませんでした。');
+          const image = await cachedEditorImage(source);
+          if (
+            pickerSessionRef.current?.sessionId !== selection.sessionId ||
+            pickerPreviewPathRef.current !== selection.imagePath
+          )
+            return;
+          setImages((current) => ({ ...current, [source.path]: image }));
+          setPickerPreview(selection);
+          await new Promise<void>((resolve) =>
+            window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())),
+          );
+          if (pickerPreviewPathRef.current !== selection.imagePath) return;
+          await window.batchStudio.thumbnail.previewResult(
+            selection.sessionId,
+            selection.imagePath,
+            selection.previewGeneration ?? -1,
+            true,
+          );
+        } catch (error) {
+          await window.batchStudio.thumbnail
+            .previewResult(
+              selection.sessionId,
+              selection.imagePath,
+              selection.previewGeneration ?? -1,
+              false,
+              error instanceof Error ? error.message : String(error),
+            )
+            .catch(() => undefined);
+          if (pickerPreviewPathRef.current === selection.imagePath) setPickerPreview(null);
+        }
+      })();
     });
     const removeCommit = window.batchStudio.thumbnail.onPickerCommit((selection) => {
       const session = pickerSessionRef.current;
-      if (!session || session.sessionId !== selection.sessionId || session.slot !== selection.slot)
+      if (
+        !session ||
+        session.sessionId !== selection.sessionId ||
+        session.slot !== selection.slot
+      ) {
+        void window.batchStudio.thumbnail
+          .commitResult(
+            selection.sessionId,
+            selection.imagePath,
+            false,
+            '画像選択セッションが終了しました。',
+          )
+          .catch(() => undefined);
         return;
+      }
       pickerPreviewPathRef.current = null;
-      void run(async () => {
-        const source = await window.batchStudio.thumbnail.readEditorImage(selection.imagePath);
-        if (!source) throw new Error('画像を読み込めませんでした。');
-        const image = await cachedEditorImage(source);
-        if (pickerSessionRef.current?.sessionId !== selection.sessionId) return;
-        setImages((current) => ({ ...current, [source.path]: image }));
-        updateSlot(selection.slot, {
-          imagePath: source.path,
-          offsetX: 0,
-          offsetY: 0,
-          scale: 1,
-        });
-        setNotice(`${SLOT_LABELS[selection.slot]}へ ${source.name} を設定しました。`);
-        pickerSessionRef.current = null;
-        setPickerSession(null);
-        setPickerPreview(null);
-      });
+      void (async () => {
+        try {
+          const source = await window.batchStudio.thumbnail.readEditorImage(selection.imagePath);
+          if (!source) throw new Error('画像を読み込めませんでした。');
+          const image = await cachedEditorImage(source);
+          if (pickerSessionRef.current?.sessionId !== selection.sessionId) return;
+          const base = currentStateRef.current;
+          if (!base) throw new Error('サムネイル編集状態を読み込めません。');
+          const next: ThumbnailEditorState = {
+            ...base,
+            documents: base.documents.map((document) =>
+              document.id === base.activeDocumentId
+                ? {
+                    ...document,
+                    slots: {
+                      ...document.slots,
+                      [selection.slot]: {
+                        imagePath: source.path,
+                        offsetX: 0,
+                        offsetY: 0,
+                        scale: 1,
+                      },
+                    },
+                  }
+                : document,
+            ),
+          };
+          const saved = await saveNow(next);
+          if (pickerSessionRef.current?.sessionId !== selection.sessionId) return;
+          setImages((current) => ({ ...current, [source.path]: image }));
+          setState(saved);
+          setNotice(`${SLOT_LABELS[selection.slot]}へ ${source.name} を設定しました。`);
+          await window.batchStudio.thumbnail.commitResult(
+            selection.sessionId,
+            selection.imagePath,
+            true,
+          );
+          pickerSessionRef.current = null;
+          setPickerSession(null);
+          setPickerPreview(null);
+        } catch (error) {
+          await window.batchStudio.thumbnail
+            .commitResult(
+              selection.sessionId,
+              selection.imagePath,
+              false,
+              error instanceof Error ? error.message : String(error),
+            )
+            .catch(() => undefined);
+        }
+      })();
     });
     const removeCancel = window.batchStudio.thumbnail.onPickerCancel((session) => {
       if (pickerSessionRef.current?.sessionId !== session.sessionId) return;
@@ -656,7 +742,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
       removeCommit();
       removeCancel();
     };
-  }, []);
+  }, [saveNow]);
 
   const openImagePicker = (slot: ThumbnailSlotKey) => {
     setSelectedSlot(slot);
