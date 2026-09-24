@@ -34,6 +34,7 @@ import {
   type ImportNoticeInput,
 } from './ArtifactImportToast';
 import './divider.css';
+import { flushEditorSaves } from './editor-save-registry';
 
 const blankBrief: ProjectBriefInput = {
   project: { id: '', title: '' },
@@ -200,11 +201,27 @@ function App() {
       stage !== '実行' &&
       (executionViewState?.root !== project.rootPath || executionViewState.protected),
   );
+  useEffect(
+    () =>
+      window.batchStudio.editorSaves.onFlushRequest((id, root) => {
+        void flushEditorSaves(root).then(
+          () => window.batchStudio.editorSaves.flushResult(id, true),
+          (error) =>
+            window.batchStudio.editorSaves.flushResult(
+              id,
+              false,
+              error instanceof Error ? error.message : String(error),
+            ),
+        );
+      }),
+    [],
+  );
   const navigateStage = async (next: Stage) => {
     if (!project || next === stage || navigationPending.current) return;
     navigationPending.current = true;
     setError('');
     try {
+      await flushEditorSaves(project.rootPath);
       // Moving between stages must not stop the worker; closing or switching
       // the project still uses the existing main-process exit confirmation.
       if (next !== '実行') {

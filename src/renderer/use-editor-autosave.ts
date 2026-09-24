@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MarketplaceImageEditorState, ThumbnailEditorState } from '../shared/types';
+import { registerEditorFlush } from './editor-save-registry';
 
 export type EditorSaveStatus = 'saved' | 'editing' | 'saving' | 'error';
 type Editable = ThumbnailEditorState | MarketplaceImageEditorState;
@@ -33,7 +34,12 @@ export function useEditorAutosave<T extends Editable>(
   const pending = useRef<Submission<T> | null>(null);
   const timer = useRef<number | null>(null);
   const lastSnapshot = useRef<T | null>(null);
+  const lastSource = useRef<T | null>(null);
   const issuedRevision = useRef(0);
+  const inFlight = useRef(new Set<Promise<T>>());
+  const failed = useRef<Submission<T> | null>(null);
+  const latest = useRef({ root, state, ready, blocked });
+  latest.current = { root, state, ready, blocked };
 
   const dispatch = useCallback(
     async ({ root: target, state: payload }: Submission<T>): Promise<T> => {
@@ -69,13 +75,66 @@ export function useEditorAutosave<T extends Editable>(
     [kind],
   );
 
+  const launch = useCallback(
+    (request: Submission<T>) => {
+      const operation = dispatch(request);
+      inFlight.current.add(operation);
+      void operation
+        .then(
+          () => {
+            if (failed.current?.state.saveRevision === request.state.saveRevision)
+              failed.current = null;
+          },
+          () => {
+            if (issuedRevision.current === request.state.saveRevision) failed.current = request;
+          },
+        )
+        .finally(() => inFlight.current.delete(operation));
+      return operation;
+    },
+    [dispatch],
+  );
+
   const flush = useCallback(() => {
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = null;
     const request = pending.current;
     pending.current = null;
-    if (request) void dispatch(request).catch(() => undefined);
-  }, [dispatch]);
+    return request ? launch(request) : Promise.resolve();
+  }, [launch]);
+
+  const flushAndWait = useCallback(async () => {
+    const current = latest.current;
+    if (
+      current.ready &&
+      current.state &&
+      !current.blocked &&
+      current.state !== lastSource.current &&
+      !pending.current
+    ) {
+      const revision = revisionFor(current.root, kind, current.state.saveRevision ?? 0);
+      issuedRevision.current = revision;
+      pending.current = {
+        root: current.root,
+        state: { ...current.state, saveRevision: revision } as T,
+      };
+      lastSnapshot.current = pending.current.state;
+      lastSource.current = current.state;
+    }
+    const request = pending.current;
+    const results = await Promise.allSettled([...inFlight.current, flush()]);
+    if (pending.current || inFlight.current.size)
+      await Promise.allSettled([...inFlight.current, flush()]);
+    if (failed.current) {
+      const retry = failed.current;
+      failed.current = null;
+      await launch(retry);
+    } else if (results.some((result) => result.status === 'rejected') && request) {
+      throw new Error('編集内容の保存に失敗しました。');
+    }
+  }, [flush, kind, launch]);
+
+  useEffect(() => registerEditorFlush(root, flushAndWait), [root, flushAndWait]);
 
   // This effect owns the debounce. Re-render cancels the old timer and keeps
   // only the newest edit. Unmount independently flushes that edit immediately.
@@ -83,6 +142,7 @@ export function useEditorAutosave<T extends Editable>(
     if (!ready || !state || blocked) return;
     if (!hydrated.current) {
       hydrated.current = true;
+      lastSource.current = state;
       return;
     }
     const revision = revisionFor(root, kind, state.saveRevision ?? 0);
@@ -90,9 +150,10 @@ export function useEditorAutosave<T extends Editable>(
     const next = { ...state, saveRevision: revision } as T;
     pending.current = { root, state: next };
     lastSnapshot.current = next;
+    lastSource.current = state;
     setSaveStatus('editing');
     setSaveError('');
-    timer.current = window.setTimeout(flush, delayMs);
+    timer.current = window.setTimeout(() => void flush().catch(() => undefined), delayMs);
     return () => {
       if (timer.current !== null) window.clearTimeout(timer.current);
       timer.current = null;
@@ -100,13 +161,10 @@ export function useEditorAutosave<T extends Editable>(
   }, [blocked, delayMs, flush, kind, ready, root, state]);
 
   useEffect(() => {
-    return () => flush();
-  }, [flush, root]);
-
-  useEffect(() => {
-    window.addEventListener('beforeunload', flush);
-    return () => window.removeEventListener('beforeunload', flush);
-  }, [flush]);
+    return () => {
+      void flushAndWait().catch(() => undefined);
+    };
+  }, [flushAndWait, root]);
 
   const saveNow = useCallback(
     (value: T): Promise<T> => {
@@ -117,9 +175,10 @@ export function useEditorAutosave<T extends Editable>(
       issuedRevision.current = revision;
       const next = { ...value, saveRevision: revision } as T;
       lastSnapshot.current = next;
-      return dispatch({ root, state: next });
+      lastSource.current = value;
+      return launch({ root, state: next });
     },
-    [dispatch, kind, root],
+    [kind, launch, root],
   );
 
   const retrySave = useCallback(() => {

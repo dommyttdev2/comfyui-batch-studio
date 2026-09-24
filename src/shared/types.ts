@@ -1191,6 +1191,10 @@ export interface GrokPaneState {
   ratio: number;
 }
 export interface BatchStudioApi {
+  editorSaves: {
+    onFlushRequest: (listener: (id: string, root: string) => void) => () => void;
+    flushResult: (id: string, ok: boolean, message?: string) => Promise<void>;
+  };
   appSettings: {
     get: () => Promise<AppSettingsStatus>;
     selectComfyUiDirectory: () => Promise<string | null>;

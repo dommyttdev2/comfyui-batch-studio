@@ -12,6 +12,8 @@ const I = {
   PROJECT_SELECT_PARENT: 'project:select-parent',
   PROJECT_CREATE: 'project:create',
   PROJECT_MENU_COMMAND: 'project:menu-command',
+  EDITOR_FLUSH_REQUEST: 'editor:flush-request',
+  EDITOR_FLUSH_RESULT: 'editor:flush-result',
   PROJECT_SCAN: 'project:scan',
   PROJECT_OPEN_FOLDER: 'project:open-folder',
   PROJECT_SAVE_SETTINGS: 'project:save-settings',
@@ -188,6 +190,14 @@ contextBridge.exposeInMainWorld('batchStudio', {
     get: () => ipcRenderer.invoke(I.APP_SETTINGS_GET),
     selectComfyUiDirectory: () => ipcRenderer.invoke(I.APP_SETTINGS_SELECT_COMFYUI),
     save: (s) => ipcRenderer.invoke(I.APP_SETTINGS_SAVE, s),
+  },
+  editorSaves: {
+    onFlushRequest: (listener) => {
+      const handler = (_event, id, root) => listener(id, root);
+      ipcRenderer.on(I.EDITOR_FLUSH_REQUEST, handler);
+      return () => ipcRenderer.removeListener(I.EDITOR_FLUSH_REQUEST, handler);
+    },
+    flushResult: (id, ok, message) => ipcRenderer.invoke(I.EDITOR_FLUSH_RESULT, id, ok, message),
   },
   project: {
     select: () => ipcRenderer.invoke(I.PROJECT_SELECT),
