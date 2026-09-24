@@ -351,13 +351,13 @@ matchCode(
 );
 matchCode(
   autosave,
-  /return \(\) => flush\(\)/,
-  'stage switch must flush pending autosave before unmount',
+  /return \(\) => \{\s*void flushAndWait\(\)/,
+  'stage switch must await the editor save at the navigation boundary',
 );
 matchCode(
   autosave,
-  /window\.addEventListener\('beforeunload', flush\)/,
-  'window closing must dispatch pending autosave',
+  /registerEditorFlush\(root, flushAndWait\)/,
+  'window closing must request and await pending autosave',
 );
 matchCode(
   autosave,

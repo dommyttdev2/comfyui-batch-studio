@@ -11,6 +11,8 @@ export const IPC = {
   PROJECT_SELECT_PARENT: 'project:select-parent',
   PROJECT_CREATE: 'project:create',
   PROJECT_MENU_COMMAND: 'project:menu-command',
+  EDITOR_FLUSH_REQUEST: 'editor:flush-request',
+  EDITOR_FLUSH_RESULT: 'editor:flush-result',
   PROJECT_SCAN: 'project:scan',
   PROJECT_OPEN_FOLDER: 'project:open-folder',
   PROJECT_SAVE_SETTINGS: 'project:save-settings',

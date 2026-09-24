@@ -1475,13 +1475,58 @@ async function ensureProjectWritable(root: string) {
     );
 }
 
+let editorFlushSequence = 0;
+const editorFlushReplies = new Map<
+  string,
+  {
+    senderId: number;
+    root: string;
+    resolve: (result: { ok: boolean; message?: string }) => void;
+  }
+>();
+
+async function confirmEditorSavesBeforeLeave(root: string, owner: BaseWindow): Promise<boolean> {
+  const state = projectWindows.get(owner.id);
+  if (!state || state.localView.webContents.isDestroyed()) return true;
+  for (;;) {
+    const id = `editor-flush-${++editorFlushSequence}`;
+    const result = await new Promise<{ ok: boolean; message?: string }>((resolve) => {
+      const timeout = setTimeout(() => {
+        editorFlushReplies.delete(id);
+        resolve({ ok: false, message: '編集内容の保存確認がタイムアウトしました。' });
+      }, 30_000);
+      editorFlushReplies.set(id, {
+        senderId: state.localView.webContents.id,
+        root,
+        resolve: (reply) => {
+          clearTimeout(timeout);
+          resolve(reply);
+        },
+      });
+      state.localView.webContents.send(IPC.EDITOR_FLUSH_REQUEST, id, root);
+    });
+    if (result.ok) return true;
+    const answer = await dialog.showMessageBox(owner, {
+      type: 'warning',
+      title: '編集内容を保存できません',
+      message: result.message || '編集内容の保存に失敗しました。',
+      buttons: ['キャンセル', '再試行', '未保存内容を破棄して続行'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (answer.response === 0) return false;
+    if (answer.response === 2) return true;
+  }
+}
+
 async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action: string) {
-  const key = path.resolve(root);
+  const key = `${owner.id}\0${path.resolve(root)}`;
   const pending = exitChecks.get(key);
   if (pending) return pending;
   const task = (async () => {
     await reconcilePersistedExecutionRuns(root);
-    if (!(await runRequiresExitGuard(root))) return true;
+    if (!(await runRequiresExitGuard(root))) return confirmEditorSavesBeforeLeave(root, owner);
     const result = await dialog.showMessageBox(owner, {
       type: 'warning',
       title: '実行中のRunがあります',
@@ -1509,7 +1554,7 @@ async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action
       throw new Error(
         'RunまたはVast.ai Instanceの停止を確認できません。移動・終了を中止しました。',
       );
-    return true;
+    return confirmEditorSavesBeforeLeave(root, owner);
   })().finally(() => exitChecks.delete(key));
   exitChecks.set(key, task);
   return task;
@@ -2715,6 +2760,16 @@ async function executionPreflight(root: string) {
 }
 
 function register() {
+  ipcMain.handle(IPC.EDITOR_FLUSH_RESULT, (event, id: unknown, ok: unknown, message: unknown) => {
+    if (typeof id !== 'string') return;
+    const pending = editorFlushReplies.get(id);
+    if (!pending || pending.senderId !== event.sender.id) return;
+    editorFlushReplies.delete(id);
+    pending.resolve({
+      ok: ok === true,
+      message: typeof message === 'string' ? message : undefined,
+    });
+  });
   ipcMain.handle(IPC.APP_SETTINGS_GET, () => settingsStore().status());
   ipcMain.handle(IPC.APP_SETTINGS_SELECT_COMFYUI, async () => {
     const r = await dialog.showOpenDialog({
