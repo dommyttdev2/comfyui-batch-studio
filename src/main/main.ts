@@ -3916,15 +3916,17 @@ function register() {
   );
   ipcMain.handle(
     IPC.MARKETPLACE_GENERATE_ZIP,
-    (_e, root: unknown, format: unknown, state: unknown) => {
+    async (_e, root: unknown, format: unknown, state: unknown) => {
       validRoot(root);
+      await ensureProjectWritable(root);
       return generateMarketplaceZip(root, format, state);
     },
   );
   ipcMain.handle(
     IPC.MARKETPLACE_EXPORT_CUSTOM,
-    (_e, root: unknown, state: unknown, webpDataUrl: unknown, sourcePngDataUrl: unknown) => {
+    async (_e, root: unknown, state: unknown, webpDataUrl: unknown, sourcePngDataUrl: unknown) => {
       validRoot(root);
+      await ensureProjectWritable(root);
       return exportCustomMarketplaceImage(
         root,
         state,

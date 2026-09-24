@@ -68,6 +68,8 @@ for (const channel of [
   'THUMBNAIL_EXPORT',
   'MARKETPLACE_SAVE',
   'MARKETPLACE_GENERATE',
+  'MARKETPLACE_GENERATE_ZIP',
+  'MARKETPLACE_EXPORT_CUSTOM',
 ]) {
   const start = main.indexOf('IPC.' + channel + ',');
   assert.ok(start >= 0, channel + ' handler is missing');
