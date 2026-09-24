@@ -152,6 +152,8 @@ const I = {
   CODEX_GET_PROVIDER: 'codex:get-provider',
   CODEX_SET_PROVIDER: 'codex:set-provider',
   CODEX_SET_CONTEXT: 'codex:set-context',
+  CODEX_SELECT_STAGE_TASK: 'codex:select-stage-task',
+  CODEX_STAGE_TASK_SELECTED: 'codex:stage-task-selected',
   CODEX_CONTEXT: 'codex:context',
   CODEX_CONTEXT_CHANGED: 'codex:context-changed',
   CODEX_STATUS: 'codex:status',
