@@ -159,6 +159,8 @@ import {
   generateMarketplaceZip,
   getMarketplaceImageTargets,
   loadMarketplaceImageState,
+  restoreMarketplaceImageState,
+  initializeCorruptMarketplaceImageState,
   renderMarketplacePng,
   saveMarketplaceImageState,
   readMarketplaceSource,
@@ -172,6 +174,8 @@ import {
   listThumbnailFonts,
   listThumbnailImages,
   loadThumbnailState,
+  restoreThumbnailState,
+  initializeCorruptThumbnailState,
   readThumbnailImage,
   readThumbnailPreview,
   readThumbnailTemplate,
@@ -3573,6 +3577,40 @@ function register() {
     validRoot(root);
     return loadThumbnailState(root);
   });
+  ipcMain.handle(IPC.THUMBNAIL_RESTORE_BACKUP, async (event, root: unknown) => {
+    validRoot(root);
+    const owner = projectWindowForSender(event.sender);
+    if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
+    await ensureProjectWritable(root);
+    const choice = await dialog.showMessageBox(owner.window, {
+      type: 'warning',
+      title: 'サムネイル編集データを復元',
+      message: '検証済みバックアップから編集状態を復元しますか？',
+      detail: '破損した元ファイルは別名で保全します。バックアップ以降の編集は戻りません。',
+      buttons: ['キャンセル', '復元する'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    return choice.response === 1 ? restoreThumbnailState(root) : null;
+  });
+  ipcMain.handle(IPC.THUMBNAIL_INITIALIZE_CORRUPT, async (event, root: unknown) => {
+    validRoot(root);
+    const owner = projectWindowForSender(event.sender);
+    if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
+    await ensureProjectWritable(root);
+    const choice = await dialog.showMessageBox(owner.window, {
+      type: 'warning',
+      title: 'サムネイル編集データを初期化',
+      message: '破損したファイルを別名で保全して初期化しますか？',
+      detail: '編集内容は新しい空の状態になります。元ファイルは削除されません。',
+      buttons: ['キャンセル', '保全して初期化'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    return choice.response === 1 ? initializeCorruptThumbnailState(root) : null;
+  });
   ipcMain.handle(IPC.THUMBNAIL_SAVE, async (_e, root: unknown, state: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
@@ -3819,6 +3857,40 @@ function register() {
   ipcMain.handle(IPC.MARKETPLACE_LOAD, (_e, root: unknown) => {
     validRoot(root);
     return loadMarketplaceImageState(root);
+  });
+  ipcMain.handle(IPC.MARKETPLACE_RESTORE_BACKUP, async (event, root: unknown) => {
+    validRoot(root);
+    const owner = projectWindowForSender(event.sender);
+    if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
+    await ensureProjectWritable(root);
+    const choice = await dialog.showMessageBox(owner.window, {
+      type: 'warning',
+      title: '販売サイト用画像の編集データを復元',
+      message: '検証済みバックアップから編集状態を復元しますか？',
+      detail: '破損した元ファイルは別名で保全します。バックアップ以降の編集は戻りません。',
+      buttons: ['キャンセル', '復元する'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    return choice.response === 1 ? restoreMarketplaceImageState(root) : null;
+  });
+  ipcMain.handle(IPC.MARKETPLACE_INITIALIZE_CORRUPT, async (event, root: unknown) => {
+    validRoot(root);
+    const owner = projectWindowForSender(event.sender);
+    if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
+    await ensureProjectWritable(root);
+    const choice = await dialog.showMessageBox(owner.window, {
+      type: 'warning',
+      title: '販売サイト用画像の編集データを初期化',
+      message: '破損したファイルを別名で保全して初期化しますか？',
+      detail: '編集内容は新しい空の状態になります。元ファイルは削除されません。',
+      buttons: ['キャンセル', '保全して初期化'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    return choice.response === 1 ? initializeCorruptMarketplaceImageState(root) : null;
   });
   ipcMain.handle(IPC.MARKETPLACE_SAVE, async (_e, root: unknown, state: unknown) => {
     validRoot(root);

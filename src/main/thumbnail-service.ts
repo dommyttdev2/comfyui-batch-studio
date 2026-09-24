@@ -12,7 +12,14 @@ import type {
   ThumbnailTextState,
   ThumbnailTemplateSource,
 } from '../shared/types.js';
-import { readJson, withTemplateStoreLock, writeJsonAtomic } from './fs-utils.js';
+import {
+  initializeCorruptProtectedJson,
+  PersistedJsonError,
+  readJson,
+  restoreValidatedJsonFromBackup,
+  withTemplateStoreLock,
+  writeJsonAtomic,
+} from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
 import {
   listImageFiles,
@@ -82,6 +89,30 @@ export async function listThumbnailFonts(): Promise<string[]> {
 
 function statePath(root: string) {
   return path.join(root, '._batch_studio', 'thumbnail-editor.json');
+}
+
+function assertThumbnailState(value: unknown, file: string): asserts value is ThumbnailEditorState {
+  const state = value as Partial<ThumbnailEditorState> | null;
+  if (
+    !state ||
+    typeof state !== 'object' ||
+    state.schemaVersion !== 1 ||
+    !Array.isArray(state.documents) ||
+    state.documents.length === 0 ||
+    !Number.isSafeInteger(state.activeDocumentId) ||
+    !Number.isSafeInteger(state.nextDocumentId) ||
+    state.documents.some(
+      (document) =>
+        !document || !Number.isSafeInteger(document.id) || typeof document.slots !== 'object',
+    ) ||
+    (state.saveRevision !== undefined &&
+      (!Number.isSafeInteger(state.saveRevision) || state.saveRevision < 0))
+  )
+    throw new PersistedJsonError(
+      'PERSISTED_JSON_CORRUPT',
+      file,
+      'Thumbnail editor state has an invalid structure',
+    );
 }
 
 function defaultText(
@@ -226,7 +257,9 @@ export function normalizeThumbnailState(
 }
 
 export async function loadThumbnailState(root: string): Promise<ThumbnailEditorState> {
-  const stored = await readJson<unknown>(statePath(root));
+  const file = statePath(root);
+  const stored = await readJson<unknown>(file);
+  if (stored !== null) assertThumbnailState(stored, file);
   // Font enumeration launches PowerShell on Windows. Existing projects carry
   // their selected fonts in the saved editor state, so do not block image display on it.
   if (stored) return normalizeThumbnailState(stored);
@@ -237,6 +270,35 @@ export async function loadThumbnailState(root: string): Promise<ThumbnailEditorS
   );
 }
 
+export async function restoreThumbnailState(root: string): Promise<ThumbnailEditorState> {
+  const file = statePath(root);
+  return withTemplateStoreLock(file, async () => {
+    try {
+      await loadThumbnailState(root);
+    } catch (error) {
+      if (!(error instanceof PersistedJsonError)) throw error;
+      await restoreValidatedJsonFromBackup(file, assertThumbnailState);
+      return loadThumbnailState(root);
+    }
+    throw new Error('編集データは正常です。復元は必要ありません。');
+  });
+}
+
+export async function initializeCorruptThumbnailState(root: string) {
+  const file = statePath(root);
+  return withTemplateStoreLock(file, async () => {
+    try {
+      await loadThumbnailState(root);
+    } catch (error) {
+      if (!(error instanceof PersistedJsonError) || error.code !== 'PERSISTED_JSON_CORRUPT')
+        throw error;
+      await initializeCorruptProtectedJson(file, createDefaultThumbnailState());
+      return loadThumbnailState(root);
+    }
+    throw new Error('編集データは正常です。初期化は必要ありません。');
+  });
+}
+
 export async function saveThumbnailState(
   root: string,
   state: unknown,
@@ -245,6 +307,7 @@ export async function saveThumbnailState(
   const file = statePath(root);
   return withTemplateStoreLock(file, async () => {
     const current = await readJson<ThumbnailEditorState>(file);
+    if (current !== null) assertThumbnailState(current, file);
     const lastRevision = current?.saveRevision ?? 0;
     if (normalized.saveRevision !== undefined && normalized.saveRevision < lastRevision)
       return normalizeThumbnailState(current);

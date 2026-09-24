@@ -1325,6 +1325,8 @@ export interface BatchStudioApi {
   thumbnail: {
     fonts: () => Promise<string[]>;
     load: (root: string) => Promise<ThumbnailEditorState>;
+    restoreBackup: (root: string) => Promise<ThumbnailEditorState | null>;
+    initializeCorrupt: (root: string) => Promise<ThumbnailEditorState | null>;
     save: (root: string, state: ThumbnailEditorState) => Promise<ThumbnailEditorState>;
     selectImage: (root: string) => Promise<ThumbnailImageSource | null>;
     listImages: (root: string) => Promise<ThumbnailImageItem[]>;
@@ -1371,6 +1373,8 @@ export interface BatchStudioApi {
       sourceType: MarketplaceSourceType,
     ) => Promise<FinalArtifactImageSource | null>;
     load: (root: string) => Promise<MarketplaceImageEditorState>;
+    restoreBackup: (root: string) => Promise<MarketplaceImageEditorState | null>;
+    initializeCorrupt: (root: string) => Promise<MarketplaceImageEditorState | null>;
     save: (
       root: string,
       state: MarketplaceImageEditorState,

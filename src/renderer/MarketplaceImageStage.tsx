@@ -128,6 +128,7 @@ function targetLabel(target: MarketplaceImageTarget) {
 export function MarketplaceImageStage({ project, run }: { project: ProjectSummary; run: Runner }) {
   const [targets, setTargets] = useState<MarketplaceImageTarget[]>([]);
   const [state, setState] = useState<MarketplaceImageEditorState | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [source, setSource] = useState<FinalArtifactImageSource | null>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [finalArtifact, setFinalArtifact] = useState<FinalArtifactStatus | null>(null);
@@ -244,60 +245,65 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     const loadToken = pickerGenerationRef.current.invalidate();
     const isCurrent = () => !cancelled && pickerGenerationRef.current.isCurrent(loadToken);
     void run(async () => {
-      const [nextTargets, nextState, nextFinalArtifact, exportedThumbnails] = await Promise.all([
-        window.batchStudio.marketplace.targets(),
-        window.batchStudio.marketplace.load(project.rootPath),
-        window.batchStudio.finalArtifact.status(project.rootPath),
-        window.batchStudio.marketplace.listThumbnailImages(project.rootPath).catch(() => []),
-      ]);
-      if (!isCurrent()) return;
-      setTargets(nextTargets);
-      setFinalArtifact(nextFinalArtifact);
-      setHasExportedThumbnails(exportedThumbnails.length > 0);
-      loadedStateRef.current = true;
-      setState(nextState);
-      if (!nextState.sourceImagePath) return;
       try {
-        const nextSource = await window.batchStudio.marketplace.readSource(
-          project.rootPath,
-          nextState.sourceImagePath,
-          nextState.sourceType,
-        );
-        if (!nextSource || !isCurrent()) return;
-        const nextImage = await loadBrowserImage(nextSource);
+        const [nextTargets, nextState, nextFinalArtifact, exportedThumbnails] = await Promise.all([
+          window.batchStudio.marketplace.targets(),
+          window.batchStudio.marketplace.load(project.rootPath),
+          window.batchStudio.finalArtifact.status(project.rootPath),
+          window.batchStudio.marketplace.listThumbnailImages(project.rootPath).catch(() => []),
+        ]);
         if (!isCurrent()) return;
-        const sizedSource = browserSizedSource(nextSource, nextImage);
-        const normalizedTargets: MarketplaceImageEditorState['targets'] = {};
-        for (const target of nextTargets)
-          normalizedTargets[target.id] = {
-            crop: normalizeCrop(
-              nextState.targets[target.id]?.crop ?? null,
-              sizedSource,
-              target.width,
-              target.height,
-            ),
-          };
-        setSource(sizedSource);
-        setImage(nextImage);
-        setState({
-          ...nextState,
-          targets: normalizedTargets,
-          custom: {
-            ...nextState.custom,
-            crop: normalizeCrop(
-              nextState.custom.crop,
-              sizedSource,
-              nextState.custom.width,
-              nextState.custom.height,
-            ),
-          },
-        });
-      } catch {
-        if (isCurrent()) {
-          setSource(null);
-          setImage(null);
-          setState({ ...nextState, sourceImagePath: '' });
+        setTargets(nextTargets);
+        setFinalArtifact(nextFinalArtifact);
+        setHasExportedThumbnails(exportedThumbnails.length > 0);
+        loadedStateRef.current = true;
+        setState(nextState);
+        setLoadError('');
+        if (!nextState.sourceImagePath) return;
+        try {
+          const nextSource = await window.batchStudio.marketplace.readSource(
+            project.rootPath,
+            nextState.sourceImagePath,
+            nextState.sourceType,
+          );
+          if (!nextSource || !isCurrent()) return;
+          const nextImage = await loadBrowserImage(nextSource);
+          if (!isCurrent()) return;
+          const sizedSource = browserSizedSource(nextSource, nextImage);
+          const normalizedTargets: MarketplaceImageEditorState['targets'] = {};
+          for (const target of nextTargets)
+            normalizedTargets[target.id] = {
+              crop: normalizeCrop(
+                nextState.targets[target.id]?.crop ?? null,
+                sizedSource,
+                target.width,
+                target.height,
+              ),
+            };
+          setSource(sizedSource);
+          setImage(nextImage);
+          setState({
+            ...nextState,
+            targets: normalizedTargets,
+            custom: {
+              ...nextState.custom,
+              crop: normalizeCrop(
+                nextState.custom.crop,
+                sizedSource,
+                nextState.custom.width,
+                nextState.custom.height,
+              ),
+            },
+          });
+        } catch {
+          if (isCurrent()) {
+            setSource(null);
+            setImage(null);
+            setState({ ...nextState, sourceImagePath: '' });
+          }
         }
+      } catch (error) {
+        if (isCurrent()) setLoadError(error instanceof Error ? error.message : String(error));
       }
     });
     return () => {
@@ -680,7 +686,79 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
     });
 
   if (!state || !finalArtifact)
-    return <div className="panel">販売サイト用画像の編集データを読み込んでいます…</div>;
+    return (
+      <div className="panel">
+        {loadError ? (
+          <div className="issue warning" role="alert">
+            編集データを読み取れません: {loadError}{' '}
+            元ファイルを保持しています。バックアップを確認してください。
+            <button
+              onClick={() =>
+                void Promise.all([
+                  window.batchStudio.marketplace.load(project.rootPath),
+                  window.batchStudio.finalArtifact.status(project.rootPath),
+                ])
+                  .then(([loaded, artifact]) => {
+                    setState(loaded);
+                    setFinalArtifact(artifact);
+                    loadedStateRef.current = true;
+                    setLoadError('');
+                  })
+                  .catch((error: unknown) =>
+                    setLoadError(error instanceof Error ? error.message : String(error)),
+                  )
+              }
+            >
+              再読み込み
+            </button>
+            <button
+              onClick={() =>
+                void window.batchStudio.marketplace
+                  .restoreBackup(project.rootPath)
+                  .then(async (loaded) => {
+                    if (loaded) {
+                      setState(loaded);
+                      setFinalArtifact(
+                        await window.batchStudio.finalArtifact.status(project.rootPath),
+                      );
+                      loadedStateRef.current = true;
+                      setLoadError('');
+                    }
+                  })
+                  .catch((error: unknown) =>
+                    setLoadError(error instanceof Error ? error.message : String(error)),
+                  )
+              }
+            >
+              バックアップから復元
+            </button>
+            <button
+              onClick={() =>
+                void window.batchStudio.marketplace
+                  .initializeCorrupt(project.rootPath)
+                  .then(async (loaded) => {
+                    if (loaded) {
+                      setState(loaded);
+                      setFinalArtifact(
+                        await window.batchStudio.finalArtifact.status(project.rootPath),
+                      );
+                      loadedStateRef.current = true;
+                      setLoadError('');
+                    }
+                  })
+                  .catch((error: unknown) =>
+                    setLoadError(error instanceof Error ? error.message : String(error)),
+                  )
+              }
+            >
+              元ファイルを保全して初期化
+            </button>
+          </div>
+        ) : (
+          '販売サイト用画像の編集データを読み込んでいます…'
+        )}
+      </div>
+    );
 
   if (finalArtifact.state !== 'ready' && !hasExportedThumbnails)
     return (

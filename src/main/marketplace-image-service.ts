@@ -11,7 +11,14 @@ import type {
   MarketplaceOutputFormat,
   MarketplaceSourceType,
 } from '../shared/types.js';
-import { readJson, withTemplateStoreLock, writeJsonAtomic } from './fs-utils.js';
+import {
+  initializeCorruptProtectedJson,
+  PersistedJsonError,
+  readJson,
+  restoreValidatedJsonFromBackup,
+  withTemplateStoreLock,
+  writeJsonAtomic,
+} from './fs-utils.js';
 import {
   assertFinalArtifactImage,
   readImageSource,
@@ -109,6 +116,32 @@ function statePath(root: string) {
   return path.join(root, '._batch_studio', 'marketplace-images.json');
 }
 
+function assertMarketplaceState(
+  value: unknown,
+  file: string,
+): asserts value is MarketplaceImageEditorState {
+  const state = value as Partial<MarketplaceImageEditorState> | null;
+  if (
+    !state ||
+    typeof state !== 'object' ||
+    state.schemaVersion !== 1 ||
+    !state.targets ||
+    typeof state.targets !== 'object' ||
+    Array.isArray(state.targets) ||
+    !state.custom ||
+    typeof state.custom !== 'object' ||
+    !Number.isFinite(state.custom.width) ||
+    !Number.isFinite(state.custom.height) ||
+    (state.saveRevision !== undefined &&
+      (!Number.isSafeInteger(state.saveRevision) || state.saveRevision < 0))
+  )
+    throw new PersistedJsonError(
+      'PERSISTED_JSON_CORRUPT',
+      file,
+      'Marketplace editor state has an invalid structure',
+    );
+}
+
 export async function createDefaultMarketplaceImageState(): Promise<MarketplaceImageEditorState> {
   const targets = await getMarketplaceImageTargets();
   return {
@@ -178,7 +211,39 @@ export async function normalizeMarketplaceImageState(
 }
 
 export async function loadMarketplaceImageState(root: string) {
-  return normalizeMarketplaceImageState(await readJson<unknown>(statePath(root)));
+  const file = statePath(root);
+  const stored = await readJson<unknown>(file);
+  if (stored !== null) assertMarketplaceState(stored, file);
+  return normalizeMarketplaceImageState(stored);
+}
+
+export async function restoreMarketplaceImageState(root: string) {
+  const file = statePath(root);
+  return withTemplateStoreLock(file, async () => {
+    try {
+      await loadMarketplaceImageState(root);
+    } catch (error) {
+      if (!(error instanceof PersistedJsonError)) throw error;
+      await restoreValidatedJsonFromBackup(file, assertMarketplaceState);
+      return loadMarketplaceImageState(root);
+    }
+    throw new Error('編集データは正常です。復元は必要ありません。');
+  });
+}
+
+export async function initializeCorruptMarketplaceImageState(root: string) {
+  const file = statePath(root);
+  return withTemplateStoreLock(file, async () => {
+    try {
+      await loadMarketplaceImageState(root);
+    } catch (error) {
+      if (!(error instanceof PersistedJsonError) || error.code !== 'PERSISTED_JSON_CORRUPT')
+        throw error;
+      await initializeCorruptProtectedJson(file, await createDefaultMarketplaceImageState());
+      return loadMarketplaceImageState(root);
+    }
+    throw new Error('編集データは正常です。初期化は必要ありません。');
+  });
 }
 
 export async function saveMarketplaceImageState(root: string, value: unknown) {
@@ -186,6 +251,7 @@ export async function saveMarketplaceImageState(root: string, value: unknown) {
   const file = statePath(root);
   return withTemplateStoreLock(file, async () => {
     const current = await readJson<MarketplaceImageEditorState>(file);
+    if (current !== null) assertMarketplaceState(current, file);
     const lastRevision = current?.saveRevision ?? 0;
     if (normalized.saveRevision !== undefined && normalized.saveRevision < lastRevision)
       return normalizeMarketplaceImageState(current);
