@@ -629,6 +629,11 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
     [preflight, setPreflight] = useState<PreflightResult | null>(null),
     [checking, setChecking] = useState(true),
     [monitorError, setMonitorError] = useState(''),
+    [runStorageError, setRunStorageError] = useState(''),
+    [storageDiagnostics, setStorageDiagnostics] = useState<
+      Array<{ runId: string | null; file: string; backupFile: string; reason: string }>
+    >([]),
+    [restoringBackup, setRestoringBackup] = useState(false),
     [pauseRequestInFlight, setPauseRequestInFlight] = useState(false);
   const refreshPreflight = async () => {
     setChecking(true);
@@ -649,10 +654,24 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
         const value = await window.batchStudio.execution.status(project.rootPath);
         if (!cancelled) {
           setCurrent(value);
+          setRunStorageError('');
+          setStorageDiagnostics([]);
           setMonitorError('');
         }
       } catch (e) {
-        if (!cancelled) setMonitorError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) {
+          const message = e instanceof Error ? e.message : String(e);
+          setRunStorageError(message);
+          setMonitorError(message);
+          try {
+            const diagnostics = await window.batchStudio.execution.storageDiagnostics(
+              project.rootPath,
+            );
+            if (!cancelled) setStorageDiagnostics(diagnostics);
+          } catch {
+            if (!cancelled) setStorageDiagnostics([]);
+          }
+        }
       }
     };
     void Promise.all([load(), refreshPreflight()]);
@@ -685,9 +704,13 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
   const requiresRecovery = recoveryUncertain || outputUncollected;
   const readyForNewRun =
     !current || current.lifecycle === 'COMPLETED' || current.lifecycle === 'DISCARDED';
-  const canStart = preflight?.state === 'READY' && readyForNewRun && !requiresRecovery;
+  const canStart =
+    preflight?.state === 'READY' && readyForNewRun && !requiresRecovery && !runStorageError;
   const canResume = Boolean(
-    current && !requiresRecovery && ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
+    current &&
+      !requiresRecovery &&
+      !runStorageError &&
+      ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
   );
   const canDiscardForEdit = Boolean(
     current && current.lifecycle !== 'COMPLETED' && current.lifecycle !== 'DISCARDED',
@@ -762,7 +785,51 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
             {checking ? '確認中…' : 'Preflight再確認'}
           </button>
         </div>
-        {monitorError && <div className="errorbar">{monitorError}</div>}
+        {runStorageError && (
+          <div className="errorbar" role="alert">
+            <p>{runStorageError}</p>
+            {storageDiagnostics.map((item) => (
+              <div key={item.file}>
+                <p>
+                  Run: {item.runId ?? 'current'} / 対象: {item.file}
+                </p>
+                <p>バックアップ: {item.backupFile || 'なし'}</p>
+                {item.backupFile && (
+                  <button
+                    disabled={restoringBackup}
+                    onClick={() => {
+                      setRestoringBackup(true);
+                      void window.batchStudio.execution
+                        .restoreBackup(project.rootPath, item.runId)
+                        .then((result) =>
+                          result === null
+                            ? null
+                            : window.batchStudio.execution.status(project.rootPath),
+                        )
+                        .then((value) => {
+                          if (value === null) return;
+                          setCurrent(value);
+                          setRunStorageError('');
+                          setStorageDiagnostics([]);
+                        })
+                        .catch((error: unknown) =>
+                          setRunStorageError(
+                            error instanceof Error ? error.message : String(error),
+                          ),
+                        )
+                        .finally(() => setRestoringBackup(false));
+                    }}
+                  >
+                    バックアップから復元
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {monitorError && monitorError !== runStorageError && (
+          <div className="errorbar">{monitorError}</div>
+        )}
         <div className={'preflight ' + (canStart ? 'ready' : 'blocked')}>
           <h2>{startBanner.state}</h2>
           <p>{startBanner.message}</p>

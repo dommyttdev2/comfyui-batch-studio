@@ -472,6 +472,47 @@ const writeJson = (file, value) => {
   assert.equal(uiSource.includes('一時停止'), true);
   assert.equal(uiSource.includes('再開'), true);
 
+  const damagedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-damaged-run-'));
+  const damagedDir = path.join(damagedRoot, 'execution_runs');
+  fs.mkdirSync(damagedDir);
+  const validPath = path.join(damagedDir, `${started.runId}.json`);
+  fs.copyFileSync(runPath, validPath);
+  writeJson(path.join(damagedDir, 'current.json'), { schemaVersion: 1, runId: started.runId });
+  const damagedId = '00000000-0000-4000-8000-000000000002';
+  const damagedPath = path.join(damagedDir, `${damagedId}.json`);
+  fs.writeFileSync(damagedPath, '{ incomplete');
+  await assert.rejects(
+    () => execution.listExecutionRuns(damagedRoot),
+    (error) => {
+      assert.equal(error.name, 'ExecutionRunStorageError');
+      assert.equal(error.diagnostics[0].runId, damagedId);
+      assert.equal(error.diagnostics[0].backupFile, `${damagedPath}.bak`);
+      return true;
+    },
+  );
+  await assert.rejects(() => execution.getCurrentExecutionRun(damagedRoot), /新規実行と編集を停止/);
+  await assert.rejects(
+    () => execution.startExecutionRun(damagedRoot, async () => ready),
+    /新規実行と編集を停止/,
+  );
+  assert.equal(fs.readFileSync(damagedPath, 'utf8'), '{ incomplete');
+  const backupRun = JSON.parse(fs.readFileSync(validPath, 'utf8'));
+  backupRun.runId = damagedId;
+  writeJson(`${damagedPath}.bak`, backupRun);
+  assert.equal((await execution.inspectExecutionRunStorage(damagedRoot))[0].runId, damagedId);
+  assert.deepEqual(await execution.restoreExecutionRunBackup(damagedRoot, damagedId), []);
+  assert.equal((await execution.getExecutionRun(damagedRoot, damagedId)).runId, damagedId);
+  assert.equal(
+    fs.readdirSync(damagedDir).some((name) => name.startsWith(`${damagedId}.json.corrupt-`)),
+    true,
+  );
+  fs.rmSync(damagedPath);
+  assert.equal((await execution.getCurrentExecutionRun(damagedRoot)).runId, started.runId);
+  fs.writeFileSync(path.join(damagedDir, 'current.json'), '{ incomplete');
+  await assert.rejects(() => execution.getCurrentExecutionRun(damagedRoot), /新規実行と編集を停止/);
+  fs.rmSync(path.join(damagedDir, 'current.json'));
+  assert.equal((await execution.getCurrentExecutionRun(damagedRoot)).runId, started.runId);
+
   console.log('Persistent Execution Run tests passed.');
 })().catch((error) => {
   console.error(error);

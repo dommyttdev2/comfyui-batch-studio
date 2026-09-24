@@ -70,12 +70,14 @@ import {
   discardExecutionRun,
   getCurrentExecutionRun,
   getExecutionRun,
+  inspectExecutionRunStorage,
   listExecutionRuns,
   mutateExecutionRun,
   requestForceInterrupt,
   requestStopScheduling,
   resumeExecutionRun,
   resumeExecutionRunFinalization,
+  restoreExecutionRunBackup,
   startExecutionRun,
   validatedExecutionEvidence,
 } from './execution-run.js';
@@ -3100,6 +3102,31 @@ function register() {
     validRoot(root);
     await reconcilePersistedExecutionRuns(root);
     return getCurrentExecutionRun(root);
+  });
+  ipcMain.handle(IPC.EXECUTION_STORAGE_DIAGNOSTICS, async (event, root: unknown) => {
+    validRoot(root);
+    if (projectWindowForSender(event.sender).projectRoot !== path.resolve(root))
+      throw new Error('Project mismatch.');
+    return inspectExecutionRunStorage(root);
+  });
+  ipcMain.handle(IPC.EXECUTION_RESTORE_BACKUP, async (event, root: unknown, runId: unknown) => {
+    validRoot(root);
+    const state = projectWindowForSender(event.sender);
+    if (state.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
+    if (runId !== null && typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
+    const decision = await dialog.showMessageBox(state.window, {
+      type: 'warning',
+      title: 'Runバックアップを復元',
+      message: '検証済みのバックアップからRunを復元しますか？',
+      detail:
+        '現在の破損ファイルは別名で保全します。バックアップ以降の状態は戻りません。復元後に実行資源の状態を確認してください。',
+      buttons: ['キャンセル', '復元する'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (decision.response !== 1) return null;
+    return restoreExecutionRunBackup(root, runId);
   });
   ipcMain.handle(IPC.EXECUTION_LEAVE, async (event, root: unknown) => {
     validRoot(root);

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { readdir, rm } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { copyFile, readFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   ExecutionEvidence,
@@ -12,7 +13,7 @@ import type {
   PreflightResult,
   PromptPlanArtifact,
 } from '../shared/types.js';
-import { exists, readJson, writeJsonAtomic } from './fs-utils.js';
+import { readJson, restoreJsonFromBackup, writeJsonAtomic } from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
 import {
   hashCanonicalJson,
@@ -115,46 +116,159 @@ async function writeCurrent(root: string, runId: string) {
 }
 
 export async function getExecutionRun(root: string, runId: string): Promise<ExecutionRun | null> {
-  return readJson<ExecutionRun>(executionRunPath(root, runId));
+  const file = executionRunPath(root, runId);
+  const run = await readJson<ExecutionRun>(file);
+  if (run !== null && (!run || run.runId !== runId || typeof run.lifecycle !== 'string'))
+    throw new ExecutionRunStorageError([
+      { runId, file, backupFile: `${file}.bak`, reason: 'Invalid Run structure' },
+    ]);
+  return run;
+}
+
+export type ExecutionRunStorageDiagnostic = {
+  runId: string | null;
+  file: string;
+  backupFile: string;
+  reason: string;
+};
+
+export class ExecutionRunStorageError extends Error {
+  constructor(public readonly diagnostics: ExecutionRunStorageDiagnostic[]) {
+    super(
+      `Runの保存データを読み取れません。新規実行と編集を停止しました: ${diagnostics.map((item) => `${item.runId ?? '一覧'}: ${item.file} (${item.reason})`).join(', ')}。元ファイルを保持し、検証済みの .bak から復元した後に再読み込みしてください。`,
+    );
+    this.name = 'ExecutionRunStorageError';
+  }
 }
 
 export async function listExecutionRuns(root: string): Promise<ExecutionRun[]> {
-  if (!(await exists(executionRunsDir(root)))) return [];
   let names: string[] = [];
   try {
     names = (await readdir(executionRunsDir(root))).filter(
       (name) => name.endsWith('.json') && name !== CURRENT_FILE,
     );
-  } catch {
-    return [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    const file = executionRunsDir(root);
+    throw new ExecutionRunStorageError([
+      {
+        runId: null,
+        file,
+        backupFile: '',
+        reason: String((error as NodeJS.ErrnoException).code ?? 'directory unreadable'),
+      },
+    ]);
   }
-  const runs = (
-    await Promise.all(
-      names.map(async (name) => {
-        try {
-          return await getExecutionRun(root, name.replace(/\.json$/, ''));
-        } catch {
-          return null;
-        }
-      }),
-    )
-  ).filter((run): run is ExecutionRun => Boolean(run));
-  return runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
-}
-
-async function latestExecutionRun(root: string): Promise<ExecutionRun | null> {
-  return (await listExecutionRuns(root))[0] ?? null;
+  const results = await Promise.all(
+    names.map(async (name) => {
+      const runId = name.replace(/\.json$/, '');
+      const file = path.join(executionRunsDir(root), name);
+      try {
+        const run = await getExecutionRun(root, runId);
+        if (run === null) throw new Error('Run file disappeared during scan');
+        return { run, diagnostic: null };
+      } catch (error) {
+        return {
+          run: null,
+          diagnostic:
+            error instanceof ExecutionRunStorageError
+              ? error.diagnostics[0]
+              : {
+                  runId,
+                  file,
+                  backupFile: `${file}.bak`,
+                  reason: String((error as NodeJS.ErrnoException).code ?? 'corrupt or unreadable'),
+                },
+        };
+      }
+    }),
+  );
+  const diagnostics = results.flatMap((result) => (result.diagnostic ? [result.diagnostic] : []));
+  if (diagnostics.length) throw new ExecutionRunStorageError(diagnostics);
+  const runs = results
+    .map((result) => result.run)
+    .filter((run): run is ExecutionRun => Boolean(run));
+  return runs.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
 }
 
 export async function getCurrentExecutionRun(root: string): Promise<ExecutionRun | null> {
-  const pointer = await readJson<{ schemaVersion: 1; runId: string }>(currentRunPath(root));
-  if (pointer?.runId) {
-    try {
-      const run = await getExecutionRun(root, pointer.runId);
-      if (run) return run;
-    } catch {}
+  // Scan every Run before trusting the current pointer: an older damaged Run may
+  // still own an active worker or remote instance.
+  const runs = await listExecutionRuns(root);
+  let pointer: { schemaVersion: 1; runId: string } | null;
+  try {
+    pointer = await readJson<{ schemaVersion: 1; runId: string }>(currentRunPath(root));
+  } catch (error) {
+    const file = currentRunPath(root);
+    throw new ExecutionRunStorageError([
+      {
+        runId: null,
+        file,
+        backupFile: `${file}.bak`,
+        reason: String((error as NodeJS.ErrnoException).code ?? 'corrupt or unreadable'),
+      },
+    ]);
   }
-  return latestExecutionRun(root);
+  if (pointer !== null) {
+    const file = currentRunPath(root);
+    if (pointer.schemaVersion !== 1 || typeof pointer.runId !== 'string')
+      throw new ExecutionRunStorageError([
+        { runId: null, file, backupFile: `${file}.bak`, reason: 'Invalid current pointer' },
+      ]);
+    const run = runs.find((item) => item.runId === pointer.runId);
+    if (!run)
+      throw new ExecutionRunStorageError([
+        { runId: pointer.runId, file, backupFile: `${file}.bak`, reason: 'Current Run is missing' },
+      ]);
+    return run;
+  }
+  return runs[0] ?? null;
+}
+
+export async function inspectExecutionRunStorage(
+  root: string,
+): Promise<ExecutionRunStorageDiagnostic[]> {
+  try {
+    await getCurrentExecutionRun(root);
+    return [];
+  } catch (error) {
+    if (error instanceof ExecutionRunStorageError) return error.diagnostics;
+    throw error;
+  }
+}
+
+/** Explicit recovery keeps the damaged original under a unique name for inspection. */
+export async function restoreExecutionRunBackup(root: string, runId: string | null) {
+  const diagnostics = await inspectExecutionRunStorage(root);
+  const diagnostic = diagnostics.find((item) => item.runId === runId);
+  if (!diagnostic || !diagnostic.backupFile)
+    throw new Error('復元対象のRunが見つかりません。再読み込みしてください。');
+  const file = runId === null ? currentRunPath(root) : executionRunPath(root, runId);
+  if (diagnostic.file !== file) throw new Error('復元対象のパスが一致しません。');
+  const backup = await readFile(diagnostic.backupFile, 'utf8');
+  let value: unknown;
+  try {
+    value = JSON.parse(backup);
+  } catch {
+    throw new Error('バックアップが破損しています。元のRunは変更していません。');
+  }
+  if (runId === null) {
+    const pointer = value as { schemaVersion?: unknown; runId?: unknown };
+    if (pointer?.schemaVersion !== 1 || typeof pointer.runId !== 'string')
+      throw new Error('バックアップのcurrentポインタが不正です。');
+    assertRunId(pointer.runId);
+  } else {
+    const run = value as Partial<ExecutionRun>;
+    if (run?.runId !== runId || typeof run.lifecycle !== 'string')
+      throw new Error('バックアップのRun IDまたは形式が一致しません。');
+  }
+  try {
+    await copyFile(file, `${file}.corrupt-${randomUUID()}`, constants.COPYFILE_EXCL);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  await restoreJsonFromBackup(file);
+  return inspectExecutionRunStorage(root);
 }
 
 async function captureSnapshot(
