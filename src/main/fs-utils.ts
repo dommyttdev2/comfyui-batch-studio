@@ -72,6 +72,11 @@ async function removeTemp(p: string, io: AtomicWriteIo) {
 function protectedJsonPath(file: string) {
   const basename = path.basename(file).toLowerCase();
   if (basename === 'project_meta.json') return true;
+  if (
+    path.basename(path.dirname(file)).toLowerCase() === '._batch_studio' &&
+    (basename === 'thumbnail-editor.json' || basename === 'marketplace-images.json')
+  )
+    return true;
   return (
     path.basename(path.dirname(file)).toLowerCase() === 'execution_runs' &&
     basename.endsWith('.json')
@@ -234,6 +239,38 @@ export async function restoreJsonFromBackup(p: string, io: AtomicWriteIo = nativ
       await removeTemp(tmp, io);
     }
   });
+}
+
+/** Preserve the damaged primary and validate the backup's schema before explicit recovery. */
+export async function restoreValidatedJsonFromBackup(
+  file: string,
+  validate: (value: unknown, file: string) => void,
+) {
+  if (!protectedJsonPath(file)) throw new Error('Only protected JSON supports recovery.');
+  const backup = await readExistingProtectedJson(`${file}.bak`, nativeIo);
+  if (backup === null)
+    throw new PersistedJsonError('PERSISTED_JSON_UNREADABLE', file, 'No validated backup exists');
+  validate(JSON.parse(backup), `${file}.bak`);
+  try {
+    await copyFile(file, `${file}.corrupt-${randomUUID()}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  await restoreJsonFromBackup(file);
+}
+
+/** Called only after the caller has diagnosed an invalid editor state and confirmed reset. */
+export async function initializeCorruptProtectedJson(file: string, initial: unknown) {
+  if (!protectedJsonPath(file)) throw new Error('Only protected JSON supports recovery.');
+  const preserved = `${file}.corrupt-${randomUUID()}`;
+  await rename(file, preserved);
+  try {
+    await writeJsonAtomic(file, initial);
+  } catch (error) {
+    if (!(await exists(file))) await rename(preserved, file);
+    throw error;
+  }
+  return preserved;
 }
 export async function writeJsonAtomic(p: string, v: unknown, io: AtomicWriteIo = nativeIo) {
   await writeTextAtomic(p, JSON.stringify(v, null, 2) + '\n', io);

@@ -141,6 +141,44 @@ const load = (relative) => import(pathToFileURL(path.join(compiled, 'main', rela
       code: 'PERSISTED_JSON_UNREADABLE',
     });
     fs.rmSync(unreadable, { recursive: true });
+    const editorDir = path.join(dir, '._batch_studio');
+    fs.mkdirSync(editorDir);
+    const { restoreValidatedJsonFromBackup } = await load('fs-utils.js');
+    for (const name of ['thumbnail-editor.json', 'marketplace-images.json']) {
+      const editorFile = path.join(editorDir, name);
+      await writeJsonAtomic(editorFile, { schemaVersion: 1, saveRevision: 3 });
+      await writeJsonAtomic(editorFile, { schemaVersion: 1, saveRevision: 4 });
+      fs.writeFileSync(editorFile, '{truncated');
+      await assert.rejects(() => readJson(editorFile), { code: 'PERSISTED_JSON_CORRUPT' });
+      await assert.rejects(() => writeJsonAtomic(editorFile, { schemaVersion: 1 }), {
+        code: 'PERSISTED_JSON_CORRUPT',
+      });
+      assert.equal(fs.readFileSync(editorFile, 'utf8'), '{truncated');
+      await assert.rejects(
+        () =>
+          restoreValidatedJsonFromBackup(editorFile, (value) => {
+            if (value.saveRevision !== 99) throw new Error('schema rejected');
+          }),
+        /schema rejected/,
+      );
+      assert.equal(fs.readFileSync(editorFile, 'utf8'), '{truncated');
+      await restoreValidatedJsonFromBackup(editorFile, (value) => {
+        assert.equal(value.saveRevision, 3);
+      });
+      assert.equal((await readJson(editorFile)).saveRevision, 3);
+      assert.equal(
+        fs.readdirSync(editorDir).some((entry) => entry.startsWith(`${name}.corrupt-`)),
+        true,
+      );
+      fs.writeFileSync(editorFile, '{damaged-again');
+      const { initializeCorruptProtectedJson } = await load('fs-utils.js');
+      const preserved = await initializeCorruptProtectedJson(editorFile, {
+        schemaVersion: 1,
+        saveRevision: 0,
+      });
+      assert.equal(fs.readFileSync(preserved, 'utf8'), '{damaged-again');
+      assert.equal((await readJson(editorFile)).saveRevision, 0);
+    }
     const draft = path.join(dir, 'draft.json');
     fs.writeFileSync(draft, '{truncated');
     assert.equal(

@@ -302,6 +302,7 @@ async function loadPsdOverlay(pattern: ThumbnailPattern): Promise<TemplateOverla
 
 export function ThumbnailStage({ project, run }: { project: ProjectSummary; run: Runner }) {
   const [state, setState] = useState<ThumbnailEditorState | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [fontFamilies, setFontFamilies] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteOutputFiles, setDeleteOutputFiles] = useState(false);
@@ -380,13 +381,20 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
 
   useEffect(() => {
     let cancelled = false;
-    void run(async () => {
-      const loaded = await window.batchStudio.thumbnail.load(project.rootPath);
-      if (cancelled) return;
-      setState(loaded);
-      // Do not block the editor on images belonging to other documents.
-      loadedStateRef.current = true;
-    });
+    loadedStateRef.current = false;
+    setState(null);
+    void window.batchStudio.thumbnail
+      .load(project.rootPath)
+      .then((loaded) => {
+        if (cancelled) return;
+        setState(loaded);
+        setLoadError('');
+        // Do not block the editor on images belonging to other documents.
+        loadedStateRef.current = true;
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+      });
     return () => {
       cancelled = true;
     };
@@ -728,7 +736,70 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
     });
 
   if (!state || !active)
-    return <div className="panel">サムネイル編集データを読み込んでいます…</div>;
+    return (
+      <div className="panel">
+        {loadError ? (
+          <div className="issue warning" role="alert">
+            編集データを読み取れません: {loadError}{' '}
+            元ファイルを保持しています。バックアップを確認してください。
+            <button
+              onClick={() =>
+                void window.batchStudio.thumbnail
+                  .load(project.rootPath)
+                  .then((loaded) => {
+                    setState(loaded);
+                    loadedStateRef.current = true;
+                    setLoadError('');
+                  })
+                  .catch((error: unknown) =>
+                    setLoadError(error instanceof Error ? error.message : String(error)),
+                  )
+              }
+            >
+              再読み込み
+            </button>
+            <button
+              onClick={() =>
+                void window.batchStudio.thumbnail
+                  .restoreBackup(project.rootPath)
+                  .then((loaded) => {
+                    if (loaded) {
+                      setState(loaded);
+                      loadedStateRef.current = true;
+                      setLoadError('');
+                    }
+                  })
+                  .catch((error: unknown) =>
+                    setLoadError(error instanceof Error ? error.message : String(error)),
+                  )
+              }
+            >
+              バックアップから復元
+            </button>
+            <button
+              onClick={() =>
+                void window.batchStudio.thumbnail
+                  .initializeCorrupt(project.rootPath)
+                  .then((loaded) => {
+                    if (loaded) {
+                      setState(loaded);
+                      loadedStateRef.current = true;
+                      setLoadError('');
+                    }
+                  })
+                  .catch((error: unknown) =>
+                    setLoadError(error instanceof Error ? error.message : String(error)),
+                  )
+              }
+            >
+              元ファイルを保全して初期化
+            </button>
+          </div>
+        ) : (
+          'サムネイル編集データを読み込んでいます…'
+        )}
+      </div>
+    );
   const slotState = active.slots[selectedSlot] ?? {
     imagePath: '',
     offsetX: 0,
