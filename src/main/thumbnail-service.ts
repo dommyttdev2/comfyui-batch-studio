@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { nativeImage } from 'electron';
 import path from 'node:path';
 import type {
   ThumbnailDocument,
@@ -21,6 +22,7 @@ import {
   writeJsonAtomic,
 } from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
+import { writeImageAtomic } from './atomic-image-output.js';
 import {
   listImageFiles,
   readImagePreview,
@@ -430,6 +432,15 @@ export async function exportThumbnail(
     outputDirectory,
     `thumbnail-${String(documentId).padStart(2, '0')}.${extension}`,
   );
-  await writeFile(outputPath, bytes);
+  await writeImageAtomic(
+    outputPath,
+    bytes,
+    format,
+    (content) => {
+      const image = nativeImage.createFromBuffer(content);
+      return image.isEmpty() ? null : image.getSize();
+    },
+    `${path.resolve(root)}:${documentId}`,
+  );
   return { path: outputPath };
 }
