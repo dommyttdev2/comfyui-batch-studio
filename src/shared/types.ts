@@ -643,6 +643,7 @@ export interface ThumbnailPickerContext extends ThumbnailPickerSession {
 export interface ThumbnailPickerSelection extends ThumbnailPickerSession {
   slot: ThumbnailSlotKey;
   imagePath: string;
+  previewGeneration?: number;
 }
 
 export interface ThumbnailTemplateSource {
@@ -717,6 +718,7 @@ export interface MarketplacePickerContext extends MarketplacePickerSession {
 
 export interface MarketplacePickerSelection extends MarketplacePickerSession {
   imagePath: string;
+  previewGeneration?: number;
 }
 
 export interface FinalArtifactStatus {
@@ -1347,7 +1349,20 @@ export interface BatchStudioApi {
     ) => Promise<void>;
     openPickerPerfLog: () => Promise<void>;
     previewPicker: (imagePath: string) => Promise<void>;
+    previewResult: (
+      sessionId: string,
+      imagePath: string,
+      generation: number,
+      ok: boolean,
+      message?: string,
+    ) => Promise<boolean>;
     commitPicker: (imagePath: string) => Promise<void>;
+    commitResult: (
+      sessionId: string,
+      imagePath: string,
+      ok: boolean,
+      message?: string,
+    ) => Promise<boolean>;
     onPickerPreview: (listener: (selection: ThumbnailPickerSelection) => void) => () => void;
     onPickerCommit: (listener: (selection: ThumbnailPickerSelection) => void) => () => void;
     onPickerCancel: (listener: (session: ThumbnailPickerSession) => void) => () => void;
@@ -1412,7 +1427,20 @@ export interface BatchStudioApi {
     ) => Promise<MarketplacePickerSession>;
     pickerContext: () => Promise<MarketplacePickerContext>;
     previewPicker: (imagePath: string) => Promise<void>;
+    previewResult: (
+      sessionId: string,
+      imagePath: string,
+      generation: number,
+      ok: boolean,
+      message?: string,
+    ) => Promise<boolean>;
     commitPicker: (imagePath: string) => Promise<void>;
+    commitResult: (
+      sessionId: string,
+      imagePath: string,
+      ok: boolean,
+      message?: string,
+    ) => Promise<boolean>;
     onPickerPreview: (listener: (selection: MarketplacePickerSelection) => void) => () => void;
     onPickerCommit: (listener: (selection: MarketplacePickerSelection) => void) => () => void;
     onPickerCancel: (listener: (session: MarketplacePickerSession) => void) => () => void;

@@ -295,8 +295,8 @@ matchCode(
 );
 matchCode(
   main,
-  /THUMBNAIL_PICKER_COMMIT[\s\S]*state\.committed = true[\s\S]*THUMBNAIL_PICKER_COMMITTED[\s\S]*state\.window\.close\(\)/,
-  'committing an image must notify the project preview and close the picker window',
+  /THUMBNAIL_PICKER_COMMIT[\s\S]*beginCommit\(resolved\)[\s\S]*THUMBNAIL_PICKER_COMMITTED[\s\S]*await committed[\s\S]*state\.window\.close\(\)/,
+  'committing an image must await the project save before closing the picker window',
 );
 matchCode(
   main,
@@ -310,8 +310,8 @@ matchCode(
 );
 matchCode(
   stage,
-  /onPickerCommit[\s\S]*updateSlot\(selection\.slot,[\s\S]*setPickerPreview\(null\)/,
-  'confirmed selection must persist to the thumbnail slot',
+  /onPickerCommit[\s\S]*saveNow\(next\)[\s\S]*setState\(saved\)[\s\S]*commitResult\(selection\.sessionId, selection\.imagePath, true\)/,
+  'confirmed selection must persist before acknowledging the picker',
 );
 matchCode(
   stage,

@@ -99,7 +99,9 @@ const I = {
   THUMBNAIL_PICKER_PERF: 'thumbnail-picker:perf',
   THUMBNAIL_PICKER_PERF_OPEN: 'thumbnail-picker:perf-open',
   THUMBNAIL_PICKER_PREVIEW: 'thumbnail-picker:preview',
+  THUMBNAIL_PICKER_PREVIEW_RESULT: 'thumbnail-picker:preview-result',
   THUMBNAIL_PICKER_COMMIT: 'thumbnail-picker:commit',
+  THUMBNAIL_PICKER_COMMIT_RESULT: 'thumbnail-picker:commit-result',
   THUMBNAIL_PICKER_PREVIEWED: 'thumbnail-picker:previewed',
   THUMBNAIL_PICKER_COMMITTED: 'thumbnail-picker:committed',
   THUMBNAIL_PICKER_CANCELLED: 'thumbnail-picker:cancelled',
@@ -118,7 +120,9 @@ const I = {
   MARKETPLACE_PICKER_OPEN: 'marketplace-picker:open',
   MARKETPLACE_PICKER_CONTEXT: 'marketplace-picker:context',
   MARKETPLACE_PICKER_PREVIEW: 'marketplace-picker:preview',
+  MARKETPLACE_PICKER_PREVIEW_RESULT: 'marketplace-picker:preview-result',
   MARKETPLACE_PICKER_COMMIT: 'marketplace-picker:commit',
+  MARKETPLACE_PICKER_COMMIT_RESULT: 'marketplace-picker:commit-result',
   MARKETPLACE_PICKER_PREVIEWED: 'marketplace-picker:previewed',
   MARKETPLACE_PICKER_COMMITTED: 'marketplace-picker:committed',
   MARKETPLACE_PICKER_CANCELLED: 'marketplace-picker:cancelled',
@@ -303,7 +307,11 @@ contextBridge.exposeInMainWorld('batchStudio', {
     logPickerPerf: (event, metrics) => ipcRenderer.invoke(I.THUMBNAIL_PICKER_PERF, event, metrics),
     openPickerPerfLog: () => ipcRenderer.invoke(I.THUMBNAIL_PICKER_PERF_OPEN),
     previewPicker: (p) => ipcRenderer.invoke(I.THUMBNAIL_PICKER_PREVIEW, p),
+    previewResult: (id, p, generation, ok, message) =>
+      ipcRenderer.invoke(I.THUMBNAIL_PICKER_PREVIEW_RESULT, id, p, generation, ok, message),
     commitPicker: (p) => ipcRenderer.invoke(I.THUMBNAIL_PICKER_COMMIT, p),
+    commitResult: (id, p, ok, message) =>
+      ipcRenderer.invoke(I.THUMBNAIL_PICKER_COMMIT_RESULT, id, p, ok, message),
     onPickerPreview: (listener) => {
       const handler = (_event, selection) => listener(selection);
       ipcRenderer.on(I.THUMBNAIL_PICKER_PREVIEWED, handler);
@@ -339,7 +347,11 @@ contextBridge.exposeInMainWorld('batchStudio', {
     openPicker: (r, p, t) => ipcRenderer.invoke(I.MARKETPLACE_PICKER_OPEN, r, p, t),
     pickerContext: () => ipcRenderer.invoke(I.MARKETPLACE_PICKER_CONTEXT),
     previewPicker: (p) => ipcRenderer.invoke(I.MARKETPLACE_PICKER_PREVIEW, p),
+    previewResult: (id, p, generation, ok, message) =>
+      ipcRenderer.invoke(I.MARKETPLACE_PICKER_PREVIEW_RESULT, id, p, generation, ok, message),
     commitPicker: (p) => ipcRenderer.invoke(I.MARKETPLACE_PICKER_COMMIT, p),
+    commitResult: (id, p, ok, message) =>
+      ipcRenderer.invoke(I.MARKETPLACE_PICKER_COMMIT_RESULT, id, p, ok, message),
     onPickerPreview: (listener) => {
       const handler = (_event, selection) => listener(selection);
       ipcRenderer.on(I.MARKETPLACE_PICKER_PREVIEWED, handler);
