@@ -1285,6 +1285,18 @@ export interface BatchStudioApi {
   execution: {
     start: (root: string) => Promise<ExecutionRun>;
     status: (root: string) => Promise<ExecutionRun | null>;
+    storageDiagnostics: (
+      root: string,
+    ) => Promise<Array<{ runId: string | null; file: string; backupFile: string; reason: string }>>;
+    restoreBackup: (
+      root: string,
+      runId: string | null,
+    ) => Promise<Array<{
+      runId: string | null;
+      file: string;
+      backupFile: string;
+      reason: string;
+    }> | null>;
     reconcile: (root: string, runId: string) => Promise<ExecutionRun>;
     leave: (root: string) => Promise<boolean>;
     stopForEdit: (root: string, runId: string, interrupt: boolean) => Promise<ExecutionRun>;

@@ -58,6 +58,8 @@ const I = {
   PREFLIGHT_RUN: 'preflight:run',
   EXECUTION_START: 'execution:start',
   EXECUTION_STATUS: 'execution:status',
+  EXECUTION_STORAGE_DIAGNOSTICS: 'execution:storage-diagnostics',
+  EXECUTION_RESTORE_BACKUP: 'execution:restore-backup',
   EXECUTION_RECONCILE: 'execution:reconcile',
   EXECUTION_LEAVE: 'execution:leave',
   EXECUTION_STOP_FOR_EDIT: 'execution:stop-for-edit',
@@ -249,6 +251,8 @@ contextBridge.exposeInMainWorld('batchStudio', {
   execution: {
     start: (r) => ipcRenderer.invoke(I.EXECUTION_START, r),
     status: (r) => ipcRenderer.invoke(I.EXECUTION_STATUS, r),
+    storageDiagnostics: (r) => ipcRenderer.invoke(I.EXECUTION_STORAGE_DIAGNOSTICS, r),
+    restoreBackup: (r, id) => ipcRenderer.invoke(I.EXECUTION_RESTORE_BACKUP, r, id),
     reconcile: (r, id) => ipcRenderer.invoke(I.EXECUTION_RECONCILE, r, id),
     leave: (r) => ipcRenderer.invoke(I.EXECUTION_LEAVE, r),
     stopForEdit: (r, id, interrupt) =>
