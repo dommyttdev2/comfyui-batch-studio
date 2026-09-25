@@ -59,21 +59,23 @@ export async function assertFinalArtifactImage(root: string, imagePath: string) 
 
   const resolved = path.resolve(imagePath);
   const extension = path.extname(resolved).toLowerCase();
-  const relative = path.relative(pathKey(directory), pathKey(resolved));
-  if (
-    !FINAL_ARTIFACT_IMAGE_MIME_TYPES[extension] ||
-    !relative ||
-    relative === '..' ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative) ||
-    relative.includes(path.sep)
-  )
+  if (!FINAL_ARTIFACT_IMAGE_MIME_TYPES[extension])
     throw new Error('最終成果物ディレクトリ外の画像は選択できません。');
 
   try {
-    // Refuse file symlinks and junction escapes; do not authorize by a prefix.
+    // A configured directory may itself be a symlink. Resolve both paths,
+    // but reject a symlink at the file entry and any nested directory.
     const info = await lstat(resolved);
-    if (!info.isFile() || pathKey(await realpath(resolved)) !== pathKey(path.join(directory, relative)))
+    const canonical = await realpath(resolved);
+    const relative = path.relative(pathKey(directory), pathKey(canonical));
+    if (
+      !info.isFile() ||
+      !relative ||
+      relative === '..' ||
+      relative.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relative) ||
+      relative.includes(path.sep)
+    )
       throw new Error('Invalid image');
   } catch {
     throw new Error('最終成果物ディレクトリ外の画像は選択できません。');
