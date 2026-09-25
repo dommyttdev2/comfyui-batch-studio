@@ -375,7 +375,8 @@ async function testExportedThumbnailAuthorization() {
     )
     .replace(/^export /, '')
     .replace(/: string/g, '')
-    .replace(/: Promise<string>/g, '');
+    .replace(/: Promise<string>/g, '')
+    .replace(/readJson<unknown>/g, 'readJson');
   const temp = await promises.mkdtemp(path.join(require('node:os').tmpdir(), 'thumbnail-auth-'));
   const output = path.join(temp, 'thumbnails');
   const authorize = new Function(
