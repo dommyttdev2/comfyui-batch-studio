@@ -779,7 +779,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
         dataUrl,
       );
       setLastExportPath(result.path);
-      setNotice(`出力しました: ${result.path}`);
+      setNotice(`出力しました: ${result.path}${result.cleanupWarning ? ` / 旧ファイル: ${result.cleanupWarning}` : ''}`);
     });
   const exportAll = () =>
     void run(async () => {
@@ -788,6 +788,7 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
       await saveNow(currentState);
       const nextTemplates = { ...templates };
       let lastPath = '';
+      const cleanupWarnings: string[] = [];
       for (const thumbnail of currentState.documents) {
         const overlay =
           nextTemplates[thumbnail.pattern] ?? (await loadPsdOverlay(thumbnail.pattern));
@@ -804,11 +805,12 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
           canvas.toDataURL(mime, 0.94),
         );
         lastPath = result.path;
+        if (result.cleanupWarning) cleanupWarnings.push(result.cleanupWarning);
       }
       setTemplates(nextTemplates);
       setLastExportPath(lastPath);
       setNotice(
-        `${currentState.documents.length}枚を出力しました: ${lastPath.replace(/[^\\/]+$/, '')}`,
+        `${currentState.documents.length}枚を出力しました: ${lastPath.replace(/[^\\/]+$/, '')}${cleanupWarnings.length ? ` / 旧ファイル: ${cleanupWarnings.join(' / ')}` : ''}`,
       );
     });
 
