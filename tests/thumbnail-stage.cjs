@@ -383,12 +383,14 @@ async function testExportedThumbnailAuthorization() {
     .replace(/readJson<unknown>/g, 'readJson');
   const temp = await promises.mkdtemp(path.join(require('node:os').tmpdir(), 'thumbnail-auth-'));
   const output = path.join(temp, 'thumbnails');
+  let outputManifest = { outputs: {} };
   const authorize = new Function(
     'path',
     'thumbnailOutputDirectory',
     'readJson',
     'statePath',
     'normalizeThumbnailState',
+    'thumbnailOutputManifest',
     'realpath',
     'lstat',
     'process',
@@ -399,6 +401,7 @@ async function testExportedThumbnailAuthorization() {
     async () => ({}),
     () => '',
     () => ({ documents: [{ id: 1 }] }),
+    async () => outputManifest,
     promises.realpath,
     promises.lstat,
     process,
@@ -408,6 +411,9 @@ async function testExportedThumbnailAuthorization() {
     const selected = path.join(output, 'thumbnail-01.jpg');
     await promises.writeFile(selected, 'image');
     assert.equal(await authorize(temp, selected), selected);
+    outputManifest = { outputs: { 1: { fileName: 'thumbnail-01.png' } } };
+    await assert.rejects(authorize(temp, selected));
+    outputManifest = { outputs: {} };
     const invalidId = path.join(output, 'thumbnail-02.jpg');
     await promises.writeFile(invalidId, 'image');
     await assert.rejects(authorize(temp, invalidId));
