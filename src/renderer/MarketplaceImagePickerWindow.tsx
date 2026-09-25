@@ -197,8 +197,37 @@ function MarketplacePickerChoice({
           .readSourcePreview(root, item.path, sourceType)
           .then((source) => {
             if (cancelled) return;
-            if (source) setPreview(source);
-            else setFailed(true);
+            if (!source) {
+              setFailed(true);
+              return;
+            }
+            if (!source.dataUrl.startsWith('data:image/webp;base64,')) {
+              setPreview(source);
+              return;
+            }
+            const image = new Image();
+            image.onload = () => {
+              if (cancelled) return;
+              const ratio = Math.min(1, 320 / Math.max(image.naturalWidth, image.naturalHeight));
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));
+              canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
+              const drawing = canvas.getContext('2d');
+              if (!drawing) {
+                setFailed(true);
+                return;
+              }
+              drawing.drawImage(image, 0, 0, canvas.width, canvas.height);
+              const dataUrl = canvas.toDataURL('image/png');
+              setPreview({ ...source, width: canvas.width, height: canvas.height, dataUrl });
+              void window.batchStudio.thumbnail
+                .storeWebpPreview(item.path, dataUrl)
+                .catch(() => undefined);
+            };
+            image.onerror = () => {
+              if (!cancelled) setFailed(true);
+            };
+            image.src = source.dataUrl;
           })
           .catch(() => {
             if (!cancelled) setFailed(true);

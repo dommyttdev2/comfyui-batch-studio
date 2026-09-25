@@ -3965,14 +3965,41 @@ function register() {
   );
   ipcMain.handle(
     IPC.MARKETPLACE_READ_SOURCE_PREVIEW,
-    (_e, root: unknown, imagePath: unknown, sourceType: unknown) => {
+    async (event, root: unknown, imagePath: unknown, sourceType: unknown) => {
       validRoot(root);
       if (
         typeof imagePath !== 'string' ||
         (sourceType !== 'thumbnail' && sourceType !== 'final-artifact')
       )
         throw new Error('Invalid marketplace source');
-      return readMarketplaceSourcePreview(root, imagePath, sourceType);
+      const started = performance.now();
+      const timing: ThumbnailCacheTiming = {};
+      const source = await readMarketplaceSourcePreview(
+        root,
+        imagePath,
+        sourceType,
+        app.getPath('userData'),
+        timing,
+      );
+      const picker = marketplacePickerWindows.get(event.sender.id);
+      if (picker) {
+        const metrics: PickerMetrics = {
+          totalMs: performance.now() - started,
+          cacheHit: timing.hit === true,
+          transferKB: source ? (source.dataUrl.length * 0.75) / 1024 : 0,
+          usedFallback: source?.dataUrl.startsWith('data:image/webp;base64,') === true,
+        };
+        for (const [key, value] of Object.entries(timing)) {
+          if (typeof value === 'number' || typeof value === 'boolean') metrics[key] = value;
+        }
+        logThumbnailPickerPerformance(
+          app.getPath('userData'),
+          picker.sessionId,
+          'marketplace_preview_read',
+          metrics,
+        );
+      }
+      return source;
     },
   );
   ipcMain.handle(IPC.MARKETPLACE_TARGETS, () => getMarketplaceImageTargets());
