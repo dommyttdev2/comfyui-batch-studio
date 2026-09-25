@@ -60,6 +60,12 @@ function jpegWithOrientation(orientation) {
 (async () => {
   try {
     const modulePath = path.join(compiled, 'main', 'image-pipeline-core.js');
+    const { encodedImageDimensions } = await import(
+      pathToFileURL(path.join(compiled, 'main', 'image-dimensions.js')).href
+    );
+    const { assertInputDimensions, assertOutputDimensions, assertRenderBudget } = await import(
+      pathToFileURL(path.join(compiled, 'shared', 'image-size-limits.js')).href
+    );
     const {
       applyExifOrientation,
       compositeBitmapOnWhite,
@@ -109,7 +115,36 @@ function jpegWithOrientation(orientation) {
       'JPEG compositing must flatten alpha onto white at quality 100 encoding time',
     );
 
-    console.log('Image pipeline EXIF/Lanczos3 tests passed.');
+    const png = Buffer.alloc(24);
+    Buffer.from('89504e470d0a1a0a', 'hex').copy(png);
+    png.write('IHDR', 12, 'ascii');
+    png.writeUInt32BE(20000, 16);
+    png.writeUInt32BE(20000, 20);
+    assert.deepEqual(encodedImageDimensions(png), { width: 20000, height: 20000 });
+    assert.throws(() => assertInputDimensions(20000, 20000, png.length), /作業メモリ/);
+    assert.throws(() => assertOutputDimensions(20000, 20000), /作業メモリ/);
+    assert.doesNotThrow(() => assertInputDimensions(4000, 4000));
+    assert.doesNotThrow(() => assertRenderBudget(4000, 4000, 560, 420, 560, 420));
+    assert.throws(() => assertRenderBudget(4000, 4000, 4000, 4000, 20000, 20000));
+
+    const shortJpegFrame = Buffer.from([
+      0xff, 0xd8, 0xff, 0xc0, 0x00, 0x02, 0xff, 0xd9, 0, 0, 0, 0,
+    ]);
+    assert.equal(encodedImageDimensions(shortJpegFrame), null);
+    const jpegFrame = Buffer.from([
+      0xff, 0xd8, 0xff, 0xc0, 0x00, 0x07, 0x08, 0x4e, 0x20, 0x4e, 0x20, 0xff, 0xd9,
+    ]);
+    assert.deepEqual(encodedImageDimensions(jpegFrame), { width: 20000, height: 20000 });
+
+    const webp = Buffer.alloc(30);
+    webp.write('RIFF', 0);
+    webp.write('WEBP', 8);
+    webp.write('VP8X', 12);
+    webp.writeUIntLE(19999, 24, 3);
+    webp.writeUIntLE(19999, 27, 3);
+    assert.deepEqual(encodedImageDimensions(webp), { width: 20000, height: 20000 });
+
+    console.log('Image pipeline EXIF/Lanczos3 and memory limit tests passed.');
   } finally {
     fs.rmSync(runtime, { recursive: true, force: true });
   }
