@@ -26,10 +26,7 @@ import {
 } from './final-artifact-image-service.js';
 import { assertExportedThumbnail } from './thumbnail-service.js';
 import { readProjectMeta } from './project-meta.js';
-import {
-  readCachedThumbnailImage,
-  type ThumbnailCacheTiming,
-} from './thumbnail-image-cache.js';
+import { readCachedThumbnailImage, type ThumbnailCacheTiming } from './thumbnail-image-cache.js';
 import {
   fingerprintMarketplaceSource,
   marketplaceInputSignature,
