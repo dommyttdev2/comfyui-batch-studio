@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { nativeImage } from 'electron';
 import type { MarketplaceCropRect } from '../shared/types.js';
+import { assertInputDimensions, assertRenderBudget } from '../shared/image-size-limits.js';
+import { encodedImageDimensions } from './image-dimensions.js';
 import {
   applyExifOrientation,
   compositeBitmapOnWhite,
@@ -10,9 +12,12 @@ import {
 
 export async function readOrientedNativeImage(filePath: string) {
   const bytes = await readFile(filePath);
+  const header = encodedImageDimensions(bytes);
+  if (header) assertInputDimensions(header.width, header.height, bytes.length);
   const decoded = nativeImage.createFromBuffer(bytes);
   if (decoded.isEmpty()) throw new Error('画像を読み込めませんでした。');
   const size = decoded.getSize();
+  assertInputDimensions(size.width, size.height, bytes.length);
   const bitmap = decoded.toBitmap();
   if (bitmap.length !== size.width * size.height * 4)
     throw new Error('画像Bitmapのサイズが正しくありません。');
@@ -40,6 +45,15 @@ export function renderLanczosCrop(
   width: number,
   height: number,
 ) {
+  const fullSize = source.getSize();
+  assertRenderBudget(
+    fullSize.width,
+    fullSize.height,
+    Math.round(crop.width),
+    Math.round(crop.height),
+    width,
+    height,
+  );
   const cropped = source.crop({
     x: Math.round(crop.x),
     y: Math.round(crop.y),
