@@ -80,7 +80,7 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
   const authorization = source
     .slice(
       source.indexOf('export async function assertFinalArtifactImage('),
-      source.indexOf('\\nexport async function readImageSource('),
+      source.indexOf('\nexport async function readImageSource('),
     )
     .replace(/^export /, '')
     .replace(/: string/g, '');
