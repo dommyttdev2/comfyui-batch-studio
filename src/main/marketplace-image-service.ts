@@ -548,7 +548,12 @@ export async function exportCustomMarketplaceImage(
     previous && trackedOldFormat && previous.fileName !== path.basename(outputPath)
       ? await cleanupTrackedOutput(path.join(outputDirectory, previous.fileName), previous)
       : null;
-  return { outputDirectory, outputPaths: [outputPath], zipPath: null, cleanupWarning: cleanupWarning ?? undefined };
+  return {
+    outputDirectory,
+    outputPaths: [outputPath],
+    zipPath: null,
+    cleanupWarning: cleanupWarning ?? undefined,
+  };
 }
 
 const CRC_TABLE = (() => {
