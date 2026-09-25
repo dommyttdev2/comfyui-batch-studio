@@ -45,14 +45,12 @@ export async function assertFinalArtifactImage(root: string, imagePath: string) 
     meta?.settings.finalArtifactDirectory?.trim() ||
     meta?.settings.captionSourceDirectory?.trim() ||
     '';
-  if (!configured)
-    throw new Error('最終成果物ディレクトリが設定されていません。');
+  if (!configured) throw new Error('最終成果物ディレクトリが設定されていません。');
 
   let directory: string;
   try {
     directory = await realpath(configured);
-    if (!(await lstat(directory)).isDirectory())
-      throw new Error('Not a directory');
+    if (!(await lstat(directory)).isDirectory()) throw new Error('Not a directory');
   } catch {
     throw new Error('最終成果物ディレクトリが見つかりません。');
   }
