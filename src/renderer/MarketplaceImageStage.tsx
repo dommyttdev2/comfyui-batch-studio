@@ -9,6 +9,7 @@ import type {
   ProjectSummary,
 } from '../shared/types';
 import { MarketplacePickerGeneration } from '../shared/marketplace-picker-generation';
+import { assertOutputDimensions } from '../shared/image-size-limits';
 import { useEditorAutosave } from './use-editor-autosave';
 import type { Runner } from './ui';
 import './marketplace-image-stage.css';
@@ -134,6 +135,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   const [finalArtifact, setFinalArtifact] = useState<FinalArtifactStatus | null>(null);
   const [hasExportedThumbnails, setHasExportedThumbnails] = useState(false);
   const [notice, setNotice] = useState('');
+  const [sizeError, setSizeError] = useState('');
   const [lastPath, setLastPath] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -651,6 +653,12 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         : state.custom.lockAspect
           ? Math.max(1, Math.round(value / currentRatio))
           : state.custom.height;
+    try {
+      assertOutputDimensions(width, height);
+      setSizeError('');
+    } catch (error) {
+      setSizeError(error instanceof Error ? error.message : String(error));
+    }
     const custom = {
       ...state.custom,
       width,
@@ -702,9 +710,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         sourcePngDataUrl,
       );
       setLastPath(result.outputPaths.at(-1) ?? result.outputDirectory);
-      setNotice(
-        `4種類を生成しました: ${result.outputDirectory}${result.cleanupWarning ? ` / 旧ファイル: ${result.cleanupWarning}` : ''}`,
-      );
+      setNotice(`4種類を生成しました: ${result.outputDirectory}`);
     });
 
   const generateZip = () =>
@@ -724,6 +730,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
   const exportCustom = () =>
     void run(async () => {
       if (!state || !source || !image || !state.custom.crop) return;
+      assertOutputDimensions(state.custom.width, state.custom.height);
       const sourcePngDataUrl = normalizedWebpSourcePng(source, image);
       const webp =
         state.format === 'webp'
@@ -748,9 +755,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         sourcePngDataUrl,
       );
       setLastPath(result.outputPaths[0] ?? result.outputDirectory);
-      setNotice(
-        `カスタム画像を生成しました: ${result.outputPaths[0]}${result.cleanupWarning ? ` / 旧ファイル: ${result.cleanupWarning}` : ''}`,
-      );
+      setNotice(`カスタム画像を生成しました: ${result.outputPaths[0]}`);
     });
 
   if (!state || !finalArtifact)
@@ -1022,6 +1027,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
                 />
               </label>
             </div>
+            {sizeError && <p role="alert">{sizeError}</p>}
             <label className="marketplace-inline-check">
               <input
                 type="checkbox"
