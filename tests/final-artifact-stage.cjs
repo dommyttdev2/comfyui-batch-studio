@@ -84,7 +84,9 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
     )
     .replace(/^export /, '')
     .replace(/: string/g, '');
-  const temp = await promises.mkdtemp(path.join(require('node:os').tmpdir(), 'final-artifact-auth-'));
+  const temp = await promises.mkdtemp(
+    path.join(require('node:os').tmpdir(), 'final-artifact-auth-'),
+  );
   const directory = path.join(temp, 'output');
   const outside = path.join(temp, 'output2');
   let scans = 0;
@@ -111,9 +113,14 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
     fakeFs.realpath,
     fakeFs.lstat,
     { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' },
-    (value) => (process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value)),
-    () => { throw new Error('full scan'); },
-    () => { throw new Error('full scan'); },
+    (value) =>
+      process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value),
+    () => {
+      throw new Error('full scan');
+    },
+    () => {
+      throw new Error('full scan');
+    },
   );
   try {
     await promises.mkdir(directory);
@@ -123,19 +130,12 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
     );
     await Promise.all(items.map((file) => promises.writeFile(file, 'image')));
     for (const file of items)
-      require('node:assert/strict').equal(
-        await authorize(temp, file),
-        file,
-      );
+      require('node:assert/strict').equal(await authorize(temp, file), file);
     require('node:assert/strict').equal(scans, 0, 'authorization must not enumerate the directory');
     const external = path.join(outside, 'outside.png');
     await promises.writeFile(external, 'image');
-    await require('node:assert/strict').rejects(
-      authorize(temp, external),
-    );
-    await require('node:assert/strict').rejects(
-      authorize(temp, directory),
-    );
+    await require('node:assert/strict').rejects(authorize(temp, external));
+    await require('node:assert/strict').rejects(authorize(temp, directory));
     await require('node:assert/strict').rejects(
       authorize(temp, path.join(directory, 'missing.png')),
     );
@@ -144,9 +144,7 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
     );
     const link = path.join(directory, 'link.png');
     await promises.symlink(external, link);
-    await require('node:assert/strict').rejects(
-      authorize(temp, link),
-    );
+    await require('node:assert/strict').rejects(authorize(temp, link));
     require('node:assert/strict').equal(scans, 0);
   } finally {
     await promises.rm(temp, { recursive: true, force: true });
