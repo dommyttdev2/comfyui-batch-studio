@@ -424,8 +424,6 @@ export async function generateMarketplaceImages(
   const staged: Array<{ outputPath: string; bytes: Buffer }> = [];
   const outputs: MarketplaceGeneratedOutput[] = [];
 
-  // A previous successful manifest must never certify a partial new generation.
-  await rm(generationManifestPath(outputDirectory), { force: true });
   for (const target of targets) {
     const crop = clampCrop(
       state.targets[target.id]?.crop ?? null,
@@ -466,6 +464,8 @@ export async function generateMarketplaceImages(
     marketplaceInputSignature(persisted, targets) !== inputSignature
   )
     throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
+  // Keep the old manifest if rendering fails before any output changes.
+  await rm(generationManifestPath(outputDirectory), { force: true });
   for (const { outputPath, bytes } of staged) await writeAtomic(outputPath, bytes);
   const manifest: MarketplaceGenerationManifest = {
     schemaVersion: 1,
@@ -480,7 +480,7 @@ export async function generateMarketplaceImages(
   // content-verified set of outputs with the same generation identity.
   await writeJsonAtomic(generationManifestPath(outputDirectory), manifest);
   const cleanupWarnings: string[] = [];
-  if (previousManifest?.schemaVersion === 1) {
+  if (previousManifest?.schemaVersion === 1 && Array.isArray(previousManifest.outputs)) {
     const previousExtension = FORMAT_EXTENSIONS[previousManifest.format];
     for (const target of targets) {
       const old = previousManifest.outputs.find((entry) => entry.targetId === target.id);
@@ -541,12 +541,12 @@ export async function exportCustomMarketplaceImage(
     size: bytes.length,
     sha256: sha256Bytes(bytes),
   });
-  const oldFileName = `custom-output.${Object.values(FORMAT_EXTENSIONS).find(
+  const trackedOldFormat = Object.values(FORMAT_EXTENSIONS).some(
     (candidate) => previous?.fileName === `custom-output.${candidate}`,
-  )}`;
+  );
   const cleanupWarning =
-    previous && previous.fileName === oldFileName && previous.fileName !== path.basename(outputPath)
-      ? await cleanupTrackedOutput(path.join(outputDirectory, oldFileName), previous)
+    previous && trackedOldFormat && previous.fileName !== path.basename(outputPath)
+      ? await cleanupTrackedOutput(path.join(outputDirectory, previous.fileName), previous)
       : null;
   return { outputDirectory, outputPaths: [outputPath], zipPath: null, cleanupWarning: cleanupWarning ?? undefined };
 }
