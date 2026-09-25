@@ -72,24 +72,22 @@ console.log('Final artifact stage contract tests passed.');
 
 async function testPreviewAuthorizationWithoutDirectoryScans() {
   const os = require('node:os');
-  const vm = require('node:vm');
-  const { stripTypeScriptTypes } = require('node:module');
   const promises = require('node:fs/promises');
   const source = fs.readFileSync(
     path.join(repo, 'src', 'main', 'final-artifact-image-service.ts'),
     'utf8',
   );
-  const js = stripTypeScriptTypes(source)
-    .replace(/^import \\{ ([^}]+) \\} from '([^']+)';$/gm, "const { $1 } = require('$2');")
-    .replace(/^export const /gm, 'const ')
-    .replace(/^export async function /gm, 'async function ')
-    .concat('\\nmodule.exports.assertFinalArtifactImage = assertFinalArtifactImage;');
-
-  const temp = await promises.mkdtemp(path.join(os.tmpdir(), 'final-artifact-auth-'));
+  const authorization = source
+    .slice(
+      source.indexOf('export async function assertFinalArtifactImage('),
+      source.indexOf('\\nexport async function readImageSource('),
+    )
+    .replace(/^export /, '')
+    .replace(/: string/g, '');
+  const temp = await promises.mkdtemp(path.join(require('node:os').tmpdir(), 'final-artifact-auth-'));
   const directory = path.join(temp, 'output');
   const outside = path.join(temp, 'output2');
   let scans = 0;
-  const moduleExports = {};
   const fakeFs = {
     ...promises,
     readdir: (...args) => {
@@ -97,30 +95,26 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
       return promises.readdir(...args);
     },
   };
-  const context = {
-    exports: moduleExports,
-    module: { exports: moduleExports },
-    process,
-    require: (name) => {
-      if (name === 'node:fs/promises') return fakeFs;
-      if (name === 'node:path') return path;
-      if (name === './project-meta.js')
-        return {
-          readProjectMeta: async () => ({
-            settings: { finalArtifactDirectory: directory },
-          }),
-        };
-      if (name === './final-artifact-service.js')
-        return {
-          getFinalArtifactStatus: () => {
-            throw new Error('full scan');
-          },
-        };
-      if (name === './image-pipeline.js') return {};
-      throw new Error(`Unexpected import: ${name}`);
-    },
-  };
-  vm.runInNewContext(js, context, { filename: 'final-artifact-image-service.js' });
+  const authorize = new Function(
+    'path',
+    'readProjectMeta',
+    'realpath',
+    'lstat',
+    'FINAL_ARTIFACT_IMAGE_MIME_TYPES',
+    'pathKey',
+    'listImageFiles',
+    'getFinalArtifactStatus',
+    `return ${authorization}; return assertFinalArtifactImage;`,
+  )(
+    path,
+    async () => ({ settings: { finalArtifactDirectory: directory } }),
+    fakeFs.realpath,
+    fakeFs.lstat,
+    { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' },
+    (value) => (process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value)),
+    () => { throw new Error('full scan'); },
+    () => { throw new Error('full scan'); },
+  );
   try {
     await promises.mkdir(directory);
     await promises.mkdir(outside);
@@ -130,28 +124,28 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
     await Promise.all(items.map((file) => promises.writeFile(file, 'image')));
     for (const file of items)
       require('node:assert/strict').equal(
-        await context.module.exports.assertFinalArtifactImage(temp, file),
+        await authorize(temp, file),
         file,
       );
     require('node:assert/strict').equal(scans, 0, 'authorization must not enumerate the directory');
     const external = path.join(outside, 'outside.png');
     await promises.writeFile(external, 'image');
     await require('node:assert/strict').rejects(
-      context.module.exports.assertFinalArtifactImage(temp, external),
+      authorize(temp, external),
     );
     await require('node:assert/strict').rejects(
-      context.module.exports.assertFinalArtifactImage(temp, directory),
+      authorize(temp, directory),
     );
     await require('node:assert/strict').rejects(
-      context.module.exports.assertFinalArtifactImage(temp, path.join(directory, 'missing.png')),
+      authorize(temp, path.join(directory, 'missing.png')),
     );
     await require('node:assert/strict').rejects(
-      context.module.exports.assertFinalArtifactImage(temp, path.join(directory, 'image-0.txt')),
+      authorize(temp, path.join(directory, 'image-0.txt')),
     );
     const link = path.join(directory, 'link.png');
     await promises.symlink(external, link);
     await require('node:assert/strict').rejects(
-      context.module.exports.assertFinalArtifactImage(temp, link),
+      authorize(temp, link),
     );
     require('node:assert/strict').equal(scans, 0);
   } finally {
