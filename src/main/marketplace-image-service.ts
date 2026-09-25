@@ -26,6 +26,7 @@ import {
 } from './final-artifact-image-service.js';
 import { assertExportedThumbnail } from './thumbnail-service.js';
 import { readProjectMeta } from './project-meta.js';
+import { cleanupTrackedOutput } from './tracked-output-cleanup.js';
 import { readCachedThumbnailImage, type ThumbnailCacheTiming } from './thumbnail-image-cache.js';
 import {
   fingerprintMarketplaceSource,
@@ -415,6 +416,9 @@ export async function generateMarketplaceImages(
   const source = await fingerprintMarketplaceSource(resolved);
   const inputSignature = marketplaceInputSignature(state, targets);
   const outputDirectory = await marketplaceOutputDirectory(root);
+  const previousManifest = await readJson<MarketplaceGenerationManifest>(
+    generationManifestPath(outputDirectory),
+  );
   const extension = FORMAT_EXTENSIONS[state.format];
   const outputPaths: string[] = [];
   const staged: Array<{ outputPath: string; bytes: Buffer }> = [];
@@ -475,7 +479,26 @@ export async function generateMarketplaceImages(
   // The manifest is the commit marker. ZIP generation accepts only a complete,
   // content-verified set of outputs with the same generation identity.
   await writeJsonAtomic(generationManifestPath(outputDirectory), manifest);
-  return { outputDirectory, outputPaths, zipPath: null };
+  const cleanupWarnings: string[] = [];
+  if (previousManifest?.schemaVersion === 1) {
+    const previousExtension = FORMAT_EXTENSIONS[previousManifest.format];
+    for (const target of targets) {
+      const old = previousManifest.outputs.find((entry) => entry.targetId === target.id);
+      const expectedPath = `${target.service}/${target.fileName}.${previousExtension}`;
+      if (!old || old.relativePath !== expectedPath || previousExtension === extension) continue;
+      const warning = await cleanupTrackedOutput(
+        path.join(outputDirectory, target.service, `${target.fileName}.${previousExtension}`),
+        old,
+      );
+      if (warning) cleanupWarnings.push(`${target.label}: ${warning}`);
+    }
+  }
+  return {
+    outputDirectory,
+    outputPaths,
+    zipPath: null,
+    cleanupWarning: cleanupWarnings.join(' / ') || undefined,
+  };
 }
 
 export async function exportCustomMarketplaceImage(
@@ -500,6 +523,10 @@ export async function exportCustomMarketplaceImage(
   );
   const extension = FORMAT_EXTENSIONS[state.format];
   const outputDirectory = path.join(await marketplaceOutputDirectory(root), 'custom');
+  const customManifestPath = path.join(outputDirectory, '._custom-output.json');
+  const previous = await readJson<{ fileName: string; size: number; sha256: string }>(
+    customManifestPath,
+  );
   const outputPath = path.join(outputDirectory, `custom-output.${extension}`);
   const bytes =
     state.format === 'webp'
@@ -509,7 +536,19 @@ export async function exportCustomMarketplaceImage(
           state.format,
         );
   await writeAtomic(outputPath, bytes);
-  return { outputDirectory, outputPaths: [outputPath], zipPath: null };
+  await writeJsonAtomic(customManifestPath, {
+    fileName: path.basename(outputPath),
+    size: bytes.length,
+    sha256: sha256Bytes(bytes),
+  });
+  const oldFileName = `custom-output.${Object.values(FORMAT_EXTENSIONS).find(
+    (candidate) => previous?.fileName === `custom-output.${candidate}`,
+  )}`;
+  const cleanupWarning =
+    previous && previous.fileName === oldFileName && previous.fileName !== path.basename(outputPath)
+      ? await cleanupTrackedOutput(path.join(outputDirectory, oldFileName), previous)
+      : null;
+  return { outputDirectory, outputPaths: [outputPath], zipPath: null, cleanupWarning: cleanupWarning ?? undefined };
 }
 
 const CRC_TABLE = (() => {
