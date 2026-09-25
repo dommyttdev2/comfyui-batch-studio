@@ -238,3 +238,28 @@ matchCode(
   /EDITOR_SAVE_STALE/,
   'out-of-order save acknowledgments must surface as conflicts',
 );
+
+const cache = fs.readFileSync(
+  path.join(repo, 'src', 'main', 'thumbnail-image-cache.ts'),
+  'utf8',
+);
+matchCode(
+  service,
+  /assertMarketplaceSource\(root, imagePath, sourceType\)[\s\S]*readCachedThumbnailImage\(userDataRoot, resolved, 'gallery', timing\)/,
+  'marketplace preview must authorize source before using the shared gallery cache',
+);
+matchCode(
+  cache,
+  /info\.size,\s*info\.mtimeMs,\s*info\.ctimeMs,\s*variant/,
+  'gallery cache key must invalidate replacement images',
+);
+matchCode(
+  picker,
+  /data:image\/webp;base64,[\s\S]*storeWebpPreview\(item\.path, dataUrl\)/,
+  'WebP fallback must persist a resized preview for subsequent pickers',
+);
+matchCode(
+  main,
+  /MARKETPLACE_READ_SOURCE_PREVIEW[\s\S]*app\.getPath\('userData'\)[\s\S]*marketplace_preview_read/,
+  'marketplace preview must use the shared user cache and record transfer metrics',
+);
