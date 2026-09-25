@@ -393,7 +393,7 @@ export async function listExportedThumbnails(root: string): Promise<ThumbnailIma
 export async function assertExportedThumbnail(root: string, imagePath: string): Promise<string> {
   const resolved = path.resolve(imagePath);
   const directory = await thumbnailOutputDirectory(root);
-  const match = /^thumbnail-(\\d+)\\.(png|jpe?g)$/i.exec(path.basename(resolved));
+  const match = /^thumbnail-(\d+)\.(png|jpe?g)$/i.exec(path.basename(resolved));
   const raw = await readJson<unknown>(statePath(root));
   const editor = normalizeThumbnailState(raw);
   const allowed = new Set(editor.documents.map((document) => document.id));
