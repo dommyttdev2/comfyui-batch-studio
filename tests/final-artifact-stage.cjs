@@ -80,7 +80,7 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
     'utf8',
   );
   const js = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: 1, target: 9 },
   }).outputText;
   const temp = await promises.mkdtemp(path.join(os.tmpdir(), 'final-artifact-auth-'));
   const directory = path.join(temp, 'output');
