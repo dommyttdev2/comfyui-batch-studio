@@ -270,8 +270,7 @@ const STATUS_RECONCILE_INTERVAL_MS = 60_000;
 async function ensureExecutionStatusReconciled(root: string): Promise<string | null> {
   const key = path.resolve(root);
   const snapshot = statusSnapshots.get(key);
-  if (snapshot && Date.now() - snapshot.at < STATUS_RECONCILE_INTERVAL_MS)
-    return snapshot.runId;
+  if (snapshot && Date.now() - snapshot.at < STATUS_RECONCILE_INTERVAL_MS) return snapshot.runId;
   const pending = statusReconciliations.get(key);
   if (pending) return pending;
   const task = (async () => {
