@@ -70,6 +70,7 @@ import {
   abandonExecutionRunForRemoteReplacement,
   discardExecutionRun,
   getCurrentExecutionRun,
+  getCurrentExecutionRunFast,
   getExecutionRun,
   inspectExecutionRunStorage,
   listExecutionRuns,
@@ -262,6 +263,30 @@ const thumbnailPickerWindows = new Map<number, ThumbnailPickerWindowState>();
 const marketplacePickerWindows = new Map<number, MarketplacePickerWindowState>();
 const executionCoordinator = new ExecutionCoordinator();
 const executionRecoveryChecks = new Map<string, Promise<void>>();
+const statusReconciliations = new Map<string, Promise<string | null>>();
+const statusSnapshots = new Map<string, { at: number; runId: string | null }>();
+const STATUS_RECONCILE_INTERVAL_MS = 60_000;
+
+async function ensureExecutionStatusReconciled(root: string): Promise<string | null> {
+  const key = path.resolve(root);
+  const snapshot = statusSnapshots.get(key);
+  if (snapshot && Date.now() - snapshot.at < STATUS_RECONCILE_INTERVAL_MS) return snapshot.runId;
+  const pending = statusReconciliations.get(key);
+  if (pending) return pending;
+  const task = (async () => {
+    await reconcilePersistedExecutionRuns(root);
+    const runId = (await getCurrentExecutionRun(root))?.runId ?? null;
+    statusSnapshots.set(key, { at: Date.now(), runId });
+    return runId;
+  })();
+  statusReconciliations.set(key, task);
+  try {
+    return await task;
+  } finally {
+    if (statusReconciliations.get(key) === task) statusReconciliations.delete(key);
+  }
+}
+
 const approvedWindowCloses = new Set<number>();
 const pendingWindowCloses = new Set<number>();
 type ProjectWindowState = {
@@ -394,6 +419,7 @@ async function setWindowProject(state: ProjectWindowState, root: string | null) 
   )
     throw new Error('Runの停止がキャンセルされました。');
   state.projectRoot = resolved;
+  statusSnapshots.delete(resolved);
   await rememberProjectAndRefreshMenu(resolved);
 }
 async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
@@ -2829,6 +2855,7 @@ function register() {
     try {
       const project = await scanWithCatalog(root);
       state.projectRoot = path.resolve(root);
+      statusSnapshots.delete(state.projectRoot);
       await rememberProjectAndRefreshMenu(state.projectRoot);
       return project;
     } catch {
@@ -3176,8 +3203,8 @@ function register() {
   });
   ipcMain.handle(IPC.EXECUTION_STATUS, async (_e, root: unknown) => {
     validRoot(root);
-    await reconcilePersistedExecutionRuns(root);
-    return getCurrentExecutionRun(root);
+    const fallbackRunId = await ensureExecutionStatusReconciled(root);
+    return getCurrentExecutionRunFast(root, fallbackRunId);
   });
   ipcMain.handle(IPC.EXECUTION_STORAGE_DIAGNOSTICS, async (event, root: unknown) => {
     validRoot(root);
@@ -3202,7 +3229,9 @@ function register() {
       noLink: true,
     });
     if (decision.response !== 1) return null;
-    return restoreExecutionRunBackup(root, runId);
+    const restored = await restoreExecutionRunBackup(root, runId);
+    statusSnapshots.delete(path.resolve(root));
+    return restored;
   });
   ipcMain.handle(IPC.EXECUTION_LEAVE, async (event, root: unknown) => {
     validRoot(root);

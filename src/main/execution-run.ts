@@ -225,6 +225,39 @@ export async function getCurrentExecutionRun(root: string): Promise<ExecutionRun
   return runs[0] ?? null;
 }
 
+// Status polling reads only the current pointer and Run after a full reconciliation.
+export async function getCurrentExecutionRunFast(
+  root: string,
+  fallbackRunId: string | null,
+): Promise<ExecutionRun | null> {
+  const file = currentRunPath(root);
+  let pointer: { schemaVersion: 1; runId: string } | null;
+  try {
+    pointer = await readJson<{ schemaVersion: 1; runId: string }>(file);
+  } catch (error) {
+    throw new ExecutionRunStorageError([
+      {
+        runId: null,
+        file,
+        backupFile: `${file}.bak`,
+        reason: String((error as NodeJS.ErrnoException).code ?? 'corrupt or unreadable'),
+      },
+    ]);
+  }
+  if (pointer !== null && (pointer.schemaVersion !== 1 || typeof pointer.runId !== 'string'))
+    throw new ExecutionRunStorageError([
+      { runId: null, file, backupFile: `${file}.bak`, reason: 'Invalid current pointer' },
+    ]);
+  const runId = pointer?.runId ?? fallbackRunId;
+  if (!runId) return null;
+  const run = await getExecutionRun(root, runId);
+  if (!run)
+    throw new ExecutionRunStorageError([
+      { runId, file, backupFile: `${file}.bak`, reason: 'Current Run is missing' },
+    ]);
+  return run;
+}
+
 export async function inspectExecutionRunStorage(
   root: string,
 ): Promise<ExecutionRunStorageDiagnostic[]> {
