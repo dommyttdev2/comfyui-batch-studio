@@ -486,7 +486,7 @@ export async function exportThumbnail(
     };
     await writeJsonAtomic(manifestPath, manifest);
     const oldName = previous?.fileName;
-    const expectedOldName = oldName && /^thumbnail-(\\d+)\\.(png|jpe?g)$/i.exec(oldName);
+    const expectedOldName = oldName && /^thumbnail-(\d+)\.(png|jpe?g)$/i.exec(oldName);
     const cleanupWarning =
       previous &&
       expectedOldName &&
