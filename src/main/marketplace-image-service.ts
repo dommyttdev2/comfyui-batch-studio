@@ -27,6 +27,10 @@ import {
 import { assertExportedThumbnail } from './thumbnail-service.js';
 import { readProjectMeta } from './project-meta.js';
 import {
+  readCachedThumbnailImage,
+  type ThumbnailCacheTiming,
+} from './thumbnail-image-cache.js';
+import {
   fingerprintMarketplaceSource,
   marketplaceInputSignature,
   MARKETPLACE_REGENERATION_REQUIRED,
@@ -329,8 +333,17 @@ export async function readMarketplaceSourcePreview(
   root: string,
   imagePath: string,
   sourceType: MarketplaceSourceType,
+  userDataRoot?: string,
+  timing?: ThumbnailCacheTiming,
 ) {
-  return readImagePreview(await assertMarketplaceSource(root, imagePath, sourceType));
+  const resolved = await assertMarketplaceSource(root, imagePath, sourceType);
+  if (userDataRoot) {
+    const cached = await readCachedThumbnailImage(userDataRoot, resolved, 'gallery', timing);
+    if (cached) return cached;
+  }
+  // WebP may require Chromium decoding. The picker scales this fallback to
+  // 320px and stores it in the shared gallery cache for subsequent opens.
+  return readImagePreview(resolved);
 }
 
 async function loadSource(
