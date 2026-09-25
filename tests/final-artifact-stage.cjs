@@ -73,15 +73,18 @@ console.log('Final artifact stage contract tests passed.');
 async function testPreviewAuthorizationWithoutDirectoryScans() {
   const os = require('node:os');
   const vm = require('node:vm');
-  const ts = require('typescript');
+  const { stripTypeScriptTypes } = require('node:module');
   const promises = require('node:fs/promises');
   const source = fs.readFileSync(
     path.join(repo, 'src', 'main', 'final-artifact-image-service.ts'),
     'utf8',
   );
-  const js = ts.transpileModule(source, {
-    compilerOptions: { module: 1, target: 9 },
-  }).outputText;
+  const js = stripTypeScriptTypes(source)
+    .replace(/^import \\{ ([^}]+) \\} from '([^']+)';$/gm, "const { $1 } = require('$2');")
+    .replace(/^export const /gm, 'const ')
+    .replace(/^export async function /gm, 'async function ')
+    .concat('\\nmodule.exports.assertFinalArtifactImage = assertFinalArtifactImage;');
+
   const temp = await promises.mkdtemp(path.join(os.tmpdir(), 'final-artifact-auth-'));
   const directory = path.join(temp, 'output');
   const outside = path.join(temp, 'output2');
