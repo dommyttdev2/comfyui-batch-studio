@@ -86,7 +86,7 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
   const directory = path.join(temp, 'output');
   const outside = path.join(temp, 'output2');
   let scans = 0;
-  const exports = {};
+  const moduleExports = {};
   const fakeFs = {
     ...promises,
     readdir: (...args) => {
@@ -95,8 +95,8 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
     },
   };
   const context = {
-    exports,
-    module: { exports },
+    exports: moduleExports,
+    module: { exports: moduleExports },
     process,
     require: (name) => {
       if (name === 'node:fs/promises') return fakeFs;
