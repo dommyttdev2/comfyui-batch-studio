@@ -129,8 +129,16 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
       path.join(directory, `image-${index}.png`),
     );
     await Promise.all(items.map((file) => promises.writeFile(file, 'image')));
-    for (const file of items)
+    const timings = [];
+    for (const file of items) {
+      const started = performance.now();
       require('node:assert/strict').equal(await authorize(temp, file), file);
+      timings.push(performance.now() - started);
+    }
+    timings.sort((a, b) => a - b);
+    console.log(
+      `500 image authorization: p50=${timings[249].toFixed(2)}ms p95=${timings[474].toFixed(2)}ms, directory scans=${scans}`,
+    );
     require('node:assert/strict').equal(scans, 0, 'authorization must not enumerate the directory');
     const external = path.join(outside, 'outside.png');
     await promises.writeFile(external, 'image');
