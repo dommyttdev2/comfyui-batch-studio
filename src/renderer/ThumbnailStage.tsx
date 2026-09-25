@@ -779,7 +779,9 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
         dataUrl,
       );
       setLastExportPath(result.path);
-      setNotice(`出力しました: ${result.path}${result.cleanupWarning ? ` / 旧ファイル: ${result.cleanupWarning}` : ''}`);
+      setNotice(
+        `出力しました: ${result.path}${result.cleanupWarning ? ` / 旧ファイル: ${result.cleanupWarning}` : ''}`,
+      );
     });
   const exportAll = () =>
     void run(async () => {
