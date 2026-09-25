@@ -420,6 +420,7 @@ async function setWindowProject(state: ProjectWindowState, root: string | null) 
   )
     throw new Error('Runの停止がキャンセルされました。');
   state.projectRoot = resolved;
+  statusSnapshots.delete(resolved);
   await rememberProjectAndRefreshMenu(resolved);
 }
 async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
@@ -2855,6 +2856,7 @@ function register() {
     try {
       const project = await scanWithCatalog(root);
       state.projectRoot = path.resolve(root);
+      statusSnapshots.delete(state.projectRoot);
       await rememberProjectAndRefreshMenu(state.projectRoot);
       return project;
     } catch {
