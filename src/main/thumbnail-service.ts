@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, rm } from 'node:fs/promises';
 import { nativeImage } from 'electron';
 import path from 'node:path';
 import type {
@@ -392,13 +392,26 @@ export async function listExportedThumbnails(root: string): Promise<ThumbnailIma
 
 export async function assertExportedThumbnail(root: string, imagePath: string): Promise<string> {
   const resolved = path.resolve(imagePath);
-  const allowed = (await listExportedThumbnails(root)).some((item) =>
-    process.platform === 'win32'
-      ? path.resolve(item.path).toLowerCase() === resolved.toLowerCase()
-      : path.resolve(item.path) === resolved,
-  );
-  if (!allowed) throw new Error('現在有効なサムネイルの出力済み画像を選択してください。');
-  if (!(await stat(resolved)).isFile()) throw new Error('サムネイル画像が見つかりません。');
+  const directory = await thumbnailOutputDirectory(root);
+  const match = /^thumbnail-(\d+)\.(png|jpe?g)$/i.exec(path.basename(resolved));
+  const raw = await readJson<unknown>(statePath(root));
+  const editor = normalizeThumbnailState(raw);
+  const allowed = new Set(editor.documents.map((document) => document.id));
+  if (!match || !allowed.has(Number(match[1])))
+    throw new Error('現在有効なサムネイルの出力済み画像を選択してください。');
+  try {
+    const canonicalDirectory = await realpath(directory);
+    const info = await lstat(resolved);
+    const canonical = await realpath(resolved);
+    const sameDirectory =
+      process.platform === 'win32'
+        ? path.dirname(canonical).toLowerCase() === canonicalDirectory.toLowerCase()
+        : path.dirname(canonical) === canonicalDirectory;
+    if (!info.isFile() || !sameDirectory)
+      throw new Error('現在有効なサムネイルの出力済み画像を選択してください。');
+  } catch {
+    throw new Error('サムネイル画像が見つかりません。');
+  }
   return resolved;
 }
 

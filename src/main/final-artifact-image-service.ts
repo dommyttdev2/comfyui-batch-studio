@@ -1,7 +1,8 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import type { FinalArtifactImageItem, FinalArtifactImageSource } from '../shared/types.js';
 import { getFinalArtifactStatus } from './final-artifact-service.js';
+import { readProjectMeta } from './project-meta.js';
 import { readOrientedNativeImage } from './image-pipeline.js';
 
 export const FINAL_ARTIFACT_IMAGE_MIME_TYPES: Record<string, string> = {
@@ -37,14 +38,46 @@ export async function listFinalArtifactImages(root: string): Promise<FinalArtifa
 }
 
 export async function assertFinalArtifactImage(root: string, imagePath: string) {
-  const status = await getFinalArtifactStatus(root);
-  if (!status.exists || !status.directory)
-    throw new Error('最終成果物ディレクトリが設定されていません。');
+  // Read the configured path directly. getFinalArtifactStatus and listImageFiles
+  // enumerate the entire directory, which is quadratic for gallery previews.
+  const meta = await readProjectMeta(root);
+  const configured =
+    meta?.settings.finalArtifactDirectory?.trim() ||
+    meta?.settings.captionSourceDirectory?.trim() ||
+    '';
+  if (!configured) throw new Error('最終成果物ディレクトリが設定されていません。');
+
+  let directory: string;
+  try {
+    directory = await realpath(configured);
+    if (!(await lstat(directory)).isDirectory()) throw new Error('Not a directory');
+  } catch {
+    throw new Error('最終成果物ディレクトリが見つかりません。');
+  }
+
   const resolved = path.resolve(imagePath);
-  const allowed = (await listImageFiles(status.directory)).some(
-    (item) => pathKey(item.path) === pathKey(resolved),
-  );
-  if (!allowed) throw new Error('最終成果物ディレクトリ外の画像は選択できません。');
+  const extension = path.extname(resolved).toLowerCase();
+  if (!FINAL_ARTIFACT_IMAGE_MIME_TYPES[extension])
+    throw new Error('最終成果物ディレクトリ外の画像は選択できません。');
+
+  try {
+    // A configured directory may itself be a symlink. Resolve both paths,
+    // but reject a symlink at the file entry and any nested directory.
+    const info = await lstat(resolved);
+    const canonical = await realpath(resolved);
+    const relative = path.relative(pathKey(directory), pathKey(canonical));
+    if (
+      !info.isFile() ||
+      !relative ||
+      relative === '..' ||
+      relative.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relative) ||
+      relative.includes(path.sep)
+    )
+      throw new Error('Invalid image');
+  } catch {
+    throw new Error('最終成果物ディレクトリ外の画像は選択できません。');
+  }
   return resolved;
 }
 

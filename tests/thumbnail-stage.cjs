@@ -364,3 +364,61 @@ matchCode(
   /EDITOR_SAVE_STALE/,
   'out-of-order save acknowledgments must surface as conflicts',
 );
+
+async function testExportedThumbnailAuthorization() {
+  const promises = require('node:fs/promises');
+  const assert = require('node:assert/strict');
+  const text = service
+    .slice(
+      service.indexOf('export async function assertExportedThumbnail('),
+      service.indexOf('\nexport async function deleteThumbnailOutputs('),
+    )
+    .replace(/^export /, '')
+    .replace(/: string/g, '')
+    .replace(/: Promise<string>/g, '')
+    .replace(/readJson<unknown>/g, 'readJson');
+  const temp = await promises.mkdtemp(path.join(require('node:os').tmpdir(), 'thumbnail-auth-'));
+  const output = path.join(temp, 'thumbnails');
+  const authorize = new Function(
+    'path',
+    'thumbnailOutputDirectory',
+    'readJson',
+    'statePath',
+    'normalizeThumbnailState',
+    'realpath',
+    'lstat',
+    'process',
+    `return ${text};`,
+  )(
+    path,
+    async () => output,
+    async () => ({}),
+    () => '',
+    () => ({ documents: [{ id: 1 }] }),
+    promises.realpath,
+    promises.lstat,
+    process,
+  );
+  try {
+    await promises.mkdir(output);
+    const selected = path.join(output, 'thumbnail-01.jpg');
+    await promises.writeFile(selected, 'image');
+    assert.equal(await authorize(temp, selected), selected);
+    const invalidId = path.join(output, 'thumbnail-02.jpg');
+    await promises.writeFile(invalidId, 'image');
+    await assert.rejects(authorize(temp, invalidId));
+    const outside = path.join(temp, 'thumbnail-01.jpg');
+    await promises.writeFile(outside, 'image');
+    await assert.rejects(authorize(temp, outside));
+    const link = path.join(output, 'thumbnail-1.png');
+    await promises.symlink(outside, link);
+    await assert.rejects(authorize(temp, link));
+  } finally {
+    await promises.rm(temp, { recursive: true, force: true });
+  }
+}
+
+testExportedThumbnailAuthorization().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
