@@ -5,6 +5,7 @@ import type {
   MarketplacePickerContext,
   MarketplaceSourceType,
 } from '../shared/types';
+import { VirtualPickerGrid } from './VirtualPickerGrid';
 import './thumbnail-stage.css';
 
 type PickerSize = 'large' | 'medium' | 'small';
@@ -139,10 +140,12 @@ export function MarketplaceImagePickerWindow() {
         {loading ? (
           <div className="thumbnail-image-picker-message">画像一覧を読み込んでいます…</div>
         ) : filteredItems.length ? (
-          <div className={`thumbnail-image-picker-grid ${size}`}>
-            {filteredItems.map((item) => (
+          <VirtualPickerGrid
+            items={filteredItems}
+            size={size}
+            activePath={tentativePath || context?.currentImagePath || ''}
+            renderItem={(item) => (
               <MarketplacePickerChoice
-                key={item.path}
                 root={context?.root ?? ''}
                 sourceType={context?.sourceType ?? 'final-artifact'}
                 item={item}
@@ -150,8 +153,8 @@ export function MarketplaceImagePickerWindow() {
                 current={context?.currentImagePath === item.path}
                 onSelect={() => selectImage(item)}
               />
-            ))}
-          </div>
+            )}
+          />
         ) : (
           <div className="thumbnail-image-picker-message">
             {items.length
