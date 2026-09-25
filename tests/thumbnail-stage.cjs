@@ -472,3 +472,14 @@ matchCode(
   /requestedGeneration !== generation/,
   'old project decodes must not refill the new project cache',
 );
+
+matchCode(
+  service,
+  /manifest\.outputs\[String\(Number\(match\[1\]\)\)\][\s\S]*tracked\.fileName !== entry\.name/,
+  'downstream thumbnail list must not expose superseded formats',
+);
+matchCode(
+  service,
+  /writeJsonAtomic\(manifestPath, manifest\)[\s\S]*cleanupTrackedOutput/,
+  'old thumbnail cleanup must follow successful new output tracking',
+);
