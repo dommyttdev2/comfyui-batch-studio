@@ -14,6 +14,10 @@ const standalone = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'StandaloneToolApp.tsx'),
   'utf8',
 );
+const virtualGrid = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'VirtualPickerGrid.tsx'),
+  'utf8',
+);
 const thumbnailCss = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'thumbnail-stage.css'),
   'utf8',
@@ -260,7 +264,7 @@ matchCode(
 );
 matchCode(
   picker,
-  /thumbnail-image-picker-grid \$\{size\}/,
+  /<VirtualPickerGrid[\s\S]*size=\{size\}/,
   'image picker grid must reflect the selected display size',
 );
 matchCode(
@@ -422,3 +426,31 @@ testExportedThumbnailAuthorization().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
+matchCode(
+  virtualGrid,
+  /thumbnail-image-picker-grid thumbnail-image-picker-row \$\{size\}/,
+  'virtual rows must retain the three picker column layouts',
+);
+matchCode(
+  virtualGrid,
+  /activePath[\s\S]*scrollTop/,
+  'filtering and size changes must keep the current image visible',
+);
+const rangeSource = virtualGrid
+  .slice(
+    virtualGrid.indexOf('export function virtualPickerRange('),
+    virtualGrid.indexOf('\nexport function VirtualPickerGrid'),
+  )
+  .replace(/^export /, '')
+  .replace(/: number/g, '');
+const virtualPickerRange = new Function('OVERSCAN', `return ${rangeSource}`)(3);
+const firstRange = virtualPickerRange(2000, 5, 200, 0, 700);
+require('node:assert/strict').equal(firstRange.rows, 400);
+require('node:assert/strict').ok(
+  (firstRange.end - firstRange.start) * 5 < 100,
+  '2000 images must mount only visible and overscan rows',
+);
+const lastRange = virtualPickerRange(2000, 7, 200, 100000, 700);
+require('node:assert/strict').ok(lastRange.start <= lastRange.end);
+require('node:assert/strict').ok(lastRange.end <= lastRange.rows);
