@@ -702,7 +702,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         sourcePngDataUrl,
       );
       setLastPath(result.outputPaths.at(-1) ?? result.outputDirectory);
-      setNotice(`4種類を生成しました: ${result.outputDirectory}`);
+      setNotice(`4種類を生成しました: ${result.outputDirectory}${result.cleanupWarning ? ` / 旧ファイル: ${result.cleanupWarning}` : ''}`);
     });
 
   const generateZip = () =>
@@ -746,7 +746,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         sourcePngDataUrl,
       );
       setLastPath(result.outputPaths[0] ?? result.outputDirectory);
-      setNotice(`カスタム画像を生成しました: ${result.outputPaths[0]}`);
+      setNotice(`カスタム画像を生成しました: ${result.outputPaths[0]}${result.cleanupWarning ? ` / 旧ファイル: ${result.cleanupWarning}` : ''}`);
     });
 
   if (!state || !finalArtifact)
