@@ -439,10 +439,16 @@ export async function deleteThumbnailOutputs(root: string, documentId: number): 
   if (!Number.isSafeInteger(documentId) || documentId < 1)
     throw new Error('Invalid thumbnail document');
   const directory = await thumbnailOutputDirectory(root);
-  for (const ext of ['png', 'jpg', 'jpeg'])
-    await rm(path.join(directory, `thumbnail-${String(documentId).padStart(2, '0')}.${ext}`), {
-      force: true,
-    });
+  const manifestPath = thumbnailOutputManifestPath(root);
+  await withTemplateStoreLock(manifestPath, async () => {
+    for (const ext of ['png', 'jpg', 'jpeg'])
+      await rm(path.join(directory, `thumbnail-${String(documentId).padStart(2, '0')}.${ext}`), {
+        force: true,
+      });
+    const manifest = await thumbnailOutputManifest(root);
+    delete manifest.outputs[String(documentId)];
+    await writeJsonAtomic(manifestPath, manifest);
+  });
 }
 
 export async function exportThumbnail(
