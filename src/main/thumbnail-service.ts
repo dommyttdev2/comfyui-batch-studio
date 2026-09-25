@@ -416,8 +416,14 @@ export async function assertExportedThumbnail(root: string, imagePath: string): 
   const raw = await readJson<unknown>(statePath(root));
   const editor = normalizeThumbnailState(raw);
   const allowed = new Set(editor.documents.map((document) => document.id));
-  const tracked = match ? (await thumbnailOutputManifest(root)).outputs[String(Number(match[1]))] : null;
-  if (!match || !allowed.has(Number(match[1])) || (tracked && tracked.fileName !== path.basename(resolved)))
+  const tracked = match
+    ? (await thumbnailOutputManifest(root)).outputs[String(Number(match[1]))]
+    : null;
+  if (
+    !match ||
+    !allowed.has(Number(match[1])) ||
+    (tracked && tracked.fileName !== path.basename(resolved))
+  )
     throw new Error('現在有効なサムネイルの出力済み画像を選択してください。');
   try {
     const canonicalDirectory = await realpath(directory);
