@@ -108,7 +108,11 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
           }),
         };
       if (name === './final-artifact-service.js')
-        return { getFinalArtifactStatus: () => { throw new Error('full scan'); } };
+        return {
+          getFinalArtifactStatus: () => {
+            throw new Error('full scan');
+          },
+        };
       if (name === './image-pipeline.js') return {};
       throw new Error(`Unexpected import: ${name}`);
     },
