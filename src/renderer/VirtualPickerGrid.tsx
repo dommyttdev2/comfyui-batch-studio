@@ -16,7 +16,7 @@ export function virtualPickerRange(
   viewportHeight: number,
 ) {
   const rows = Math.ceil(count / columns);
-  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN);
+  const start = Math.min(rows, Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN));
   const end = Math.min(rows, Math.ceil((scrollTop + viewportHeight) / rowHeight) + OVERSCAN);
   return { start, end, rows };
 }
@@ -76,10 +76,10 @@ export function VirtualPickerGrid<T extends { path: string }>({
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    if (activePath && items.some((item) => item.path === activePath)) return;
-    viewport.scrollTop = 0;
-    setGeometry((current) => ({ ...current, top: 0 }));
-  }, [items, activePath]);
+    const activeIndex = items.findIndex((item) => item.path === activePath);
+    viewport.scrollTop = activeIndex < 0 ? 0 : Math.floor(activeIndex / columns) * rowHeight;
+    setGeometry((current) => ({ ...current, top: viewport.scrollTop }));
+  }, [items, activePath, columns, rowHeight]);
 
   const rows = useMemo(
     () =>
