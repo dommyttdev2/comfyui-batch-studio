@@ -266,3 +266,14 @@ matchCode(
   /<VirtualPickerGrid[\s\S]*items=\{filteredItems\}[\s\S]*renderItem=/,
   'marketplace picker must render only virtual rows while preserving selection callbacks',
 );
+
+matchCode(
+  service,
+  /writeJsonAtomic\(generationManifestPath\(outputDirectory\), manifest\)[\s\S]*cleanupTrackedOutput/,
+  'marketplace old-format cleanup must follow the new commit marker',
+);
+matchCode(
+  service,
+  /previousManifest\.outputs[\s\S]*previousExtension === extension/,
+  'only tracked outputs from a different format may be cleaned',
+);
