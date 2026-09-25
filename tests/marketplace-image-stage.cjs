@@ -260,3 +260,9 @@ matchCode(
   /MARKETPLACE_READ_SOURCE_PREVIEW[\s\S]*app\.getPath\('userData'\)[\s\S]*marketplace_preview_read/,
   'marketplace preview must use the shared user cache and record transfer metrics',
 );
+
+matchCode(
+  picker,
+  /<VirtualPickerGrid[\s\S]*items=\{filteredItems\}[\s\S]*renderItem=/,
+  'marketplace picker must render only virtual rows while preserving selection callbacks',
+);

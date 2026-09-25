@@ -4,6 +4,7 @@ import type {
   ThumbnailImageSource,
   ThumbnailPickerContext,
 } from '../shared/types';
+import { VirtualPickerGrid } from './VirtualPickerGrid';
 import './thumbnail-stage.css';
 
 type ThumbnailPickerSize = 'large' | 'medium' | 'small';
@@ -231,18 +232,23 @@ export function ThumbnailPickerWindow() {
         {loading ? (
           <div className="thumbnail-image-picker-message">画像一覧を読み込んでいます…</div>
         ) : filteredItems.length ? (
-          <div className={`thumbnail-image-picker-grid ${size}`}>
-            {filteredItems.map((item) => (
+          <VirtualPickerGrid
+            items={filteredItems}
+            size={size}
+            activePath={tentativePath || context?.currentImagePath || ''}
+            onMetrics={(visible, total) =>
+              reportPickerTiming('virtual_rows', { visible, total, displaySize: size })
+            }
+            renderItem={(item) => (
               <ThumbnailPickerChoice
-                key={item.path}
                 item={item}
                 tentative={tentativePath === item.path}
                 current={context?.currentImagePath === item.path}
                 onSelect={() => selectImage(item)}
                 onImageLoaded={onImageLoaded}
               />
-            ))}
-          </div>
+            )}
+          />
         ) : (
           <div className="thumbnail-image-picker-message">
             {items.length
