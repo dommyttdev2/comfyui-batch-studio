@@ -491,6 +491,11 @@ const writeJson = (file, value) => {
     },
   );
   await assert.rejects(() => execution.getCurrentExecutionRun(damagedRoot), /新規実行と編集を停止/);
+  assert.equal(
+    (await execution.getCurrentExecutionRunFast(damagedRoot, started.runId)).runId,
+    started.runId,
+    'status reads only current Run after an earlier full reconciliation',
+  );
   await assert.rejects(
     () => execution.startExecutionRun(damagedRoot, async () => ready),
     /新規実行と編集を停止/,
@@ -510,6 +515,10 @@ const writeJson = (file, value) => {
   assert.equal((await execution.getCurrentExecutionRun(damagedRoot)).runId, started.runId);
   fs.writeFileSync(path.join(damagedDir, 'current.json'), '{ incomplete');
   await assert.rejects(() => execution.getCurrentExecutionRun(damagedRoot), /新規実行と編集を停止/);
+  await assert.rejects(
+    () => execution.getCurrentExecutionRunFast(damagedRoot, started.runId),
+    /新規実行と編集を停止/,
+  );
   fs.rmSync(path.join(damagedDir, 'current.json'));
   assert.equal((await execution.getCurrentExecutionRun(damagedRoot)).runId, started.runId);
 
