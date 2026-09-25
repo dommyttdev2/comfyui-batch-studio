@@ -239,10 +239,7 @@ matchCode(
   'out-of-order save acknowledgments must surface as conflicts',
 );
 
-const cache = fs.readFileSync(
-  path.join(repo, 'src', 'main', 'thumbnail-image-cache.ts'),
-  'utf8',
-);
+const cache = fs.readFileSync(path.join(repo, 'src', 'main', 'thumbnail-image-cache.ts'), 'utf8');
 matchCode(
   service,
   /assertMarketplaceSource\(root, imagePath, sourceType\)[\s\S]*readCachedThumbnailImage\(userDataRoot, resolved, 'gallery', timing\)/,
