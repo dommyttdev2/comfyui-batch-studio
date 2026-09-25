@@ -653,6 +653,7 @@ export interface ThumbnailTemplateSource {
 
 export interface ThumbnailExportResult {
   path: string;
+  cleanupWarning?: string;
 }
 
 export type MarketplaceOutputFormat = 'jpeg' | 'png' | 'webp';
@@ -704,6 +705,7 @@ export interface MarketplaceGenerationResult {
   outputDirectory: string;
   outputPaths: string[];
   zipPath: string | null;
+  cleanupWarning?: string;
 }
 
 export interface MarketplacePickerSession {

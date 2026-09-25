@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, readdir, realpath, rm } from 'node:fs/promises';
 import { nativeImage } from 'electron';
 import path from 'node:path';
@@ -23,6 +24,7 @@ import {
 } from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
 import { writeImageAtomic } from './atomic-image-output.js';
+import { cleanupTrackedOutput } from './tracked-output-cleanup.js';
 import {
   listImageFiles,
   readImagePreview,
@@ -367,12 +369,27 @@ export async function thumbnailOutputDirectory(root: string): Promise<string> {
   return path.join(path.resolve(base), 'thumbnails');
 }
 
+type ThumbnailOutputRecord = { fileName: string; size: number; sha256: string };
+type ThumbnailOutputManifest = { schemaVersion: 1; outputs: Record<string, ThumbnailOutputRecord> };
+
+function thumbnailOutputManifestPath(root: string) {
+  return path.join(root, '._batch_studio', 'thumbnail-outputs.json');
+}
+
+async function thumbnailOutputManifest(root: string): Promise<ThumbnailOutputManifest> {
+  const stored = await readJson<ThumbnailOutputManifest>(thumbnailOutputManifestPath(root));
+  return stored?.schemaVersion === 1 && stored.outputs && typeof stored.outputs === 'object'
+    ? stored
+    : { schemaVersion: 1, outputs: {} };
+}
+
 export async function listExportedThumbnails(root: string): Promise<ThumbnailImageItem[]> {
   const directory = await thumbnailOutputDirectory(root);
   // Avoid system-font enumeration for every gallery preview/source validation.
   const raw = await readJson<unknown>(statePath(root));
   const editor = normalizeThumbnailState(raw);
   const allowed = new Set(editor.documents.map((document) => document.id));
+  const manifest = await thumbnailOutputManifest(root);
   let entries;
   try {
     entries = await readdir(directory, { withFileTypes: true });
@@ -385,6 +402,8 @@ export async function listExportedThumbnails(root: string): Promise<ThumbnailIma
     if (!entry.isFile()) continue;
     const match = /^thumbnail-(\d+)\.(png|jpe?g)$/i.exec(entry.name);
     if (!match || !allowed.has(Number(match[1]))) continue;
+    const tracked = manifest.outputs[String(Number(match[1]))];
+    if (tracked && tracked.fileName !== entry.name) continue;
     items.push({ name: entry.name, path: path.join(directory, entry.name) });
   }
   return items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
@@ -397,7 +416,14 @@ export async function assertExportedThumbnail(root: string, imagePath: string): 
   const raw = await readJson<unknown>(statePath(root));
   const editor = normalizeThumbnailState(raw);
   const allowed = new Set(editor.documents.map((document) => document.id));
-  if (!match || !allowed.has(Number(match[1])))
+  const tracked = match
+    ? (await thumbnailOutputManifest(root)).outputs[String(Number(match[1]))]
+    : null;
+  if (
+    !match ||
+    !allowed.has(Number(match[1])) ||
+    (tracked && tracked.fileName !== path.basename(resolved))
+  )
     throw new Error('現在有効なサムネイルの出力済み画像を選択してください。');
   try {
     const canonicalDirectory = await realpath(directory);
@@ -419,10 +445,16 @@ export async function deleteThumbnailOutputs(root: string, documentId: number): 
   if (!Number.isSafeInteger(documentId) || documentId < 1)
     throw new Error('Invalid thumbnail document');
   const directory = await thumbnailOutputDirectory(root);
-  for (const ext of ['png', 'jpg', 'jpeg'])
-    await rm(path.join(directory, `thumbnail-${String(documentId).padStart(2, '0')}.${ext}`), {
-      force: true,
-    });
+  const manifestPath = thumbnailOutputManifestPath(root);
+  await withTemplateStoreLock(manifestPath, async () => {
+    for (const ext of ['png', 'jpg', 'jpeg'])
+      await rm(path.join(directory, `thumbnail-${String(documentId).padStart(2, '0')}.${ext}`), {
+        force: true,
+      });
+    const manifest = await thumbnailOutputManifest(root);
+    delete manifest.outputs[String(documentId)];
+    await writeJsonAtomic(manifestPath, manifest);
+  });
 }
 
 export async function exportThumbnail(
@@ -445,15 +477,35 @@ export async function exportThumbnail(
     outputDirectory,
     `thumbnail-${String(documentId).padStart(2, '0')}.${extension}`,
   );
-  await writeImageAtomic(
-    outputPath,
-    bytes,
-    format,
-    (content) => {
-      const image = nativeImage.createFromBuffer(content);
-      return image.isEmpty() ? null : image.getSize();
-    },
-    `${path.resolve(root)}:${documentId}`,
-  );
-  return { path: outputPath };
+  const manifestPath = thumbnailOutputManifestPath(root);
+  return withTemplateStoreLock(manifestPath, async () => {
+    const manifest = await thumbnailOutputManifest(root);
+    const previous = manifest.outputs[String(documentId)];
+    await writeImageAtomic(
+      outputPath,
+      bytes,
+      format,
+      (content) => {
+        const image = nativeImage.createFromBuffer(content);
+        return image.isEmpty() ? null : image.getSize();
+      },
+      `${path.resolve(root)}:${documentId}`,
+    );
+    manifest.outputs[String(documentId)] = {
+      fileName: path.basename(outputPath),
+      size: bytes.length,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+    };
+    await writeJsonAtomic(manifestPath, manifest);
+    const oldName = previous?.fileName;
+    const expectedOldName = oldName && /^thumbnail-(\d+)\.(png|jpe?g)$/i.exec(oldName);
+    const cleanupWarning =
+      previous &&
+      expectedOldName &&
+      Number(expectedOldName[1]) === documentId &&
+      oldName !== path.basename(outputPath)
+        ? await cleanupTrackedOutput(path.join(outputDirectory, oldName), previous)
+        : null;
+    return { path: outputPath, cleanupWarning: cleanupWarning ?? undefined };
+  });
 }

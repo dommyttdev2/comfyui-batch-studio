@@ -26,6 +26,7 @@ import {
 } from './final-artifact-image-service.js';
 import { assertExportedThumbnail } from './thumbnail-service.js';
 import { readProjectMeta } from './project-meta.js';
+import { cleanupTrackedOutput } from './tracked-output-cleanup.js';
 import { readCachedThumbnailImage, type ThumbnailCacheTiming } from './thumbnail-image-cache.js';
 import {
   fingerprintMarketplaceSource,
@@ -415,13 +416,14 @@ export async function generateMarketplaceImages(
   const source = await fingerprintMarketplaceSource(resolved);
   const inputSignature = marketplaceInputSignature(state, targets);
   const outputDirectory = await marketplaceOutputDirectory(root);
+  const previousManifest = await readJson<MarketplaceGenerationManifest>(
+    generationManifestPath(outputDirectory),
+  );
   const extension = FORMAT_EXTENSIONS[state.format];
   const outputPaths: string[] = [];
   const staged: Array<{ outputPath: string; bytes: Buffer }> = [];
   const outputs: MarketplaceGeneratedOutput[] = [];
 
-  // A previous successful manifest must never certify a partial new generation.
-  await rm(generationManifestPath(outputDirectory), { force: true });
   for (const target of targets) {
     const crop = clampCrop(
       state.targets[target.id]?.crop ?? null,
@@ -462,6 +464,8 @@ export async function generateMarketplaceImages(
     marketplaceInputSignature(persisted, targets) !== inputSignature
   )
     throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
+  // Keep the old manifest if rendering fails before any output changes.
+  await rm(generationManifestPath(outputDirectory), { force: true });
   for (const { outputPath, bytes } of staged) await writeAtomic(outputPath, bytes);
   const manifest: MarketplaceGenerationManifest = {
     schemaVersion: 1,
@@ -475,7 +479,26 @@ export async function generateMarketplaceImages(
   // The manifest is the commit marker. ZIP generation accepts only a complete,
   // content-verified set of outputs with the same generation identity.
   await writeJsonAtomic(generationManifestPath(outputDirectory), manifest);
-  return { outputDirectory, outputPaths, zipPath: null };
+  const cleanupWarnings: string[] = [];
+  if (previousManifest?.schemaVersion === 1 && Array.isArray(previousManifest.outputs)) {
+    const previousExtension = FORMAT_EXTENSIONS[previousManifest.format];
+    for (const target of targets) {
+      const old = previousManifest.outputs.find((entry) => entry.targetId === target.id);
+      const expectedPath = `${target.service}/${target.fileName}.${previousExtension}`;
+      if (!old || old.relativePath !== expectedPath || previousExtension === extension) continue;
+      const warning = await cleanupTrackedOutput(
+        path.join(outputDirectory, target.service, `${target.fileName}.${previousExtension}`),
+        old,
+      );
+      if (warning) cleanupWarnings.push(`${target.label}: ${warning}`);
+    }
+  }
+  return {
+    outputDirectory,
+    outputPaths,
+    zipPath: null,
+    cleanupWarning: cleanupWarnings.join(' / ') || undefined,
+  };
 }
 
 export async function exportCustomMarketplaceImage(
@@ -500,6 +523,10 @@ export async function exportCustomMarketplaceImage(
   );
   const extension = FORMAT_EXTENSIONS[state.format];
   const outputDirectory = path.join(await marketplaceOutputDirectory(root), 'custom');
+  const customManifestPath = path.join(outputDirectory, '._custom-output.json');
+  const previous = await readJson<{ fileName: string; size: number; sha256: string }>(
+    customManifestPath,
+  );
   const outputPath = path.join(outputDirectory, `custom-output.${extension}`);
   const bytes =
     state.format === 'webp'
@@ -509,7 +536,24 @@ export async function exportCustomMarketplaceImage(
           state.format,
         );
   await writeAtomic(outputPath, bytes);
-  return { outputDirectory, outputPaths: [outputPath], zipPath: null };
+  await writeJsonAtomic(customManifestPath, {
+    fileName: path.basename(outputPath),
+    size: bytes.length,
+    sha256: sha256Bytes(bytes),
+  });
+  const trackedOldFormat = Object.values(FORMAT_EXTENSIONS).some(
+    (candidate) => previous?.fileName === `custom-output.${candidate}`,
+  );
+  const cleanupWarning =
+    previous && trackedOldFormat && previous.fileName !== path.basename(outputPath)
+      ? await cleanupTrackedOutput(path.join(outputDirectory, previous.fileName), previous)
+      : null;
+  return {
+    outputDirectory,
+    outputPaths: [outputPath],
+    zipPath: null,
+    cleanupWarning: cleanupWarning ?? undefined,
+  };
 }
 
 const CRC_TABLE = (() => {

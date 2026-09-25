@@ -23,6 +23,9 @@ execFileSync(
   const core = await import(
     pathToFileURL(path.join(build, 'main', 'marketplace-generation-manifest.js')).href
   );
+  const { cleanupTrackedOutput } = await import(
+    pathToFileURL(path.join(build, 'main', 'tracked-output-cleanup.js')).href
+  );
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-marketplace-manifest-'));
   const sourcePath = path.join(root, 'source.png');
   fs.writeFileSync(sourcePath, Buffer.from('first-source-bytes'));
@@ -150,6 +153,17 @@ execFileSync(
   assert.match(service, /verifiedMarketplaceOutput\(/);
   assert.match(service, /storedZip\(entries\)/);
   assert.match(service, /writeJsonAtomic\(generationManifestPath\(outputDirectory\), manifest\)/);
+  const tracked = path.join(root, 'tracked-old.png');
+  const original = Buffer.from('generated-output');
+  fs.writeFileSync(tracked, original);
+  const identity = { size: original.length, sha256: core.sha256Bytes(original) };
+  assert.equal(await cleanupTrackedOutput(tracked, identity), null);
+  assert.equal(fs.existsSync(tracked), false);
+  fs.writeFileSync(tracked, Buffer.from('manual-edited-file'));
+  assert.match(await cleanupTrackedOutput(tracked, identity), /手動変更/);
+  assert.equal(fs.existsSync(tracked), true);
+  assert.equal(await cleanupTrackedOutput(path.join(root, 'missing-old.png'), identity), null);
+
   console.log('Marketplace generation manifest tests passed.');
 })().catch((error) => {
   console.error(error);
