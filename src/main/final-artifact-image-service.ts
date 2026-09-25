@@ -59,7 +59,7 @@ export async function assertFinalArtifactImage(root: string, imagePath: string) 
 
   const resolved = path.resolve(imagePath);
   const extension = path.extname(resolved).toLowerCase();
-  const relative = path.relative(directory, resolved);
+  const relative = path.relative(pathKey(directory), pathKey(resolved));
   if (
     !FINAL_ARTIFACT_IMAGE_MIME_TYPES[extension] ||
     !relative ||
@@ -73,7 +73,7 @@ export async function assertFinalArtifactImage(root: string, imagePath: string) 
   try {
     // Refuse file symlinks and junction escapes; do not authorize by a prefix.
     const info = await lstat(resolved);
-    if (!info.isFile() || (await realpath(resolved)) !== path.join(directory, relative))
+    if (!info.isFile() || pathKey(await realpath(resolved)) !== pathKey(path.join(directory, relative)))
       throw new Error('Invalid image');
   } catch {
     throw new Error('最終成果物ディレクトリ外の画像は選択できません。');
