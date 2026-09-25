@@ -10,7 +10,7 @@ import type {
   ThumbnailTextState,
 } from '../shared/types';
 import { useEditorAutosave } from './use-editor-autosave';
-import { cachedEditorImage } from './thumbnail-image-memory-cache';
+import { cachedEditorImage, resetEditorImageCache } from './thumbnail-image-memory-cache';
 import type { Runner } from './ui';
 import './thumbnail-stage.css';
 
@@ -309,6 +309,8 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   const [deleteWarning, setDeleteWarning] = useState('');
   const [selectedSlot, setSelectedSlot] = useState<ThumbnailSlotKey>('CENTER_MAIN');
   const [images, setImages] = useState<LoadedImages>({});
+  const [imageRetry, setImageRetry] = useState(0);
+  const [imageLoadState, setImageLoadState] = useState({ loading: false, error: '' });
   const [templates, setTemplates] = useState<Partial<Record<ThumbnailPattern, TemplateOverlay>>>(
     {},
   );
@@ -384,6 +386,8 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   useEffect(() => {
     let cancelled = false;
     loadedStateRef.current = false;
+    resetEditorImageCache();
+    setImages({});
     setState(null);
     void window.batchStudio.thumbnail
       .load(project.rootPath)
@@ -412,6 +416,11 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
           .filter((value): value is string => Boolean(value)),
       ),
     ];
+    const retained = new Set([...paths, pickerPreview?.imagePath].filter(Boolean));
+    setImages((current) =>
+      Object.fromEntries(Object.entries(current).filter(([imagePath]) => retained.has(imagePath))),
+    );
+    setImageLoadState({ loading: paths.length > 0, error: '' });
     void Promise.all(
       paths.map(async (imagePath) => {
         try {
@@ -419,53 +428,35 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
           if (!source) throw new Error('画像を読み込めませんでした。');
           const image = await cachedEditorImage(source);
           if (!cancelled) setImages((current) => ({ ...current, [source.path]: image }));
-        } catch {
+          return '';
+        } catch (error) {
           if (!cancelled)
             setImages((current) => {
               const next = { ...current };
               delete next[imagePath];
               return next;
             });
+          return error instanceof Error ? error.message : String(error);
         }
       }),
-    );
+    ).then((errors) => {
+      if (!cancelled)
+        setImageLoadState({
+          loading: false,
+          error: errors.find(Boolean) ?? '',
+        });
+    });
     return () => {
       cancelled = true;
     };
-  }, [project.rootPath, active?.id, active?.pattern, active?.slots]);
-
-  // Prepare images for the remaining documents after the active document is displayed.
-  useEffect(() => {
-    if (!state || !active) return;
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      const paths = [
-        ...new Set(
-          state.documents
-            .filter((document) => document.id !== active.id)
-            .flatMap((document) => Object.values(document.slots).map((slot) => slot.imagePath))
-            .filter(Boolean),
-        ),
-      ];
-      void (async () => {
-        for (const imagePath of paths) {
-          if (cancelled) break;
-          try {
-            const source = await window.batchStudio.thumbnail.readEditorImage(imagePath);
-            if (!source) continue;
-            const image = await cachedEditorImage(source);
-            if (!cancelled) setImages((current) => ({ ...current, [source.path]: image }));
-          } catch {
-            /* A missing image must not block the active editor. */
-          }
-        }
-      })();
-    }, 300);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [project.rootPath, state?.documents, active?.id]);
+  }, [
+    project.rootPath,
+    active?.id,
+    active?.pattern,
+    active?.slots,
+    pickerPreview?.imagePath,
+    imageRetry,
+  ]);
 
   const fullResolutionImages = async (document: ThumbnailDocument): Promise<LoadedImages> => {
     const entries = await Promise.all(
@@ -1002,6 +993,15 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
               </select>
             </label>
           </div>
+          {imageLoadState.loading && <p role="status">編集中の画像を読み込んでいます…</p>}
+          {imageLoadState.error && (
+            <div role="alert">
+              画像を読み込めませんでした: {imageLoadState.error}
+              <button type="button" onClick={() => setImageRetry((current) => current + 1)}>
+                再試行
+              </button>
+            </div>
+          )}
           <canvas
             ref={canvasRef}
             width={WIDTH}

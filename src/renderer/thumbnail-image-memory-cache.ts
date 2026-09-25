@@ -4,6 +4,13 @@ const LIMIT = 128 * 1024 * 1024;
 type Entry = { image: HTMLImageElement; bytes: number };
 const loaded = new Map<string, Entry>();
 const pending = new Map<string, Promise<HTMLImageElement>>();
+let generation = 0;
+
+export function resetEditorImageCache() {
+  generation++;
+  loaded.clear();
+  pending.clear();
+}
 
 function decode(source: ThumbnailImageSource): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -26,7 +33,9 @@ export async function cachedEditorImage(source: ThumbnailImageSource): Promise<H
   }
   const inFlight = pending.get(key);
   if (inFlight) return inFlight;
+  const requestedGeneration = generation;
   const task = decode(source).then((image) => {
+    if (requestedGeneration !== generation) return image;
     const bytes = image.naturalWidth * image.naturalHeight * 4;
     for (const stale of loaded.keys()) {
       if (stale.startsWith(`${source.path}\0`) && stale !== key) loaded.delete(stale);
@@ -44,6 +53,6 @@ export async function cachedEditorImage(source: ThumbnailImageSource): Promise<H
   try {
     return await task;
   } finally {
-    pending.delete(key);
+    if (pending.get(key) === task) pending.delete(key);
   }
 }

@@ -454,3 +454,21 @@ require('node:assert/strict').ok(
 const lastRange = virtualPickerRange(2000, 7, 200, 100000, 700);
 require('node:assert/strict').ok(lastRange.start <= lastRange.end);
 require('node:assert/strict').ok(lastRange.end <= lastRange.rows);
+
+doesNotMatchCode(
+  stage,
+  /state\.documents\s*\.filter\(\(document\) => document\.id !== active\.id\)[\s\S]*readEditorImage/,
+  'inactive documents must not retain decoded images through bulk prefetch',
+);
+matchCode(
+  stage,
+  /Object\.fromEntries\(Object\.entries\(current\)\.filter\(\(\[imagePath\]\) => retained\.has\(imagePath\)\)\)/,
+  'switching documents must release inactive editor image references',
+);
+matchCode(stage, /resetEditorImageCache\(\)/, 'switching projects must clear decoded image cache');
+matchCode(stage, /imageLoadState\.error[\s\S]*再試行/, 'missing active images must offer retry');
+matchCode(
+  memoryCache,
+  /requestedGeneration !== generation/,
+  'old project decodes must not refill the new project cache',
+);
