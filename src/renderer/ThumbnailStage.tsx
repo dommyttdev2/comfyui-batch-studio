@@ -449,7 +449,14 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
     return () => {
       cancelled = true;
     };
-  }, [project.rootPath, active?.id, active?.pattern, active?.slots, pickerPreview?.imagePath, imageRetry]);
+  }, [
+    project.rootPath,
+    active?.id,
+    active?.pattern,
+    active?.slots,
+    pickerPreview?.imagePath,
+    imageRetry,
+  ]);
 
   const fullResolutionImages = async (document: ThumbnailDocument): Promise<LoadedImages> => {
     const entries = await Promise.all(
