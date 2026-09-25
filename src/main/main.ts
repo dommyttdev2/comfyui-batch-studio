@@ -3987,7 +3987,7 @@ function register() {
           totalMs: performance.now() - started,
           cacheHit: timing.hit === true,
           transferKB: source ? (source.dataUrl.length * 0.75) / 1024 : 0,
-          usedFallback: timing.hit !== true && !source?.cacheVersion,
+          usedFallback: source?.dataUrl.startsWith('data:image/webp;base64,') === true,
         };
         for (const [key, value] of Object.entries(timing)) {
           if (typeof value === 'number' || typeof value === 'boolean') metrics[key] = value;
