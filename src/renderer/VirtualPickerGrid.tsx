@@ -91,7 +91,10 @@ export function VirtualPickerGrid<T extends { path: string }>({
   );
 
   useEffect(() => {
-    onMetrics?.(rows.reduce((count, row) => count + row.entries.length, 0), items.length);
+    onMetrics?.(
+      rows.reduce((count, row) => count + row.entries.length, 0),
+      items.length,
+    );
   }, [rows, items.length, onMetrics]);
 
   return (
@@ -102,14 +105,21 @@ export function VirtualPickerGrid<T extends { path: string }>({
         setGeometry((current) => ({ ...current, top: event.currentTarget.scrollTop }))
       }
     >
-      <div className="thumbnail-image-picker-virtual-space" style={{ height: range.rows * rowHeight }}>
+      <div
+        className="thumbnail-image-picker-virtual-space"
+        style={{ height: range.rows * rowHeight }}
+      >
         {rows.map(({ row, entries }) => (
           <div
             key={row}
             className={`thumbnail-image-picker-grid thumbnail-image-picker-row ${size}`}
             style={{ top: row * rowHeight, height: rowHeight - GAP }}
           >
-            {entries.map((item) => <div key={item.path} className="thumbnail-image-picker-cell">{renderItem(item)}</div>)}
+            {entries.map((item) => (
+              <div key={item.path} className="thumbnail-image-picker-cell">
+                {renderItem(item)}
+              </div>
+            ))}
           </div>
         ))}
       </div>
