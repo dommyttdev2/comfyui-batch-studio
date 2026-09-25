@@ -13,6 +13,16 @@ export async function cleanupTrackedOutput(
     const bytes = await readFile(file);
     if (createHash('sha256').update(bytes).digest('hex') !== expected.sha256)
       return '以前の成果物が手動変更されたため、削除せず保持しました。';
+    const latest = await lstat(file);
+    if (
+      !latest.isFile() ||
+      latest.dev !== info.dev ||
+      latest.ino !== info.ino ||
+      latest.size !== info.size ||
+      latest.mtimeMs !== info.mtimeMs ||
+      latest.ctimeMs !== info.ctimeMs
+    )
+      return '以前の成果物が手動変更されたため、削除せず保持しました。';
     await rm(file);
     return null;
   } catch (error) {
