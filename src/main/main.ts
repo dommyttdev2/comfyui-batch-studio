@@ -46,6 +46,7 @@ import type {
   VastAiOfferSearchInput,
   VastAiRentRequest,
   VastAiSshEndpoint,
+  type AgentEvent,
 } from '../shared/types.js';
 import {
   createProject,
@@ -119,6 +120,15 @@ import {
 } from '../shared/codex-activity.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
+import { CodexCliAdapter, AgentTurnCancelledError } from './codex-cli-adapter.js';
+import { AgentSessionStateStore } from './agent-session-state.js';
+import {
+  prepareAgentWorkspace,
+  agentWorkspaceOutputInstruction,
+  readAgentWorkspaceOutput,
+  rememberAgentWorkspace,
+  type AgentWorkspace,
+} from './agent-workspace.js';
 import { CodexTurnMonitor } from './codex-turn-monitor.js';
 import {
   expectedArtifact,
@@ -324,13 +334,21 @@ let lastFocusedProjectWindowId: number | null = null,
   codexChatState: CodexChatStateStore | null = null,
   assistantProviderState: AssistantProviderStore | null = null,
   codexAppServer: CodexAppServer | null = null,
+  codexCliAdapter: CodexCliAdapter | null = null,
+  agentSessionState: AgentSessionStateStore | null = null,
+  codexCliActiveTurnIds = new Map<string, string>(),
   codexBusy = new Set<string>(),
   codexTurnStartRequests = new Map<string, Promise<string>>(),
   codexActiveTurnIds = new Map<string, string>(),
   codexInterruptRequests = new Map<string, Promise<void>>(),
   codexPendingArtifacts = new Map<
     string,
-    { root: string; stage: GrokTask['stage']; fileName: string; workspace?: FileArtifactWorkspace }
+    {
+      root: string;
+      stage: GrokTask['stage'];
+      fileName: string;
+      workspace?: FileArtifactWorkspace | AgentWorkspace;
+    }
   >(),
   codexTurnMonitor = new CodexTurnMonitor(),
   codexModelSelections: CodexModelSelectionStore | null = null,
@@ -4727,6 +4745,8 @@ async function initializeApplication() {
   codexChatState = new CodexChatStateStore(userData);
   codexModelSelections = new CodexModelSelectionStore(userData);
   assistantProviderState = new AssistantProviderStore(userData);
+  agentSessionState = new AgentSessionStateStore(userData);
+  codexCliAdapter = new CodexCliAdapter();
   codexAppServer = new CodexAppServer();
   codexAppServer.on('notification', forwardCodexNotification);
   codexAppServer.on('disconnected', (message: string) => {
@@ -4761,7 +4781,11 @@ async function initializeApplication() {
   });
 }
 if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
-app.on('will-quit', () => codexAppServer?.stop());
+app.on('will-quit', () => {
+  for (const turnId of codexCliActiveTurnIds.values())
+    void codexCliAdapter?.stop(turnId).catch(() => {});
+  codexAppServer?.stop();
+});
 app.on('window-all-closed', () => {
   if (!executionCoordinator.hasActiveRuns() && process.platform !== 'darwin') app.quit();
 });
