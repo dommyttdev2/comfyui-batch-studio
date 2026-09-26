@@ -22,8 +22,9 @@ app
       pathToFileURL(path.join(root, 'main/thumbnail-image-cache.js')).href
     );
     const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'image-memory-electron-'));
-    const sideArgument = process.argv.slice(1).find((value) => /^\\d+$/.test(value));
+    const sideArgument = process.env.BATCH_STUDIO_IMAGE_TEST_SIDE;
     const side = Number(sideArgument ?? 2048);
+    if (!Number.isSafeInteger(side) || side < 1) throw new Error('Invalid image test side.');
     let window;
     try {
       const state = await marketplace.createDefaultMarketplaceImageState();
