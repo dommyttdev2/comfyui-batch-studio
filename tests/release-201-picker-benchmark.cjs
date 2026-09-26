@@ -12,6 +12,7 @@ const counts = (process.env.BATCH_STUDIO_RELEASE_201_COUNTS ?? '100,500,2000')
   .map((value) => Number(value))
   .filter((value) => Number.isSafeInteger(value) && value > 0);
 const sampleCount = Number(process.env.BATCH_STUDIO_RELEASE_201_SAMPLES ?? 5);
+const outputFile = process.env.BATCH_STUDIO_RELEASE_201_OUTPUT;
 const benchmarkChannel = 'release-201-benchmark-event';
 
 app.disableHardwareAcceleration();
@@ -417,6 +418,7 @@ app
       cache: await import(pathToFileURL(path.join(base, 'main', 'thumbnail-image-cache.js')).href),
     };
 
+    const results = [];
     for (const count of counts) {
       const service = await benchmarkService(count, dataUrls, modules);
       const ui = await benchmarkUi(count, dataUrls);
@@ -425,17 +427,20 @@ app
         true,
         'preview/commit interaction contract must remain intact',
       );
-      console.log(
-        `RELEASE201 ${JSON.stringify({
-          label,
-          count,
-          formats: ['png', 'jpeg', 'webp'],
-          service,
-          ui,
-        })}`,
-      );
+      results.push({
+        label,
+        count,
+        formats: ['png', 'jpeg', 'webp'],
+        service,
+        ui,
+      });
     }
-    app.exit(0);
+    const output = `${results
+      .map((result) => `RELEASE201 ${JSON.stringify(result)}`)
+      .join('\n')}\n`;
+    if (outputFile) await fs.writeFile(outputFile, output, 'utf8');
+    process.stdout.write(output);
+    app.quit();
   })
   .catch((error) => {
     console.error(error);
