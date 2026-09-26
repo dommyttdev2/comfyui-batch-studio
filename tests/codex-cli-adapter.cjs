@@ -359,7 +359,7 @@ function task(root, workspace = true) {
     const queued = [
       { stdout: 'codex-cli 1.2.3\n', code: 0 },
       { stdout: 'Usage: codex exec --json ... resume\n', code: 0 },
-      { stdout: 'Logged in\n', code: 0 },
+      { stdout: 'Logged in using ChatGPT\n', code: 0 },
     ];
     const adapter = new CodexCliAdapter({
       platform: 'linux',
