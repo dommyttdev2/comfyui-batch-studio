@@ -754,7 +754,8 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
     : preflightError
       ? {
           state: 'PREFLIGHT ERROR',
-          message: 'Preflightの状態を確認できません。エラー内容を確認し、Preflightを再試行してください。',
+          message:
+            'Preflightの状態を確認できません。エラー内容を確認し、Preflightを再試行してください。',
         }
       : runStatusError
         ? {
@@ -763,26 +764,26 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
           }
         : checking
           ? { state: 'CHECKING', message: 'Preflightを確認しています。' }
-      : preflight?.state !== 'READY'
-        ? {
-            state: preflight?.state ?? 'UNKNOWN',
-            message: current
-              ? 'Startには実行前チェックのREADYが必要です。前工程を変更した場合はワークフローを再生成し、実行前チェックを完了してください。'
-              : 'StartにはPreflight READYが必要です',
-          }
-        : active
-          ? current?.lifecycle === 'RUNNING'
+          : preflight?.state !== 'READY'
             ? {
-                state: 'RUN RUNNING',
-                message:
-                  '生成中です。「一時停止」は現在の画像の生成が完了した後に停止します。新しいRunを開始する場合は現在のRunを破棄してください。',
+                state: preflight?.state ?? 'UNKNOWN',
+                message: current
+                  ? 'Startには実行前チェックのREADYが必要です。前工程を変更した場合はワークフローを再生成し、実行前チェックを完了してください。'
+                  : 'StartにはPreflight READYが必要です',
               }
-            : {
-                state: `RUN ${current?.lifecycle ?? 'ACTIVE'}`,
-                message:
-                  '既存Runは未完了です。生成を続ける場合は「再開」、新しいRunを開始する場合は「現在のRunを破棄」を使用してください。',
-              }
-          : { state: 'READY', message: 'Start可能です' };
+            : active
+              ? current?.lifecycle === 'RUNNING'
+                ? {
+                    state: 'RUN RUNNING',
+                    message:
+                      '生成中です。「一時停止」は現在の画像の生成が完了した後に停止します。新しいRunを開始する場合は現在のRunを破棄してください。',
+                  }
+                : {
+                    state: `RUN ${current?.lifecycle ?? 'ACTIVE'}`,
+                    message:
+                      '既存Runは未完了です。生成を続ける場合は「再開」、新しいRunを開始する場合は「現在のRunを破棄」を使用してください。',
+                  }
+              : { state: 'READY', message: 'Start可能です' };
   if (outputUncollected)
     startBanner = {
       state: 'OUTPUT RECOVERY REQUIRED',
