@@ -39,6 +39,17 @@ matchCode(menuUi, /︙/);
 matchCode(menuUi, /この工程からリセット/);
 matchCode(menuUi, /保持されます/);
 matchCode(menuUi, /リセットされます/);
+matchCode(
+  menuUi,
+  /if\(busyRef\.current\)return/,
+  'busy Escape/cancel must not dismiss an active reset',
+);
+matchCode(menuUi, /if\(busy\)return/, 'double-click reset submission must remain single-flight');
+matchCode(
+  menuUi,
+  /setConfirming\(false\)[\s\S]*restoreTriggerFocus\(\)/,
+  'successful or cancelled reset must restore focus to the originating trigger',
+);
 doesNotMatchCode(
   menuUi,
   /window\.(?:confirm|prompt)/,
