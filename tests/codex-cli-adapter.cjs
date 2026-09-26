@@ -358,6 +358,30 @@ function task(root, workspace = true) {
   }
 
   {
+    const queued = [
+      { stdout: 'codex-cli 1.2.3\\n', code: 0 },
+      { stdout: 'Usage: codex exec --json ... resume\\n', code: 0 },
+      { stdout: 'Logged in using an API key - sk-***1234\\n', code: 0 },
+    ];
+    const adapter = new CodexCliAdapter({
+      platform: 'linux',
+      spawnProcess: () => {
+        const child = new FakeChild(750 + queued.length);
+        const response = queued.shift();
+        queueMicrotask(() => {
+          if (response.stdout) child.stdout.write(response.stdout);
+          child.close(response.code);
+        });
+        return child;
+      },
+    });
+    const availability = await adapter.checkAvailability();
+    assert.equal(availability.state, 'unauthenticated');
+    assert.match(availability.message, /ChatGPTアカウント/);
+    assert.doesNotMatch(availability.message, /sk-/);
+  }
+
+  {
     const calls = [];
     const child = new FakeChild(800);
     const adapter = new CodexCliAdapter({
