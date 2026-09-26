@@ -377,6 +377,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
       for (const event of normalized.events) onEvent(event);
       if (normalized.terminal === 'failed') {
         fail(new Error(normalized.error || 'Codex CLI turn failed.'), false);
+        void this.killProcessTree(child);
         return;
       }
       if (normalized.terminal === 'completed') running.terminal = true;
