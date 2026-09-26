@@ -2023,7 +2023,10 @@ function forwardCodexCliEvent(
     codexCliActiveTurnIds.delete(threadId);
     forwardCodexNotification({
       method: 'turn/completed',
-      params: { threadId, turn: { id: turnId, status: 'failed' } },
+      params: {
+        threadId,
+        turn: { id: turnId, status: 'failed', error: { message: event.error } },
+      },
     });
     return;
   }
