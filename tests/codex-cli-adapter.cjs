@@ -91,11 +91,9 @@ function task(root, workspace = true) {
 }
 
 (async () => {
-  const {
-    CodexCliAdapter,
-    CodexCliResumeMismatchError,
-    AgentTurnCancelledError,
-  } = await import(pathToFileURL(path.join(runtime, 'main', 'codex-cli-adapter.js')).href);
+  const { CodexCliAdapter, CodexCliResumeMismatchError, AgentTurnCancelledError } = await import(
+    pathToFileURL(path.join(runtime, 'main', 'codex-cli-adapter.js')).href
+  );
 
   {
     const children = [];
@@ -232,11 +230,16 @@ function task(root, workspace = true) {
     });
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-cli-mismatch-'));
     const events = [];
-    const start = adapter.resumeTask('session-old', task(root, false), (event) => events.push(event));
+    const start = adapter.resumeTask('session-old', task(root, false), (event) =>
+      events.push(event),
+    );
     children[0].line({ type: 'thread.started', thread_id: 'session-new' });
     await assert.rejects(start, CodexCliResumeMismatchError);
     assert.equal(killed, 1);
-    assert.equal(events.some((event) => event.type === 'session.started'), false);
+    assert.equal(
+      events.some((event) => event.type === 'session.started'),
+      false,
+    );
   }
 
   {
@@ -284,10 +287,7 @@ function task(root, workspace = true) {
     children[0].line({ type: 'thread.started', thread_id: 'session-malformed' });
     await start;
     children[0].raw('{not-json}\n');
-    await assert.rejects(
-      adapter.waitForCompletion('malformed-turn'),
-      /不正なJSONL/,
-    );
+    await assert.rejects(adapter.waitForCompletion('malformed-turn'), /不正なJSONL/);
   }
 
   {
@@ -382,7 +382,9 @@ function task(root, workspace = true) {
     await adapter.waitForCompletion('windows-turn');
   }
 
-  console.log('Codex CLI JSONL, resume guard, cancellation, probes and argument safety tests passed.');
+  console.log(
+    'Codex CLI JSONL, resume guard, cancellation, probes and argument safety tests passed.',
+  );
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;
