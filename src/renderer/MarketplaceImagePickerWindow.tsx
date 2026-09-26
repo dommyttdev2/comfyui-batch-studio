@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
-import type {
-  FinalArtifactImageItem,
-  MarketplacePickerContext,
-} from '../shared/types';
+import type { FinalArtifactImageItem, MarketplacePickerContext } from '../shared/types';
 import { ImagePickerGrid } from './ImagePickerGrid';
 import type { ImagePickerProvider } from './ImagePickerGrid';
 import './thumbnail-stage.css';
@@ -43,7 +40,11 @@ export function MarketplaceImagePickerWindow() {
     commit: (path) => window.batchStudio.marketplace.commitPicker(path),
     readPreview: (item) =>
       context
-        ? window.batchStudio.marketplace.readSourcePreview(context.root, item.path, context.sourceType)
+        ? window.batchStudio.marketplace.readSourcePreview(
+            context.root,
+            item.path,
+            context.sourceType,
+          )
         : Promise.resolve(null),
     persistWebpPreview: (path, dataUrl) =>
       window.batchStudio.thumbnail.storeWebpPreview(path, dataUrl),
