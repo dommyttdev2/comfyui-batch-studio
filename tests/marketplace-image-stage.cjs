@@ -19,6 +19,10 @@ const picker = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'MarketplaceImagePickerWindow.tsx'),
   'utf8',
 );
+const sharedPicker = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'ImagePickerGrid.tsx'),
+  'utf8',
+);
 const service = fs.readFileSync(
   path.join(repo, 'src', 'main', 'marketplace-image-service.ts'),
   'utf8',
@@ -162,8 +166,8 @@ matchCode(
 );
 matchCode(
   picker,
-  /marketplace\.readSourcePreview\(root, item\.path, sourceType\)/,
-  'preview must validate its source type',
+  /marketplace\.readSourcePreview\(context\.root, item\.path, context\.sourceType\)/,
+  'marketplace provider must validate the selected source type',
 );
 matchCode(picker, /marketplace\.previewPicker/, 'first picker click must preview the image');
 matchCode(picker, /marketplace[\s\S]*commitPicker/, 'second picker click must commit the image');
@@ -256,9 +260,14 @@ matchCode(
   'gallery cache key must invalidate replacement images',
 );
 matchCode(
+  sharedPicker,
+  /data:image\/webp;[\s\S]*persistWebpPreview\?\.\(item\.path, dataUrl\)/,
+  'shared picker must convert WebP fallback previews lazily',
+);
+matchCode(
   picker,
-  /data:image\/webp;base64,[\s\S]*storeWebpPreview\(item\.path, dataUrl\)/,
-  'WebP fallback must persist a resized preview for subsequent pickers',
+  /persistWebpPreview:[\s\S]*storeWebpPreview\(path, dataUrl\)/,
+  'marketplace provider must persist resized WebP previews for subsequent pickers',
 );
 matchCode(
   main,
@@ -267,9 +276,14 @@ matchCode(
 );
 
 matchCode(
+  sharedPicker,
+  /<VirtualPickerGrid[\s\S]*items=\{session\.filteredItems\}[\s\S]*renderItem=/,
+  'both pickers must render virtual rows through the shared grid',
+);
+matchCode(
   picker,
-  /<VirtualPickerGrid[\s\S]*items=\{filteredItems\}[\s\S]*renderItem=/,
-  'marketplace picker must render only virtual rows while preserving selection callbacks',
+  /<ImagePickerGrid[\s\S]*provider=\{provider\}/,
+  'marketplace picker must delegate rendering and selection state to the shared picker',
 );
 
 matchCode(
