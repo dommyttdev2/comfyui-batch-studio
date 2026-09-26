@@ -86,7 +86,10 @@ assert.match(source('src/main/agent-cli-adapter.ts'), /export interface AgentCli
   assert.notEqual(grokWorkspace.directory, codexWorkspace.directory);
   assert.deepEqual(fs.readdirSync(grokWorkspace.inputDirectory), ['1-story.md', '2-models.json']);
   assert.match(agentWorkspaceOutputInstruction(grokWorkspace), /output\/prompt_plan\.json/);
-  assert.match(agentWorkspaceOutputInstruction(grokWorkspace), /input\/ 内の参照ファイルは読み取り専用/);
+  assert.match(
+    agentWorkspaceOutputInstruction(grokWorkspace),
+    /input\/ 内の参照ファイルは読み取り専用/,
+  );
 
   await assert.rejects(
     readAgentWorkspaceOutput(grokWorkspace),
@@ -95,12 +98,7 @@ assert.match(source('src/main/agent-cli-adapter.ts'), /export interface AgentCli
   fs.writeFileSync(grokWorkspace.outputPath, '{"schemaVersion":2}');
   assert.equal(await readAgentWorkspaceOutput(grokWorkspace), '{"schemaVersion":2}');
 
-  await rememberAgentWorkspace(
-    projectA,
-    grokWorkspace,
-    'grok-session-1',
-    'grok-turn-1',
-  );
+  await rememberAgentWorkspace(projectA, grokWorkspace, 'grok-session-1', 'grok-turn-1');
   const restored = await findAgentWorkspace(
     projectA,
     userData,
@@ -136,7 +134,10 @@ assert.match(source('src/main/agent-cli-adapter.ts'), /export interface AgentCli
   );
 
   fs.unlinkSync(grokWorkspace.outputPath);
-  fs.symlinkSync(path.join(grokWorkspace.inputDirectory, '2-models.json'), grokWorkspace.outputPath);
+  fs.symlinkSync(
+    path.join(grokWorkspace.inputDirectory, '2-models.json'),
+    grokWorkspace.outputPath,
+  );
   await assert.rejects(readAgentWorkspaceOutput(grokWorkspace), /通常のファイルではない/);
 
   console.log('Common agent session, workspace, event IPC and adapter contracts passed.');
