@@ -155,6 +155,7 @@ const I = {
   CLIPBOARD_WRITE_TEXT: 'clipboard:write-text',
   ASSISTANT_GET_PROVIDER: 'assistant:get-provider',
   ASSISTANT_SET_PROVIDER: 'assistant:set-provider',
+  AGENT_EVENT: 'agent:event',
   CODEX_GET_PROVIDER: 'codex:get-provider',
   CODEX_SET_PROVIDER: 'codex:set-provider',
   CODEX_SET_CONTEXT: 'codex:set-context',
@@ -416,6 +417,11 @@ contextBridge.exposeInMainWorld('batchStudio', {
   assistant: {
     getProvider: (stage) => ipcRenderer.invoke(I.ASSISTANT_GET_PROVIDER, stage),
     setProvider: (provider, stage) => ipcRenderer.invoke(I.ASSISTANT_SET_PROVIDER, provider, stage),
+    onEvent: (listener) => {
+      const handler = (_event, agentEvent) => listener(agentEvent);
+      ipcRenderer.on(I.AGENT_EVENT, handler);
+      return () => ipcRenderer.removeListener(I.AGENT_EVENT, handler);
+    },
   },
   codex: {
     getProvider: (stage) => ipcRenderer.invoke(I.CODEX_GET_PROVIDER, stage),
