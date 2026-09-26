@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { nativeImage } from 'electron';
 import type { ThumbnailImageSource } from '../shared/types.js';
 import { readOrientedNativeImage } from './image-pipeline.js';
 import { encodedImageDimensions } from './image-dimensions.js';
+import { ThumbnailCachePruner } from './thumbnail-cache-prune.js';
 
 export type ThumbnailCacheVariant = 'editor' | 'gallery';
 export type ThumbnailCacheTiming = {
@@ -22,6 +23,8 @@ const MAX_EDGE: Record<ThumbnailCacheVariant, number> = { editor: 2048, gallery:
 const LIMIT_BYTES = 512 * 1024 * 1024;
 const MAX_CONCURRENT = 2;
 const pending = new Map<string, Promise<ThumbnailImageSource | null>>();
+const protectedCacheFiles = new Set<string>();
+const pruner = new ThumbnailCachePruner(LIMIT_BYTES);
 const queue: Array<() => void> = [];
 let active = 0;
 let completed = 0;
@@ -93,24 +96,20 @@ function toSource(
   };
 }
 
-async function pruneCache(root: string) {
-  const base = path.join(root, 'cache', 'thumbnail-images', 'v1');
-  const files: Array<{ path: string; size: number; mtimeMs: number }> = [];
-  for (const variant of ['editor', 'gallery']) {
-    const directory = path.join(base, variant);
-    const entries = await readdir(directory).catch(() => [] as string[]);
-    for (const name of entries) {
-      const file = path.join(directory, name);
-      const info = await stat(file).catch(() => null);
-      if (info?.isFile()) files.push({ path: file, size: info.size, mtimeMs: info.mtimeMs });
-    }
-  }
-  let total = files.reduce((sum, file) => sum + file.size, 0);
-  for (const file of files.sort((a, b) => a.mtimeMs - b.mtimeMs)) {
-    if (total <= LIMIT_BYTES) break;
-    await rm(file.path, { force: true }).catch(() => undefined);
-    total -= file.size;
-  }
+function cacheRoot(root: string) {
+  return path.join(root, 'cache', 'thumbnail-images', 'v1');
+}
+
+function isCacheFileProtected(file: string) {
+  return pending.has(file) || protectedCacheFiles.has(file);
+}
+
+function scheduleCachePrune(root: string) {
+  pruner.schedule(cacheRoot(root), isCacheFileProtected);
+}
+
+export function thumbnailCachePruneMetrics(root: string) {
+  return pruner.snapshot(cacheRoot(root));
 }
 
 export async function readCachedThumbnailImage(
@@ -127,15 +126,20 @@ export async function readCachedThumbnailImage(
   const mime = jpeg ? 'image/jpeg' : 'image/png';
   const target = cacheFile(userDataRoot, variant, key, extension);
   const readStarted = performance.now();
-  const cached = await readFile(target).catch(() => null);
-  if (timing) timing.diskReadMs = performance.now() - readStarted;
-  if (cached) {
-    const size = cachedDimensions(cached, variant);
-    if (size) {
-      if (timing) timing.hit = true;
-      return toSource(resolved, cached, mime, key, size.width, size.height);
+  protectedCacheFiles.add(target);
+  try {
+    const cached = await readFile(target).catch(() => null);
+    if (timing) timing.diskReadMs = performance.now() - readStarted;
+    if (cached) {
+      const size = cachedDimensions(cached, variant);
+      if (size) {
+        if (timing) timing.hit = true;
+        return toSource(resolved, cached, mime, key, size.width, size.height);
+      }
+      await rm(target, { force: true }).catch(() => undefined);
     }
-    await rm(target, { force: true }).catch(() => undefined);
+  } finally {
+    protectedCacheFiles.delete(target);
   }
   const existing = pending.get(target);
   if (existing) {
@@ -210,7 +214,7 @@ export async function readCachedThumbnailImage(
       timing.hit = false;
       timing.writeMs = performance.now() - writeStarted;
     }
-    if (++completed % 32 === 0) void pruneCache(userDataRoot).catch(() => undefined);
+    if (++completed % 32 === 0) scheduleCachePrune(userDataRoot);
     return toSource(resolved, bytes, mime, key, size.width, size.height);
   });
   pending.set(target, job);
@@ -239,10 +243,12 @@ export async function storeWebpThumbnailPreview(
   const target = cacheFile(userDataRoot, 'gallery', before.key, 'png');
   await mkdir(path.dirname(target), { recursive: true });
   const temp = `${target}.${randomUUID()}.tmp`;
+  protectedCacheFiles.add(target);
   try {
     await writeFile(temp, bytes);
     await rename(temp, target);
   } finally {
+    protectedCacheFiles.delete(target);
     await rm(temp, { force: true }).catch(() => undefined);
   }
 }
