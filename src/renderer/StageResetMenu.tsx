@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './stage-reset.css';
 
 export type ResetScope =
@@ -79,7 +79,50 @@ export function StageResetMenu({
     [confirming, setConfirming] = useState(false),
     [busy, setBusy] = useState(false),
     [resetError, setResetError] = useState('');
+  const triggerRef = useRef<HTMLButtonElement>(null),
+    menuItemRef = useRef<HTMLButtonElement>(null),
+    dialogRef = useRef<HTMLDialogElement>(null),
+    cancelRef = useRef<HTMLButtonElement>(null),
+    errorRef = useRef<HTMLDivElement>(null),
+    busyRef = useRef(false);
+  busyRef.current = busy;
   const copy = COPY[scope];
+
+  const restoreTriggerFocus = () => {
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+  const cancelConfirmation = () => {
+    if (busyRef.current) return;
+    setResetError('');
+    setConfirming(false);
+    restoreTriggerFocus();
+  };
+
+  useEffect(() => {
+    if (menu) menuItemRef.current?.focus();
+  }, [menu]);
+
+  useEffect(() => {
+    if (!resetError) return;
+    errorRef.current?.focus();
+  }, [resetError]);
+
+  useEffect(() => {
+    if (!confirming) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (!dialog.open) dialog.showModal();
+    requestAnimationFrame(() => cancelRef.current?.focus());
+    const cancel = (event: Event) => {
+      event.preventDefault();
+      cancelConfirmation();
+    };
+    dialog.addEventListener('cancel', cancel);
+    return () => {
+      dialog.removeEventListener('cancel', cancel);
+      if (dialog.open) dialog.close();
+    };
+  }, [confirming]);
   const execute = async () => {
     if (busy) return;
     setResetError('');
@@ -88,6 +131,7 @@ export function StageResetMenu({
       await onReset(scope);
       setConfirming(false);
       setMenu(false);
+      restoreTriggerFocus();
     } catch (cause) {
       setResetError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -98,18 +142,41 @@ export function StageResetMenu({
     <>
       <div className="stage-reset-menu">
         <button
+          ref={triggerRef}
           type="button"
           className="stage-reset-trigger"
           aria-label={`${copy.title}のメニュー`}
           aria-expanded={menu}
+          aria-haspopup="menu"
           onClick={() => setMenu((v) => !v)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              setMenu(true);
+            } else if (event.key === 'Escape' && menu) {
+              event.preventDefault();
+              setMenu(false);
+            }
+          }}
         >
           ︙
         </button>
         {menu && (
-          <div className="stage-reset-popover">
+          <div
+            className="stage-reset-popover"
+            role="menu"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setMenu(false);
+                restoreTriggerFocus();
+              }
+            }}
+          >
             <button
+              ref={menuItemRef}
               type="button"
+              role="menuitem"
               onClick={() => {
                 setResetError('');
                 setConfirming(true);
@@ -122,11 +189,39 @@ export function StageResetMenu({
         )}
       </div>
       {confirming && (
-        <div
+        <dialog
+          ref={dialogRef}
           className="modal stage-reset-modal"
-          role="dialog"
           aria-modal="true"
           aria-labelledby={`reset-title-${scope}`}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              cancelConfirmation();
+              return;
+            }
+            if (event.key !== 'Tab') return;
+            const dialog = dialogRef.current;
+            if (!dialog) return;
+            const focusable = Array.from(
+              dialog.querySelectorAll<HTMLElement>(
+                'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+              ),
+            ).filter((element) => !element.hasAttribute('hidden'));
+            if (!focusable.length) {
+              event.preventDefault();
+              return;
+            }
+            const first = focusable[0],
+              last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first.focus();
+            }
+          }}
         >
           <div className="modalcard">
             <h2 id={`reset-title-${scope}`}>{copy.title}</h2>
@@ -151,7 +246,13 @@ export function StageResetMenu({
             </div>
             {copy.note && <p className="stage-reset-note">{copy.note}</p>}
             {resetError && (
-              <div className="stage-reset-error" role="alert" aria-live="assertive">
+              <div
+                ref={errorRef}
+                className="stage-reset-error"
+                role="alert"
+                aria-live="assertive"
+                tabIndex={-1}
+              >
                 <strong>リセットできませんでした</strong>
                 <p>{resetError}</p>
                 <p>{resetRecoveryHint(resetError)}</p>
@@ -162,14 +263,7 @@ export function StageResetMenu({
               に退避します。
             </p>
             <div className="actions">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setResetError('');
-                  setConfirming(false);
-                }}
-              >
+              <button ref={cancelRef} type="button" disabled={busy} onClick={cancelConfirmation}>
                 キャンセル
               </button>
               <button
@@ -182,7 +276,7 @@ export function StageResetMenu({
               </button>
             </div>
           </div>
-        </div>
+        </dialog>
       )}
     </>
   );
