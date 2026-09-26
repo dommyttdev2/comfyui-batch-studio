@@ -517,6 +517,8 @@ export async function exportCustomMarketplaceImage(
   webpDataUrl?: string,
   sourcePngDataUrl?: string,
 ): Promise<MarketplaceGenerationResult> {
+  const requested = await normalizeMarketplaceImageState(value);
+  assertOutputDimensions(requested.custom.width, requested.custom.height);
   const state = await saveMarketplaceImageState(root, value);
   const { image, size } = await loadSource(
     root,
@@ -532,7 +534,6 @@ export async function exportCustomMarketplaceImage(
     state.custom.height,
   );
   const extension = FORMAT_EXTENSIONS[state.format];
-  assertOutputDimensions(state.custom.width, state.custom.height);
   const outputDirectory = path.join(await marketplaceOutputDirectory(root), 'custom');
   const customManifestPath = path.join(outputDirectory, '._custom-output.json');
   const previous = await readJson<{ fileName: string; size: number; sha256: string }>(

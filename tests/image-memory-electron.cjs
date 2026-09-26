@@ -15,9 +15,25 @@ app
     const pipeline = await import(pathToFileURL(path.join(root, 'main/image-pipeline.js')).href);
     const limitsPath = path.join(root, 'shared/image-size-limits.js');
     const limits = await import(pathToFileURL(limitsPath).href);
+    const marketplace = await import(
+      pathToFileURL(path.join(root, 'main/marketplace-image-service.js')).href
+    );
     const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'image-memory-electron-'));
     let window;
     try {
+      const state = await marketplace.createDefaultMarketplaceImageState();
+      await marketplace.saveMarketplaceImageState(temporary, state);
+      const editorFile = path.join(temporary, '._batch_studio/marketplace-images.json');
+      const editorBefore = await fs.readFile(editorFile, 'utf8');
+      await assert.rejects(
+        marketplace.exportCustomMarketplaceImage(temporary, {
+          ...state,
+          custom: { ...state.custom, width: 20000, height: 20000 },
+        }),
+        /作業メモリ/,
+      );
+      assert.equal(await fs.readFile(editorFile, 'utf8'), editorBefore);
+      assert.deepEqual(await fs.readdir(temporary), ['._batch_studio']);
       const bitmap = Buffer.alloc(2048 * 2048 * 4, 127);
       const fixture = nativeImage.createFromBitmap(bitmap, { width: 2048, height: 2048 });
       for (const [format, bytes] of [
