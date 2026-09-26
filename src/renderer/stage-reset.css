@@ -58,6 +58,17 @@
   font-size: 13px;
   opacity: 0.85;
 }
+.stage-reset-error {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid #b94a48;
+  border-radius: 10px;
+  background: color-mix(in srgb, #b94a48 12%, var(--panel));
+}
+.stage-reset-error p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
 .stage-reset-modal button.danger {
   border-color: #b94a48;
   color: #fff;
