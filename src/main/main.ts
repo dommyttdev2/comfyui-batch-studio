@@ -186,6 +186,7 @@ import {
 import {
   readCachedThumbnailImage,
   storeWebpThumbnailPreview,
+  thumbnailCachePruneMetrics,
   type ThumbnailCacheTiming,
 } from './thumbnail-image-cache.js';
 import {
@@ -3784,6 +3785,14 @@ function register() {
           sourceWidth: source?.width ?? 0,
           sourceHeight: source?.height ?? 0,
         };
+        const prune = thumbnailCachePruneMetrics(app.getPath('userData'));
+        details.pruneRequests = prune.requests;
+        details.pruneRuns = prune.runs;
+        details.pruneCoalesced = prune.coalesced;
+        details.pruneDeleted = prune.filesDeleted;
+        details.pruneFailures = prune.deleteFailures;
+        details.pruneLastMs = prune.lastDurationMs;
+        details.pruneLastBytesAfter = prune.lastBytesAfter;
         for (const [key, value] of Object.entries(timing)) {
           if (typeof value === 'number' || typeof value === 'boolean') details[key] = value;
         }
