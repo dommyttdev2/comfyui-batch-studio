@@ -2390,6 +2390,114 @@ async function codexChooseModel(
   await codexModelSelections.remember(context.root, context.stage, requested);
   return requested;
 }
+function defaultTaskStage(context: GrokContextStage): GrokTask['stage'] {
+  if (context === 'story') return 'story-initial';
+  if (context === 'models') return 'models';
+  if (context === 'prompt-plan') return 'prompt-plan';
+  return 'caption';
+}
+
+async function codexSendViaCli(
+  state: ProjectWindowState,
+  message: string,
+  artifactStage?: GrokTask['stage'],
+  workspace?: AgentWorkspace,
+): Promise<CodexSendResult> {
+  const context = codexContextFor(state);
+  const input = message.trim();
+  if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
+  const { adapter, sessions, legacyStore } = codexCliService();
+  const availability = await adapter.checkAvailability();
+  if (availability.state !== 'available')
+    throw new Error(availability.message ?? 'Codex CLIを利用できません。');
+
+  const settings = await codexModelSettings(context);
+  const saved = await legacyStore.get(context.root, context.stage);
+  const existingThreadId = saved.activeThreadId;
+  if (existingThreadId && codexBusy.has(existingThreadId))
+    throw new Error('このチャットは回答生成中です。');
+
+  let observedThreadId: string | null = existingThreadId;
+  let ready = false;
+  const queued: AgentEvent[] = [];
+  const dispatch = (event: AgentEvent) => {
+    if (event.type === 'session.started') {
+      observedThreadId = event.sessionId;
+      notifyAgentEvent(context, event);
+      return;
+    }
+    if (!ready) {
+      queued.push(event);
+      return;
+    }
+    if (!observedThreadId) return;
+    const activeTurnId = codexCliActiveTurnIds.get(observedThreadId);
+    if (activeTurnId) forwardCodexCliEvent(context, observedThreadId, activeTurnId, event);
+    else notifyAgentEvent(context, event);
+  };
+  const request = {
+    context,
+    taskStage: artifactStage ?? defaultTaskStage(context.stage),
+    prompt: input,
+    extra: '',
+    ...(workspace ? { workspace } : {}),
+    model: {
+      model: settings.selection.model,
+      reasoningEffort: settings.selection.effort,
+    },
+  };
+  const turn = existingThreadId
+    ? await adapter.resumeTask(existingThreadId, request, dispatch)
+    : await adapter.startTask(request, dispatch);
+  const threadId = turn.sessionId;
+  observedThreadId = threadId;
+
+  await Promise.all([
+    legacyStore.remember(context.root, context.stage, threadId),
+    sessions.remember(context.root, context.stage, 'codex', threadId),
+  ]);
+  stateCodexActiveThread.set(state.window.id, threadId);
+  codexBusy.add(threadId);
+  codexCliActiveTurnIds.set(threadId, turn.turnId);
+  codexTurnMonitor.sending(threadId);
+
+  const artifactFile = artifactStage ? expectedArtifact(artifactStage) : null;
+  if (artifactFile && artifactStage)
+    codexPendingArtifacts.set(threadId, {
+      root: context.root,
+      stage: artifactStage,
+      fileName: artifactFile,
+      workspace,
+    });
+  if (workspace)
+    await rememberAgentWorkspace(context.root, workspace, threadId, turn.turnId);
+
+  ready = true;
+  for (const event of queued.splice(0)) forwardCodexCliEvent(context, threadId, turn.turnId, event);
+
+  void adapter.waitForCompletion(turn.turnId).catch((error) => {
+    if (error instanceof AgentTurnCancelledError) return;
+    // Post-start failures are already projected as AgentEvent turn.failed by the adapter.
+    // This catch prevents an unhandled rejection while the event path remains authoritative.
+  });
+
+  return {
+    ...(await legacyStore.get(context.root, context.stage)),
+    status: codexTurnStatus(threadId),
+    artifact:
+      artifactFile && artifactStage
+        ? {
+            provider: 'codex',
+            root: context.root,
+            stage: artifactStage,
+            fileName: artifactFile,
+            sourceId: threadId,
+            phase: 'waiting',
+          }
+        : null,
+  };
+}
+
 async function codexSend(
   state: ProjectWindowState,
   message: string,
@@ -2399,6 +2507,17 @@ async function codexSend(
   const context = codexContextFor(state);
   const input = message.trim();
   if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
+  if (codexCliTransportEnabled()) {
+    const cliWorkspace: AgentWorkspace | undefined = workspace
+      ? {
+          ...workspace,
+          provider: 'codex',
+          inputDirectory: path.join(workspace.directory, 'input'),
+          outputDirectory: path.join(workspace.directory, 'output'),
+        }
+      : undefined;
+    return codexSendViaCli(state, input, artifactStage, cliWorkspace);
+  }
   const account = await codexAccount();
   if (!account.authenticated)
     throw new Error(
