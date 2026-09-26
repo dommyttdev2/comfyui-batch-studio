@@ -751,8 +751,18 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
         state: 'RECOVERY REQUIRED',
         message: `既存Prompt/Workerの状態が未確定のため、自動生成と再開を停止しています。「状態を再確認」は既存処理の確認のみ行い、新しいPromptを投入しません。Remoteの場合はVast.ai Instanceの課金状態も確認してください。`,
       }
-    : checking
-      ? { state: 'CHECKING', message: 'Preflightを確認しています。' }
+    : preflightError
+      ? {
+          state: 'PREFLIGHT ERROR',
+          message: 'Preflightの状態を確認できません。エラー内容を確認し、Preflightを再試行してください。',
+        }
+      : runStatusError
+        ? {
+            state: 'RUN MONITOR ERROR',
+            message: '現在のRun状態を確認できないため、新しいRunの開始と再開を停止しています。',
+          }
+        : checking
+          ? { state: 'CHECKING', message: 'Preflightを確認しています。' }
       : preflight?.state !== 'READY'
         ? {
             state: preflight?.state ?? 'UNKNOWN',
