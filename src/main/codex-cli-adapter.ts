@@ -243,12 +243,8 @@ export class CodexCliAdapter implements AgentCliAdapter {
   }
 
   async shutdown(): Promise<void> {
-    const active = [...this.turns.entries()].filter(([, turn]) => !turn.terminal);
-    await Promise.allSettled(
-      active.map(async ([turnId]) => {
-        await this.stop(turnId);
-      }),
-    );
+    const liveChildren = [...this.turns.values()].filter((turn) => turn.child.exitCode === null);
+    await Promise.allSettled(liveChildren.map((turn) => this.killProcessTree(turn.child)));
   }
 
   private buildArgs(task: AgentTaskRequest, requestedSessionId: string | null): string[] {
@@ -271,7 +267,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
     return args;
   }
 
-  private launch(
+  private async launch(
     task: AgentTaskRequest,
     requestedSessionId: string | null,
     onEvent: AgentEventSink,
@@ -397,7 +393,8 @@ export class CodexCliAdapter implements AgentCliAdapter {
       clearTimeout(startupTimer);
       rl.close();
       if (running.cancelled) {
-        if (!startSettled) {
+        const cancelledBeforeStart = !startSettled;
+        if (cancelledBeforeStart) {
           startSettled = true;
           rejectStart(new AgentTurnCancelledError());
         }
@@ -406,6 +403,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
           onEvent({ type: 'turn.cancelled', at: this.now(), turnId });
         }
         running.rejectCompletion(new AgentTurnCancelledError());
+        if (cancelledBeforeStart) this.turns.delete(turnId);
         return;
       }
       if (running.failed) return;
