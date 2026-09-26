@@ -294,6 +294,29 @@ function task(root, workspace = true) {
     const children = [];
     const adapter = new CodexCliAdapter({
       platform: 'linux',
+      createTurnId: () => 'prestart-failure-turn',
+      spawnProcess: () => {
+        const child = new FakeChild(450);
+        children.push(child);
+        return child;
+      },
+    });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-cli-prestart-failure-'));
+    const start = adapter.startTask(task(root, false), () => {});
+    children[0].stderr.write('startup failed');
+    children[0].close(1);
+    await assert.rejects(start, /startup failed/);
+    await assert.rejects(
+      adapter.waitForCompletion('prestart-failure-turn'),
+      /turnが見つかりません/,
+      'A turn that never exposed a session ID must not remain in the adapter map',
+    );
+  }
+
+  {
+    const children = [];
+    const adapter = new CodexCliAdapter({
+      platform: 'linux',
       createTurnId: () => 'exit-turn',
       spawnProcess: () => {
         const child = new FakeChild(500);
@@ -355,6 +378,36 @@ function task(root, workspace = true) {
       version: '1.2.3',
       message: null,
     });
+  }
+
+  {
+    const children = [];
+    let killed = 0;
+    let turnSequence = 0;
+    const adapter = new CodexCliAdapter({
+      platform: 'linux',
+      createTurnId: () => 'shutdown-turn-' + ++turnSequence,
+      spawnProcess: () => {
+        const child = new FakeChild(650 + children.length);
+        children.push(child);
+        return child;
+      },
+      killProcessTree: async (child) => {
+        killed++;
+        child.close(null, 'SIGTERM');
+      },
+    });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-cli-shutdown-'));
+    const first = adapter.startTask(task(root, false), () => {});
+    children[0].line({ type: 'thread.started', thread_id: 'shutdown-session-1' });
+    await first;
+    const second = adapter.startTask(task(root, false), () => {});
+    children[1].line({ type: 'thread.started', thread_id: 'shutdown-session-2' });
+    await second;
+    await adapter.shutdown();
+    assert.equal(killed, 2, 'shutdown must terminate every active CLI child');
+    await assert.rejects(adapter.waitForCompletion('shutdown-turn-1'), AgentTurnCancelledError);
+    await assert.rejects(adapter.waitForCompletion('shutdown-turn-2'), AgentTurnCancelledError);
   }
 
   {
