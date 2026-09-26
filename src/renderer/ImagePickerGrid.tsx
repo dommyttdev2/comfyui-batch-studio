@@ -202,11 +202,7 @@ export function ImagePickerGrid<TItem extends ImagePickerItem>({
             items={session.filteredItems}
             size={session.size}
             activePath={session.tentativePath || provider.currentImagePath}
-            onMetrics={
-              onMetrics
-                ? (visible, total) => onMetrics(visible, total, session.size)
-                : undefined
-            }
+            onMetrics={onMetrics ? (visible, total) => onMetrics(visible, total, session.size) : undefined}
             renderItem={(item) => (
               <ImagePickerChoice
                 provider={provider}
@@ -292,7 +288,9 @@ function ImagePickerChoice<TItem extends ImagePickerItem>({
               drawing.drawImage(image, 0, 0, canvas.width, canvas.height);
               const dataUrl = canvas.toDataURL('image/png');
               setPreview({ ...source, width: canvas.width, height: canvas.height, dataUrl });
-              void providerRef.current.persistWebpPreview?.(item.path, dataUrl).catch(() => undefined);
+              void providerRef.current
+                .persistWebpPreview?.(item.path, dataUrl)
+                .catch(() => undefined);
             };
             image.onerror = () => {
               if (!cancelled) setFailed(true);
