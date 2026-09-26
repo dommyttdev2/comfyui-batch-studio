@@ -260,6 +260,8 @@ export class CodexCliAdapter implements AgentCliAdapter {
       'approval_policy="never"',
       '--config',
       'sandbox_workspace_write.network_access=false',
+      '--config',
+      'web_search="disabled"',
     ];
     if (model) args.push('--model', model);
     if (effort) args.push('--config', `model_reasoning_effort="${effort}"`);
