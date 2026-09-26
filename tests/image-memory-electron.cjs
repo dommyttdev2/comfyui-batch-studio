@@ -39,6 +39,45 @@ app
       );
       assert.equal(await fs.readFile(editorFile, 'utf8'), editorBefore);
       assert.deepEqual(await fs.readdir(temporary), ['._batch_studio']);
+
+      const artifactRoot = path.join(temporary, 'artifacts');
+      const finalRoot = path.join(temporary, 'final');
+      await fs.mkdir(finalRoot, { recursive: true });
+      await fs.writeFile(
+        path.join(temporary, 'project_meta.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          createdAt: new Date().toISOString(),
+          settings: {
+            finalArtifactDirectory: finalRoot,
+            artifactOutputPath: artifactRoot,
+          },
+        }),
+      );
+      const oldCustomDirectory = path.join(artifactRoot, 'marketplace', 'custom');
+      await fs.mkdir(oldCustomDirectory, { recursive: true });
+      const oldCustomImage = path.join(oldCustomDirectory, 'custom-output.jpg');
+      const oldCustomManifest = path.join(oldCustomDirectory, '._custom-output.json');
+      const oldImageBytes = Buffer.from('existing-output');
+      const oldManifestBytes = Buffer.from(
+        JSON.stringify({
+          fileName: 'custom-output.jpg',
+          size: oldImageBytes.length,
+          sha256: '0'.repeat(64),
+        }),
+      );
+      await fs.writeFile(oldCustomImage, oldImageBytes);
+      await fs.writeFile(oldCustomManifest, oldManifestBytes);
+      await assert.rejects(
+        marketplace.exportCustomMarketplaceImage(temporary, {
+          ...state,
+          custom: { ...state.custom, width: 20000, height: 20000 },
+        }),
+        /作業メモリ/,
+      );
+      assert.deepEqual(await fs.readFile(oldCustomImage), oldImageBytes);
+      assert.deepEqual(await fs.readFile(oldCustomManifest), oldManifestBytes);
+
       const bitmap = Buffer.alloc(side * side * 4, 127);
       const fixture = nativeImage.createFromBitmap(bitmap, { width: side, height: side });
       for (const [format, bytes] of [
@@ -71,8 +110,49 @@ app
         );
       }
 
+      const normalizedPng = fixture.toPNG();
+      const normalizedDataUrl = `data:image/png;base64,${normalizedPng.toString('base64')}`;
+      const webpHeader = (width, height) => {
+        const bytes = Buffer.alloc(30);
+        bytes.write('RIFF', 0);
+        bytes.writeUInt32LE(22, 4);
+        bytes.write('WEBP', 8);
+        bytes.write('VP8X', 12);
+        bytes.writeUIntLE(width - 1, 24, 3);
+        bytes.writeUIntLE(height - 1, 27, 3);
+        return bytes;
+      };
+      const mismatchWebp = path.join(finalRoot, 'mismatch.webp');
+      await fs.writeFile(mismatchWebp, webpHeader(side + 1, side));
+      await assert.rejects(
+        marketplace.renderMarketplacePng(
+          temporary,
+          mismatchWebp,
+          { x: 0, y: 0, width: side, height: side },
+          560,
+          420,
+          normalizedDataUrl,
+          'final-artifact',
+        ),
+        /寸法.*一致しません/,
+      );
+      const giantWebp = path.join(finalRoot, 'giant.webp');
+      await fs.writeFile(giantWebp, webpHeader(20000, 20000));
+      await assert.rejects(
+        marketplace.renderMarketplacePng(
+          temporary,
+          giantWebp,
+          { x: 0, y: 0, width: side, height: side },
+          560,
+          420,
+          normalizedDataUrl,
+          'final-artifact',
+        ),
+        /作業メモリ/,
+      );
+
       // Header rejection must happen before native decoding, with no writes.
-      const giant = Buffer.from(fixture.toPNG());
+      const giant = Buffer.from(normalizedPng);
       giant.writeUInt32BE(20000, 16);
       giant.writeUInt32BE(20000, 20);
       const giantFile = path.join(temporary, 'giant.png');
