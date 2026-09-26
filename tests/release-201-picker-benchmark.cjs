@@ -364,7 +364,8 @@ async function runPickerWindow(count, dataUrls, interact) {
       }
       const previewed = events.filter((event) => event.kind === 'preview').length > beforePreview;
       const committed = events.filter((event) => event.kind === 'commit').length > beforeCommit;
-      result.interactionOk = Boolean(selectedTitle) && selected === 'true' && previewed && committed;
+      result.interactionOk =
+        Boolean(selectedTitle) && selected === 'true' && previewed && committed;
 
       result.rssMB = Math.max(result.rssMB, rendererResidentSetMB(window));
       result.transferBytes = events
