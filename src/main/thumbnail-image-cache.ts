@@ -4,6 +4,7 @@ import path from 'node:path';
 import { nativeImage } from 'electron';
 import type { ThumbnailImageSource } from '../shared/types.js';
 import { readOrientedNativeImage } from './image-pipeline.js';
+import { encodedImageDimensions } from './image-dimensions.js';
 
 export type ThumbnailCacheVariant = 'editor' | 'gallery';
 export type ThumbnailCacheTiming = {
@@ -24,6 +25,21 @@ const pending = new Map<string, Promise<ThumbnailImageSource | null>>();
 const queue: Array<() => void> = [];
 let active = 0;
 let completed = 0;
+
+function cachedDimensions(bytes: Buffer, variant: ThumbnailCacheVariant) {
+  const header = encodedImageDimensions(bytes);
+  if (
+    !header ||
+    header.width < 1 ||
+    header.height < 1 ||
+    Math.max(header.width, header.height) > MAX_EDGE[variant]
+  )
+    return null;
+  const size = nativeImage.createFromBuffer(bytes).getSize();
+  return size.width > 0 && size.height > 0 && Math.max(size.width, size.height) <= MAX_EDGE[variant]
+    ? size
+    : null;
+}
 
 async function limited<T>(action: () => Promise<T>): Promise<T> {
   if (active >= MAX_CONCURRENT) await new Promise<void>((resolve) => queue.push(resolve));
@@ -114,8 +130,8 @@ export async function readCachedThumbnailImage(
   const cached = await readFile(target).catch(() => null);
   if (timing) timing.diskReadMs = performance.now() - readStarted;
   if (cached) {
-    const size = nativeImage.createFromBuffer(cached).getSize();
-    if (size.width && size.height) {
+    const size = cachedDimensions(cached, variant);
+    if (size) {
       if (timing) timing.hit = true;
       return toSource(resolved, cached, mime, key, size.width, size.height);
     }
@@ -137,8 +153,8 @@ export async function readCachedThumbnailImage(
     // Another request may have populated the file while queued.
     const already = await readFile(target).catch(() => null);
     if (already) {
-      const size = nativeImage.createFromBuffer(already).getSize();
-      if (size.width && size.height) {
+      const size = cachedDimensions(already, variant);
+      if (size) {
         if (timing) timing.hit = true;
         return toSource(resolved, already, mime, key, size.width, size.height);
       }
@@ -153,11 +169,11 @@ export async function readCachedThumbnailImage(
       image = oriented.image;
       width = oriented.width;
       height = oriented.height;
-    } catch {
+    } catch (error) {
       // Some Electron builds do not support WebP in nativeImage. The picker can
       // decode it in Chromium and store a resized preview via storeWebpThumbnailPreview.
       if (variant === 'gallery' && /\.webp$/i.test(resolved)) return null;
-      throw new Error('画像キャッシュを生成できませんでした。');
+      throw error instanceof Error ? error : new Error('画像キャッシュを生成できませんでした。');
     }
     const ratio = Math.min(1, MAX_EDGE[variant] / Math.max(width, height));
     const resizeStarted = performance.now();
@@ -216,10 +232,8 @@ export async function storeWebpThumbnailPreview(
   const bytes = Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64');
   if (!bytes.length || bytes.length > 4 * 1024 * 1024)
     throw new Error('Invalid WebP preview size.');
-  const decoded = nativeImage.createFromBuffer(bytes);
-  const size = decoded.getSize();
-  if (decoded.isEmpty() || Math.max(size.width, size.height) > 320)
-    throw new Error('Invalid WebP preview dimensions.');
+  const size = cachedDimensions(bytes, 'gallery');
+  if (!size) throw new Error('Invalid WebP preview dimensions.');
   const after = await sourceIdentity(file, 'gallery');
   if (before.key !== after.key) throw new Error('画像が処理中に変更されました。');
   const target = cacheFile(userDataRoot, 'gallery', before.key, 'png');

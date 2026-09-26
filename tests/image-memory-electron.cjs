@@ -18,6 +18,9 @@ app
     const marketplace = await import(
       pathToFileURL(path.join(root, 'main/marketplace-image-service.js')).href
     );
+    const cache = await import(
+      pathToFileURL(path.join(root, 'main/thumbnail-image-cache.js')).href
+    );
     const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'image-memory-electron-'));
     let window;
     try {
@@ -71,6 +74,16 @@ app
       giant.writeUInt32BE(20000, 20);
       const giantFile = path.join(temporary, 'giant.png');
       await fs.writeFile(giantFile, giant);
+      const webpFile = path.join(temporary, 'input.webp');
+      await fs.writeFile(webpFile, 'synthetic cache identity');
+      await assert.rejects(
+        cache.storeWebpThumbnailPreview(
+          temporary,
+          webpFile,
+          `data:image/png;base64,${giant.toString('base64')}`,
+        ),
+        /Invalid WebP preview dimensions/,
+      );
       const before = await fs.readdir(temporary);
       const rejectionStart = performance.now();
       await assert.rejects(pipeline.readOrientedNativeImage(giantFile), /作業メモリ/);
