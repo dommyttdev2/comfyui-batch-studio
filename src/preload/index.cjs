@@ -185,7 +185,7 @@ const I = {
   GROK_SET_DIVIDER_X: 'grok:set-divider-x',
   GROK_RELOAD: 'grok:reload',
   GROK_OPEN_EXTERNAL: 'grok:open-external',
-}
+};
 // END GENERATED IPC CHANNELS
 contextBridge.exposeInMainWorld('batchStudio', {
   appSettings: {
