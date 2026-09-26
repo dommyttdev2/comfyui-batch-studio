@@ -46,6 +46,8 @@ export class ThumbnailCachePruner {
     private readonly limitBytes: number,
     private readonly idleDelayMs = 250,
     private readonly retryDelayMs = 2_000,
+    private readonly removeFile: (file: string) => Promise<void> = (file) =>
+      rm(file, { force: true }),
   ) {}
 
   schedule(root: string, protect: (file: string) => boolean) {
@@ -76,12 +78,15 @@ export class ThumbnailCachePruner {
   async waitForIdleForTests(root: string) {
     const state = this.states.get(path.resolve(root));
     if (!state) return;
-    if (state.timer) {
-      clearTimeout(state.timer);
-      state.timer = null;
-      await this.run(path.resolve(root), state);
+    while (state.timer || state.running) {
+      if (state.timer) {
+        clearTimeout(state.timer);
+        state.timer = null;
+        await this.run(path.resolve(root), state);
+      } else if (state.running) {
+        await state.running;
+      }
     }
-    if (state.running) await state.running;
   }
 
   private state(root: string, protect: (file: string) => boolean) {
@@ -151,7 +156,7 @@ export class ThumbnailCachePruner {
         continue;
       }
       try {
-        await rm(file.path, { force: true });
+        await this.removeFile(file.path);
         total -= file.size;
         remaining--;
         state.metrics.filesDeleted++;
