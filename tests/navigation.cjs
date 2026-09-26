@@ -48,6 +48,31 @@ matchCode(
   'stage reset retry must remain single-flight and explicit',
 );
 matchCode(
+  resetMenuSource,
+  /dialog\.showModal\(\)[\s\S]*cancelRef\.current\?\.focus\(\)/,
+  'reset confirmation must use a modal top layer and initially focus the safe cancel action',
+);
+matchCode(
+  resetMenuSource,
+  /event\.key === 'Tab'[\s\S]*event\.shiftKey[\s\S]*last\.focus\(\)[\s\S]*first\.focus\(\)/,
+  'Tab and Shift+Tab must wrap inside the reset dialog',
+);
+matchCode(
+  resetMenuSource,
+  /event\.key === 'Escape'[\s\S]*cancelConfirmation\(\)[\s\S]*busyRef\.current/,
+  'Escape must use the busy-aware reset cancellation path',
+);
+matchCode(
+  resetMenuSource,
+  /aria-haspopup="menu"[\s\S]*role="menu"[\s\S]*role="menuitem"/,
+  'reset popover must expose menu semantics and keyboard state',
+);
+matchCode(
+  resetMenuSource,
+  /role="alert"[\s\S]*aria-live="assertive"[\s\S]*tabIndex=\{-1\}/,
+  'reset failures must be announced and programmatically focusable',
+);
+matchCode(
   appSource,
   /await window\.batchStudio\.artifact\.resetFrom\(project\.rootPath,scope\)[\s\S]*setProject\(next\)[\s\S]*setResetRevision/,
   'reset revision and project view may advance only after the reset succeeds',
