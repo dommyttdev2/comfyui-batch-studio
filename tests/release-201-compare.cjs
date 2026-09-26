@@ -48,8 +48,14 @@ for (const entry of [...before, ...after]) {
 }
 const before2000 = before.find((entry) => entry.count === 2000);
 const after2000 = after.find((entry) => entry.count === 2000);
-assert.ok(before2000.ui.mounted.p50 >= 1900, 'baseline must reproduce the non-virtualized 2000-item DOM');
-assert.ok(after2000.ui.mounted.p95 < 100, 'current picker must keep the mounted image count bounded');
+assert.ok(
+  before2000.ui.mounted.p50 >= 1900,
+  'baseline must reproduce the non-virtualized 2000-item DOM',
+);
+assert.ok(
+  after2000.ui.mounted.p95 < 100,
+  'current picker must keep the mounted image count bounded',
+);
 assert.ok(
   after2000.service.redisplay.p95 <= before2000.service.redisplay.p95 * 1.25,
   'shared cache/direct authorization must not regress 2000-item redisplay p95 materially',
