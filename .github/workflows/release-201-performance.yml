@@ -1,0 +1,78 @@
+name: Release 201 Performance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/release-201-picker-benchmark.cjs'
+      - 'tests/release-201-compare.cjs'
+      - '.github/workflows/release-201-performance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compare-picker-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+
+      - name: Prepare baseline worktree
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/release-201-before" 84f8e928ddb81edb20ee5bd04699fb5c62d9eec7
+          cp tests/release-201-picker-benchmark.cjs "$RUNNER_TEMP/release-201-before/tests/"
+
+      - name: Install and build baseline
+        working-directory: ${{ runner.temp }}/release-201-before
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Benchmark baseline
+        working-directory: ${{ runner.temp }}/release-201-before
+        env:
+          BATCH_STUDIO_RELEASE_201_LABEL: before
+          BATCH_STUDIO_RELEASE_201_COUNTS: 100,500,2000
+          BATCH_STUDIO_RELEASE_201_SAMPLES: 5
+          BATCH_STUDIO_RELEASE_201_OUTPUT: ${{ runner.temp }}/release-201-before.log
+        run: xvfb-run -a node_modules/.bin/electron --no-sandbox tests/release-201-picker-benchmark.cjs
+
+      - name: Install and build current
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Benchmark current
+        env:
+          BATCH_STUDIO_RELEASE_201_LABEL: after
+          BATCH_STUDIO_RELEASE_201_COUNTS: 100,500,2000
+          BATCH_STUDIO_RELEASE_201_SAMPLES: 5
+          BATCH_STUDIO_RELEASE_201_OUTPUT: ${{ runner.temp }}/release-201-after.log
+        run: xvfb-run -a node_modules/.bin/electron --no-sandbox tests/release-201-picker-benchmark.cjs
+
+      - name: Compare results
+        run: |
+          node tests/release-201-compare.cjs \
+            "$RUNNER_TEMP/release-201-before.log" \
+            "$RUNNER_TEMP/release-201-after.log" \
+            > "$RUNNER_TEMP/release-201-comparison.md"
+          cat "$RUNNER_TEMP/release-201-comparison.md"
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-201-performance
+          path: |
+            ${{ runner.temp }}/release-201-before.log
+            ${{ runner.temp }}/release-201-after.log
+            ${{ runner.temp }}/release-201-comparison.md
