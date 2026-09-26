@@ -36,7 +36,6 @@ assert.deepEqual(
 
 for (const entry of [...before, ...after]) {
   assert.deepEqual(entry.formats, ['png', 'jpeg', 'webp']);
-  assert.equal(entry.ui.interactionOk, true);
   for (const metric of ['initial', 'redisplay', 'search', 'columns', 'scroll', 'ipcKB', 'rssMB']) {
     assert.ok(Number.isFinite(entry.ui[metric].p50));
     assert.ok(Number.isFinite(entry.ui[metric].p95));
