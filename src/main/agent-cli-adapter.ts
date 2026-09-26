@@ -24,5 +24,6 @@ export interface AgentCliAdapter {
     onEvent: AgentEventSink,
   ): Promise<AgentTurn>;
 
+  waitForCompletion(turnId: string): Promise<void>;
   stop(turnId: string): Promise<void>;
 }
