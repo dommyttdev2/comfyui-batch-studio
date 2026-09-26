@@ -29,6 +29,11 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      - name: Image memory regression and measurements
+        run: |
+          node tests/image-memory-benchmark.cjs
+          xvfb-run -a node_modules/.bin/electron --no-sandbox tests/image-memory-electron.cjs
+          BATCH_STUDIO_IMAGE_TEST_SIDE=3584 xvfb-run -a node_modules/.bin/electron --no-sandbox tests/image-memory-electron.cjs
 
   windows-launcher-smoke:
     runs-on: windows-latest

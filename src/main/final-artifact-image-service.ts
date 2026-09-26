@@ -1,6 +1,8 @@
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import type { FinalArtifactImageItem, FinalArtifactImageSource } from '../shared/types.js';
+import { assertInputDimensions } from '../shared/image-size-limits.js';
+import { encodedImageDimensions } from './image-dimensions.js';
 import { getFinalArtifactStatus } from './final-artifact-service.js';
 import { readProjectMeta } from './project-meta.js';
 import { readOrientedNativeImage } from './image-pipeline.js';
@@ -89,6 +91,8 @@ export async function readImageSource(imagePath: string): Promise<FinalArtifactI
   try {
     if (extension === '.webp') {
       const bytes = await readFile(resolved);
+      const dimensions = encodedImageDimensions(bytes);
+      if (dimensions) assertInputDimensions(dimensions.width, dimensions.height, bytes.length);
       return {
         path: resolved,
         name: path.basename(resolved),
@@ -120,6 +124,8 @@ export async function readImagePreview(
   try {
     if (extension === '.webp') {
       const bytes = await readFile(resolved);
+      const dimensions = encodedImageDimensions(bytes);
+      if (dimensions) assertInputDimensions(dimensions.width, dimensions.height, bytes.length);
       return {
         path: resolved,
         name: path.basename(resolved),

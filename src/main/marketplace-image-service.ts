@@ -3,6 +3,8 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nativeImage } from 'electron';
+import { assertInputDimensions, assertOutputDimensions } from '../shared/image-size-limits.js';
+import { encodedImageDimensions } from './image-dimensions.js';
 import type {
   MarketplaceCropRect,
   MarketplaceGenerationResult,
@@ -304,7 +306,13 @@ function normalizedPngImage(dataUrl: string | undefined) {
   const bytes = Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64');
   if (!bytes.length || bytes.length > 200 * 1024 * 1024)
     throw new Error('WebP入力画像の正規化PNGデータが不正です。');
+  const dimensions = encodedImageDimensions(bytes);
+  if (dimensions) assertInputDimensions(dimensions.width, dimensions.height, bytes.length);
   const image = nativeImage.createFromBuffer(bytes);
+  if (!image.isEmpty()) {
+    const size = image.getSize();
+    assertInputDimensions(size.width, size.height, bytes.length);
+  }
   if (image.isEmpty()) throw new Error('WebP入力画像の正規化PNGを読み込めませんでした。');
   return image;
 }
@@ -357,8 +365,21 @@ async function loadSource(
   if (info.size > MAX_INPUT_BYTES) throw new Error('入力画像は100MB以下にしてください。');
 
   if (path.extname(resolved).toLowerCase() === '.webp') {
+    const sourceBytes = await readFile(resolved);
+    const sourceDimensions = encodedImageDimensions(sourceBytes);
+    if (sourceDimensions)
+      assertInputDimensions(sourceDimensions.width, sourceDimensions.height, sourceBytes.length);
     const image = normalizedPngImage(sourcePngDataUrl);
-    return { resolved, image, size: image.getSize() };
+    const normalizedSize = image.getSize();
+    if (
+      sourceDimensions &&
+      (sourceDimensions.width !== normalizedSize.width ||
+        sourceDimensions.height !== normalizedSize.height)
+    )
+      throw new Error(
+        `WebP入力画像の寸法 ${sourceDimensions.width}×${sourceDimensions.height}px と正規化画像 ${normalizedSize.width}×${normalizedSize.height}px が一致しません。画像を選択し直してください。`,
+      );
+    return { resolved, image, size: normalizedSize };
   }
 
   const oriented = await readOrientedNativeImage(resolved);
@@ -373,6 +394,8 @@ function webpBuffer(dataUrl: string | undefined) {
   if (!dataUrl || !dataUrl.startsWith('data:image/webp;base64,'))
     throw new Error('WebP画像データが不足しています。');
   const bytes = Buffer.from(dataUrl.slice('data:image/webp;base64,'.length), 'base64');
+  const dimensions = encodedImageDimensions(bytes);
+  if (dimensions) assertOutputDimensions(dimensions.width, dimensions.height);
   if (!bytes.length || bytes.length > 100 * 1024 * 1024)
     throw new Error('WebP画像データが不正です。');
   return bytes;
@@ -507,6 +530,8 @@ export async function exportCustomMarketplaceImage(
   webpDataUrl?: string,
   sourcePngDataUrl?: string,
 ): Promise<MarketplaceGenerationResult> {
+  const requested = await normalizeMarketplaceImageState(value);
+  assertOutputDimensions(requested.custom.width, requested.custom.height);
   const state = await saveMarketplaceImageState(root, value);
   const { image, size } = await loadSource(
     root,
@@ -647,6 +672,7 @@ export async function renderMarketplacePng(
 ) {
   const width = Math.round(finite(widthValue, 1, 1, 20000));
   const height = Math.round(finite(heightValue, 1, 1, 20000));
+  assertOutputDimensions(width, height);
   const { image, size } = await loadSource(root, sourceImagePath, sourcePngDataUrl, sourceType);
   const crop = clampCrop(cropValue, size.width, size.height, width, height);
   return renderLanczosCrop(image, crop, width, height).toDataURL();

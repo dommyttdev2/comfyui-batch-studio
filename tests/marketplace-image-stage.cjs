@@ -141,6 +141,11 @@ matchCode(
   'Main Process must decode normalized PNG for WebP source images',
 );
 matchCode(
+  service,
+  /path\.extname\(resolved\)\.toLowerCase\(\) === '\.webp'[\s\S]*readFile\(resolved\)[\s\S]*encodedImageDimensions[\s\S]*assertInputDimensions[\s\S]*sourceDimensions\.width !== normalizedSize\.width/,
+  'Main Process must validate the original WebP dimensions before accepting Renderer normalization',
+);
+matchCode(
   preload,
   /generate: \(r, s, w, p\)[\s\S]*renderPng: \(r, p, c, w, h, s, t\)/,
   'WebP normalization payload must cross preload explicitly',
