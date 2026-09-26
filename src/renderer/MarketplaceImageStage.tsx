@@ -9,7 +9,7 @@ import type {
   ProjectSummary,
 } from '../shared/types';
 import { MarketplacePickerGeneration } from '../shared/marketplace-picker-generation';
-import { assertOutputDimensions } from '../shared/image-size-limits';
+import { assertInputDimensions, assertOutputDimensions } from '../shared/image-size-limits';
 import { useEditorAutosave } from './use-editor-autosave';
 import type { Runner } from './ui';
 import './marketplace-image-stage.css';
@@ -77,7 +77,14 @@ function normalizeCrop(
 function loadBrowserImage(source: FinalArtifactImageSource) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
-    image.onload = () => resolve(image);
+    image.onload = () => {
+      try {
+        assertInputDimensions(image.naturalWidth, image.naturalHeight);
+        resolve(image);
+      } catch (error) {
+        reject(error);
+      }
+    };
     image.onerror = () => reject(new Error(`${source.name} をプレビューできませんでした。`));
     image.src = source.dataUrl;
   });
@@ -93,6 +100,7 @@ function browserSizedSource(source: FinalArtifactImageSource, image: HTMLImageEl
 
 function normalizedWebpSourcePng(source: FinalArtifactImageSource, image: HTMLImageElement) {
   if (!source.path.toLocaleLowerCase().endsWith('.webp')) return undefined;
+  assertInputDimensions(source.width, source.height);
   const canvas = document.createElement('canvas');
   canvas.width = source.width;
   canvas.height = source.height;
@@ -658,6 +666,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
       setSizeError('');
     } catch (error) {
       setSizeError(error instanceof Error ? error.message : String(error));
+      return;
     }
     const custom = {
       ...state.custom,
@@ -670,6 +679,7 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
 
   const applyPreset = (width: number, height: number) => {
     if (!state) return;
+    setSizeError('');
     setState({
       ...state,
       custom: {
@@ -710,7 +720,9 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         sourcePngDataUrl,
       );
       setLastPath(result.outputPaths.at(-1) ?? result.outputDirectory);
-      setNotice(`4種類を生成しました: ${result.outputDirectory}`);
+      setNotice(
+        `4種類を生成しました: ${result.outputDirectory}${result.cleanupWarning ? ` / 旧ファイル: ${result.cleanupWarning}` : ''}`,
+      );
     });
 
   const generateZip = () =>
@@ -755,7 +767,9 @@ export function MarketplaceImageStage({ project, run }: { project: ProjectSummar
         sourcePngDataUrl,
       );
       setLastPath(result.outputPaths[0] ?? result.outputDirectory);
-      setNotice(`カスタム画像を生成しました: ${result.outputPaths[0]}`);
+      setNotice(
+        `カスタム画像を生成しました: ${result.outputPaths[0]}${result.cleanupWarning ? ` / 旧ファイル: ${result.cleanupWarning}` : ''}`,
+      );
     });
 
   if (!state || !finalArtifact)

@@ -63,9 +63,12 @@ function jpegWithOrientation(orientation) {
     const { encodedImageDimensions } = await import(
       pathToFileURL(path.join(compiled, 'main', 'image-dimensions.js')).href
     );
-    const { assertInputDimensions, assertOutputDimensions, assertRenderBudget } = await import(
-      pathToFileURL(path.join(compiled, 'shared', 'image-size-limits.js')).href
-    );
+    const {
+      MAX_IMAGE_WORKING_BYTES,
+      assertInputDimensions,
+      assertOutputDimensions,
+      assertRenderBudget,
+    } = await import(pathToFileURL(path.join(compiled, 'shared', 'image-size-limits.js')).href);
     const {
       applyExifOrientation,
       compositeBitmapOnWhite,
@@ -135,6 +138,30 @@ function jpegWithOrientation(orientation) {
       0xff, 0xd8, 0xff, 0xc0, 0x00, 0x07, 0x08, 0x4e, 0x20, 0x4e, 0x20, 0xff, 0xd9,
     ]);
     assert.deepEqual(encodedImageDimensions(jpegFrame), { width: 20000, height: 20000 });
+    const paddedJpeg = Buffer.concat([
+      jpegFrame.subarray(0, 2),
+      Buffer.from([0xff]),
+      jpegFrame.subarray(2),
+    ]);
+    assert.deepEqual(encodedImageDimensions(paddedJpeg), { width: 20000, height: 20000 });
+    for (let length = 0; length < jpegFrame.length; length++)
+      assert.doesNotThrow(() => encodedImageDimensions(jpegFrame.subarray(0, length)));
+
+    const inputPixels = MAX_IMAGE_WORKING_BYTES / 16;
+    assert.doesNotThrow(() => assertInputDimensions(inputPixels, 1));
+    assert.throws(() => assertInputDimensions(inputPixels, 1, 1));
+    const outputPixels = MAX_IMAGE_WORKING_BYTES / 24;
+    assert.doesNotThrow(() => assertOutputDimensions(outputPixels, 1));
+    assert.throws(() => assertOutputDimensions(outputPixels + 1, 1));
+    for (const invalid of [NaN, Infinity, -1, 0, 1.5]) {
+      assert.throws(() => assertInputDimensions(invalid, 10));
+      assert.throws(() => assertOutputDimensions(10, invalid));
+      assert.throws(() => assertRenderBudget(10, 10, invalid, 10, 10, 10));
+    }
+    assert.throws(() => assertInputDimensions(10, 10, -1));
+    assert.throws(() => assertRenderBudget(10, 10, 11, 10, 10, 10));
+    // Both Float32 pass results and the final RGBA/native bitmap can overlap.
+    assert.throws(() => assertRenderBudget(4000, 4000, 4000, 4000, 4100, 4000));
 
     const webp = Buffer.alloc(30);
     webp.write('RIFF', 0);
@@ -143,6 +170,16 @@ function jpegWithOrientation(orientation) {
     webp.writeUIntLE(19999, 24, 3);
     webp.writeUIntLE(19999, 27, 3);
     assert.deepEqual(encodedImageDimensions(webp), { width: 20000, height: 20000 });
+    const lossless = Buffer.alloc(25);
+    lossless.write('RIFF', 0);
+    lossless.write('WEBP', 8);
+    lossless.write('VP8L', 12);
+    lossless[20] = 0x2f;
+    lossless.writeUInt32LE(16383 | (16383 << 14), 21);
+    assert.deepEqual(encodedImageDimensions(lossless), { width: 16384, height: 16384 });
+    assert.throws(() => assertInputDimensions(16384, 16384, lossless.length));
+    for (let length = 0; length < webp.length; length++)
+      assert.doesNotThrow(() => encodedImageDimensions(webp.subarray(0, length)));
 
     console.log('Image pipeline EXIF/Lanczos3 and memory limit tests passed.');
   } finally {

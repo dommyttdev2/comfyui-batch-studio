@@ -12,6 +12,8 @@ export function assertInputDimensions(width: number, height: number, compressedB
     !Number.isSafeInteger(height) ||
     width < 1 ||
     height < 1 ||
+    !Number.isSafeInteger(compressedBytes) ||
+    compressedBytes < 0 ||
     !Number.isFinite(estimated) ||
     estimated > MAX_IMAGE_WORKING_BYTES
   )
@@ -45,12 +47,21 @@ export function assertRenderBudget(
 ) {
   assertInputDimensions(sourceWidth, sourceHeight);
   assertOutputDimensions(outputWidth, outputHeight);
+  if (
+    !Number.isSafeInteger(cropWidth) ||
+    !Number.isSafeInteger(cropHeight) ||
+    cropWidth < 1 ||
+    cropHeight < 1 ||
+    cropWidth > sourceWidth ||
+    cropHeight > sourceHeight
+  )
+    throw new Error('クロップ寸法が入力画像の範囲外です。範囲を設定し直してください。');
   const intermediate = Math.min(outputWidth * cropHeight, cropWidth * outputHeight);
   const estimated =
     sourceWidth * sourceHeight * 12 +
     cropWidth * cropHeight * 8 +
     intermediate * 16 +
-    outputWidth * outputHeight * 12;
+    outputWidth * outputHeight * 24;
   if (estimated > MAX_IMAGE_WORKING_BYTES)
     throw new Error(
       `入力 ${sourceWidth}×${sourceHeight}px、出力 ${outputWidth}×${outputHeight}px の変換には作業メモリ約${megabytes(estimated)}MBが必要です。画像または出力サイズを縮小してください。`,
