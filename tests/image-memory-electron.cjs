@@ -22,6 +22,7 @@ app
       pathToFileURL(path.join(root, 'main/thumbnail-image-cache.js')).href
     );
     const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'image-memory-electron-'));
+    const side = Number(process.argv[2] || 2048);
     let window;
     try {
       const state = await marketplace.createDefaultMarketplaceImageState();
@@ -37,8 +38,8 @@ app
       );
       assert.equal(await fs.readFile(editorFile, 'utf8'), editorBefore);
       assert.deepEqual(await fs.readdir(temporary), ['._batch_studio']);
-      const bitmap = Buffer.alloc(2048 * 2048 * 4, 127);
-      const fixture = nativeImage.createFromBitmap(bitmap, { width: 2048, height: 2048 });
+      const bitmap = Buffer.alloc(side * side * 4, 127);
+      const fixture = nativeImage.createFromBitmap(bitmap, { width: side, height: side });
       for (const [format, bytes] of [
         ['png', fixture.toPNG()],
         ['jpeg', fixture.toJPEG(100)],
@@ -50,16 +51,17 @@ app
         const decoded = await pipeline.readOrientedNativeImage(file);
         const rendered = pipeline.renderLanczosCrop(
           decoded.image,
-          { x: 0, y: 0, width: 2048, height: 2048 },
-          2049,
-          2048,
+          { x: 0, y: 0, width: side, height: side },
+          side + 1,
+          side,
         );
         const encoded = pipeline.encodeLanczosImage(rendered, format);
         assert.ok(encoded.length > 0);
-        assert.deepEqual(rendered.getSize(), { width: 2049, height: 2048 });
+        assert.deepEqual(rendered.getSize(), { width: side + 1, height: side });
         console.log(
           JSON.stringify({
             format,
+            side,
             elapsedMs: performance.now() - start,
             baselineRss,
             rss: process.memoryUsage().rss,
@@ -91,7 +93,7 @@ app
         () =>
           pipeline.renderLanczosCrop(
             fixture,
-            { x: 0, y: 0, width: 2048, height: 2048 },
+            { x: 0, y: 0, width: side, height: side },
             20000,
             20000,
           ),
@@ -108,8 +110,8 @@ app
       const renderer = await window.webContents.executeJavaScript(`(async () => {
       const limits = await import(${JSON.stringify(moduleUrl)});
       const canvas = document.createElement('canvas');
-      canvas.width = 2048; canvas.height = 2048;
-      canvas.getContext('2d').fillRect(0, 0, 2048, 2048);
+      canvas.width = ${side}; canvas.height = ${side};
+      canvas.getContext('2d').fillRect(0, 0, ${side}, ${side});
       const image = new Image(); image.src = canvas.toDataURL('image/webp', 1);
       await image.decode();
       limits.assertInputDimensions(image.naturalWidth, image.naturalHeight);
@@ -117,7 +119,7 @@ app
       try { limits.assertOutputDimensions(20000, 20000); } catch { rejected = true; }
       return { width: image.naturalWidth, height: image.naturalHeight, rejected };
     })()`);
-      assert.deepEqual(renderer, { width: 2048, height: 2048, rejected: true });
+      assert.deepEqual(renderer, { width: side, height: side, rejected: true });
       assert.doesNotThrow(() => limits.assertInputDimensions(renderer.width, renderer.height));
       console.log(JSON.stringify({ scope: 'Chromium WebP and shared limits', ...renderer }));
     } finally {
