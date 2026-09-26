@@ -242,6 +242,15 @@ export class CodexCliAdapter implements AgentCliAdapter {
     await this.killProcessTree(running.child);
   }
 
+  async shutdown(): Promise<void> {
+    const active = [...this.turns.entries()].filter(([, turn]) => !turn.terminal);
+    await Promise.allSettled(
+      active.map(async ([turnId]) => {
+        await this.stop(turnId);
+      }),
+    );
+  }
+
   private buildArgs(task: AgentTaskRequest, requestedSessionId: string | null): string[] {
     const model = safeModel(task.model?.model);
     const effort = safeEffort(task.model?.reasoningEffort);
@@ -318,11 +327,13 @@ export class CodexCliAdapter implements AgentCliAdapter {
       rejectStart(error);
       running.failed = true;
       running.rejectCompletion(error);
+      this.turns.delete(turnId);
       void this.killProcessTree(child);
     }, this.startupTimeoutMs);
 
     const fail = (error: Error, emitTurnFailed = true) => {
-      if (!startSettled) {
+      const failedBeforeStart = !startSettled;
+      if (failedBeforeStart) {
         startSettled = true;
         clearTimeout(startupTimer);
         rejectStart(error);
@@ -332,6 +343,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
         if (emitTurnFailed) onEvent({ type: 'turn.failed', at: this.now(), error: error.message });
         running.rejectCompletion(error);
       }
+      if (failedBeforeStart) this.turns.delete(turnId);
     };
 
     const rl = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
