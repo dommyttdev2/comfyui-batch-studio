@@ -173,8 +173,7 @@ export class CodexCliEventParser {
       ['command_execution', 'mcp_tool_call', 'collab_tool_call', 'web_search'].includes(itemType)
     ) {
       const name = itemName(item);
-      if (phase === 'started')
-        normalized.push({ type: 'tool.started', at: now, name });
+      if (phase === 'started') normalized.push({ type: 'tool.started', at: now, name });
       if (phase === 'completed') {
         const status = stringValue(item.status);
         normalized.push({
