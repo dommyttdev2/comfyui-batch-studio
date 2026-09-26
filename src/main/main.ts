@@ -2503,22 +2503,26 @@ async function codexSend(
   state: ProjectWindowState,
   message: string,
   artifactStage?: GrokTask['stage'],
-  workspace?: FileArtifactWorkspace,
+  workspace?: FileArtifactWorkspace | AgentWorkspace,
 ): Promise<CodexSendResult> {
   const context = codexContextFor(state);
   const input = message.trim();
   if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
   if (codexCliTransportEnabled()) {
     const cliWorkspace: AgentWorkspace | undefined = workspace
-      ? {
-          ...workspace,
-          provider: 'codex',
-          inputDirectory: path.join(workspace.directory, 'input'),
-          outputDirectory: path.join(workspace.directory, 'output'),
-        }
+      ? 'provider' in workspace
+        ? workspace
+        : {
+            ...workspace,
+            provider: 'codex',
+            inputDirectory: path.join(workspace.directory, 'input'),
+            outputDirectory: path.join(workspace.directory, 'output'),
+          }
       : undefined;
     return codexSendViaCli(state, input, artifactStage, cliWorkspace);
   }
+  if (workspace && 'provider' in workspace)
+    throw new Error('共通Agent WorkspaceをCodex App Server経路では使用できません。');
   const account = await codexAccount();
   if (!account.authenticated)
     throw new Error(
