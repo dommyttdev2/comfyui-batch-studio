@@ -2707,10 +2707,9 @@ async function collectCodexArtifact(
   }
   if (pending.workspace) {
     try {
-      const raw =
-        isAgentWorkspace(pending.workspace)
-          ? await readAgentWorkspaceOutput(pending.workspace)
-          : await readCodexOutput(pending.workspace);
+      const raw = isAgentWorkspace(pending.workspace)
+        ? await readAgentWorkspaceOutput(pending.workspace)
+        : await readCodexOutput(pending.workspace);
       const turnId = typeof turn.id === 'string' ? turn.id : 'last';
       return await importAutoArtifact(
         pending.root,
