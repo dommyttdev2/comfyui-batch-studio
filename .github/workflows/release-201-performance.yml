@@ -68,6 +68,7 @@ jobs:
           cat "$RUNNER_TEMP/release-201-comparison.md"
 
       - name: Upload benchmark evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: release-201-performance
