@@ -64,6 +64,31 @@ matchCode(
 );
 matchCode(
   executionSource,
+  /preflightError[\s\S]*runStatusError[\s\S]*runStorageError/,
+  'Preflight, Run monitor and Run storage failures must use independent state',
+);
+matchCode(
+  executionSource,
+  /setPreflight\(value\)[\s\S]*setPreflightError\(''\)/,
+  'only a successful Preflight refresh may clear the Preflight error',
+);
+matchCode(
+  executionSource,
+  /setCurrent\(value\)[\s\S]*setRunStatusError\(''\)/,
+  'only a successful Run status refresh may clear the Run monitor error',
+);
+matchCode(
+  executionSource,
+  /preflightGeneration[\s\S]*runStatusGeneration[\s\S]*generation !== preflightGeneration\.current[\s\S]*generation !== runStatusGeneration\.current/,
+  'stale Preflight and Run status responses must be ignored independently',
+);
+matchCode(
+  executionSource,
+  /Preflightを再試行[\s\S]*Run監視を再試行/,
+  'Preflight and Run monitor failures must expose separate retry actions',
+);
+matchCode(
+  executionSource,
   /\{\(canStopScheduling\|\|pauseRequestInFlight\)&&current&&\(<button/,
   'Only show pause when available, retaining feedback while the request is in flight',
 );
