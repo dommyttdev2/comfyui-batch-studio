@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import './stage-reset.css';
 
 export type ResetScope =
@@ -88,15 +88,15 @@ export function StageResetMenu({
   busyRef.current = busy;
   const copy = COPY[scope];
 
-  const restoreTriggerFocus = () => {
+  const restoreTriggerFocus = useCallback(() => {
     requestAnimationFrame(() => triggerRef.current?.focus());
-  };
-  const cancelConfirmation = () => {
+  }, []);
+  const cancelConfirmation = useCallback(() => {
     if (busyRef.current) return;
     setResetError('');
     setConfirming(false);
     restoreTriggerFocus();
-  };
+  }, [restoreTriggerFocus]);
 
   useEffect(() => {
     if (menu) menuItemRef.current?.focus();
@@ -122,7 +122,7 @@ export function StageResetMenu({
       dialog.removeEventListener('cancel', cancel);
       if (dialog.open) dialog.close();
     };
-  }, [confirming]);
+  }, [confirming, cancelConfirmation]);
   const execute = async () => {
     if (busy) return;
     setResetError('');
