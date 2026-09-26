@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+// BEGIN GENERATED IPC CHANNELS - edit src/shared/ipc.ts instead
 const I = {
   APP_SETTINGS_GET: 'app-settings:get',
   APP_SETTINGS_SELECT_COMFYUI: 'app-settings:select-comfyui',
@@ -184,7 +185,8 @@ const I = {
   GROK_SET_DIVIDER_X: 'grok:set-divider-x',
   GROK_RELOAD: 'grok:reload',
   GROK_OPEN_EXTERNAL: 'grok:open-external',
-};
+}
+// END GENERATED IPC CHANNELS
 contextBridge.exposeInMainWorld('batchStudio', {
   appSettings: {
     get: () => ipcRenderer.invoke(I.APP_SETTINGS_GET),
