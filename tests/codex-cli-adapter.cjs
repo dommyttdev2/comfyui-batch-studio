@@ -9,6 +9,7 @@ const { execFileSync } = require('node:child_process');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-cli-adapter-'));
+const source = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
 execFileSync(
   process.execPath,
   [
@@ -20,6 +21,15 @@ execFileSync(
   ],
   { cwd: repo, stdio: 'inherit' },
 );
+
+const main = source('src/main/main.ts');
+assert.match(main, /BATCH_STUDIO_CODEX_TRANSPORT/);
+assert.match(main, /adapter\.resumeTask\(existingThreadId/);
+assert.match(main, /prepareAgentWorkspace\(app\.getPath\('userData'\), 'codex'/);
+assert.match(main, /readAgentWorkspaceOutput\(pending\.workspace\)/);
+assert.match(main, /rememberAgentWorkspace\(context\.root, workspace, threadId, turn\.turnId\)/);
+assert.match(main, /codexCliActiveTurnIds/);
+assert.match(source('src/main/codex-artifact-turn.ts'), /Batch Studio向け成果物出力契約/);
 
 class FakeChild extends EventEmitter {
   constructor(pid) {
