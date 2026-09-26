@@ -1102,8 +1102,90 @@ export interface R2Metrics {
   payload?: unknown;
 }
 export type GrokContextStage = 'story' | 'models' | 'prompt-plan' | 'caption';
-export type AssistantPaneProvider = 'grok' | 'codex';
-export type AutoArtifactProvider = 'grok' | 'codex';
+export type AgentProvider = 'grok' | 'codex';
+export type AssistantPaneProvider = AgentProvider;
+export type AutoArtifactProvider = AgentProvider;
+
+export interface AgentContext {
+  root: string;
+  stage: GrokContextStage;
+}
+
+export interface AgentCapabilities {
+  structuredEvents: boolean;
+  sessionResume: boolean;
+  fileWorkspace: boolean;
+  modelSelection: boolean;
+  reasoningEffort: boolean;
+}
+
+export interface AgentAvailability {
+  provider: AgentProvider;
+  state: 'available' | 'missing' | 'unauthenticated' | 'unsupported' | 'error';
+  version: string | null;
+  message: string | null;
+}
+
+export interface AgentModelOption {
+  id: string;
+  displayName: string;
+  supportedReasoningEfforts?: string[];
+}
+
+export interface AgentModelSelection {
+  model: string | null;
+  reasoningEffort?: string | null;
+}
+
+export interface AgentModelSettings {
+  models: AgentModelOption[];
+  selection: AgentModelSelection;
+}
+
+export interface AgentWorkspaceDescriptor {
+  workspaceId: string;
+  directory: string;
+  inputDirectory: string;
+  outputDirectory: string;
+  outputPath: string;
+  fileName: string;
+}
+
+export interface AgentTaskRequest {
+  context: AgentContext;
+  taskStage: GrokTask['stage'];
+  prompt: string;
+  extra: string;
+  workspace?: AgentWorkspaceDescriptor;
+  model?: AgentModelSelection;
+}
+
+export interface AgentTurn {
+  provider: AgentProvider;
+  sessionId: string;
+  turnId: string;
+}
+
+export type AgentEvent =
+  | { type: 'session.started'; at: number; sessionId: string }
+  | { type: 'turn.started'; at: number; turnId: string }
+  | { type: 'message.delta'; at: number; text: string }
+  | { type: 'message.completed'; at: number; text: string }
+  | { type: 'activity'; at: number; label: string; detail?: string }
+  | { type: 'tool.started'; at: number; name: string }
+  | { type: 'tool.completed'; at: number; name: string; success: boolean }
+  | { type: 'file.changed'; at: number; path: string }
+  | { type: 'artifact.ready'; at: number; fileName: string; path: string }
+  | { type: 'turn.completed'; at: number; turnId: string }
+  | { type: 'turn.failed'; at: number; error: string }
+  | { type: 'turn.cancelled'; at: number; turnId: string };
+
+export interface AgentEventEnvelope {
+  provider: AgentProvider;
+  root: string;
+  stage: GrokContextStage;
+  event: AgentEvent;
+}
 export type AutoArtifactPhase =
   | 'waiting'
   | 'detected'
@@ -1511,6 +1593,7 @@ export interface BatchStudioApi {
       provider: AssistantPaneProvider,
       stage: GrokContextStage,
     ) => Promise<GrokPaneState>;
+    onEvent: (listener: (event: AgentEventEnvelope) => void) => () => void;
   };
   codex: {
     getProvider: (stage: GrokContextStage) => Promise<AssistantPaneProvider>;
