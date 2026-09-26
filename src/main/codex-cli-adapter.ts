@@ -201,12 +201,13 @@ export class CodexCliAdapter implements AgentCliAdapter {
       };
 
     const auth = await this.capture(['login', 'status']);
-    if (!auth.ok || /not logged in|not authenticated|login required/i.test(auth.output))
+    if (!auth.ok || !/Logged in using ChatGPT/i.test(auth.output))
       return {
         provider: 'codex',
         state: 'unauthenticated',
         version,
-        message: auth.output || auth.detail || 'Codex CLIでログインが必要です。',
+        message:
+          'ChatGPTアカウントでCodex CLIにログインしてください。APIキー等の認証では送信しません。',
       };
 
     return { provider: 'codex', state: 'available', version, message: null };
