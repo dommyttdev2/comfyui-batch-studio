@@ -46,7 +46,7 @@ import type {
   VastAiOfferSearchInput,
   VastAiRentRequest,
   VastAiSshEndpoint,
-  type AgentEvent,
+  AgentEvent,
 } from '../shared/types.js';
 import {
   createProject,
@@ -1976,6 +1976,11 @@ function codexCliService() {
     throw new Error('Codex CLIが初期化されていません。');
   return { adapter: codexCliAdapter, sessions: agentSessionState, legacyStore: codexChatState };
 }
+function isAgentWorkspace(
+  workspace: FileArtifactWorkspace | AgentWorkspace,
+): workspace is AgentWorkspace {
+  return 'inputDirectory' in workspace && 'outputDirectory' in workspace;
+}
 function notifyAgentEvent(context: CodexContext, event: AgentEvent) {
   const envelope = { provider: 'codex' as const, root: context.root, stage: context.stage, event };
   for (const state of projectWindows.values()) {
@@ -2513,7 +2518,7 @@ async function codexSend(
   if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
   if (codexCliTransportEnabled()) {
     const cliWorkspace: AgentWorkspace | undefined = workspace
-      ? 'provider' in workspace
+      ? isAgentWorkspace(workspace)
         ? workspace
         : {
             ...workspace,
@@ -2524,7 +2529,7 @@ async function codexSend(
       : undefined;
     return codexSendViaCli(state, input, artifactStage, cliWorkspace);
   }
-  if (workspace && 'provider' in workspace)
+  if (workspace && isAgentWorkspace(workspace))
     throw new Error('共通Agent WorkspaceをCodex App Server経路では使用できません。');
   const account = await codexAccount();
   if (!account.authenticated)
@@ -2703,7 +2708,7 @@ async function collectCodexArtifact(
   if (pending.workspace) {
     try {
       const raw =
-        'provider' in pending.workspace
+        isAgentWorkspace(pending.workspace)
           ? await readAgentWorkspaceOutput(pending.workspace)
           : await readCodexOutput(pending.workspace);
       const turnId = typeof turn.id === 'string' ? turn.id : 'last';
@@ -2845,7 +2850,7 @@ ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
       state,
       patchPrompt +
         '\n\n' +
-        ('provider' in workspace
+        (isAgentWorkspace(workspace)
           ? agentWorkspaceOutputInstruction(workspace)
           : workspaceOutputInstruction(workspace)),
       stage,
@@ -2885,7 +2890,7 @@ ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
     prompt +
       (referenceGuide.length ? '\n\n## 参照ファイル\n' + referenceGuide.join('\n') : '') +
       '\n\n' +
-      ('provider' in workspace
+      (isAgentWorkspace(workspace)
         ? agentWorkspaceOutputInstruction(workspace)
         : workspaceOutputInstruction(workspace)),
     stage,
