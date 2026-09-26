@@ -365,8 +365,21 @@ async function loadSource(
   if (info.size > MAX_INPUT_BYTES) throw new Error('入力画像は100MB以下にしてください。');
 
   if (path.extname(resolved).toLowerCase() === '.webp') {
+    const sourceBytes = await readFile(resolved);
+    const sourceDimensions = encodedImageDimensions(sourceBytes);
+    if (sourceDimensions)
+      assertInputDimensions(sourceDimensions.width, sourceDimensions.height, sourceBytes.length);
     const image = normalizedPngImage(sourcePngDataUrl);
-    return { resolved, image, size: image.getSize() };
+    const normalizedSize = image.getSize();
+    if (
+      sourceDimensions &&
+      (sourceDimensions.width !== normalizedSize.width ||
+        sourceDimensions.height !== normalizedSize.height)
+    )
+      throw new Error(
+        `WebP入力画像の寸法 ${sourceDimensions.width}×${sourceDimensions.height}px と正規化画像 ${normalizedSize.width}×${normalizedSize.height}px が一致しません。画像を選択し直してください。`,
+      );
+    return { resolved, image, size: normalizedSize };
   }
 
   const oriented = await readOrientedNativeImage(resolved);
