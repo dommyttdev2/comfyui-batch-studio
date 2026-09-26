@@ -162,8 +162,10 @@ export class CodexCliAdapter implements AgentCliAdapter {
   private readonly turns = new Map<string, RunningTurn>();
 
   constructor(options: CodexCliAdapterOptions = {}) {
-    this.spawnProcess = options.spawnProcess ?? ((command, args, spawnOptions) =>
-      spawn(command, args, spawnOptions) as ChildProcessWithoutNullStreams);
+    this.spawnProcess =
+      options.spawnProcess ??
+      ((command, args, spawnOptions) =>
+        spawn(command, args, spawnOptions) as ChildProcessWithoutNullStreams);
     this.killProcessTree = options.killProcessTree ?? defaultKillProcessTree;
     this.platform = options.platform ?? process.platform;
     this.env = options.env ?? process.env;
@@ -326,8 +328,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
       }
       if (!running.failed && !running.cancelled) {
         running.failed = true;
-        if (emitTurnFailed)
-          onEvent({ type: 'turn.failed', at: this.now(), error: error.message });
+        if (emitTurnFailed) onEvent({ type: 'turn.failed', at: this.now(), error: error.message });
         running.rejectCompletion(error);
       }
     };
@@ -349,10 +350,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
           requestedSessionId &&
           normalized.threadId.toLowerCase() !== requestedSessionId.toLowerCase()
         ) {
-          const mismatch = new CodexCliResumeMismatchError(
-            requestedSessionId,
-            normalized.threadId,
-          );
+          const mismatch = new CodexCliResumeMismatchError(requestedSessionId, normalized.threadId);
           fail(mismatch);
           void this.killProcessTree(child);
           return;
@@ -460,9 +458,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
         void this.killProcessTree(child);
         finish({ ok: false, output: '', detail: 'Codex CLI probe timed out.' });
       }, this.probeTimeoutMs);
-      child.once('error', (error) =>
-        finish({ ok: false, output: '', detail: errorText(error) }),
-      );
+      child.once('error', (error) => finish({ ok: false, output: '', detail: errorText(error) }));
       child.once('close', (code, signal) => {
         const out = Buffer.concat(stdout).toString('utf8').trim();
         const err = Buffer.concat(stderr).toString('utf8').trim();
