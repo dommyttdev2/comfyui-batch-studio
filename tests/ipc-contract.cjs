@@ -44,7 +44,11 @@ for (const key of invokes) {
 for (const key of listens) {
   assert.ok(expected[key], `Unknown listened IPC key: ${key}`);
   assert.ok(sends.has(key), `Renderer event listener lacks Main sender: ${key}`);
-  assert.equal(handles.has(key), false, `Event-only IPC must not be registered as an invoke handler: ${key}`);
+  assert.equal(
+    handles.has(key),
+    false,
+    `Event-only IPC must not be registered as an invoke handler: ${key}`,
+  );
 }
 for (const key of handles) assert.ok(expected[key], `Main handler uses unknown IPC key: ${key}`);
 for (const key of sends) assert.ok(expected[key], `Main sender uses unknown IPC key: ${key}`);
