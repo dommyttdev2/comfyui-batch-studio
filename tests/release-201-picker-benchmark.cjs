@@ -38,6 +38,12 @@ function sourceTransferBytes(source) {
   return Buffer.byteLength(JSON.stringify(source), 'utf8');
 }
 
+function rendererResidentSetMB(window) {
+  const pid = window.webContents.getOSProcessId();
+  const metric = app.getAppMetrics().find((candidate) => candidate.pid === pid);
+  return metric?.memory?.workingSetSize ? metric.memory.workingSetSize / 1024 : 0;
+}
+
 async function browserFixtureDataUrls(window) {
   await window.loadURL('about:blank');
   return window.webContents.executeJavaScript(`(() => {
@@ -276,7 +282,7 @@ async function runPickerWindow(count, dataUrls, interact) {
     const initialMounted = await window.webContents.executeJavaScript(
       "document.querySelectorAll('.thumbnail-image-choice').length",
     );
-    const initialMemory = await window.webContents.getProcessMemoryInfo();
+    const initialMemoryMB = rendererResidentSetMB(window);
 
     const result = {
       initialMs,
@@ -284,7 +290,7 @@ async function runPickerWindow(count, dataUrls, interact) {
       transferBytes: events
         .filter((event) => event.kind === 'transfer')
         .reduce((sum, event) => sum + Number(event.bytes || 0), 0),
-      rssMB: initialMemory.residentSet / 1024,
+      rssMB: initialMemoryMB,
       searchMs: 0,
       columnsMs: 0,
       scrollMs: 0,
@@ -343,8 +349,7 @@ async function runPickerWindow(count, dataUrls, interact) {
       const committed = events.filter((event) => event.kind === 'commit').length > beforeCommit;
       result.interactionOk = selected === 'true' && previewed && committed;
 
-      const finalMemory = await window.webContents.getProcessMemoryInfo();
-      result.rssMB = Math.max(result.rssMB, finalMemory.residentSet / 1024);
+      result.rssMB = Math.max(result.rssMB, rendererResidentSetMB(window));
       result.transferBytes = events
         .filter((event) => event.kind === 'transfer')
         .reduce((sum, event) => sum + Number(event.bytes || 0), 0);
