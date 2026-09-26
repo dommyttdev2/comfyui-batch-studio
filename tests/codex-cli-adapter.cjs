@@ -241,6 +241,34 @@ function task(root, workspace = true) {
 
   {
     const children = [];
+    const events = [];
+    const adapter = new CodexCliAdapter({
+      platform: 'linux',
+      createTurnId: () => 'failed-turn',
+      spawnProcess: () => {
+        const child = new FakeChild(350);
+        children.push(child);
+        return child;
+      },
+      killProcessTree: async (child) => child.close(null, 'SIGTERM'),
+    });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-cli-failed-'));
+    const start = adapter.startTask(task(root, false), (event) => events.push(event));
+    children[0].line({ type: 'thread.started', thread_id: 'session-failed' });
+    await start;
+    children[0].line({ type: 'turn.started' });
+    children[0].line({ type: 'turn.failed', error: { message: 'model failed' } });
+    children[0].close(1);
+    await assert.rejects(adapter.waitForCompletion('failed-turn'), /model failed/);
+    assert.equal(
+      events.filter((event) => event.type === 'turn.failed').length,
+      1,
+      'Raw turn.failed must be projected exactly once',
+    );
+  }
+
+  {
+    const children = [];
     const adapter = new CodexCliAdapter({
       platform: 'linux',
       createTurnId: () => 'malformed-turn',
