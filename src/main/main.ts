@@ -2471,8 +2471,7 @@ async function codexSendViaCli(
       fileName: artifactFile,
       workspace,
     });
-  if (workspace)
-    await rememberAgentWorkspace(context.root, workspace, threadId, turn.turnId);
+  if (workspace) await rememberAgentWorkspace(context.root, workspace, threadId, turn.turnId);
 
   ready = true;
   for (const event of queued.splice(0)) forwardCodexCliEvent(context, threadId, turn.turnId, event);
