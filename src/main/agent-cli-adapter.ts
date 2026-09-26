@@ -26,4 +26,5 @@ export interface AgentCliAdapter {
 
   waitForCompletion(turnId: string): Promise<void>;
   stop(turnId: string): Promise<void>;
+  shutdown(): Promise<void>;
 }
