@@ -143,6 +143,23 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
     'caption_content.json',
   ]) {
     assert.equal(codexTaskFileForTurn(taskTurn(fileName)), fileName);
+    assert.equal(
+      codexTaskFileForTurn({
+        status: 'completed',
+        items: [
+          {
+            type: 'userMessage',
+            text:
+              '## Batch Studio向け成果物出力契約\\n' +
+              '作業ディレクトリ内の output/' +
+              fileName +
+              ' に完成した成果物を直接書き込んでください。',
+          },
+        ],
+      }),
+      fileName,
+      'Shared CLI workspace contract must remain classifiable from Codex history',
+    );
   }
   assert.equal(
     codexTaskFileForTurn({
