@@ -265,18 +265,17 @@ async function runPickerWindow(count, dataUrls, interact) {
     };
     ipcMain.on(benchmarkChannel, listener);
     const openedAt = performance.now();
-    const rendererUrl = `${pathToFileURL(
-      path.join(repo, 'dist-renderer', 'index.html'),
-    ).href}?tool=thumbnail-picker`;
+    const rendererUrl = `${
+      pathToFileURL(path.join(repo, 'dist-renderer', 'index.html')).href
+    }?tool=thumbnail-picker`;
     await window.loadURL(rendererUrl);
 
     const deadline = Date.now() + 10_000;
     while (
-      !events.some(
-        (event) => event.kind === 'metric' && event.event === 'first_image_painted',
-      )
+      !events.some((event) => event.kind === 'metric' && event.event === 'first_image_painted')
     ) {
-      if (Date.now() > deadline) throw new Error(`Picker first paint timed out for ${count} items.`);
+      if (Date.now() > deadline)
+        throw new Error(`Picker first paint timed out for ${count} items.`);
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     await doubleAnimationFrame(window);
@@ -415,15 +414,17 @@ app
       finalArtifact: await import(
         pathToFileURL(path.join(base, 'main', 'final-artifact-image-service.js')).href
       ),
-      cache: await import(
-        pathToFileURL(path.join(base, 'main', 'thumbnail-image-cache.js')).href
-      ),
+      cache: await import(pathToFileURL(path.join(base, 'main', 'thumbnail-image-cache.js')).href),
     };
 
     for (const count of counts) {
       const service = await benchmarkService(count, dataUrls, modules);
       const ui = await benchmarkUi(count, dataUrls);
-      assert.equal(ui.interactionOk, true, 'preview/commit interaction contract must remain intact');
+      assert.equal(
+        ui.interactionOk,
+        true,
+        'preview/commit interaction contract must remain intact',
+      );
       console.log(
         `RELEASE201 ${JSON.stringify({
           label,
