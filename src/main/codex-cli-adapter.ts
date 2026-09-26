@@ -318,7 +318,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
       void this.killProcessTree(child);
     }, this.startupTimeoutMs);
 
-    const fail = (error: Error) => {
+    const fail = (error: Error, emitTurnFailed = true) => {
       if (!startSettled) {
         startSettled = true;
         clearTimeout(startupTimer);
@@ -326,7 +326,8 @@ export class CodexCliAdapter implements AgentCliAdapter {
       }
       if (!running.failed && !running.cancelled) {
         running.failed = true;
-        onEvent({ type: 'turn.failed', at: this.now(), error: error.message });
+        if (emitTurnFailed)
+          onEvent({ type: 'turn.failed', at: this.now(), error: error.message });
         running.rejectCompletion(error);
       }
     };
@@ -366,7 +367,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
 
       for (const event of normalized.events) onEvent(event);
       if (normalized.terminal === 'failed') {
-        fail(new Error(normalized.error || 'Codex CLI turn failed.'));
+        fail(new Error(normalized.error || 'Codex CLI turn failed.'), false);
         return;
       }
       if (normalized.terminal === 'completed') running.terminal = true;
