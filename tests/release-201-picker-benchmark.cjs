@@ -38,31 +38,23 @@ function sourceTransferBytes(source) {
   return Buffer.byteLength(JSON.stringify(source), 'utf8');
 }
 
-async function browserFixtureDataUrls() {
-  const window = new BrowserWindow({
-    show: false,
-    webPreferences: { sandbox: true, backgroundThrottling: false },
-  });
-  try {
-    await window.loadURL('about:blank');
-    return await window.webContents.executeJavaScript(`(() => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 160;
-      canvas.height = 90;
-      const context = canvas.getContext('2d');
-      context.fillStyle = '#345';
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = '#def';
-      context.fillRect(20, 20, 120, 50);
-      return {
-        png: canvas.toDataURL('image/png'),
-        jpg: canvas.toDataURL('image/jpeg', 0.92),
-        webp: canvas.toDataURL('image/webp', 0.92),
-      };
-    })()`);
-  } finally {
-    window.destroy();
-  }
+async function browserFixtureDataUrls(window) {
+  await window.loadURL('about:blank');
+  return window.webContents.executeJavaScript(`(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 160;
+    canvas.height = 90;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#345';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#def';
+    context.fillRect(20, 20, 120, 50);
+    return {
+      png: canvas.toDataURL('image/png'),
+      jpg: canvas.toDataURL('image/jpeg', 0.92),
+      webp: canvas.toDataURL('image/webp', 0.92),
+    };
+  })()`);
 }
 
 function fixtureName(index) {
@@ -406,7 +398,11 @@ async function benchmarkUi(count, dataUrls) {
 app
   .whenReady()
   .then(async () => {
-    const dataUrls = await browserFixtureDataUrls();
+    const keepAlive = new BrowserWindow({
+      show: false,
+      webPreferences: { sandbox: true, backgroundThrottling: false },
+    });
+    const dataUrls = await browserFixtureDataUrls(keepAlive);
     const base = path.join(repo, 'dist-electron');
     const modules = {
       marketplace: await import(
@@ -440,6 +436,7 @@ app
       .join('\n')}\n`;
     if (outputFile) await fs.writeFile(outputFile, output, 'utf8');
     process.stdout.write(output);
+    keepAlive.destroy();
     app.quit();
   })
   .catch((error) => {
