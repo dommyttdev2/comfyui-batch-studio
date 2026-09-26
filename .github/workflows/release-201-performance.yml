@@ -43,8 +43,8 @@ jobs:
           BATCH_STUDIO_RELEASE_201_LABEL: before
           BATCH_STUDIO_RELEASE_201_COUNTS: 100,500,2000
           BATCH_STUDIO_RELEASE_201_SAMPLES: 5
-        run: |
-          xvfb-run -a node_modules/.bin/electron --no-sandbox tests/release-201-picker-benchmark.cjs             | tee "$RUNNER_TEMP/release-201-before.log"
+          BATCH_STUDIO_RELEASE_201_OUTPUT: ${{ runner.temp }}/release-201-before.log
+        run: xvfb-run -a node_modules/.bin/electron --no-sandbox tests/release-201-picker-benchmark.cjs
 
       - name: Install and build current
         run: |
@@ -56,12 +56,16 @@ jobs:
           BATCH_STUDIO_RELEASE_201_LABEL: after
           BATCH_STUDIO_RELEASE_201_COUNTS: 100,500,2000
           BATCH_STUDIO_RELEASE_201_SAMPLES: 5
-        run: |
-          xvfb-run -a node_modules/.bin/electron --no-sandbox tests/release-201-picker-benchmark.cjs             | tee "$RUNNER_TEMP/release-201-after.log"
+          BATCH_STUDIO_RELEASE_201_OUTPUT: ${{ runner.temp }}/release-201-after.log
+        run: xvfb-run -a node_modules/.bin/electron --no-sandbox tests/release-201-picker-benchmark.cjs
 
       - name: Compare results
         run: |
-          node tests/release-201-compare.cjs             "$RUNNER_TEMP/release-201-before.log"             "$RUNNER_TEMP/release-201-after.log"             | tee "$RUNNER_TEMP/release-201-comparison.md"
+          node tests/release-201-compare.cjs \
+            "$RUNNER_TEMP/release-201-before.log" \
+            "$RUNNER_TEMP/release-201-after.log" \
+            > "$RUNNER_TEMP/release-201-comparison.md"
+          cat "$RUNNER_TEMP/release-201-comparison.md"
 
       - name: Upload benchmark evidence
         uses: actions/upload-artifact@v4
