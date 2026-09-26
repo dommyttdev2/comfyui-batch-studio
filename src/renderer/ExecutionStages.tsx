@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   AppSettings,
   AppSettingsStatus,
@@ -628,56 +628,66 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
   const [current, setCurrent] = useState<ExecutionRun | null>(null),
     [preflight, setPreflight] = useState<PreflightResult | null>(null),
     [checking, setChecking] = useState(true),
-    [monitorError, setMonitorError] = useState(''),
+    [preflightError, setPreflightError] = useState(''),
+    [runStatusError, setRunStatusError] = useState(''),
     [runStorageError, setRunStorageError] = useState(''),
     [storageDiagnostics, setStorageDiagnostics] = useState<
       Array<{ runId: string | null; file: string; backupFile: string; reason: string }>
     >([]),
     [restoringBackup, setRestoringBackup] = useState(false),
     [pauseRequestInFlight, setPauseRequestInFlight] = useState(false);
+  const preflightGeneration = useRef(0);
+  const runStatusGeneration = useRef(0);
+
   const refreshPreflight = async () => {
+    const generation = ++preflightGeneration.current;
     setChecking(true);
     try {
-      setPreflight(await window.batchStudio.preflight.run(project.rootPath));
-      setMonitorError('');
+      const value = await window.batchStudio.preflight.run(project.rootPath);
+      if (generation !== preflightGeneration.current) return;
+      setPreflight(value);
+      setPreflightError('');
     } catch (e) {
-      setMonitorError(e instanceof Error ? e.message : String(e));
+      if (generation !== preflightGeneration.current) return;
+      setPreflightError(e instanceof Error ? e.message : String(e));
     } finally {
-      setChecking(false);
+      if (generation === preflightGeneration.current) setChecking(false);
     }
   };
-  useEffect(() => {
-    let cancelled = false;
-    let timer: number | undefined;
-    const load = async () => {
+
+  const refreshRunStatus = async () => {
+    const generation = ++runStatusGeneration.current;
+    try {
+      const value = await window.batchStudio.execution.status(project.rootPath);
+      if (generation !== runStatusGeneration.current) return;
+      setCurrent(value);
+      setRunStatusError('');
+      setRunStorageError('');
+      setStorageDiagnostics([]);
+    } catch (e) {
+      if (generation !== runStatusGeneration.current) return;
+      const message = e instanceof Error ? e.message : String(e);
+      setRunStatusError(message);
       try {
-        const value = await window.batchStudio.execution.status(project.rootPath);
-        if (!cancelled) {
-          setCurrent(value);
-          setRunStorageError('');
-          setStorageDiagnostics([]);
-          setMonitorError('');
-        }
-      } catch (e) {
-        if (!cancelled) {
-          const message = e instanceof Error ? e.message : String(e);
-          setRunStorageError(message);
-          setMonitorError(message);
-          try {
-            const diagnostics = await window.batchStudio.execution.storageDiagnostics(
-              project.rootPath,
-            );
-            if (!cancelled) setStorageDiagnostics(diagnostics);
-          } catch {
-            if (!cancelled) setStorageDiagnostics([]);
-          }
-        }
+        const diagnostics = await window.batchStudio.execution.storageDiagnostics(project.rootPath);
+        if (generation !== runStatusGeneration.current) return;
+        setStorageDiagnostics(diagnostics);
+        setRunStorageError(diagnostics.length ? message : '');
+      } catch {
+        if (generation !== runStatusGeneration.current) return;
+        setStorageDiagnostics([]);
+        setRunStorageError('');
       }
-    };
-    void Promise.all([load(), refreshPreflight()]);
-    timer = window.setInterval(() => void load(), 1500);
+    }
+  };
+
+  useEffect(() => {
+    let timer: number | undefined;
+    void Promise.all([refreshRunStatus(), refreshPreflight()]);
+    timer = window.setInterval(() => void refreshRunStatus(), 1500);
     return () => {
-      cancelled = true;
+      ++preflightGeneration.current;
+      ++runStatusGeneration.current;
       if (timer !== undefined) window.clearInterval(timer);
     };
   }, [project.rootPath]);
@@ -705,10 +715,19 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
   const readyForNewRun =
     !current || current.lifecycle === 'COMPLETED' || current.lifecycle === 'DISCARDED';
   const canStart =
-    preflight?.state === 'READY' && readyForNewRun && !requiresRecovery && !runStorageError;
+    !checking &&
+    preflight?.state === 'READY' &&
+    readyForNewRun &&
+    !requiresRecovery &&
+    !preflightError &&
+    !runStatusError &&
+    !runStorageError;
   const canResume = Boolean(
     current &&
       !requiresRecovery &&
+      !checking &&
+      !preflightError &&
+      !runStatusError &&
       !runStorageError &&
       ['PAUSED', 'INTERRUPTED', 'FAILED'].includes(current.lifecycle),
   );
@@ -785,6 +804,20 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
             {checking ? '確認中…' : 'Preflight再確認'}
           </button>
         </div>
+        {preflightError && (
+          <div className="errorbar" role="alert">
+            <p>{preflightError}</p>
+            <button onClick={() => void refreshPreflight()} disabled={checking}>
+              {checking ? 'Preflight再確認中…' : 'Preflightを再試行'}
+            </button>
+          </div>
+        )}
+        {runStatusError && !runStorageError && (
+          <div className="errorbar" role="alert">
+            <p>{runStatusError}</p>
+            <button onClick={() => void refreshRunStatus()}>Run監視を再試行</button>
+          </div>
+        )}
         {runStorageError && (
           <div className="errorbar" role="alert">
             <p>{runStorageError}</p>
@@ -826,9 +859,6 @@ export function ExecutionStage({ project, run }: { project: ProjectSummary; run:
               </div>
             ))}
           </div>
-        )}
-        {monitorError && monitorError !== runStorageError && (
-          <div className="errorbar">{monitorError}</div>
         )}
         <div className={'preflight ' + (canStart ? 'ready' : 'blocked')}>
           <h2>{startBanner.state}</h2>
