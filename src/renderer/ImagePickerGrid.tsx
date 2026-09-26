@@ -147,13 +147,7 @@ export function ImagePickerGrid<TItem extends ImagePickerItem>({
       ),
     );
     return () => cancelAnimationFrame(first);
-  }, [
-    loading,
-    session.size,
-    session.filteredItems,
-    onGridChanged,
-    onGridPainted,
-  ]);
+  }, [loading, session.size, session.filteredItems, onGridChanged, onGridPainted]);
 
   return (
     <main className="thumbnail-image-picker-page">
