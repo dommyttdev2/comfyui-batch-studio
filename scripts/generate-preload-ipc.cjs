@@ -34,9 +34,7 @@ const expected = replaceBlock(preload, generatedBlock(shared));
 
 if (process.argv.includes('--check')) {
   if (expected !== preload) {
-    console.error(
-      'Preload IPC constants are stale. Run: node scripts/generate-preload-ipc.cjs',
-    );
+    console.error('Preload IPC constants are stale. Run: node scripts/generate-preload-ipc.cjs');
     process.exitCode = 1;
   }
 } else if (expected !== preload) {
