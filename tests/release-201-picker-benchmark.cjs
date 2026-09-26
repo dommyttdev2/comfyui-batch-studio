@@ -332,22 +332,39 @@ async function runPickerWindow(count, dataUrls, interact) {
       );
       result.scrollMs = scroll.ms;
 
+      const selectedTitle = await window.webContents.executeJavaScript(
+        "document.querySelector('.thumbnail-image-choice')?.title || ''",
+      );
       const beforePreview = events.filter((event) => event.kind === 'preview').length;
       const beforeCommit = events.filter((event) => event.kind === 'commit').length;
-      await window.webContents.executeJavaScript(
-        "document.querySelector('.thumbnail-image-choice').click()",
-      );
+      const clickSelected = async () =>
+        window.webContents.executeJavaScript(`(() => {
+          const button = [...document.querySelectorAll('.thumbnail-image-choice')]
+            .find((candidate) => candidate.title === ${JSON.stringify(selectedTitle)});
+          button?.click();
+          return Boolean(button);
+        })()`);
+      await clickSelected();
+      const previewDeadline = Date.now() + 2_000;
+      while (events.filter((event) => event.kind === 'preview').length <= beforePreview) {
+        if (Date.now() > previewDeadline) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
       await doubleAnimationFrame(window);
-      const selected = await window.webContents.executeJavaScript(
-        "document.querySelector('.thumbnail-image-choice')?.getAttribute('aria-pressed')",
-      );
-      await window.webContents.executeJavaScript(
-        "document.querySelector('.thumbnail-image-choice').click()",
-      );
-      await doubleAnimationFrame(window);
+      const selected = await window.webContents.executeJavaScript(`(() => {
+        const button = [...document.querySelectorAll('.thumbnail-image-choice')]
+          .find((candidate) => candidate.title === ${JSON.stringify(selectedTitle)});
+        return button?.getAttribute('aria-pressed') ?? '';
+      })()`);
+      await clickSelected();
+      const commitDeadline = Date.now() + 2_000;
+      while (events.filter((event) => event.kind === 'commit').length <= beforeCommit) {
+        if (Date.now() > commitDeadline) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
       const previewed = events.filter((event) => event.kind === 'preview').length > beforePreview;
       const committed = events.filter((event) => event.kind === 'commit').length > beforeCommit;
-      result.interactionOk = selected === 'true' && previewed && committed;
+      result.interactionOk = Boolean(selectedTitle) && selected === 'true' && previewed && committed;
 
       result.rssMB = Math.max(result.rssMB, rendererResidentSetMB(window));
       result.transferBytes = events
