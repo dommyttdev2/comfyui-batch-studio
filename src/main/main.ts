@@ -4998,8 +4998,7 @@ async function initializeApplication() {
 }
 if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
 app.on('will-quit', () => {
-  for (const turnId of codexCliActiveTurnIds.values())
-    void codexCliAdapter?.stop(turnId).catch(() => {});
+  void codexCliAdapter?.shutdown().catch(() => {});
   codexAppServer?.stop();
 });
 app.on('window-all-closed', () => {
