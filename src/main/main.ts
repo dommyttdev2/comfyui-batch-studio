@@ -1968,6 +1968,73 @@ function codexService() {
   if (!codexAppServer || !codexChatState) throw new Error('Codexが初期化されていません。');
   return { server: codexAppServer, store: codexChatState };
 }
+function codexCliTransportEnabled() {
+  return (process.env.BATCH_STUDIO_CODEX_TRANSPORT ?? '').trim().toLowerCase() === 'cli';
+}
+function codexCliService() {
+  if (!codexCliAdapter || !agentSessionState || !codexChatState)
+    throw new Error('Codex CLIが初期化されていません。');
+  return { adapter: codexCliAdapter, sessions: agentSessionState, legacyStore: codexChatState };
+}
+function notifyAgentEvent(context: CodexContext, event: AgentEvent) {
+  const envelope = { provider: 'codex' as const, root: context.root, stage: context.stage, event };
+  for (const state of projectWindows.values()) {
+    if (!state.projectRoot || projectRootKey(state.projectRoot) !== projectRootKey(context.root))
+      continue;
+    state.localView.webContents.send(IPC.AGENT_EVENT, envelope);
+    if (
+      state.codexContext &&
+      projectRootKey(state.codexContext.root) === projectRootKey(context.root) &&
+      state.codexContext.stage === context.stage
+    )
+      state.codexView.webContents.send(IPC.AGENT_EVENT, envelope);
+  }
+}
+function forwardCodexCliEvent(
+  context: CodexContext,
+  threadId: string,
+  turnId: string,
+  event: AgentEvent,
+) {
+  notifyAgentEvent(context, event);
+  if (event.type === 'turn.started') {
+    forwardCodexNotification({
+      method: 'turn/started',
+      params: { threadId, turn: { id: turnId, status: 'inProgress' } },
+    });
+    return;
+  }
+  if (event.type === 'message.delta') {
+    forwardCodexNotification({
+      method: 'item/agentMessage/delta',
+      params: { threadId, delta: event.text },
+    });
+    return;
+  }
+  if (event.type === 'turn.completed') {
+    codexCliActiveTurnIds.delete(threadId);
+    forwardCodexNotification({
+      method: 'turn/completed',
+      params: { threadId, turn: { id: turnId, status: 'completed' } },
+    });
+    return;
+  }
+  if (event.type === 'turn.failed') {
+    codexCliActiveTurnIds.delete(threadId);
+    forwardCodexNotification({
+      method: 'turn/completed',
+      params: { threadId, turn: { id: turnId, status: 'failed' } },
+    });
+    return;
+  }
+  if (event.type === 'turn.cancelled') {
+    codexCliActiveTurnIds.delete(threadId);
+    forwardCodexNotification({
+      method: 'turn/completed',
+      params: { threadId, turn: { id: turnId, status: 'interrupted' } },
+    });
+  }
+}
 function codexContextFor(state: ProjectWindowState): CodexContext {
   const context = state.codexContext;
   if (
