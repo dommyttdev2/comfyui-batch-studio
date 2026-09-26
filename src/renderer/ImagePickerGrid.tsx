@@ -115,7 +115,10 @@ export function ImagePickerGrid<TItem extends ImagePickerItem>({
   emptyMessage,
   provider,
   toolbarExtra,
+  externalError,
   onMetrics,
+  onGridChanged,
+  onGridPainted,
   onImageLoaded,
 }: {
   title: string;
@@ -126,10 +129,32 @@ export function ImagePickerGrid<TItem extends ImagePickerItem>({
   emptyMessage: string;
   provider: ImagePickerProvider<TItem>;
   toolbarExtra?: ReactNode;
+  externalError?: string;
   onMetrics?: (visible: number, total: number, size: PickerGridSize) => void;
+  onGridChanged?: (size: PickerGridSize, count: number) => void;
+  onGridPainted?: (size: PickerGridSize, count: number, renderMs: number) => void;
   onImageLoaded?: (timing: ImagePickerLoadTiming) => void;
 }) {
   const session = useImagePickerSession(items, provider);
+
+  useEffect(() => {
+    if (loading) return;
+    const started = performance.now();
+    onGridChanged?.(session.size, session.filteredItems.length);
+    const first = requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        onGridPainted?.(session.size, session.filteredItems.length, performance.now() - started),
+      ),
+    );
+    return () => cancelAnimationFrame(first);
+  }, [
+    loading,
+    session.size,
+    session.filteredItems,
+    onGridChanged,
+    onGridPainted,
+  ]);
+
   return (
     <main className="thumbnail-image-picker-page">
       <section className="thumbnail-image-picker thumbnail-image-picker-standalone">
@@ -173,7 +198,9 @@ export function ImagePickerGrid<TItem extends ImagePickerItem>({
           </span>
           {toolbarExtra}
         </div>
-        {session.error && <div className="thumbnail-image-picker-error">{session.error}</div>}
+        {(externalError || session.error) && (
+          <div className="thumbnail-image-picker-error">{externalError || session.error}</div>
+        )}
         {loading ? (
           <div className="thumbnail-image-picker-message">画像一覧を読み込んでいます…</div>
         ) : session.filteredItems.length ? (
