@@ -2189,9 +2189,11 @@ async function codexArtifactFor(
       sourceId: threadId,
       phase: 'waiting',
     };
-  return lastTurnId
-    ? latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/' + lastTurnId)
-    : null;
+  if (!lastTurnId) return null;
+  return (
+    (await latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/' + lastTurnId)) ??
+    latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/')
+  );
 }
 async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> {
   const context = codexContextFor(state);
@@ -2625,6 +2627,16 @@ async function codexSend(
 }
 async function codexStopTurn(state: ProjectWindowState): Promise<CodexSnapshot> {
   const context = codexContextFor(state);
+  if (codexCliTransportEnabled()) {
+    const { adapter, legacyStore } = codexCliService();
+    const saved = await legacyStore.get(context.root, context.stage);
+    const threadId = saved.activeThreadId;
+    if (!threadId || !codexBusy.has(threadId)) return codexSnapshot(state);
+    const turnId = codexCliActiveTurnIds.get(threadId);
+    if (!turnId) throw new Error('中止対象のCodex CLI turnを特定できません。');
+    await adapter.stop(turnId);
+    return codexSnapshot(state);
+  }
   const { server, store } = codexService();
   const saved = await store.get(context.root, context.stage);
   const threadId = saved.activeThreadId;
@@ -2664,7 +2676,7 @@ async function collectCodexArtifact(
     root: string;
     stage: GrokTask['stage'];
     fileName: string;
-    workspace?: FileArtifactWorkspace;
+    workspace?: FileArtifactWorkspace | AgentWorkspace;
   },
   params: Record<string, unknown>,
 ): Promise<AutoArtifactEvent | null> {
@@ -2684,7 +2696,10 @@ async function collectCodexArtifact(
   }
   if (pending.workspace) {
     try {
-      const raw = await readCodexOutput(pending.workspace);
+      const raw =
+        'provider' in pending.workspace
+          ? await readAgentWorkspaceOutput(pending.workspace)
+          : await readCodexOutput(pending.workspace);
       const turnId = typeof turn.id === 'string' ? turn.id : 'last';
       return await importAutoArtifact(
         pending.root,
@@ -2781,9 +2796,13 @@ async function codexSendTask(
     throw new Error('選択した工程に対応しない依頼です。');
   if (stage === 'prompt-plan-patch') {
     const baseline = await promptPlanPatchBase(context.root);
-    const workspace = await prepareCodexFileWorkspace(app.getPath('userData'), stage, [
-      { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
-    ]);
+    const workspace = codexCliTransportEnabled()
+      ? await prepareAgentWorkspace(app.getPath('userData'), 'codex', stage, [
+          { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
+        ])
+      : await prepareCodexFileWorkspace(app.getPath('userData'), stage, [
+          { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
+        ]);
     const patchPrompt = `## Task
 あなたはComfyUI Batch StudioのPrompt Plan Schema v2を修正します。
 これは相談や全文再生成ではなく、この会話で合意した変更を、現在の既存計画へ部分適用するための差分生成依頼です。
@@ -2818,7 +2837,11 @@ async function codexSendTask(
 ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
     return codexSend(
       state,
-      patchPrompt + '\n\n' + workspaceOutputInstruction(workspace),
+      patchPrompt +
+        '\n\n' +
+        ('provider' in workspace
+          ? agentWorkspaceOutputInstruction(workspace)
+          : workspaceOutputInstruction(workspace)),
       stage,
       workspace,
     );
@@ -2848,13 +2871,17 @@ ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
     references.push({ name: filename, content });
     referenceGuide.push('input/' + references.length + '-' + filename + ' — ' + attachment.purpose);
   }
-  const workspace = await prepareCodexFileWorkspace(app.getPath('userData'), stage, references);
+  const workspace = codexCliTransportEnabled()
+    ? await prepareAgentWorkspace(app.getPath('userData'), 'codex', stage, references)
+    : await prepareCodexFileWorkspace(app.getPath('userData'), stage, references);
   return codexSend(
     state,
     prompt +
       (referenceGuide.length ? '\n\n## 参照ファイル\n' + referenceGuide.join('\n') : '') +
       '\n\n' +
-      workspaceOutputInstruction(workspace),
+      ('provider' in workspace
+        ? agentWorkspaceOutputInstruction(workspace)
+        : workspaceOutputInstruction(workspace)),
     stage,
     workspace,
   );
