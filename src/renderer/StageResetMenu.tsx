@@ -10,6 +10,19 @@ export type ResetScope =
   | 'workflow';
 
 type ResetCopy = { title: string; keep: string[]; reset: string[]; note?: string };
+
+function resetRecoveryHint(message: string) {
+  if (/run|execution|実行中|生成中/i.test(message)) {
+    return '実行中のRunを停止または完了させてから、再試行してください。';
+  }
+  if (/eacces|eperm|permission|access denied|権限|書き込み/i.test(message)) {
+    return 'プロジェクトフォルダーへの書き込み権限や、他アプリによるファイルロックを確認してから再試行してください。';
+  }
+  if (/json|parse|invalid|破損|形式/i.test(message)) {
+    return '対象ファイルの内容を確認・復旧してから再試行してください。退避済みデータは history/downstream-reset に保持されます。';
+  }
+  return '表示された原因を解消して「再試行」を押すか、「キャンセル」でこの操作を中止してください。';
+}
 const COPY: Record<ResetScope, ResetCopy> = {
   story: {
     title: 'ストーリーからリセット',
@@ -64,15 +77,19 @@ export function StageResetMenu({
 }) {
   const [menu, setMenu] = useState(false),
     [confirming, setConfirming] = useState(false),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [resetError, setResetError] = useState('');
   const copy = COPY[scope];
   const execute = async () => {
+    if (busy) return;
+    setResetError('');
     setBusy(true);
     try {
       await onReset(scope);
       setConfirming(false);
       setMenu(false);
-    } catch {
+    } catch (cause) {
+      setResetError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
     }
@@ -94,6 +111,7 @@ export function StageResetMenu({
             <button
               type="button"
               onClick={() => {
+                setResetError('');
                 setConfirming(true);
                 setMenu(false);
               }}
@@ -132,12 +150,26 @@ export function StageResetMenu({
               </section>
             </div>
             {copy.note && <p className="stage-reset-note">{copy.note}</p>}
+            {resetError && (
+              <div className="stage-reset-error" role="alert" aria-live="assertive">
+                <strong>リセットできませんでした</strong>
+                <p>{resetError}</p>
+                <p>{resetRecoveryHint(resetError)}</p>
+              </div>
+            )}
             <p className="stage-reset-archive">
               リセット対象は削除せず <code>._batch_studio/history/downstream-reset/</code>{' '}
               に退避します。
             </p>
             <div className="actions">
-              <button type="button" disabled={busy} onClick={() => setConfirming(false)}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setResetError('');
+                  setConfirming(false);
+                }}
+              >
                 キャンセル
               </button>
               <button
@@ -146,7 +178,7 @@ export function StageResetMenu({
                 disabled={busy}
                 onClick={() => void execute()}
               >
-                {busy ? 'リセット中…' : 'リセットする'}
+                {busy ? 'リセット中…' : resetError ? '再試行' : 'リセットする'}
               </button>
             </div>
           </div>

@@ -9,6 +9,10 @@ const { execFileSync } = require('node:child_process');
 const repo = path.resolve(__dirname, '..');
 const uiSource = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8');
 const appSource = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8');
+const resetMenuSource = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'StageResetMenu.tsx'),
+  'utf8',
+);
 const stylesSource = fs.readFileSync(path.join(repo, 'src', 'renderer', 'styles.css'), 'utf8');
 const executionSource = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'ExecutionStages.tsx'),
@@ -33,6 +37,21 @@ matchCode(
   'Project navigation must place 実行 after 実行前チェック',
 );
 matchCode(appSource, /case'実行':return <ExecutionStage/, '実行 stage must render ExecutionStage');
+matchCode(
+  resetMenuSource,
+  /catch\(cause\)[\s\S]*setResetError[\s\S]*role="alert"[\s\S]*resetRecoveryHint/,
+  'stage reset failures must stay visible in the confirmation dialog with recovery guidance',
+);
+matchCode(
+  resetMenuSource,
+  /if\(busy\)return[\s\S]*disabled=\{busy\}[\s\S]*resetError\?'再試行':'リセットする'/,
+  'stage reset retry must remain single-flight and explicit',
+);
+matchCode(
+  appSource,
+  /await window\.batchStudio\.artifact\.resetFrom\(project\.rootPath,scope\)[\s\S]*setProject\(next\)[\s\S]*setResetRevision/,
+  'reset revision and project view may advance only after the reset succeeds',
+);
 matchCode(
   stylesSource,
   /nav\{position:sticky;top:var\(--app-header-height\);align-self:start;height:calc\(100vh-var\(--app-header-height\)\);overflow-y:auto;/,
