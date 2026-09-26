@@ -128,6 +128,7 @@ function task(root, workspace = true) {
       'approval_policy="never"',
     ]);
     assert.ok(calls[0].args.includes('sandbox_workspace_write.network_access=false'));
+    assert.ok(calls[0].args.includes('web_search="disabled"'));
     assert.ok(calls[0].args.includes('gpt-5.6-codex'));
     assert.ok(calls[0].args.includes('model_reasoning_effort="high"'));
     assert.ok(!calls[0].args.some((value) => value.includes('Create the prompt plan')));
