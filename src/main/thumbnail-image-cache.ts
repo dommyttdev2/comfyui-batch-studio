@@ -204,10 +204,12 @@ export async function readCachedThumbnailImage(
     const writeStarted = performance.now();
     await mkdir(path.dirname(target), { recursive: true });
     const temp = `${target}.${randomUUID()}.tmp`;
+    protectedCacheFiles.add(target);
     try {
       await writeFile(temp, bytes);
       await rename(temp, target);
     } finally {
+      protectedCacheFiles.delete(target);
       await rm(temp, { force: true }).catch(() => undefined);
     }
     if (timing) {
@@ -251,4 +253,5 @@ export async function storeWebpThumbnailPreview(
     protectedCacheFiles.delete(target);
     await rm(temp, { force: true }).catch(() => undefined);
   }
+  if (++completed % 32 === 0) scheduleCachePrune(userDataRoot);
 }
