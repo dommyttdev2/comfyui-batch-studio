@@ -2555,9 +2555,6 @@ async function assistantChooseModel(
     model: requested.model,
     ...(requested.reasoningEffort != null ? { reasoningEffort: requested.reasoningEffort } : {}),
   };
-  if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
-  await agentModelSelections.remember(root, stage, provider, normalized);
-
   if (provider === 'codex' && normalized.model) {
     const codexSettings = await codexModelSettings({ root, stage });
     const codexModel = codexSettings.models.find((item) => item.id === normalized.model);
@@ -2567,10 +2564,17 @@ async function assistantChooseModel(
       codexSettings.selection.effort;
     if (!codexModel?.supportedReasoningEfforts.some((item) => item.reasoningEffort === effort))
       throw new Error('選択したCodexモデルと推論強度を利用できません。');
-    if (!codexModelSelections) throw new Error('Codexモデル設定が初期化されていません。');
-    await codexModelSelections.remember(root, stage, { model: normalized.model, effort });
-    return { model: normalized.model, reasoningEffort: effort };
+    if (!codexModelSelections || !agentModelSelections)
+      throw new Error('AIモデル設定が初期化されていません。');
+    const selected = { model: normalized.model, reasoningEffort: effort };
+    await Promise.all([
+      codexModelSelections.remember(root, stage, { model: normalized.model, effort }),
+      agentModelSelections.remember(root, stage, provider, selected),
+    ]);
+    return selected;
   }
+  if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
+  await agentModelSelections.remember(root, stage, provider, normalized);
   return normalized;
 }
 
