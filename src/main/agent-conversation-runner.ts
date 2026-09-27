@@ -89,7 +89,8 @@ export class AgentConversationRunner {
     text: string,
   ): Promise<AgentTurn> {
     const prompt = text.trim();
-    if (!prompt || prompt.length > 750_000) throw new Error('AIへのメッセージが空、または長すぎます。');
+    if (!prompt || prompt.length > 750_000)
+      throw new Error('AIへのメッセージが空、または長すぎます。');
     const activeKey = key(root, stage, provider);
     if (this.active.has(activeKey)) throw new Error('この会話は回答生成中です。');
 
@@ -186,7 +187,9 @@ export class AgentConversationRunner {
         text: event.text,
         at: event.at,
       };
-      void this.conversations.upsert(root, stage, provider, turn.sessionId, message).catch(() => {});
+      void this.conversations
+        .upsert(root, stage, provider, turn.sessionId, message)
+        .catch(() => {});
     }
   }
 
