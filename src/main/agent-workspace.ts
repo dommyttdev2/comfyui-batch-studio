@@ -108,9 +108,15 @@ export async function prepareAgentConversationWorkspace(
   const workspaceId = randomUUID();
   const directory = path.join(workspaceBase(userData, provider), workspaceId);
   const inputDirectory = path.join(directory, 'input');
-  await mkdir(inputDirectory, { recursive: true });
-  await writeWorkspaceReferences(inputDirectory, references);
-  return { workspaceId, provider, directory, inputDirectory };
+  const workspace = { workspaceId, provider, directory, inputDirectory };
+  try {
+    await mkdir(inputDirectory, { recursive: true });
+    await writeWorkspaceReferences(inputDirectory, references);
+    return workspace;
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 async function removeWorkspaceDirectory(
@@ -145,10 +151,15 @@ export async function prepareAgentWorkspace(
   references: Array<{ name: string; content: string }>,
 ): Promise<AgentWorkspace> {
   const workspace = agentWorkspaceFor(userData, provider, stage, randomUUID());
-  await mkdir(workspace.inputDirectory, { recursive: true });
-  await mkdir(workspace.outputDirectory, { recursive: true });
-  await writeWorkspaceReferences(workspace.inputDirectory, references);
-  return workspace;
+  try {
+    await mkdir(workspace.inputDirectory, { recursive: true });
+    await mkdir(workspace.outputDirectory, { recursive: true });
+    await writeWorkspaceReferences(workspace.inputDirectory, references);
+    return workspace;
+  } catch (error) {
+    await rm(workspace.directory, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 export function agentWorkspaceOutputInstruction(workspace: AgentWorkspace): string {
