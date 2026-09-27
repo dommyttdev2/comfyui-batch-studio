@@ -30,7 +30,8 @@ function bytesIn(root) {
   for (const variant of ['editor', 'gallery']) {
     const directory = path.join(root, variant);
     if (!fs.existsSync(directory)) continue;
-    for (const name of fs.readdirSync(directory)) total += fs.statSync(path.join(directory, name)).size;
+    for (const name of fs.readdirSync(directory))
+      total += fs.statSync(path.join(directory, name)).size;
   }
   return total;
 }
@@ -51,7 +52,11 @@ function bytesIn(root) {
     assert.equal(metrics.runs, 1, `${requests} burst requests must coalesce to one prune`);
     assert.equal(metrics.coalesced, requests - 1);
     assert.ok(bytesIn(root) <= 64, `${requests} files must prune back to the configured limit`);
-    assert.equal(JSON.stringify(metrics).includes(root), false, 'metrics must not contain cache paths');
+    assert.equal(
+      JSON.stringify(metrics).includes(root),
+      false,
+      'metrics must not contain cache paths',
+    );
   }
 
   const parallelRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-prune-parallel-'));
