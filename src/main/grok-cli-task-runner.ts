@@ -106,16 +106,9 @@ export class GrokCliTaskRunner {
         const content = await readFile(attachment.path, 'utf8');
         const name = safeReferenceName(attachment.name);
         references.push({ name, content });
-        referenceGuide.push(
-          `input/${references.length}-${name} — ${attachment.purpose}`,
-        );
+        referenceGuide.push(`input/${references.length}-${name} — ${attachment.purpose}`);
       }
-      workspace = await prepareAgentWorkspace(
-        this.userDataPath,
-        'grok',
-        taskStage,
-        references,
-      );
+      workspace = await prepareAgentWorkspace(this.userDataPath, 'grok', taskStage, references);
     }
 
     const prompt = workspace
@@ -143,15 +136,13 @@ export class GrokCliTaskRunner {
       ...(workspace ? { workspace } : {}),
       ...(model ? { model } : {}),
     };
-    const forward = (event: AgentEvent) =>
-      this.onEvent({ root, stage: contextStage }, event);
+    const forward = (event: AgentEvent) => this.onEvent({ root, stage: contextStage }, event);
     const turn = saved.activeSessionId
       ? await this.adapter.resumeTask(saved.activeSessionId, request, forward)
       : await this.adapter.startTask(request, forward);
 
     await this.sessions.remember(root, contextStage, 'grok', turn.sessionId);
-    if (workspace)
-      await rememberAgentWorkspace(root, workspace, turn.sessionId, turn.turnId);
+    if (workspace) await rememberAgentWorkspace(root, workspace, turn.sessionId, turn.turnId);
 
     const run: ActiveRun = {
       turn,
