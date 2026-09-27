@@ -2406,6 +2406,109 @@ async function codexModelSettings(context: CodexContext): Promise<CodexModelSett
       : model.defaultReasoningEffort;
   return { models, selection: { model: model.id, effort } };
 }
+function assistantAdapter(provider: AgentProvider) {
+  const adapter = provider === 'codex' ? codexCliAdapter : grokCliAdapter;
+  if (!adapter) throw new Error(`${provider} CLIが初期化されていません。`);
+  return adapter;
+}
+
+async function assistantModelSettings(
+  root: string,
+  stage: GrokContextStage,
+  provider: AgentProvider,
+): Promise<AgentModelSettings> {
+  if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
+  if (provider === 'codex') {
+    const settings = await codexModelSettings({ root, stage });
+    return {
+      models: settings.models.map((model) => ({
+        id: model.id,
+        displayName: model.displayName,
+        supportedReasoningEfforts: model.supportedReasoningEfforts.map(
+          (effort) => effort.reasoningEffort,
+        ),
+      })),
+      selection: {
+        model: settings.selection.model,
+        reasoningEffort: settings.selection.effort,
+      },
+    };
+  }
+
+  const adapter = assistantAdapter(provider);
+  if (!adapter.getModels) return { models: [], selection: { model: null } };
+  const available = await adapter.getModels();
+  const saved = await agentModelSelections.get(root, stage, provider);
+  const requested = available.models.find((model) => model.id === saved?.model);
+  const fallback =
+    available.models.find((model) => model.id === available.selection.model) ?? available.models[0];
+  const model = requested ?? fallback;
+  const requestedEffort = saved?.reasoningEffort;
+  const supported = model?.supportedReasoningEfforts;
+  const reasoningEffort =
+    requestedEffort &&
+    (!supported?.length || supported.includes(requestedEffort))
+      ? requestedEffort
+      : available.selection.reasoningEffort;
+  return {
+    models: available.models,
+    selection: {
+      model: model?.id ?? null,
+      ...(reasoningEffort != null ? { reasoningEffort } : {}),
+    },
+  };
+}
+
+async function assistantChooseModel(
+  root: string,
+  stage: GrokContextStage,
+  provider: AgentProvider,
+  selection: unknown,
+): Promise<AgentModelSelection> {
+  if (
+    !selection ||
+    typeof selection !== 'object' ||
+    !('model' in selection) ||
+    ((selection as AgentModelSelection).model !== null &&
+      typeof (selection as AgentModelSelection).model !== 'string')
+  )
+    throw new Error('AIモデルを選択してください。');
+  const requested = selection as AgentModelSelection;
+  const settings = await assistantModelSettings(root, stage, provider);
+  const model = settings.models.find((item) => item.id === requested.model);
+  if (requested.model && !model) throw new Error('選択したモデルは利用できません。');
+  if (
+    requested.reasoningEffort &&
+    model?.supportedReasoningEfforts?.length &&
+    !model.supportedReasoningEfforts.includes(requested.reasoningEffort)
+  )
+    throw new Error('選択した推論強度はこのモデルで利用できません。');
+
+  const normalized: AgentModelSelection = {
+    model: requested.model,
+    ...(requested.reasoningEffort != null
+      ? { reasoningEffort: requested.reasoningEffort }
+      : {}),
+  };
+  if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
+  await agentModelSelections.remember(root, stage, provider, normalized);
+
+  if (provider === 'codex' && normalized.model) {
+    const codexSettings = await codexModelSettings({ root, stage });
+    const codexModel = codexSettings.models.find((item) => item.id === normalized.model);
+    const effort =
+      normalized.reasoningEffort ??
+      codexModel?.defaultReasoningEffort ??
+      codexSettings.selection.effort;
+    if (!codexModel?.supportedReasoningEfforts.some((item) => item.reasoningEffort === effort))
+      throw new Error('選択したCodexモデルと推論強度を利用できません。');
+    if (!codexModelSelections) throw new Error('Codexモデル設定が初期化されていません。');
+    await codexModelSelections.remember(root, stage, { model: normalized.model, effort });
+    return { model: normalized.model, reasoningEffort: effort };
+  }
+  return normalized;
+}
+
 async function codexChooseModel(
   state: ProjectWindowState,
   selection: unknown,
