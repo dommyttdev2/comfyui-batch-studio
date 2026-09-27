@@ -116,11 +116,7 @@ async function waitUntil(predicate, message) {
   const buildTask = async (_root, stage, extra) => ({
     stage,
     title: 'Prompt Plan',
-    prompt:
-      'Build prompt plan. ' +
-      extra +
-      '\n\n' +
-      artifactFileOutputRules('prompt_plan.json'),
+    prompt: 'Build prompt plan. ' + extra + '\n\n' + artifactFileOutputRules('prompt_plan.json'),
     attachments: [
       {
         name: 'story.md',
@@ -183,7 +179,10 @@ async function waitUntil(predicate, message) {
   fs.writeFileSync(starts[0].request.workspace.outputPath, '{"schemaVersion":2}', 'utf8');
   waits.get(first.turnId).resolve();
   await waitUntil(() => imports.length === 1, 'first artifact was not imported');
-  await waitUntil(() => !runner.isBusy(root, 'prompt-plan'), 'first run did not release busy state');
+  await waitUntil(
+    () => !runner.isBusy(root, 'prompt-plan'),
+    'first run did not release busy state',
+  );
 
   assert.equal(imports[0].raw, '{"schemaVersion":2}');
   assert.equal(imports[0].provider, 'grok');
@@ -199,7 +198,10 @@ async function waitUntil(predicate, message) {
   assert.equal(second.sessionId, first.sessionId);
   await runner.stop(root, 'prompt-plan');
   assert.deepEqual(stops, [second.turnId]);
-  await waitUntil(() => !runner.isBusy(root, 'prompt-plan'), 'cancelled run did not release busy state');
+  await waitUntil(
+    () => !runner.isBusy(root, 'prompt-plan'),
+    'cancelled run did not release busy state',
+  );
   assert.equal(artifacts.at(-1).phase, 'failed');
 
   assert.equal(
