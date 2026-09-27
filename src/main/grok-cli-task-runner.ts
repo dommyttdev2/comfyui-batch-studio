@@ -13,9 +13,12 @@ import { expectedArtifact, importAutoArtifact } from './agent-artifact-import.js
 import { AgentSessionStateStore } from './agent-session-state.js';
 import {
   agentWorkspaceOutputInstruction,
+  prepareAgentConversationWorkspace,
   prepareAgentWorkspace,
   readAgentWorkspaceOutput,
   rememberAgentWorkspace,
+  removeAgentConversationWorkspace,
+  type AgentConversationWorkspace,
   type AgentWorkspace,
 } from './agent-workspace.js';
 import { artifactFileOutputRules, buildGrokTask } from './grok-context.js';
@@ -38,6 +41,7 @@ type ActiveRun = {
   turn: AgentTurn;
   taskStage: GrokTask['stage'];
   workspace: AgentWorkspace | null;
+  conversationWorkspace: AgentConversationWorkspace | null;
   fileName: string | null;
 };
 
@@ -98,18 +102,21 @@ export class GrokCliTaskRunner {
     const artifactFile = expectedArtifact(taskStage);
     const references: Array<{ name: string; content: string }> = [];
     const referenceGuide: string[] = [];
-    let workspace: AgentWorkspace | null = null;
-
-    if (artifactFile) {
-      for (const attachment of task.attachments) {
-        if (!attachment.exists) continue;
-        const content = await readFile(attachment.path, 'utf8');
-        const name = safeReferenceName(attachment.name);
-        references.push({ name, content });
-        referenceGuide.push(`input/${references.length}-${name} — ${attachment.purpose}`);
-      }
-      workspace = await prepareAgentWorkspace(this.userDataPath, 'grok', taskStage, references);
+    for (const attachment of task.attachments) {
+      if (!attachment.exists) continue;
+      const content = await readFile(attachment.path, 'utf8');
+      const name = safeReferenceName(attachment.name);
+      references.push({ name, content });
+      referenceGuide.push(`input/${references.length}-${name} — ${attachment.purpose}`);
     }
+
+    const workspace = artifactFile
+      ? await prepareAgentWorkspace(this.userDataPath, 'grok', taskStage, references)
+      : null;
+    const conversationWorkspace = artifactFile
+      ? null
+      : await prepareAgentConversationWorkspace(this.userDataPath, 'grok', references);
+    const taskWorkspace = workspace ?? conversationWorkspace;
 
     const prompt =
       workspace && artifactFile
@@ -120,7 +127,15 @@ export class GrokCliTaskRunner {
           ]
             .filter(Boolean)
             .join('\n\n')
-        : task.prompt;
+        : [
+            task.prompt,
+            referenceGuide.length ? `## 参照ファイル\n${referenceGuide.join('\n')}` : '',
+            referenceGuide.length
+              ? 'CLI実行では上記ファイルを作業ディレクトリの input/ から参照してください。'
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n\n');
 
     let model: AgentModelSelection | undefined;
     if (this.adapter.getModels) {
@@ -134,7 +149,7 @@ export class GrokCliTaskRunner {
       taskStage,
       prompt,
       extra,
-      ...(workspace ? { workspace } : {}),
+      ...(taskWorkspace ? { workspace: taskWorkspace } : {}),
       ...(model ? { model } : {}),
     };
     const forward = (event: AgentEvent) => this.onEvent({ root, stage: contextStage }, event);
@@ -149,6 +164,7 @@ export class GrokCliTaskRunner {
       turn,
       taskStage,
       workspace,
+      conversationWorkspace,
       fileName: artifactFile,
     };
     this.active.set(activeKey, run);
@@ -213,6 +229,10 @@ export class GrokCliTaskRunner {
         });
       }
     } finally {
+      if (run.conversationWorkspace)
+        await removeAgentConversationWorkspace(this.userDataPath, run.conversationWorkspace).catch(
+          () => {},
+        );
       if (this.active.get(activeKey) === run) this.active.delete(activeKey);
     }
   }
