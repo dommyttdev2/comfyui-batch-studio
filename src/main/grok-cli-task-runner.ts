@@ -18,6 +18,7 @@ import {
   readAgentWorkspaceOutput,
   rememberAgentWorkspace,
   removeAgentConversationWorkspace,
+  removeAgentWorkspace,
   type AgentConversationWorkspace,
   type AgentWorkspace,
 } from './agent-workspace.js';
@@ -98,6 +99,12 @@ export class GrokCliTaskRunner {
     if (availability.state !== 'available')
       throw new Error(availability.message ?? 'Grok CLIを利用できません。');
 
+    let model: AgentModelSelection | undefined;
+    if (this.adapter.getModels) {
+      const settings = await this.adapter.getModels();
+      model = settings.selection;
+    }
+
     const task = await this.buildTask(root, taskStage, extra);
     const artifactFile = expectedArtifact(taskStage);
     const references: Array<{ name: string; content: string }> = [];
@@ -137,12 +144,6 @@ export class GrokCliTaskRunner {
             .filter(Boolean)
             .join('\n\n');
 
-    let model: AgentModelSelection | undefined;
-    if (this.adapter.getModels) {
-      const settings = await this.adapter.getModels();
-      model = settings.selection;
-    }
-
     const saved = await this.sessions.get(root, contextStage, 'grok');
     const request = {
       context: { root, stage: contextStage },
@@ -153,12 +154,22 @@ export class GrokCliTaskRunner {
       ...(model ? { model } : {}),
     };
     const forward = (event: AgentEvent) => this.onEvent({ root, stage: contextStage }, event);
-    const turn = saved.activeSessionId
-      ? await this.adapter.resumeTask(saved.activeSessionId, request, forward)
-      : await this.adapter.startTask(request, forward);
-
-    await this.sessions.remember(root, contextStage, 'grok', turn.sessionId);
-    if (workspace) await rememberAgentWorkspace(root, workspace, turn.sessionId, turn.turnId);
+    let turn: AgentTurn;
+    try {
+      turn = saved.activeSessionId
+        ? await this.adapter.resumeTask(saved.activeSessionId, request, forward)
+        : await this.adapter.startTask(request, forward);
+      await this.sessions.remember(root, contextStage, 'grok', turn.sessionId);
+      if (workspace) await rememberAgentWorkspace(root, workspace, turn.sessionId, turn.turnId);
+    } catch (error) {
+      if (typeof turn !== 'undefined') await this.adapter.stop(turn.turnId).catch(() => {});
+      if (conversationWorkspace)
+        await removeAgentConversationWorkspace(this.userDataPath, conversationWorkspace).catch(
+          () => {},
+        );
+      if (workspace) await removeAgentWorkspace(this.userDataPath, workspace).catch(() => {});
+      throw error;
+    }
 
     const run: ActiveRun = {
       turn,
