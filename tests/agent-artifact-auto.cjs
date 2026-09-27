@@ -65,7 +65,16 @@ assert.match(
   source('src/main/grok-auto-artifact-watcher.ts'),
   /MutationObserver|observeGrokArtifact/,
 );
-assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
+assert.match(
+  source('src/renderer/GrokStages.tsx'),
+  /assistant\.startTask/,
+  'Left-pane AI execution must rely on the shared task runner rather than the Grok Web watcher.',
+);
+assert.doesNotMatch(
+  source('src/renderer/GrokStages.tsx'),
+  /autoArtifact\.armGrok/,
+  'The unified stage UI must not arm the legacy Grok Web artifact watcher.',
+);
 
 (async () => {
   const { importAutoArtifact, latestAutoArtifact, expectedArtifact, artifactFileContent } =
