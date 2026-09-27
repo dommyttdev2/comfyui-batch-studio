@@ -22,7 +22,7 @@ execFileSync(
 );
 
 class FakeChild extends EventEmitter {
-  constructor(pid) {
+  constructor(pid, autoSpawn = true) {
     super();
     this.pid = pid;
     this.stdin = new PassThrough();
@@ -30,7 +30,7 @@ class FakeChild extends EventEmitter {
     this.stderr = new PassThrough();
     this.exitCode = null;
     this.killed = false;
-    queueMicrotask(() => this.emit('spawn'));
+    if (autoSpawn) queueMicrotask(() => this.emit('spawn'));
   }
 
   line(value) {
@@ -289,6 +289,30 @@ async function nextTick() {
     await adapter.startTask(task(root, false), () => {});
     children[0].raw('{bad-json}\n');
     await assert.rejects(adapter.waitForCompletion('malformed-turn'), /不正なstreaming-json/);
+  }
+
+  {
+    const calls = [];
+    const sessionId = '56565656-5656-4565-8565-565656565656';
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-cli-spawn-error-'));
+    const adapter = new GrokCliAdapter({
+      platform: 'linux',
+      createTurnId: () => 'spawn-error-turn',
+      createSessionId: () => sessionId,
+      spawnProcess: (command, args) => {
+        const child = new FakeChild(450, false);
+        calls.push({ command, args: [...args] });
+        queueMicrotask(() => child.emit('error', new Error('spawn grok ENOENT')));
+        return child;
+      },
+    });
+    await assert.rejects(adapter.startTask(task(root, false), () => {}), /ENOENT/);
+    const promptPath = calls[0].args[calls[0].args.indexOf('--prompt-file') + 1];
+    assert.equal(
+      fs.existsSync(promptPath),
+      false,
+      'Prompt temp file must be deleted when Grok fails to spawn',
+    );
   }
 
   {
