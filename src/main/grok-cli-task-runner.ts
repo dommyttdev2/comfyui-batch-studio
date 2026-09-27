@@ -106,6 +106,7 @@ export class GrokCliTaskRunner {
     }
 
     const task = await this.buildTask(root, taskStage, extra);
+    const saved = await this.sessions.get(root, contextStage, 'grok');
     const artifactFile = expectedArtifact(taskStage);
     const references: Array<{ name: string; content: string }> = [];
     const referenceGuide: string[] = [];
@@ -144,7 +145,6 @@ export class GrokCliTaskRunner {
             .filter(Boolean)
             .join('\n\n');
 
-    const saved = await this.sessions.get(root, contextStage, 'grok');
     const request = {
       context: { root, stage: contextStage },
       taskStage,
