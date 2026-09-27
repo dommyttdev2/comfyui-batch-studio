@@ -46,6 +46,7 @@ import type {
   VastAiOfferSearchInput,
   VastAiRentRequest,
   VastAiSshEndpoint,
+  AgentEvent,
 } from '../shared/types.js';
 import {
   createProject,
@@ -119,6 +120,15 @@ import {
 } from '../shared/codex-activity.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
+import { CodexCliAdapter, AgentTurnCancelledError } from './codex-cli-adapter.js';
+import { AgentSessionStateStore } from './agent-session-state.js';
+import {
+  prepareAgentWorkspace,
+  agentWorkspaceOutputInstruction,
+  readAgentWorkspaceOutput,
+  rememberAgentWorkspace,
+  type AgentWorkspace,
+} from './agent-workspace.js';
 import { CodexTurnMonitor } from './codex-turn-monitor.js';
 import {
   expectedArtifact,
@@ -324,13 +334,21 @@ let lastFocusedProjectWindowId: number | null = null,
   codexChatState: CodexChatStateStore | null = null,
   assistantProviderState: AssistantProviderStore | null = null,
   codexAppServer: CodexAppServer | null = null,
+  codexCliAdapter: CodexCliAdapter | null = null,
+  agentSessionState: AgentSessionStateStore | null = null,
+  codexCliActiveTurnIds = new Map<string, string>(),
   codexBusy = new Set<string>(),
   codexTurnStartRequests = new Map<string, Promise<string>>(),
   codexActiveTurnIds = new Map<string, string>(),
   codexInterruptRequests = new Map<string, Promise<void>>(),
   codexPendingArtifacts = new Map<
     string,
-    { root: string; stage: GrokTask['stage']; fileName: string; workspace?: FileArtifactWorkspace }
+    {
+      root: string;
+      stage: GrokTask['stage'];
+      fileName: string;
+      workspace?: FileArtifactWorkspace | AgentWorkspace;
+    }
   >(),
   codexTurnMonitor = new CodexTurnMonitor(),
   codexModelSelections: CodexModelSelectionStore | null = null,
@@ -1950,6 +1968,88 @@ function codexService() {
   if (!codexAppServer || !codexChatState) throw new Error('Codexが初期化されていません。');
   return { server: codexAppServer, store: codexChatState };
 }
+function codexCliTransportEnabled() {
+  return (process.env.BATCH_STUDIO_CODEX_TRANSPORT ?? '').trim().toLowerCase() === 'cli';
+}
+function isAgentWorkspace(
+  workspace: FileArtifactWorkspace | AgentWorkspace,
+): workspace is AgentWorkspace {
+  return (
+    'provider' in workspace &&
+    workspace.provider === 'codex' &&
+    'inputDirectory' in workspace &&
+    typeof workspace.inputDirectory === 'string' &&
+    'outputDirectory' in workspace &&
+    typeof workspace.outputDirectory === 'string'
+  );
+}
+function codexCliService() {
+  if (!codexCliAdapter || !agentSessionState || !codexChatState)
+    throw new Error('Codex CLIが初期化されていません。');
+  return { adapter: codexCliAdapter, sessions: agentSessionState, legacyStore: codexChatState };
+}
+function notifyAgentEvent(context: CodexContext, event: AgentEvent) {
+  const envelope = { provider: 'codex' as const, root: context.root, stage: context.stage, event };
+  for (const state of projectWindows.values()) {
+    if (!state.projectRoot || projectRootKey(state.projectRoot) !== projectRootKey(context.root))
+      continue;
+    state.localView.webContents.send(IPC.AGENT_EVENT, envelope);
+    if (
+      state.codexContext &&
+      projectRootKey(state.codexContext.root) === projectRootKey(context.root) &&
+      state.codexContext.stage === context.stage
+    )
+      state.codexView.webContents.send(IPC.AGENT_EVENT, envelope);
+  }
+}
+function forwardCodexCliEvent(
+  context: CodexContext,
+  threadId: string,
+  turnId: string,
+  event: AgentEvent,
+) {
+  notifyAgentEvent(context, event);
+  if (event.type === 'turn.started') {
+    forwardCodexNotification({
+      method: 'turn/started',
+      params: { threadId, turn: { id: turnId, status: 'inProgress' } },
+    });
+    return;
+  }
+  if (event.type === 'message.delta') {
+    forwardCodexNotification({
+      method: 'item/agentMessage/delta',
+      params: { threadId, delta: event.text },
+    });
+    return;
+  }
+  if (event.type === 'turn.completed') {
+    codexCliActiveTurnIds.delete(threadId);
+    forwardCodexNotification({
+      method: 'turn/completed',
+      params: { threadId, turn: { id: turnId, status: 'completed' } },
+    });
+    return;
+  }
+  if (event.type === 'turn.failed') {
+    codexCliActiveTurnIds.delete(threadId);
+    forwardCodexNotification({
+      method: 'turn/completed',
+      params: {
+        threadId,
+        turn: { id: turnId, status: 'failed', error: { message: event.error } },
+      },
+    });
+    return;
+  }
+  if (event.type === 'turn.cancelled') {
+    codexCliActiveTurnIds.delete(threadId);
+    forwardCodexNotification({
+      method: 'turn/completed',
+      params: { threadId, turn: { id: turnId, status: 'interrupted' } },
+    });
+  }
+}
 function codexContextFor(state: ProjectWindowState): CodexContext {
   const context = state.codexContext;
   if (
@@ -2104,9 +2204,11 @@ async function codexArtifactFor(
       sourceId: threadId,
       phase: 'waiting',
     };
-  return lastTurnId
-    ? latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/' + lastTurnId)
-    : null;
+  if (!lastTurnId) return null;
+  return (
+    (await latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/' + lastTurnId)) ??
+    latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/')
+  );
 }
 async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> {
   const context = codexContextFor(state);
@@ -2305,15 +2407,137 @@ async function codexChooseModel(
   await codexModelSelections.remember(context.root, context.stage, requested);
   return requested;
 }
-async function codexSend(
+function defaultTaskStage(context: GrokContextStage): GrokTask['stage'] {
+  if (context === 'story') return 'story-initial';
+  if (context === 'models') return 'models';
+  if (context === 'prompt-plan') return 'prompt-plan';
+  return 'caption';
+}
+
+async function codexSendViaCli(
   state: ProjectWindowState,
   message: string,
   artifactStage?: GrokTask['stage'],
-  workspace?: FileArtifactWorkspace,
+  workspace?: AgentWorkspace,
 ): Promise<CodexSendResult> {
   const context = codexContextFor(state);
   const input = message.trim();
   if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
+  const { adapter, sessions, legacyStore } = codexCliService();
+  const availability = await adapter.checkAvailability();
+  if (availability.state !== 'available')
+    throw new Error(availability.message ?? 'Codex CLIを利用できません。');
+
+  const settings = await codexModelSettings(context);
+  const saved = await legacyStore.get(context.root, context.stage);
+  const existingThreadId = saved.activeThreadId;
+  if (existingThreadId && codexBusy.has(existingThreadId))
+    throw new Error('このチャットは回答生成中です。');
+
+  let observedThreadId: string | null = existingThreadId;
+  let ready = false;
+  const queued: AgentEvent[] = [];
+  const dispatch = (event: AgentEvent) => {
+    if (event.type === 'session.started') {
+      observedThreadId = event.sessionId;
+      notifyAgentEvent(context, event);
+      return;
+    }
+    if (!ready) {
+      queued.push(event);
+      return;
+    }
+    if (!observedThreadId) return;
+    const activeTurnId = codexCliActiveTurnIds.get(observedThreadId);
+    if (activeTurnId) forwardCodexCliEvent(context, observedThreadId, activeTurnId, event);
+    else notifyAgentEvent(context, event);
+  };
+  const request = {
+    context,
+    taskStage: artifactStage ?? defaultTaskStage(context.stage),
+    prompt: input,
+    extra: '',
+    ...(workspace ? { workspace } : {}),
+    model: {
+      model: settings.selection.model,
+      reasoningEffort: settings.selection.effort,
+    },
+  };
+  const turn = existingThreadId
+    ? await adapter.resumeTask(existingThreadId, request, dispatch)
+    : await adapter.startTask(request, dispatch);
+  const threadId = turn.sessionId;
+  observedThreadId = threadId;
+
+  await Promise.all([
+    legacyStore.remember(context.root, context.stage, threadId),
+    sessions.remember(context.root, context.stage, 'codex', threadId),
+  ]);
+  stateCodexActiveThread.set(state.window.id, threadId);
+  codexBusy.add(threadId);
+  codexCliActiveTurnIds.set(threadId, turn.turnId);
+  codexTurnMonitor.sending(threadId);
+
+  const artifactFile = artifactStage ? expectedArtifact(artifactStage) : null;
+  if (artifactFile && artifactStage)
+    codexPendingArtifacts.set(threadId, {
+      root: context.root,
+      stage: artifactStage,
+      fileName: artifactFile,
+      workspace,
+    });
+  if (workspace) await rememberAgentWorkspace(context.root, workspace, threadId, turn.turnId);
+
+  ready = true;
+  for (const event of queued.splice(0)) forwardCodexCliEvent(context, threadId, turn.turnId, event);
+
+  void adapter.waitForCompletion(turn.turnId).catch((error) => {
+    if (error instanceof AgentTurnCancelledError) return;
+    // Post-start failures are already projected as AgentEvent turn.failed by the adapter.
+    // This catch prevents an unhandled rejection while the event path remains authoritative.
+  });
+
+  return {
+    ...(await legacyStore.get(context.root, context.stage)),
+    status: codexTurnStatus(threadId),
+    artifact:
+      artifactFile && artifactStage
+        ? {
+            provider: 'codex',
+            root: context.root,
+            stage: artifactStage,
+            fileName: artifactFile,
+            sourceId: threadId,
+            phase: 'waiting',
+          }
+        : null,
+  };
+}
+
+async function codexSend(
+  state: ProjectWindowState,
+  message: string,
+  artifactStage?: GrokTask['stage'],
+  workspace?: FileArtifactWorkspace | AgentWorkspace,
+): Promise<CodexSendResult> {
+  const context = codexContextFor(state);
+  const input = message.trim();
+  if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
+  if (codexCliTransportEnabled()) {
+    const cliWorkspace: AgentWorkspace | undefined = workspace
+      ? isAgentWorkspace(workspace)
+        ? workspace
+        : {
+            ...workspace,
+            provider: 'codex',
+            inputDirectory: path.join(workspace.directory, 'input'),
+            outputDirectory: path.join(workspace.directory, 'output'),
+          }
+      : undefined;
+    return codexSendViaCli(state, input, artifactStage, cliWorkspace);
+  }
+  if (workspace && isAgentWorkspace(workspace))
+    throw new Error('共通Agent WorkspaceをCodex App Server経路では使用できません。');
   const account = await codexAccount();
   if (!account.authenticated)
     throw new Error(
@@ -2421,6 +2645,16 @@ async function codexSend(
 }
 async function codexStopTurn(state: ProjectWindowState): Promise<CodexSnapshot> {
   const context = codexContextFor(state);
+  if (codexCliTransportEnabled()) {
+    const { adapter, legacyStore } = codexCliService();
+    const saved = await legacyStore.get(context.root, context.stage);
+    const threadId = saved.activeThreadId;
+    if (!threadId || !codexBusy.has(threadId)) return codexSnapshot(state);
+    const turnId = codexCliActiveTurnIds.get(threadId);
+    if (!turnId) throw new Error('中止対象のCodex CLI turnを特定できません。');
+    await adapter.stop(turnId);
+    return codexSnapshot(state);
+  }
   const { server, store } = codexService();
   const saved = await store.get(context.root, context.stage);
   const threadId = saved.activeThreadId;
@@ -2460,7 +2694,7 @@ async function collectCodexArtifact(
     root: string;
     stage: GrokTask['stage'];
     fileName: string;
-    workspace?: FileArtifactWorkspace;
+    workspace?: FileArtifactWorkspace | AgentWorkspace;
   },
   params: Record<string, unknown>,
 ): Promise<AutoArtifactEvent | null> {
@@ -2480,7 +2714,9 @@ async function collectCodexArtifact(
   }
   if (pending.workspace) {
     try {
-      const raw = await readCodexOutput(pending.workspace);
+      const raw = isAgentWorkspace(pending.workspace)
+        ? await readAgentWorkspaceOutput(pending.workspace)
+        : await readCodexOutput(pending.workspace);
       const turnId = typeof turn.id === 'string' ? turn.id : 'last';
       return await importAutoArtifact(
         pending.root,
@@ -2577,9 +2813,13 @@ async function codexSendTask(
     throw new Error('選択した工程に対応しない依頼です。');
   if (stage === 'prompt-plan-patch') {
     const baseline = await promptPlanPatchBase(context.root);
-    const workspace = await prepareCodexFileWorkspace(app.getPath('userData'), stage, [
-      { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
-    ]);
+    const workspace = codexCliTransportEnabled()
+      ? await prepareAgentWorkspace(app.getPath('userData'), 'codex', stage, [
+          { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
+        ])
+      : await prepareCodexFileWorkspace(app.getPath('userData'), stage, [
+          { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
+        ]);
     const patchPrompt = `## Task
 あなたはComfyUI Batch StudioのPrompt Plan Schema v2を修正します。
 これは相談や全文再生成ではなく、この会話で合意した変更を、現在の既存計画へ部分適用するための差分生成依頼です。
@@ -2614,7 +2854,11 @@ async function codexSendTask(
 ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
     return codexSend(
       state,
-      patchPrompt + '\n\n' + workspaceOutputInstruction(workspace),
+      patchPrompt +
+        '\n\n' +
+        (isAgentWorkspace(workspace)
+          ? agentWorkspaceOutputInstruction(workspace)
+          : workspaceOutputInstruction(workspace)),
       stage,
       workspace,
     );
@@ -2644,13 +2888,17 @@ ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
     references.push({ name: filename, content });
     referenceGuide.push('input/' + references.length + '-' + filename + ' — ' + attachment.purpose);
   }
-  const workspace = await prepareCodexFileWorkspace(app.getPath('userData'), stage, references);
+  const workspace = codexCliTransportEnabled()
+    ? await prepareAgentWorkspace(app.getPath('userData'), 'codex', stage, references)
+    : await prepareCodexFileWorkspace(app.getPath('userData'), stage, references);
   return codexSend(
     state,
     prompt +
       (referenceGuide.length ? '\n\n## 参照ファイル\n' + referenceGuide.join('\n') : '') +
       '\n\n' +
-      workspaceOutputInstruction(workspace),
+      (isAgentWorkspace(workspace)
+        ? agentWorkspaceOutputInstruction(workspace)
+        : workspaceOutputInstruction(workspace)),
     stage,
     workspace,
   );
@@ -4727,6 +4975,8 @@ async function initializeApplication() {
   codexChatState = new CodexChatStateStore(userData);
   codexModelSelections = new CodexModelSelectionStore(userData);
   assistantProviderState = new AssistantProviderStore(userData);
+  agentSessionState = new AgentSessionStateStore(userData);
+  codexCliAdapter = new CodexCliAdapter();
   codexAppServer = new CodexAppServer();
   codexAppServer.on('notification', forwardCodexNotification);
   codexAppServer.on('disconnected', (message: string) => {
@@ -4761,7 +5011,10 @@ async function initializeApplication() {
   });
 }
 if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
-app.on('will-quit', () => codexAppServer?.stop());
+app.on('will-quit', () => {
+  void codexCliAdapter?.shutdown().catch(() => {});
+  codexAppServer?.stop();
+});
 app.on('window-all-closed', () => {
   if (!executionCoordinator.hasActiveRuns() && process.platform !== 'darwin') app.quit();
 });

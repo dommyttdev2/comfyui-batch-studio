@@ -22,12 +22,19 @@ export function codexTaskFileForTurn(turn: unknown): string | null {
             .map((part) => part.text)
             .join('\n')
         : '';
-  if (!text.includes('## Codex向け出力契約')) return null;
+  const legacyContract = text.includes('## Codex向け出力契約');
+  const sharedContract = text.includes('## Batch Studio向け成果物出力契約');
+  if (!legacyContract && !sharedContract) return null;
   // Story discussion can mention story.md without requesting an artifact.
-  // Capture only the filename, not the entire phrase "回答の最後に ...".
-  const match = text.match(
-    /回答の最後に\s*(story\.md|model_loras\.json|prompt_plan\.json|prompt_plan_patch\.json|caption_content\.json)/,
-  );
+  // Legacy App Server turns name the file after "回答の最後に"; the shared CLI
+  // contract names the actual output/<file> path.
+  const match = legacyContract
+    ? text.match(
+        /回答の最後に\s*(story\.md|model_loras\.json|prompt_plan\.json|prompt_plan_patch\.json|caption_content\.json)/,
+      )
+    : text.match(
+        /output\/(story\.md|model_loras\.json|prompt_plan\.json|prompt_plan_patch\.json|caption_content\.json)/,
+      );
   return match?.[1] ?? null;
 }
 
