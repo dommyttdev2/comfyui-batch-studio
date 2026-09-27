@@ -182,7 +182,6 @@ export class GrokCliAdapter implements AgentCliAdapter {
       !help.ok ||
       !/--prompt-file/.test(help.output) ||
       !/streaming-json/.test(help.output) ||
-      !/--no-auto-update/.test(help.output) ||
       !/--resume/.test(help.output)
     )
       return {
@@ -192,7 +191,7 @@ export class GrokCliAdapter implements AgentCliAdapter {
         message: 'このGrok CLIは必要なheadless / streaming-json機能をサポートしていません。',
       };
 
-    const models = await this.capture(['models', '--no-auto-update']);
+    const models = await this.capture(['--no-auto-update', 'models']);
     if (/You are not authenticated\./i.test(models.output))
       return {
         provider: 'grok',
@@ -211,7 +210,7 @@ export class GrokCliAdapter implements AgentCliAdapter {
   }
 
   async getModels(): Promise<AgentModelSettings> {
-    const result = await this.capture(['models', '--no-auto-update']);
+    const result = await this.capture(['--no-auto-update', 'models']);
     if (!result.ok) throw new Error('Grok CLIからモデル一覧を取得できません。');
     if (/You are not authenticated\./i.test(result.output))
       throw new Error('Grok CLIでログインするか、XAI_API_KEYを設定してください。');
