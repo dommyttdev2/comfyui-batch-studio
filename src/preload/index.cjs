@@ -155,6 +155,8 @@ const I = {
   CLIPBOARD_WRITE_TEXT: 'clipboard:write-text',
   ASSISTANT_GET_PROVIDER: 'assistant:get-provider',
   ASSISTANT_SET_PROVIDER: 'assistant:set-provider',
+  AGENT_TASK_START: 'agent:task-start',
+  AGENT_TASK_STOP: 'agent:task-stop',
   AGENT_EVENT: 'agent:event',
   CODEX_GET_PROVIDER: 'codex:get-provider',
   CODEX_SET_PROVIDER: 'codex:set-provider',
@@ -417,6 +419,8 @@ contextBridge.exposeInMainWorld('batchStudio', {
   assistant: {
     getProvider: (stage) => ipcRenderer.invoke(I.ASSISTANT_GET_PROVIDER, stage),
     setProvider: (provider, stage) => ipcRenderer.invoke(I.ASSISTANT_SET_PROVIDER, provider, stage),
+    startTask: (root, stage, extra) => ipcRenderer.invoke(I.AGENT_TASK_START, root, stage, extra),
+    stopTask: (root, stage) => ipcRenderer.invoke(I.AGENT_TASK_STOP, root, stage),
     onEvent: (listener) => {
       const handler = (_event, agentEvent) => listener(agentEvent);
       ipcRenderer.on(I.AGENT_EVENT, handler);
