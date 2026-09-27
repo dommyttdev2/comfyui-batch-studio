@@ -88,6 +88,29 @@ export class AgentSessionStateStore {
     await this.writeQueue;
   }
 
+  async activate(
+    projectPath: string,
+    stage: GrokContextStage,
+    provider: AgentProvider,
+    sessionId: string,
+  ): Promise<void> {
+    validSessionId(sessionId);
+    this.writeQueue = this.writeQueue
+      .catch(() => {})
+      .then(async () => {
+        const state = await this.read();
+        const key = projectKey(projectPath);
+        const sessions = copySessions(state.projects[key]?.[stage]?.[provider]);
+        if (!sessions.sessionIds.includes(sessionId))
+          throw new Error('Agent session is not part of this stage.');
+        sessions.activeSessionId = sessionId;
+        const stageState = { ...(state.projects[key]?.[stage] ?? {}), [provider]: sessions };
+        state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: stageState };
+        await writeJsonAtomic(this.filePath, state);
+      });
+    await this.writeQueue;
+  }
+
   async clearActive(
     projectPath: string,
     stage: GrokContextStage,
