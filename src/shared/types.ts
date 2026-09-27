@@ -1194,6 +1194,7 @@ export interface AgentEventEnvelope {
   provider: AgentProvider;
   root: string;
   stage: GrokContextStage;
+  taskStage: GrokTask['stage'];
   event: AgentEvent;
 }
 export type AutoArtifactPhase =
@@ -1603,6 +1604,8 @@ export interface BatchStudioApi {
       provider: AssistantPaneProvider,
       stage: GrokContextStage,
     ) => Promise<GrokPaneState>;
+    startTask: (root: string, stage: GrokTask['stage'], extra?: string) => Promise<void>;
+    stopTask: (root: string, stage: GrokTask['stage']) => Promise<void>;
     onEvent: (listener: (event: AgentEventEnvelope) => void) => () => void;
   };
   codex: {
