@@ -279,7 +279,6 @@ export class GrokCliAdapter implements AgentCliAdapter {
       task.workspace?.directory ?? task.context.root,
       '--sandbox',
       task.workspace ? 'strict' : 'read-only',
-      '--disable-web-search',
       '--always-approve',
     ];
     if (model) args.push('--model', model);
