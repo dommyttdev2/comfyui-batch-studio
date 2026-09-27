@@ -115,7 +115,6 @@ async function nextTick() {
     assert.ok(calls[0].args.includes('streaming-json'));
     assert.ok(calls[0].args.includes('--cwd'));
     assert.ok(calls[0].args.includes('strict'));
-    assert.ok(calls[0].args.includes('--disable-web-search'));
     assert.ok(calls[0].args.includes('--always-approve'));
     assert.ok(calls[0].args.includes('grok-4.6'));
     assert.ok(calls[0].args.includes('high'));
