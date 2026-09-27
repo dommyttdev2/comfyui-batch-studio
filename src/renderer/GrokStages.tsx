@@ -178,9 +178,7 @@ export function AgentStageBridge({
     isFix = stage.endsWith('-fix'),
     returnFile = AGENT_RETURN_FILES[stage],
     canRetry =
-      Boolean(agentError) ||
-      autoArtifact?.phase === 'invalid' ||
-      autoArtifact?.phase === 'failed';
+      Boolean(agentError) || autoArtifact?.phase === 'invalid' || autoArtifact?.phase === 'failed';
   const announceImport = useImportNotice();
 
   const selectReturnFile = (file: File | null) => {
@@ -342,7 +340,9 @@ export function AgentStageBridge({
             </p>
           )}
           {(autoArtifact.phase === 'invalid' || autoArtifact.phase === 'failed') && (
-            <p>追加条件を調整して「再実行」を押すか、必要な場合だけ下の手動取り込みを利用してください。</p>
+            <p>
+              追加条件を調整して「再実行」を押すか、必要な場合だけ下の手動取り込みを利用してください。
+            </p>
           )}
         </div>
       )}
@@ -418,7 +418,11 @@ export function AgentStageBridge({
           {importResultView(result)}
           <details>
             <summary>ファイルがない場合は本文を貼り付ける</summary>
-            <textarea className="raw" value={raw} onChange={(event) => setRaw(event.target.value)} />
+            <textarea
+              className="raw"
+              value={raw}
+              onChange={(event) => setRaw(event.target.value)}
+            />
             <button
               className="primary"
               disabled={!raw.trim() || !onImport}
