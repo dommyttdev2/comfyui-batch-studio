@@ -48,6 +48,10 @@ import type {
   VastAiSshEndpoint,
   AgentEvent,
   AgentProvider,
+  AgentModelSelection,
+  AgentModelSettings,
+  AssistantPaneContext,
+  AssistantPaneSnapshot,
 } from '../shared/types.js';
 import {
   createProject,
@@ -123,6 +127,9 @@ import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { CodexCliAdapter, AgentTurnCancelledError } from './codex-cli-adapter.js';
 import { AgentSessionStateStore } from './agent-session-state.js';
+import { AgentConversationStore } from './agent-conversation-store.js';
+import { AgentConversationRunner } from './agent-conversation-runner.js';
+import { AgentModelSelectionStore } from './agent-model-selection.js';
 import {
   prepareAgentWorkspace,
   agentWorkspaceOutputInstruction,
@@ -310,6 +317,7 @@ type ProjectWindowState = {
   paneProvider: AssistantPaneProvider;
   assistantSelectionGeneration: number;
   codexContext: CodexContext | null;
+  assistantContext: AssistantPaneContext | null;
   grokLoadingView: WebContentsView;
   projectRoot: string | null;
   restoreLastProject: boolean;
@@ -341,6 +349,9 @@ let lastFocusedProjectWindowId: number | null = null,
   grokCliAdapter: GrokCliAdapter | null = null,
   grokCliTaskRunner: GrokCliTaskRunner | null = null,
   agentSessionState: AgentSessionStateStore | null = null,
+  agentConversationStore: AgentConversationStore | null = null,
+  agentConversationRunner: AgentConversationRunner | null = null,
+  agentModelSelections: AgentModelSelectionStore | null = null,
   codexCliActiveTurnIds = new Map<string, string>(),
   codexBusy = new Set<string>(),
   codexTurnStartRequests = new Map<string, Promise<string>>(),
@@ -580,6 +591,7 @@ function createProjectWindow(
       paneProvider: 'grok',
       assistantSelectionGeneration: 0,
       codexContext: null,
+      assistantContext: null,
       grokLoadingView,
       projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
       restoreLastProject: Boolean(options.restoreLastProject),
