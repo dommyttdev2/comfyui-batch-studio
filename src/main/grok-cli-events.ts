@@ -61,7 +61,12 @@ export class GrokCliEventParser {
   private readonly tools = new Map<string, ToolState>();
   private message = '';
 
-  parseLine(line: string, turnId: string, expectedSessionId: string, now = Date.now()): GrokCliNormalizedLine {
+  parseLine(
+    line: string,
+    turnId: string,
+    expectedSessionId: string,
+    now = Date.now(),
+  ): GrokCliNormalizedLine {
     let parsed: unknown;
     try {
       parsed = JSON.parse(line);
@@ -90,8 +95,9 @@ export class GrokCliEventParser {
       const kind = text(value.kind);
       const name = toolName || text(value.title) || kind || 'tool';
       const mutationToken = `${kind} ${toolName}`.toLowerCase();
-      const mutatesFile =
-        /(?:write|edit|delete|rename|move|patch|replace|create)/.test(mutationToken);
+      const mutatesFile = /(?:write|edit|delete|rename|move|patch|replace|create)/.test(
+        mutationToken,
+      );
       if (id) this.tools.set(id, { name, path: toolPath(value.rawInput), mutatesFile });
       return { events: [{ type: 'tool.started', at: now, name }] };
     }
@@ -143,8 +149,7 @@ export class GrokCliEventParser {
         );
       const stopReason = text(value.stopReason);
       const normalized: AgentEvent[] = [];
-      if (this.message)
-        normalized.push({ type: 'message.completed', at: now, text: this.message });
+      if (this.message) normalized.push({ type: 'message.completed', at: now, text: this.message });
 
       if (stopReason === 'cancelled') {
         normalized.push({ type: 'turn.cancelled', at: now, turnId });
