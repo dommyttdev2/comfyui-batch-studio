@@ -154,7 +154,7 @@ export class GrokCliTaskRunner {
       ...(model ? { model } : {}),
     };
     const forward = (event: AgentEvent) => this.onEvent({ root, stage: contextStage }, event);
-    let turn: AgentTurn;
+    let turn: AgentTurn | null = null;
     try {
       turn = saved.activeSessionId
         ? await this.adapter.resumeTask(saved.activeSessionId, request, forward)
@@ -162,7 +162,7 @@ export class GrokCliTaskRunner {
       await this.sessions.remember(root, contextStage, 'grok', turn.sessionId);
       if (workspace) await rememberAgentWorkspace(root, workspace, turn.sessionId, turn.turnId);
     } catch (error) {
-      if (typeof turn !== 'undefined') await this.adapter.stop(turn.turnId).catch(() => {});
+      if (turn) await this.adapter.stop(turn.turnId).catch(() => {});
       if (conversationWorkspace)
         await removeAgentConversationWorkspace(this.userDataPath, conversationWorkspace).catch(
           () => {},
@@ -170,6 +170,7 @@ export class GrokCliTaskRunner {
       if (workspace) await removeAgentWorkspace(this.userDataPath, workspace).catch(() => {});
       throw error;
     }
+    if (!turn) throw new Error('Grok CLI turnを開始できませんでした。');
 
     const run: ActiveRun = {
       turn,
