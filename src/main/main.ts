@@ -4878,11 +4878,136 @@ function register() {
     if (state.projectRoot !== root || state.assistantSelectionGeneration !== generation)
       throw new Error('Project or stage changed during agent switch.');
     state.paneProvider = provider;
+    if (
+      state.assistantContext &&
+      state.projectRoot &&
+      projectRootKey(state.assistantContext.root) === projectRootKey(state.projectRoot) &&
+      state.assistantContext.stage === stage
+    ) {
+      state.assistantContext = { ...state.assistantContext, provider };
+      state.codexView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, state.assistantContext);
+    }
     layoutProjectWindow(state);
     return paneState(state);
   };
   ipcMain.handle(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider);
   ipcMain.handle(IPC.CODEX_SET_PROVIDER, setAssistantProvider);
+
+  const assistantTaskBusy = async (context: AssistantPaneContext) => {
+    if (context.provider === 'grok')
+      return grokCliTaskRunner?.isBusy(context.root, context.stage) ?? false;
+    if (!agentSessionState) return false;
+    const sessions = await agentSessionState.get(context.root, context.stage, 'codex');
+    return Boolean(sessions.activeSessionId && codexBusy.has(sessions.activeSessionId));
+  };
+
+  ipcMain.handle(IPC.ASSISTANT_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    if (event.sender.id !== state.localView.webContents.id)
+      throw new Error('Only the project window can select an AI context.');
+    validRoot(root);
+    validGrokContextStage(stage);
+    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
+      throw new Error('This project is not active in the current window.');
+    setAssistantContext(state, root, stage);
+  });
+
+  ipcMain.handle(IPC.ASSISTANT_CONTEXT, (event) => {
+    const state = projectWindowForSender(event.sender);
+    return state.assistantContext;
+  });
+
+  ipcMain.handle(IPC.ASSISTANT_SNAPSHOT, (event) =>
+    assistantSnapshot(projectWindowForSender(event.sender)),
+  );
+
+  ipcMain.handle(IPC.ASSISTANT_SEND, async (event, message: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    const context = assistantContextFor(state);
+    if (typeof message !== 'string') throw new Error('AI message must be text.');
+    if (!agentConversationRunner || !agentSessionState)
+      throw new Error('共通AI conversation runtimeが初期化されていません。');
+    if (await assistantTaskBusy(context))
+      throw new Error('工程用AIタスクの実行中は通常メッセージを送信できません。');
+    const turn = await agentConversationRunner.send(
+      context.root,
+      context.stage,
+      context.provider,
+      message,
+    );
+    if (context.provider === 'codex' && codexChatState) {
+      await codexChatState.remember(context.root, context.stage, turn.sessionId);
+      stateCodexActiveThread.set(state.window.id, turn.sessionId);
+    }
+    return turn;
+  });
+
+  ipcMain.handle(IPC.ASSISTANT_STOP_TURN, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    const context = assistantContextFor(state);
+    if (!agentConversationRunner) throw new Error('共通AI runtimeが初期化されていません。');
+    await agentConversationRunner.stop(context.root, context.stage, context.provider);
+  });
+
+  ipcMain.handle(IPC.ASSISTANT_NEW_CONVERSATION, async (event) => {
+    const state = projectWindowForSender(event.sender);
+    const context = assistantContextFor(state);
+    if (!agentSessionState || !agentConversationRunner)
+      throw new Error('共通AI session runtimeが初期化されていません。');
+    if (
+      agentConversationRunner.isBusy(context.root, context.stage, context.provider) ||
+      (await assistantTaskBusy(context))
+    )
+      throw new Error('回答生成中は新しい会話へ切り替えられません。');
+    await agentSessionState.clearActive(context.root, context.stage, context.provider);
+    if (context.provider === 'codex' && codexChatState) {
+      await codexChatState.clearActive(context.root, context.stage);
+      stateCodexActiveThread.set(state.window.id, null);
+    }
+    return assistantSnapshot(state);
+  });
+
+  ipcMain.handle(IPC.ASSISTANT_RESTORE_CONVERSATION, async (event, sessionId: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    const context = assistantContextFor(state);
+    if (typeof sessionId !== 'string' || !sessionId)
+      throw new Error('Invalid AI session ID.');
+    if (!agentSessionState || !agentConversationRunner)
+      throw new Error('共通AI session runtimeが初期化されていません。');
+    if (
+      agentConversationRunner.isBusy(context.root, context.stage, context.provider) ||
+      (await assistantTaskBusy(context))
+    )
+      throw new Error('回答生成中は会話履歴を切り替えられません。');
+    await agentSessionState.activate(
+      context.root,
+      context.stage,
+      context.provider,
+      sessionId,
+    );
+    if (context.provider === 'codex' && codexChatState) {
+      await codexChatState.remember(context.root, context.stage, sessionId);
+      stateCodexActiveThread.set(state.window.id, sessionId);
+    }
+    return assistantSnapshot(state);
+  });
+
+  ipcMain.handle(IPC.ASSISTANT_MODELS, async (event) => {
+    const context = assistantContextFor(projectWindowForSender(event.sender));
+    return assistantModelSettings(context.root, context.stage, context.provider);
+  });
+
+  ipcMain.handle(IPC.ASSISTANT_SELECT_MODEL, async (event, selection: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    const context = assistantContextFor(state);
+    if (!agentConversationRunner) throw new Error('共通AI runtimeが初期化されていません。');
+    if (
+      agentConversationRunner.isBusy(context.root, context.stage, context.provider) ||
+      (await assistantTaskBusy(context))
+    )
+      throw new Error('回答生成中はモデルを変更できません。');
+    return assistantChooseModel(context.root, context.stage, context.provider, selection);
+  });
 
   const validateAgentTaskRequest = (
     event: IpcMainInvokeEvent,
@@ -4913,6 +5038,19 @@ function register() {
     IPC.AGENT_TASK_START,
     async (event, root: unknown, stage: unknown, extra: unknown) => {
       const request = validateAgentTaskRequest(event, root, stage, extra);
+      const assistantContext: AssistantPaneContext = {
+        root: request.root,
+        stage: request.contextStage,
+        provider: request.state.paneProvider,
+      };
+      if (
+        agentConversationRunner?.isBusy(
+          assistantContext.root,
+          assistantContext.stage,
+          assistantContext.provider,
+        )
+      )
+        throw new Error('通常会話の回答生成中は工程用AIタスクを開始できません。');
       if (request.state.paneProvider === 'grok') {
         if (!grokCliTaskRunner) throw new Error('Grok CLIが初期化されていません。');
         await grokCliTaskRunner.run(
