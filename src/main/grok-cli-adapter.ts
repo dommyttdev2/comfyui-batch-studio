@@ -67,7 +67,8 @@ function safeModel(value: string | null | undefined) {
 
 function safeEffort(value: string | null | undefined) {
   if (!value) return null;
-  if (!EFFORT_TOKEN.test(value)) throw new Error('Grok reasoning effort contains unsupported characters.');
+  if (!EFFORT_TOKEN.test(value))
+    throw new Error('Grok reasoning effort contains unsupported characters.');
   return value;
 }
 
