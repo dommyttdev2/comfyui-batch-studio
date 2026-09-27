@@ -111,7 +111,7 @@ export class GrokCliTaskRunner {
       workspace = await prepareAgentWorkspace(this.userDataPath, 'grok', taskStage, references);
     }
 
-    const prompt = workspace
+    const prompt = workspace && artifactFile
       ? [
           task.prompt.replace(artifactFileOutputRules(artifactFile), '').trim(),
           referenceGuide.length ? `## 参照ファイル\n${referenceGuide.join('\n')}` : '',
