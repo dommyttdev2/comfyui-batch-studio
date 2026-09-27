@@ -1971,6 +1971,16 @@ function codexService() {
 function codexCliTransportEnabled() {
   return (process.env.BATCH_STUDIO_CODEX_TRANSPORT ?? '').trim().toLowerCase() === 'cli';
 }
+function isAgentWorkspace(
+  workspace: FileArtifactWorkspace | AgentWorkspace,
+): workspace is AgentWorkspace {
+  return (
+    isAgentWorkspace(workspace) &&
+    workspace.provider === 'codex' &&
+    typeof workspace.inputDirectory === 'string' &&
+    typeof workspace.outputDirectory === 'string'
+  );
+}
 function codexCliService() {
   if (!codexCliAdapter || !agentSessionState || !codexChatState)
     throw new Error('Codex CLIが初期化されていません。');
