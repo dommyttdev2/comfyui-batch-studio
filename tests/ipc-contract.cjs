@@ -56,11 +56,7 @@ vm.runInNewContext(preload, {
     'make it concise',
   ]);
   await bridge.assistant.stopTask('project-root', 'story-finalize');
-  assert.deepEqual(calls.at(-1), [
-    expected.AGENT_TASK_STOP,
-    'project-root',
-    'story-finalize',
-  ]);
+  assert.deepEqual(calls.at(-1), [expected.AGENT_TASK_STOP, 'project-root', 'story-finalize']);
 
   await bridge.codex.selectStageTask('project-root', 'execution');
   assert.deepEqual(calls.at(-1), [expected.CODEX_SELECT_STAGE_TASK, 'project-root', 'execution']);
@@ -84,7 +80,10 @@ vm.runInNewContext(preload, {
     main.indexOf('ipcMain.handle(IPC.CODEX_SET_CONTEXT'),
   );
   assert.match(commonHandler, /grokCliTaskRunner\.run/);
-  assert.match(commonHandler, /codexSendTask\(request\.state, request\.stage, request\.extra, true\)/);
+  assert.match(
+    commonHandler,
+    /codexSendTask\(request\.state, request\.stage, request\.extra, true\)/,
+  );
   assert.match(commonHandler, /grokCliTaskRunner\.stop/);
   assert.match(commonHandler, /codexStopTurn\(request\.state, true\)/);
   console.log('IPC contract and provider-neutral agent task routing tests passed.');
