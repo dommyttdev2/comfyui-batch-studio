@@ -226,10 +226,7 @@ function fakeAdapter(provider, sessionId) {
   firstRun.onEvent({ type: 'turn.completed', at: 8, turnId: first.turnId });
   firstRun.gate.resolve();
 
-  await waitUntil(
-    () => !runner.isBusy(root, 'story', 'grok'),
-    'Grok conversation did not finish',
-  );
+  await waitUntil(() => !runner.isBusy(root, 'story', 'grok'), 'Grok conversation did not finish');
   await waitUntil(
     () => !fs.existsSync(grokWorkspace),
     'Grok conversation workspace was not cleaned up',
@@ -268,10 +265,7 @@ function fakeAdapter(provider, sessionId) {
     first.sessionId,
     'Provider sessions must remain isolated',
   );
-  assert.equal(
-    (await sessions.get(root, 'story', 'codex')).activeSessionId,
-    codexTurn.sessionId,
-  );
+  assert.equal((await sessions.get(root, 'story', 'codex')).activeSessionId, codexTurn.sessionId);
   const codexRun = codex.active.get(codexTurn.turnId);
   codexRun.onEvent({ type: 'activity', at: 10, label: 'thinking', detail: 'safe summary' });
   codexRun.onEvent({ type: 'tool.started', at: 11, name: 'read_file' });
