@@ -430,6 +430,82 @@ async function nextTick() {
   }
 
   {
+    const adapter = new GrokCliAdapter({
+      platform: 'linux',
+      spawnProcess: () => {
+        const child = new FakeChild(740, false);
+        queueMicrotask(() => child.emit('error', new Error('spawn grok ENOENT')));
+        return child;
+      },
+    });
+    assert.deepEqual(await adapter.checkAvailability(), {
+      provider: 'grok',
+      state: 'missing',
+      version: null,
+      message: 'spawn grok ENOENT',
+    });
+  }
+
+  {
+    const responses = [
+      { stdout: 'grok 0.2.120\n', code: 0 },
+      {
+        stdout:
+          '--prompt-file <PATH> --output-format <FMT> [possible values: plain, json, streaming-json] --resume <ID>\n',
+        code: 0,
+      },
+      {
+        stdout:
+          'You are not authenticated.\n\nDefault model: grok-4.6\n\nAvailable models:\n  * grok-4.6 (default)\n',
+        code: 0,
+      },
+    ];
+    const adapter = new GrokCliAdapter({
+      platform: 'linux',
+      spawnProcess: () => {
+        const child = new FakeChild(745);
+        const response = responses.shift();
+        queueMicrotask(() => {
+          child.stdout.write(response.stdout);
+          child.close(response.code);
+        });
+        return child;
+      },
+    });
+    assert.deepEqual(await adapter.checkAvailability(), {
+      provider: 'grok',
+      state: 'unauthenticated',
+      version: '0.2.120',
+      message: 'Grok CLIでログインするか、XAI_API_KEYを設定してください。',
+    });
+  }
+
+  {
+    const responses = [
+      { stdout: 'grok 0.1.0\n', code: 0 },
+      { stdout: '--single <PROMPT> --resume <ID>\n', code: 0 },
+    ];
+    const adapter = new GrokCliAdapter({
+      platform: 'linux',
+      spawnProcess: () => {
+        const child = new FakeChild(748);
+        const response = responses.shift();
+        queueMicrotask(() => {
+          child.stdout.write(response.stdout);
+          child.close(response.code);
+        });
+        return child;
+      },
+    });
+    assert.deepEqual(await adapter.checkAvailability(), {
+      provider: 'grok',
+      state: 'unsupported',
+      version: '0.1.0',
+      message: 'このGrok CLIは必要なheadless / streaming-json機能をサポートしていません。',
+    });
+  }
+
+  {
     const responses = [
       {
         stdout:
