@@ -117,6 +117,8 @@ async function nextTick() {
     assert.ok(calls[0].args.includes('--cwd'));
     assert.ok(calls[0].args.includes('strict'));
     assert.ok(calls[0].args.includes('--always-approve'));
+    assert.ok(calls[0].args.includes('--disallowed-tools'));
+    assert.ok(calls[0].args.includes('run_terminal_cmd'));
     assert.ok(calls[0].args.includes('grok-4.6'));
     assert.ok(calls[0].args.includes('high'));
     assert.equal(calls[0].args.at(-2), '--session-id');
@@ -491,7 +493,8 @@ async function nextTick() {
       },
     });
     await adapter.startTask(task(root, false), () => {});
-    assert.equal(calls[0].command, 'grok');
+    assert.equal(calls[0].command, 'cmd.exe');
+    assert.deepEqual(calls[0].args.slice(0, 4), ['/d', '/s', '/c', 'grok']);
     assert.ok(calls[0].args.includes('--prompt-file'));
     assert.ok(!calls[0].args.some((value) => value.includes('Create the Grok prompt plan')));
     child.line({ type: 'end', stopReason: 'end_turn', sessionId });
