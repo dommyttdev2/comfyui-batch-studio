@@ -5268,6 +5268,8 @@ async function initializeApplication() {
   codexModelSelections = new CodexModelSelectionStore(userData);
   assistantProviderState = new AssistantProviderStore(userData);
   agentSessionState = new AgentSessionStateStore(userData);
+  agentConversationStore = new AgentConversationStore(userData);
+  agentModelSelections = new AgentModelSelectionStore(userData);
   codexCliAdapter = new CodexCliAdapter();
   grokCliAdapter = new GrokCliAdapter();
   grokCliTaskRunner = new GrokCliTaskRunner({
@@ -5276,6 +5278,17 @@ async function initializeApplication() {
     sessions: agentSessionState,
     onEvent: (context, event) => notifyAgentEvent('grok', context, context.taskStage, event),
     onArtifact: notifyAutoArtifact,
+    resolveModel: async (root, stage) =>
+      (await assistantModelSettings(root, stage, 'grok')).selection,
+  });
+  agentConversationRunner = new AgentConversationRunner({
+    userDataPath: userData,
+    sessions: agentSessionState,
+    conversations: agentConversationStore,
+    adapter: assistantAdapter,
+    model: async (root, stage, provider) =>
+      (await assistantModelSettings(root, stage, provider)).selection,
+    onEvent: notifyAgentEvent,
   });
   codexAppServer = new CodexAppServer();
   codexAppServer.on('notification', forwardCodexNotification);
@@ -5314,6 +5327,7 @@ if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
 app.on('will-quit', () => {
   void codexCliAdapter?.shutdown().catch(() => {});
   void grokCliTaskRunner?.shutdown().catch(() => {});
+  void agentConversationRunner?.shutdown().catch(() => {});
   codexAppServer?.stop();
 });
 app.on('window-all-closed', () => {
