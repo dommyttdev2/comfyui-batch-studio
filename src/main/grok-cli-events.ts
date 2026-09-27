@@ -5,6 +5,7 @@ type RecordValue = Record<string, unknown>;
 type ToolState = {
   name: string;
   path: string | null;
+  mutatesFile: boolean;
 };
 
 export interface GrokCliNormalizedLine {
@@ -85,21 +86,26 @@ export class GrokCliEventParser {
 
     if (type === 'tool_call') {
       const id = text(value.toolCallId);
-      const name = text(value.toolName) || text(value.title) || text(value.kind) || 'tool';
-      if (id) this.tools.set(id, { name, path: toolPath(value.rawInput) });
+      const toolName = text(value.toolName);
+      const kind = text(value.kind);
+      const name = toolName || text(value.title) || kind || 'tool';
+      const mutationToken = `${kind} ${toolName}`.toLowerCase();
+      const mutatesFile =
+        /(?:write|edit|delete|rename|move|patch|replace|create)/.test(mutationToken);
+      if (id) this.tools.set(id, { name, path: toolPath(value.rawInput), mutatesFile });
       return { events: [{ type: 'tool.started', at: now, name }] };
     }
 
     if (type === 'tool_call_update') {
       const id = text(value.toolCallId);
       const stored = id ? this.tools.get(id) : undefined;
-      const name = stored?.name ?? text(value.toolName) || text(value.title) || 'tool';
+      const name = stored?.name ?? (text(value.toolName) || text(value.title) || 'tool');
       const status = text(value.status);
       if (!['completed', 'failed', 'cancelled'].includes(status)) return { events: [] };
       const normalized: AgentEvent[] = [
         { type: 'tool.completed', at: now, name, success: status === 'completed' },
       ];
-      if (status === 'completed' && stored?.path)
+      if (status === 'completed' && stored?.mutatesFile && stored.path)
         normalized.push({ type: 'file.changed', at: now, path: stored.path });
       if (id) this.tools.delete(id);
       return { events: normalized };
