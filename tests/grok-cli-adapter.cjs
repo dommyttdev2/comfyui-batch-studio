@@ -176,7 +176,11 @@ async function nextTick() {
     child.close(0);
     await adapter.waitForCompletion('grok-turn-1');
 
-    assert.equal(fs.existsSync(promptPath), false, 'Prompt temp file must be deleted after the turn');
+    assert.equal(
+      fs.existsSync(promptPath),
+      false,
+      'Prompt temp file must be deleted after the turn',
+    );
     assert.equal(
       events.some(
         (event) =>
@@ -188,9 +192,7 @@ async function nextTick() {
       'Raw thought content must never be projected into AgentEvent',
     );
     assert.equal(
-      events.some(
-        (event) => event.type === 'file.changed' && event.path === 'input/1-story.md',
-      ),
+      events.some((event) => event.type === 'file.changed' && event.path === 'input/1-story.md'),
       false,
       'Read-only tools must not emit file.changed',
     );
@@ -205,10 +207,7 @@ async function nextTick() {
       events.filter((event) => event.type === 'message.delta').map((event) => event.text),
       ['Hel', 'lo'],
     );
-    assert.equal(
-      events.find((event) => event.type === 'message.completed')?.text,
-      'Hello',
-    );
+    assert.equal(events.find((event) => event.type === 'message.completed')?.text, 'Hello');
     assert.equal(events.at(-1).type, 'turn.completed');
   }
 
@@ -308,10 +307,7 @@ async function nextTick() {
     await adapter.startTask(task(root, false), () => {});
     children[0].stderr.write('Not logged in. Run grok login.');
     children[0].close(1);
-    await assert.rejects(
-      adapter.waitForCompletion('exit-turn'),
-      /code 1.*Not logged in/,
-    );
+    await assert.rejects(adapter.waitForCompletion('exit-turn'), /code 1.*Not logged in/);
   }
 
   {
