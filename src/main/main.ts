@@ -1975,9 +1975,11 @@ function isAgentWorkspace(
   workspace: FileArtifactWorkspace | AgentWorkspace,
 ): workspace is AgentWorkspace {
   return (
-    isAgentWorkspace(workspace) &&
+    'provider' in workspace &&
     workspace.provider === 'codex' &&
+    'inputDirectory' in workspace &&
     typeof workspace.inputDirectory === 'string' &&
+    'outputDirectory' in workspace &&
     typeof workspace.outputDirectory === 'string'
   );
 }
@@ -1985,11 +1987,6 @@ function codexCliService() {
   if (!codexCliAdapter || !agentSessionState || !codexChatState)
     throw new Error('Codex CLIが初期化されていません。');
   return { adapter: codexCliAdapter, sessions: agentSessionState, legacyStore: codexChatState };
-}
-function isAgentWorkspace(
-  workspace: FileArtifactWorkspace | AgentWorkspace,
-): workspace is AgentWorkspace {
-  return 'inputDirectory' in workspace && 'outputDirectory' in workspace;
 }
 function notifyAgentEvent(context: CodexContext, event: AgentEvent) {
   const envelope = { provider: 'codex' as const, root: context.root, stage: context.stage, event };
