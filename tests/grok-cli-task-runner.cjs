@@ -44,6 +44,9 @@ async function waitUntil(predicate, message) {
       import(pathToFileURL(path.join(runtime, 'main', 'agent-session-state.js')).href),
       import(pathToFileURL(path.join(runtime, 'main', 'grok-context.js')).href),
     ]);
+  const { buildGrokTask } = await import(
+    pathToFileURL(path.join(runtime, 'main', 'grok-context.js')).href
+  );
 
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-cli-runner-userdata-'));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-cli-runner-project-'));
@@ -236,8 +239,68 @@ async function waitUntil(predicate, message) {
     true,
   );
 
+  // Compare the real Grok Web task builder with the CLI transport. The semantic
+  // task body must stay identical; only attachment delivery and artifact return
+  // mechanics are allowed to differ.
+  const parityRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-cli-parity-project-'));
+  fs.writeFileSync(
+    path.join(parityRoot, 'project_brief.json'),
+    JSON.stringify({ schemaVersion: 1 }),
+    'utf8',
+  );
+  const parityRunner = new GrokCliTaskRunner({
+    userDataPath: userData,
+    adapter,
+    sessions,
+    onEvent: () => {},
+    onArtifact: () => {},
+    importArtifact,
+  });
+
+  const webDiscussion = await buildGrokTask(
+    parityRoot,
+    'story-initial',
+    'same discussion condition',
+  );
+  const discussionTurn = await parityRunner.run(
+    parityRoot,
+    'story',
+    'story-initial',
+    'same discussion condition',
+  );
+  const discussionRequest = starts.at(-1).request;
+  assert.equal(
+    discussionRequest.prompt.startsWith(webDiscussion.prompt),
+    true,
+    'CLI discussion must preserve the current Grok Web semantic prompt',
+  );
+  assert.match(discussionRequest.prompt, /input\/1-project_brief\.json/);
+  waits.get(discussionTurn.turnId).resolve();
+  await waitUntil(() => !parityRunner.isBusy(parityRoot, 'story'), 'parity discussion did not finish');
+
+  const webFinalize = await buildGrokTask(parityRoot, 'story-finalize', '');
+  const finalizeSemanticPrompt = webFinalize.prompt
+    .replace(artifactFileOutputRules('story.md'), '')
+    .trim();
+  const finalizeTurn = await parityRunner.run(parityRoot, 'story', 'story-finalize', '');
+  const finalizeRequest = resumes.at(-1).request;
+  assert.equal(
+    finalizeRequest.prompt.startsWith(finalizeSemanticPrompt),
+    true,
+    'CLI artifact task must preserve the current Grok Web semantic prompt',
+  );
+  assert.equal(
+    finalizeRequest.prompt.includes('ダウンロード可能な添付ファイル'),
+    false,
+    'CLI artifact task must replace only the Web attachment return contract',
+  );
+  assert.match(finalizeRequest.prompt, /## Batch Studio向け成果物出力契約/);
+  fs.writeFileSync(finalizeRequest.workspace.outputPath, '# Story\nCLI parity output', 'utf8');
+  waits.get(finalizeTurn.turnId).resolve();
+  await waitUntil(() => !parityRunner.isBusy(parityRoot, 'story'), 'parity finalize did not finish');
+
   console.log(
-    'Grok CLI runner common session, workspace, resume, stop and artifact import tests passed.',
+    'Grok CLI runner common session, workspace, resume, artifact import and Web-flow parity tests passed.',
   );
 })().catch((error) => {
   console.error(error);
