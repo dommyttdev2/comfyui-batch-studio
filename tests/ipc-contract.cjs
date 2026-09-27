@@ -76,7 +76,7 @@ vm.runInNewContext(preload, {
     /state\.codexView\.webContents\.send\(IPC\.CODEX_STAGE_TASK_SELECTED, stage\)/,
   );
   const commonHandler = main.slice(
-    main.indexOf('ipcMain.handle(IPC.AGENT_TASK_START'),
+    main.indexOf('const validateAgentTaskRequest'),
     main.indexOf('ipcMain.handle(IPC.CODEX_SET_CONTEXT'),
   );
   assert.match(commonHandler, /grokCliTaskRunner\.run/);
