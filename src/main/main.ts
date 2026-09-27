@@ -127,6 +127,7 @@ import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { CodexCliAdapter, AgentTurnCancelledError } from './codex-cli-adapter.js';
 import { AgentSessionStateStore } from './agent-session-state.js';
+import type { AgentCliAdapter } from './agent-cli-adapter.js';
 import { AgentConversationStore } from './agent-conversation-store.js';
 import { AgentConversationRunner } from './agent-conversation-runner.js';
 import { AgentModelSelectionStore } from './agent-model-selection.js';
@@ -2473,7 +2474,7 @@ async function codexModelSettings(context: CodexContext): Promise<CodexModelSett
       : model.defaultReasoningEffort;
   return { models, selection: { model: model.id, effort } };
 }
-function assistantAdapter(provider: AgentProvider) {
+function assistantAdapter(provider: AgentProvider): AgentCliAdapter {
   const adapter = provider === 'codex' ? codexCliAdapter : grokCliAdapter;
   if (!adapter) throw new Error(`${provider} CLIが初期化されていません。`);
   return adapter;
