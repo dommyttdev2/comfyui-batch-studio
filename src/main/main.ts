@@ -2033,11 +2033,7 @@ async function assistantSnapshot(state: ProjectWindowState): Promise<AssistantPa
   let modelSettings: AgentModelSettings | null = null;
   if (availability.state === 'available' && adapter.capabilities.modelSelection) {
     try {
-      modelSettings = await assistantModelSettings(
-        context.root,
-        context.stage,
-        context.provider,
-      );
+      modelSettings = await assistantModelSettings(context.root, context.stage, context.provider);
     } catch {
       modelSettings = null;
     }
@@ -2517,8 +2513,7 @@ async function assistantModelSettings(
   const requestedEffort = saved?.reasoningEffort;
   const supported = model?.supportedReasoningEfforts;
   const reasoningEffort =
-    requestedEffort &&
-    (!supported?.length || supported.includes(requestedEffort))
+    requestedEffort && (!supported?.length || supported.includes(requestedEffort))
       ? requestedEffort
       : available.selection.reasoningEffort;
   return {
@@ -2557,9 +2552,7 @@ async function assistantChooseModel(
 
   const normalized: AgentModelSelection = {
     model: requested.model,
-    ...(requested.reasoningEffort != null
-      ? { reasoningEffort: requested.reasoningEffort }
-      : {}),
+    ...(requested.reasoningEffort != null ? { reasoningEffort: requested.reasoningEffort } : {}),
   };
   if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
   await agentModelSelections.remember(root, stage, provider, normalized);
@@ -4970,8 +4963,7 @@ function register() {
   ipcMain.handle(IPC.ASSISTANT_RESTORE_CONVERSATION, async (event, sessionId: unknown) => {
     const state = projectWindowForSender(event.sender);
     const context = assistantContextFor(state);
-    if (typeof sessionId !== 'string' || !sessionId)
-      throw new Error('Invalid AI session ID.');
+    if (typeof sessionId !== 'string' || !sessionId) throw new Error('Invalid AI session ID.');
     if (!agentSessionState || !agentConversationRunner)
       throw new Error('共通AI session runtimeが初期化されていません。');
     if (
@@ -4979,12 +4971,7 @@ function register() {
       (await assistantTaskBusy(context))
     )
       throw new Error('回答生成中は会話履歴を切り替えられません。');
-    await agentSessionState.activate(
-      context.root,
-      context.stage,
-      context.provider,
-      sessionId,
-    );
+    await agentSessionState.activate(context.root, context.stage, context.provider, sessionId);
     if (context.provider === 'codex' && codexChatState) {
       await codexChatState.remember(context.root, context.stage, sessionId);
       stateCodexActiveThread.set(state.window.id, sessionId);
