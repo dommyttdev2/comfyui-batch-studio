@@ -13,7 +13,7 @@ import type {
 import { compilePromptPlanPrompts } from '../shared/prompt-policy';
 import type { Runner } from './ui';
 import { issuesView } from './ui';
-import { GrokBridge } from './GrokStages';
+import { AgentStageBridge } from './GrokStages';
 import './prompt-plan-modal.css';
 
 type PlanSelection =
@@ -152,7 +152,7 @@ export function PromptPlanStage({
   };
   return (
     <>
-      <GrokBridge
+      <AgentStageBridge
         project={project}
         stage="prompt-plan"
         provider={provider}
@@ -165,7 +165,7 @@ export function PromptPlanStage({
         }}
       />
       {project.artifacts.find((a) => a.key === 'promptPlan')?.state !== 'missing' && (
-        <GrokBridge
+        <AgentStageBridge
           project={project}
           stage="prompt-plan-fix"
           provider={provider}
@@ -180,7 +180,7 @@ export function PromptPlanStage({
       )}
       {provider === 'codex' &&
         project.artifacts.find((a) => a.key === 'promptPlan')?.state !== 'missing' && (
-          <GrokBridge
+          <AgentStageBridge
             project={project}
             stage="prompt-plan-patch"
             provider={provider}
