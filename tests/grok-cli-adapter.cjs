@@ -308,7 +308,10 @@ async function nextTick() {
         return child;
       },
     });
-    await assert.rejects(adapter.startTask(task(root, false), () => {}), /ENOENT/);
+    await assert.rejects(
+      adapter.startTask(task(root, false), () => {}),
+      /ENOENT/,
+    );
     const promptPath = calls[0].args[calls[0].args.indexOf('--prompt-file') + 1];
     assert.equal(
       fs.existsSync(promptPath),
