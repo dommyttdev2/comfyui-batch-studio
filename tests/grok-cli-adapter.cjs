@@ -30,6 +30,7 @@ class FakeChild extends EventEmitter {
     this.stderr = new PassThrough();
     this.exitCode = null;
     this.killed = false;
+    queueMicrotask(() => this.emit('spawn'));
   }
 
   line(value) {
