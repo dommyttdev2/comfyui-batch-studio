@@ -39,6 +39,10 @@ export interface GrokCliTaskRunnerOptions {
   onArtifact: (event: AutoArtifactEvent) => void;
   buildTask?: TaskBuilder;
   importArtifact?: ArtifactImporter;
+  resolveModel?: (
+    root: string,
+    stage: GrokContextStage,
+  ) => Promise<AgentModelSelection | undefined>;
 }
 
 type ActiveRun = {
@@ -74,6 +78,7 @@ export class GrokCliTaskRunner {
   private readonly onArtifact: GrokCliTaskRunnerOptions['onArtifact'];
   private readonly buildTask: TaskBuilder;
   private readonly importArtifact: ArtifactImporter;
+  private readonly resolveModel?: GrokCliTaskRunnerOptions['resolveModel'];
   private readonly active = new Map<string, ActiveRun>();
 
   constructor(options: GrokCliTaskRunnerOptions) {
@@ -85,6 +90,7 @@ export class GrokCliTaskRunner {
     this.onArtifact = options.onArtifact;
     this.buildTask = options.buildTask ?? buildGrokTask;
     this.importArtifact = options.importArtifact ?? importAutoArtifact;
+    this.resolveModel = options.resolveModel;
   }
 
   async run(
@@ -103,7 +109,8 @@ export class GrokCliTaskRunner {
       throw new Error(availability.message ?? 'Grok CLIを利用できません。');
 
     let model: AgentModelSelection | undefined;
-    if (this.adapter.getModels) {
+    if (this.resolveModel) model = await this.resolveModel(root, contextStage);
+    else if (this.adapter.getModels) {
       const settings = await this.adapter.getModels();
       model = settings.selection;
     }
