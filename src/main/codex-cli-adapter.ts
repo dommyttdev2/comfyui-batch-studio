@@ -243,8 +243,10 @@ export class CodexCliAdapter implements AgentCliAdapter {
   }
 
   async shutdown(): Promise<void> {
-    const liveChildren = [...this.turns.values()].filter((turn) => turn.child.exitCode === null);
-    await Promise.allSettled(liveChildren.map((turn) => this.killProcessTree(turn.child)));
+    const activeTurnIds = [...this.turns.entries()]
+      .filter(([, turn]) => !turn.terminal && turn.child.exitCode === null)
+      .map(([turnId]) => turnId);
+    await Promise.allSettled(activeTurnIds.map((turnId) => this.stop(turnId)));
   }
 
   private buildArgs(task: AgentTaskRequest, requestedSessionId: string | null): string[] {
