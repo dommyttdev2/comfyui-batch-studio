@@ -1983,6 +1983,77 @@ async function setGrokContext(state: ProjectWindowState, root: string, stage: Gr
     }
   }
 }
+function assistantContextFor(state: ProjectWindowState): AssistantPaneContext {
+  if (!state.assistantContext) throw new Error('AI工程が選択されていません。');
+  return state.assistantContext;
+}
+
+function setAssistantContext(
+  state: ProjectWindowState,
+  root: string,
+  stage: GrokContextStage,
+): AssistantPaneContext {
+  const context: AssistantPaneContext = {
+    root: path.resolve(root),
+    stage,
+    provider: state.paneProvider,
+  };
+  state.assistantContext = context;
+  state.codexView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, context);
+  return context;
+}
+
+async function assistantSnapshot(state: ProjectWindowState): Promise<AssistantPaneSnapshot> {
+  const context = state.assistantContext;
+  if (!context)
+    return {
+      context: null,
+      availability: null,
+      capabilities: null,
+      sessionIds: [],
+      activeSessionId: null,
+      messages: [],
+      modelSettings: null,
+      busy: false,
+    };
+  if (!agentSessionState || !agentConversationStore || !agentConversationRunner)
+    throw new Error('共通AI runtimeが初期化されていません。');
+
+  const adapter = assistantAdapter(context.provider);
+  const sessions = await agentSessionState.get(context.root, context.stage, context.provider);
+  const [availability, messages] = await Promise.all([
+    adapter.checkAvailability(),
+    agentConversationStore.messages(
+      context.root,
+      context.stage,
+      context.provider,
+      sessions.activeSessionId,
+    ),
+  ]);
+  let modelSettings: AgentModelSettings | null = null;
+  if (availability.state === 'available' && adapter.capabilities.modelSelection) {
+    try {
+      modelSettings = await assistantModelSettings(
+        context.root,
+        context.stage,
+        context.provider,
+      );
+    } catch {
+      modelSettings = null;
+    }
+  }
+  return {
+    context: { ...context },
+    availability,
+    capabilities: { ...adapter.capabilities },
+    sessionIds: sessions.sessionIds,
+    activeSessionId: sessions.activeSessionId,
+    messages,
+    modelSettings,
+    busy: agentConversationRunner.isBusy(context.root, context.stage, context.provider),
+  };
+}
+
 function codexService() {
   if (!codexAppServer || !codexChatState) throw new Error('Codexが初期化されていません。');
   return { server: codexAppServer, store: codexChatState };
@@ -2019,10 +2090,10 @@ function notifyAgentEvent(
       continue;
     state.localView.webContents.send(IPC.AGENT_EVENT, envelope);
     if (
-      provider === 'codex' &&
-      state.codexContext &&
-      projectRootKey(state.codexContext.root) === projectRootKey(context.root) &&
-      state.codexContext.stage === context.stage
+      state.assistantContext &&
+      state.assistantContext.provider === provider &&
+      projectRootKey(state.assistantContext.root) === projectRootKey(context.root) &&
+      state.assistantContext.stage === context.stage
     )
       state.codexView.webContents.send(IPC.AGENT_EVENT, envelope);
   }
