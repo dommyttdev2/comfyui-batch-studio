@@ -57,9 +57,7 @@ export function AssistantPane() {
 
   const switchContext = useCallback(
     async (context: AssistantPaneSnapshot['context']) => {
-      const key = context
-        ? context.root + '\0' + context.stage + '\0' + context.provider
-        : '';
+      const key = context ? context.root + '\0' + context.stage + '\0' + context.provider : '';
       contextKey.current = key;
       setSnapshot(null);
       setMessages([]);
@@ -148,9 +146,9 @@ export function AssistantPane() {
     }
     if (event.type === 'tool.completed') {
       setActivity((items) => {
-        const index = [...items].reverse().findIndex(
-          (item) => item.label === event.name && item.status === 'running',
-        );
+        const index = [...items]
+          .reverse()
+          .findIndex((item) => item.label === event.name && item.status === 'running');
         if (index < 0)
           return [
             ...items,
@@ -300,7 +298,7 @@ export function AssistantPane() {
               {availability
                 ? availability.state === 'available'
                   ? `CLI ${availability.version ?? '利用可能'}`
-                  : availability.message ?? availability.state
+                  : (availability.message ?? availability.state)
                 : 'CLI状態を確認中…'}
             </small>
           </div>
@@ -332,28 +330,28 @@ export function AssistantPane() {
               </select>
             </label>
             {snapshot.capabilities.reasoningEffort &&
-              selectedModel?.supportedReasoningEfforts?.length ? (
-                <label>
-                  推論の強度
-                  <select
-                    aria-label="AI推論強度"
-                    value={snapshot.modelSettings?.selection.reasoningEffort ?? ''}
-                    disabled={busy || loading || modelSaving}
-                    onChange={(event) =>
-                      void chooseModel({
-                        model: snapshot.modelSettings?.selection.model ?? null,
-                        reasoningEffort: event.target.value || null,
-                      })
-                    }
-                  >
-                    {selectedModel.supportedReasoningEfforts.map((effort) => (
-                      <option key={effort} value={effort}>
-                        {effort}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+            selectedModel?.supportedReasoningEfforts?.length ? (
+              <label>
+                推論の強度
+                <select
+                  aria-label="AI推論強度"
+                  value={snapshot.modelSettings?.selection.reasoningEffort ?? ''}
+                  disabled={busy || loading || modelSaving}
+                  onChange={(event) =>
+                    void chooseModel({
+                      model: snapshot.modelSettings?.selection.model ?? null,
+                      reasoningEffort: event.target.value || null,
+                    })
+                  }
+                >
+                  {selectedModel.supportedReasoningEfforts.map((effort) => (
+                    <option key={effort} value={effort}>
+                      {effort}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
           </div>
         </section>
       )}
