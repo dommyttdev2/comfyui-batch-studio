@@ -176,7 +176,10 @@ export class GrokCliAdapter implements AgentCliAdapter {
         message: versionProbe.detail || 'Grok CLIを起動できません。',
       };
     }
-    const version = versionProbe.output.trim().split(/\s+/).at(-1) ?? null;
+    const version =
+      versionProbe.output.match(/^grok\s+([^\s]+)/im)?.[1] ??
+      versionProbe.output.trim().split(/\s+/).at(-1) ??
+      null;
 
     const help = await this.capture(['--help']);
     if (
@@ -295,6 +298,10 @@ export class GrokCliAdapter implements AgentCliAdapter {
         windowsHide: true,
         detached: this.platform !== 'win32',
         stdio: 'pipe',
+      });
+      await new Promise<void>((resolve, reject) => {
+        child.once('spawn', resolve);
+        child.once('error', reject);
       });
     } catch (error) {
       await rm(tempDirectory, { recursive: true, force: true }).catch(() => {});
