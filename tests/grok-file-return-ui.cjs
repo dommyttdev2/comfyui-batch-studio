@@ -20,8 +20,8 @@ for (const [stage, fileName] of [
     `${stage} must import the AI return file ${fileName}`,
   );
 }
-matchCode(src, /type="file"/, 'file-generating Grok stages must expose a file explorer picker');
-matchCode(src, /onDrop=/, 'file-generating Grok stages must accept drag and drop');
+matchCode(src, /type="file"/, 'file-generating AI stages must expose a file explorer picker');
+matchCode(src, /onDrop=/, 'file-generating AI stages must accept drag and drop');
 matchCode(
   src,
   /selectedFile\.text\(\)/,
@@ -29,8 +29,8 @@ matchCode(
 );
 matchCode(
   src,
-  /Grok返却ファイルを添付/,
-  'file-generating stages must tell the user to attach the AI return file',
+  /成果物ファイルを取り込む/,
+  'file-generating stages must expose a provider-neutral manual artifact fallback',
 );
 matchCode(
   src,
