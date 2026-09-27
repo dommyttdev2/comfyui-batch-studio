@@ -2462,7 +2462,8 @@ async function codexSendViaCli(
     }
     if (!observedThreadId) return;
     const activeTurnId = codexCliActiveTurnIds.get(observedThreadId);
-    if (activeTurnId) forwardCodexCliEvent(context, taskStage, observedThreadId, activeTurnId, event);
+    if (activeTurnId)
+      forwardCodexCliEvent(context, taskStage, observedThreadId, activeTurnId, event);
     else notifyAgentEvent('codex', context, taskStage, event);
   };
   const request = {
@@ -2502,7 +2503,8 @@ async function codexSendViaCli(
   if (workspace) await rememberAgentWorkspace(context.root, workspace, threadId, turn.turnId);
 
   ready = true;
-  for (const event of queued.splice(0)) forwardCodexCliEvent(context, taskStage, threadId, turn.turnId, event);
+  for (const event of queued.splice(0))
+    forwardCodexCliEvent(context, taskStage, threadId, turn.turnId, event);
 
   void adapter.waitForCompletion(turn.turnId).catch((error) => {
     if (error instanceof AgentTurnCancelledError) return;
@@ -2657,10 +2659,7 @@ async function codexSend(
         : null,
   };
 }
-async function codexStopTurn(
-  state: ProjectWindowState,
-  forceCli = false,
-): Promise<CodexSnapshot> {
+async function codexStopTurn(state: ProjectWindowState, forceCli = false): Promise<CodexSnapshot> {
   const context = codexContextFor(state);
   if (forceCli || codexCliTransportEnabled()) {
     const { adapter, legacyStore } = codexCliService();
@@ -4722,34 +4721,37 @@ function register() {
     };
   };
 
-  ipcMain.handle(IPC.AGENT_TASK_START, async (event, root: unknown, stage: unknown, extra: unknown) => {
-    const request = validateAgentTaskRequest(event, root, stage, extra);
-    if (request.state.paneProvider === 'grok') {
-      if (!grokCliTaskRunner) throw new Error('Grok CLIが初期化されていません。');
-      await grokCliTaskRunner.run(
-        request.root,
-        request.contextStage,
-        request.stage,
-        request.extra,
-      );
-      return;
-    }
+  ipcMain.handle(
+    IPC.AGENT_TASK_START,
+    async (event, root: unknown, stage: unknown, extra: unknown) => {
+      const request = validateAgentTaskRequest(event, root, stage, extra);
+      if (request.state.paneProvider === 'grok') {
+        if (!grokCliTaskRunner) throw new Error('Grok CLIが初期化されていません。');
+        await grokCliTaskRunner.run(
+          request.root,
+          request.contextStage,
+          request.stage,
+          request.extra,
+        );
+        return;
+      }
 
-    const previousContext = request.state.codexContext;
-    if (
-      !previousContext ||
-      projectRootKey(previousContext.root) !== projectRootKey(request.root) ||
-      previousContext.stage !== request.contextStage
-    ) {
-      request.state.codexContext = { root: request.root, stage: request.contextStage };
-      stateCodexActiveThread.set(request.state.window.id, null);
-      request.state.codexView.webContents.send(
-        IPC.CODEX_CONTEXT_CHANGED,
-        request.state.codexContext,
-      );
-    }
-    await codexSendTask(request.state, request.stage, request.extra, true);
-  });
+      const previousContext = request.state.codexContext;
+      if (
+        !previousContext ||
+        projectRootKey(previousContext.root) !== projectRootKey(request.root) ||
+        previousContext.stage !== request.contextStage
+      ) {
+        request.state.codexContext = { root: request.root, stage: request.contextStage };
+        stateCodexActiveThread.set(request.state.window.id, null);
+        request.state.codexView.webContents.send(
+          IPC.CODEX_CONTEXT_CHANGED,
+          request.state.codexContext,
+        );
+      }
+      await codexSendTask(request.state, request.stage, request.extra, true);
+    },
+  );
 
   ipcMain.handle(IPC.AGENT_TASK_STOP, async (event, root: unknown, stage: unknown) => {
     const request = validateAgentTaskRequest(event, root, stage);
