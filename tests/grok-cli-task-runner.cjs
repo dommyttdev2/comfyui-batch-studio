@@ -115,13 +115,16 @@ async function waitUntil(predicate, message) {
   const imports = [];
   const buildTask = async (_root, stage, extra) => ({
     stage,
-    title: 'Prompt Plan',
-    prompt: 'Build prompt plan. ' + extra + '\n\n' + artifactFileOutputRules('prompt_plan.json'),
+    title: stage === 'story-initial' ? 'Story discussion' : 'Prompt Plan',
+    prompt:
+      stage === 'story-initial'
+        ? 'Discuss the story using project_brief.json. ' + extra
+        : 'Build prompt plan. ' + extra + '\n\n' + artifactFileOutputRules('prompt_plan.json'),
     attachments: [
       {
-        name: 'story.md',
+        name: stage === 'story-initial' ? 'project_brief.json' : 'story.md',
         path: storyPath,
-        purpose: 'story reference',
+        purpose: stage === 'story-initial' ? 'brief reference' : 'story reference',
         exists: true,
       },
     ],
@@ -204,8 +207,32 @@ async function waitUntil(predicate, message) {
   );
   assert.equal(artifacts.at(-1).phase, 'failed');
 
+  const storyTurn = await runner.run(root, 'story', 'story-initial', 'consider alternatives');
+  const storyStart = starts.at(-1);
+  assert.equal(storyStart.turn.turnId, storyTurn.turnId);
+  assert.ok(storyStart.request.workspace, 'Discussion turn must also use an isolated workspace');
   assert.equal(
-    events.every((entry) => entry.context.root === root && entry.context.stage === 'prompt-plan'),
+    'outputPath' in storyStart.request.workspace,
+    false,
+    'Conversation workspace must not masquerade as an artifact workspace',
+  );
+  assert.match(storyStart.request.prompt, /input\/1-project_brief\.json/);
+  assert.match(storyStart.request.prompt, /input\/ から参照/);
+  const conversationDirectory = storyStart.request.workspace.directory;
+  assert.equal(fs.existsSync(conversationDirectory), true);
+  waits.get(storyTurn.turnId).resolve();
+  await waitUntil(() => !runner.isBusy(root, 'story'), 'story discussion did not finish');
+  await waitUntil(
+    () => !fs.existsSync(conversationDirectory),
+    'isolated conversation workspace was not cleaned up',
+  );
+
+  assert.equal(
+    events.some((entry) => entry.context.root === root && entry.context.stage === 'prompt-plan'),
+    true,
+  );
+  assert.equal(
+    events.some((entry) => entry.context.root === root && entry.context.stage === 'story'),
     true,
   );
 
