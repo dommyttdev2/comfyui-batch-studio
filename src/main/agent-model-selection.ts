@@ -1,21 +1,12 @@
 import path from 'node:path';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
-import type {
-  AgentModelSelection,
-  AgentProvider,
-  GrokContextStage,
-} from '../shared/types.js';
+import type { AgentModelSelection, AgentProvider, GrokContextStage } from '../shared/types.js';
 
 interface ModelSelectionState {
   schemaVersion: 1;
   projects: Record<
     string,
-    Partial<
-      Record<
-        GrokContextStage,
-        Partial<Record<AgentProvider, AgentModelSelection>>
-      >
-    >
+    Partial<Record<GrokContextStage, Partial<Record<AgentProvider, AgentModelSelection>>>>
   >;
 }
 
