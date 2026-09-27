@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, readFile, realpath } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentProvider, GrokTask } from '../shared/types.js';
 import { internalDir } from './artifact-service.js';
@@ -16,6 +16,13 @@ export interface AgentWorkspace {
   outputPath: string;
   fileName: string;
   stage: Stage;
+}
+
+export interface AgentConversationWorkspace {
+  workspaceId: string;
+  provider: AgentProvider;
+  directory: string;
+  inputDirectory: string;
 }
 
 type WorkspaceRecord = {
@@ -75,6 +82,49 @@ export function agentWorkspaceFor(
   };
 }
 
+async function writeWorkspaceReferences(
+  inputDirectory: string,
+  references: Array<{ name: string; content: string }>,
+): Promise<void> {
+  let totalBytes = 0;
+  const used = new Set<string>();
+  for (const [index, reference] of references.entries()) {
+    totalBytes += Buffer.byteLength(reference.content, 'utf8');
+    if (totalBytes > MAX_REFERENCE_BYTES)
+      throw new Error('AI参照ファイルの合計が12MBを超えています。');
+    const clean = path.basename(reference.name).replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const fileName = `${index + 1}-${clean || 'reference.txt'}`;
+    if (used.has(fileName)) throw new Error('参照ファイル名が重複しています。');
+    used.add(fileName);
+    await writeTextAtomic(path.join(inputDirectory, fileName), reference.content);
+  }
+}
+
+export async function prepareAgentConversationWorkspace(
+  userData: string,
+  provider: AgentProvider,
+  references: Array<{ name: string; content: string }>,
+): Promise<AgentConversationWorkspace> {
+  const workspaceId = randomUUID();
+  const directory = path.join(workspaceBase(userData, provider), workspaceId);
+  const inputDirectory = path.join(directory, 'input');
+  await mkdir(inputDirectory, { recursive: true });
+  await writeWorkspaceReferences(inputDirectory, references);
+  return { workspaceId, provider, directory, inputDirectory };
+}
+
+export async function removeAgentConversationWorkspace(
+  userData: string,
+  workspace: AgentConversationWorkspace,
+): Promise<void> {
+  if (!safeWorkspaceId(workspace.workspaceId))
+    throw new Error('AI会話作業領域が不正です。');
+  const expected = path.join(workspaceBase(userData, workspace.provider), workspace.workspaceId);
+  if (path.resolve(workspace.directory) !== path.resolve(expected))
+    throw new Error('AI会話作業領域が不正です。');
+  await rm(expected, { recursive: true, force: true });
+}
+
 export async function prepareAgentWorkspace(
   userData: string,
   provider: AgentProvider,
@@ -84,20 +134,7 @@ export async function prepareAgentWorkspace(
   const workspace = agentWorkspaceFor(userData, provider, stage, randomUUID());
   await mkdir(workspace.inputDirectory, { recursive: true });
   await mkdir(workspace.outputDirectory, { recursive: true });
-  let totalBytes = 0;
-  const used = new Set<string>();
-
-  for (const [index, reference] of references.entries()) {
-    totalBytes += Buffer.byteLength(reference.content, 'utf8');
-    if (totalBytes > MAX_REFERENCE_BYTES)
-      throw new Error('AI参照ファイルの合計が12MBを超えています。');
-    const clean = path.basename(reference.name).replace(/[^a-zA-Z0-9_.-]/g, '_');
-    const fileName = `${index + 1}-${clean || 'reference.txt'}`;
-    if (used.has(fileName)) throw new Error('参照ファイル名が重複しています。');
-    used.add(fileName);
-    await writeTextAtomic(path.join(workspace.inputDirectory, fileName), reference.content);
-  }
-
+  await writeWorkspaceReferences(workspace.inputDirectory, references);
   return workspace;
 }
 
