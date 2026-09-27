@@ -1,10 +1,6 @@
 import path from 'node:path';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
-import type {
-  AgentConversationMessage,
-  AgentProvider,
-  GrokContextStage,
-} from '../shared/types.js';
+import type { AgentConversationMessage, AgentProvider, GrokContextStage } from '../shared/types.js';
 
 interface ConversationRecord {
   updatedAt: number;
@@ -16,10 +12,7 @@ interface ConversationState {
   projects: Record<
     string,
     Partial<
-      Record<
-        GrokContextStage,
-        Partial<Record<AgentProvider, Record<string, ConversationRecord>>>
-      >
+      Record<GrokContextStage, Partial<Record<AgentProvider, Record<string, ConversationRecord>>>>
     >
   >;
 }
@@ -36,7 +29,8 @@ function validSessionId(id: string) {
 }
 
 function sanitizeMessage(value: AgentConversationMessage): AgentConversationMessage {
-  if (!value.id.trim() || value.id.length > 4096) throw new Error('Invalid conversation message ID.');
+  if (!value.id.trim() || value.id.length > 4096)
+    throw new Error('Invalid conversation message ID.');
   if (value.role !== 'user' && value.role !== 'assistant')
     throw new Error('Invalid conversation message role.');
   if (typeof value.text !== 'string' || value.text.length > 2_000_000)
