@@ -276,7 +276,10 @@ async function waitUntil(predicate, message) {
   );
   assert.match(discussionRequest.prompt, /input\/1-project_brief\.json/);
   waits.get(discussionTurn.turnId).resolve();
-  await waitUntil(() => !parityRunner.isBusy(parityRoot, 'story'), 'parity discussion did not finish');
+  await waitUntil(
+    () => !parityRunner.isBusy(parityRoot, 'story'),
+    'parity discussion did not finish',
+  );
 
   const webFinalize = await buildGrokTask(parityRoot, 'story-finalize', '');
   const finalizeSemanticPrompt = webFinalize.prompt
@@ -297,7 +300,10 @@ async function waitUntil(predicate, message) {
   assert.match(finalizeRequest.prompt, /## Batch Studio向け成果物出力契約/);
   fs.writeFileSync(finalizeRequest.workspace.outputPath, '# Story\nCLI parity output', 'utf8');
   waits.get(finalizeTurn.turnId).resolve();
-  await waitUntil(() => !parityRunner.isBusy(parityRoot, 'story'), 'parity finalize did not finish');
+  await waitUntil(
+    () => !parityRunner.isBusy(parityRoot, 'story'),
+    'parity finalize did not finish',
+  );
 
   console.log(
     'Grok CLI runner common session, workspace, resume, artifact import and Web-flow parity tests passed.',
