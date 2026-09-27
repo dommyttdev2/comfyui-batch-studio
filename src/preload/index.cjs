@@ -155,6 +155,16 @@ const I = {
   CLIPBOARD_WRITE_TEXT: 'clipboard:write-text',
   ASSISTANT_GET_PROVIDER: 'assistant:get-provider',
   ASSISTANT_SET_PROVIDER: 'assistant:set-provider',
+  ASSISTANT_SET_CONTEXT: 'assistant:set-context',
+  ASSISTANT_CONTEXT: 'assistant:context',
+  ASSISTANT_CONTEXT_CHANGED: 'assistant:context-changed',
+  ASSISTANT_SNAPSHOT: 'assistant:snapshot',
+  ASSISTANT_SEND: 'assistant:send',
+  ASSISTANT_STOP_TURN: 'assistant:stop-turn',
+  ASSISTANT_NEW_CONVERSATION: 'assistant:new-conversation',
+  ASSISTANT_RESTORE_CONVERSATION: 'assistant:restore-conversation',
+  ASSISTANT_MODELS: 'assistant:models',
+  ASSISTANT_SELECT_MODEL: 'assistant:select-model',
   AGENT_TASK_START: 'agent:task-start',
   AGENT_TASK_STOP: 'agent:task-stop',
   AGENT_EVENT: 'agent:event',
@@ -419,8 +429,23 @@ contextBridge.exposeInMainWorld('batchStudio', {
   assistant: {
     getProvider: (stage) => ipcRenderer.invoke(I.ASSISTANT_GET_PROVIDER, stage),
     setProvider: (provider, stage) => ipcRenderer.invoke(I.ASSISTANT_SET_PROVIDER, provider, stage),
+    setContext: (root, stage) => ipcRenderer.invoke(I.ASSISTANT_SET_CONTEXT, root, stage),
+    context: () => ipcRenderer.invoke(I.ASSISTANT_CONTEXT),
+    snapshot: () => ipcRenderer.invoke(I.ASSISTANT_SNAPSHOT),
+    send: (text) => ipcRenderer.invoke(I.ASSISTANT_SEND, text),
+    stopTurn: () => ipcRenderer.invoke(I.ASSISTANT_STOP_TURN),
+    newConversation: () => ipcRenderer.invoke(I.ASSISTANT_NEW_CONVERSATION),
+    restoreConversation: (sessionId) =>
+      ipcRenderer.invoke(I.ASSISTANT_RESTORE_CONVERSATION, sessionId),
+    models: () => ipcRenderer.invoke(I.ASSISTANT_MODELS),
+    selectModel: (selection) => ipcRenderer.invoke(I.ASSISTANT_SELECT_MODEL, selection),
     startTask: (root, stage, extra) => ipcRenderer.invoke(I.AGENT_TASK_START, root, stage, extra),
     stopTask: (root, stage) => ipcRenderer.invoke(I.AGENT_TASK_STOP, root, stage),
+    onContext: (listener) => {
+      const handler = (_event, context) => listener(context);
+      ipcRenderer.on(I.ASSISTANT_CONTEXT_CHANGED, handler);
+      return () => ipcRenderer.removeListener(I.ASSISTANT_CONTEXT_CHANGED, handler);
+    },
     onEvent: (listener) => {
       const handler = (_event, agentEvent) => listener(agentEvent);
       ipcRenderer.on(I.AGENT_EVENT, handler);
