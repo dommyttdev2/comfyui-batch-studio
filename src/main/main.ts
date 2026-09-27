@@ -47,6 +47,7 @@ import type {
   VastAiRentRequest,
   VastAiSshEndpoint,
   AgentEvent,
+  AgentProvider,
 } from '../shared/types.js';
 import {
   createProject,
@@ -136,6 +137,8 @@ import {
   latestAutoArtifact,
 } from './agent-artifact-import.js';
 import { GrokAutoArtifactWatcher } from './grok-auto-artifact-watcher.js';
+import { GrokCliAdapter } from './grok-cli-adapter.js';
+import { GrokCliTaskRunner } from './grok-cli-task-runner.js';
 import { CodexModelSelectionStore } from './codex-model-selection.js';
 import { R2ConfigStore } from './r2-config.js';
 import { R2Manager } from './r2-manager.js';
@@ -335,6 +338,8 @@ let lastFocusedProjectWindowId: number | null = null,
   assistantProviderState: AssistantProviderStore | null = null,
   codexAppServer: CodexAppServer | null = null,
   codexCliAdapter: CodexCliAdapter | null = null,
+  grokCliAdapter: GrokCliAdapter | null = null,
+  grokCliTaskRunner: GrokCliTaskRunner | null = null,
   agentSessionState: AgentSessionStateStore | null = null,
   codexCliActiveTurnIds = new Map<string, string>(),
   codexBusy = new Set<string>(),
@@ -1988,13 +1993,18 @@ function codexCliService() {
     throw new Error('Codex CLIが初期化されていません。');
   return { adapter: codexCliAdapter, sessions: agentSessionState, legacyStore: codexChatState };
 }
-function notifyAgentEvent(context: CodexContext, event: AgentEvent) {
-  const envelope = { provider: 'codex' as const, root: context.root, stage: context.stage, event };
+function notifyAgentEvent(
+  provider: AgentProvider,
+  context: { root: string; stage: GrokContextStage },
+  event: AgentEvent,
+) {
+  const envelope = { provider, root: context.root, stage: context.stage, event };
   for (const state of projectWindows.values()) {
     if (!state.projectRoot || projectRootKey(state.projectRoot) !== projectRootKey(context.root))
       continue;
     state.localView.webContents.send(IPC.AGENT_EVENT, envelope);
     if (
+      provider === 'codex' &&
       state.codexContext &&
       projectRootKey(state.codexContext.root) === projectRootKey(context.root) &&
       state.codexContext.stage === context.stage
@@ -2008,7 +2018,7 @@ function forwardCodexCliEvent(
   turnId: string,
   event: AgentEvent,
 ) {
-  notifyAgentEvent(context, event);
+  notifyAgentEvent('codex', context, event);
   if (event.type === 'turn.started') {
     forwardCodexNotification({
       method: 'turn/started',
@@ -2440,7 +2450,7 @@ async function codexSendViaCli(
   const dispatch = (event: AgentEvent) => {
     if (event.type === 'session.started') {
       observedThreadId = event.sessionId;
-      notifyAgentEvent(context, event);
+      notifyAgentEvent('codex', context, event);
       return;
     }
     if (!ready) {
@@ -2450,7 +2460,7 @@ async function codexSendViaCli(
     if (!observedThreadId) return;
     const activeTurnId = codexCliActiveTurnIds.get(observedThreadId);
     if (activeTurnId) forwardCodexCliEvent(context, observedThreadId, activeTurnId, event);
-    else notifyAgentEvent(context, event);
+    else notifyAgentEvent('codex', context, event);
   };
   const request = {
     context,
@@ -4977,6 +4987,14 @@ async function initializeApplication() {
   assistantProviderState = new AssistantProviderStore(userData);
   agentSessionState = new AgentSessionStateStore(userData);
   codexCliAdapter = new CodexCliAdapter();
+  grokCliAdapter = new GrokCliAdapter();
+  grokCliTaskRunner = new GrokCliTaskRunner({
+    userDataPath: userData,
+    adapter: grokCliAdapter,
+    sessions: agentSessionState,
+    onEvent: (context, event) => notifyAgentEvent('grok', context, event),
+    onArtifact: notifyAutoArtifact,
+  });
   codexAppServer = new CodexAppServer();
   codexAppServer.on('notification', forwardCodexNotification);
   codexAppServer.on('disconnected', (message: string) => {
@@ -5013,6 +5031,7 @@ async function initializeApplication() {
 if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
 app.on('will-quit', () => {
   void codexCliAdapter?.shutdown().catch(() => {});
+  void grokCliTaskRunner?.shutdown().catch(() => {});
   codexAppServer?.stop();
 });
 app.on('window-all-closed', () => {
