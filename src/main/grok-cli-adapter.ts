@@ -77,6 +77,21 @@ function safeSession(value: string) {
   return value.toLowerCase();
 }
 
+function invocation(
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+  args: string[],
+): { command: string; args: string[] } {
+  if (platform !== 'win32') return { command: 'grok', args };
+  // Official Windows installs ship a native executable, while npm installs may
+  // expose grok.cmd. cmd.exe handles both forms consistently. Prompt content is
+  // stored in a temporary file and never enters this command line.
+  return {
+    command: env.ComSpec || 'cmd.exe',
+    args: ['/d', '/s', '/c', 'grok', ...args],
+  };
+}
+
 async function defaultKillProcessTree(child: ChildProcessWithoutNullStreams): Promise<void> {
   if (!child.pid || child.exitCode !== null) return;
   if (process.platform === 'win32') {
@@ -283,6 +298,8 @@ export class GrokCliAdapter implements AgentCliAdapter {
       task.workspace?.directory ?? task.context.root,
       '--sandbox',
       task.workspace ? 'strict' : 'read-only',
+      '--disallowed-tools',
+      'run_terminal_cmd',
       '--always-approve',
     ];
     if (model) args.push('--model', model);
@@ -292,7 +309,8 @@ export class GrokCliAdapter implements AgentCliAdapter {
 
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = this.spawnProcess('grok', args, {
+      const command = invocation(this.platform, this.env, args);
+      child = this.spawnProcess(command.command, command.args, {
         cwd: task.workspace?.directory ?? task.context.root,
         env: this.env,
         windowsHide: true,
@@ -414,7 +432,8 @@ export class GrokCliAdapter implements AgentCliAdapter {
     return new Promise((resolve) => {
       let child: ChildProcessWithoutNullStreams;
       try {
-        child = this.spawnProcess('grok', args, {
+        const command = invocation(this.platform, this.env, args);
+        child = this.spawnProcess(command.command, command.args, {
           env: this.env,
           windowsHide: true,
           stdio: 'pipe',
