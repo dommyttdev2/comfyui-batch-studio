@@ -113,16 +113,29 @@ export async function prepareAgentConversationWorkspace(
   return { workspaceId, provider, directory, inputDirectory };
 }
 
+async function removeWorkspaceDirectory(
+  userData: string,
+  workspace: { workspaceId: string; provider: AgentProvider; directory: string },
+): Promise<void> {
+  if (!safeWorkspaceId(workspace.workspaceId)) throw new Error('AI作業領域が不正です。');
+  const expected = path.join(workspaceBase(userData, workspace.provider), workspace.workspaceId);
+  if (path.resolve(workspace.directory) !== path.resolve(expected))
+    throw new Error('AI作業領域が不正です。');
+  await rm(expected, { recursive: true, force: true });
+}
+
 export async function removeAgentConversationWorkspace(
   userData: string,
   workspace: AgentConversationWorkspace,
 ): Promise<void> {
-  if (!safeWorkspaceId(workspace.workspaceId))
-    throw new Error('AI会話作業領域が不正です。');
-  const expected = path.join(workspaceBase(userData, workspace.provider), workspace.workspaceId);
-  if (path.resolve(workspace.directory) !== path.resolve(expected))
-    throw new Error('AI会話作業領域が不正です。');
-  await rm(expected, { recursive: true, force: true });
+  await removeWorkspaceDirectory(userData, workspace);
+}
+
+export async function removeAgentWorkspace(
+  userData: string,
+  workspace: AgentWorkspace,
+): Promise<void> {
+  await removeWorkspaceDirectory(userData, workspace);
 }
 
 export async function prepareAgentWorkspace(
