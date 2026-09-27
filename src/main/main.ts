@@ -248,6 +248,7 @@ type RendererWindowTool =
   | StandaloneWindowTool
   | 'thumbnail-picker'
   | 'marketplace-picker'
+  | 'assistant-pane'
   | 'codex-pane';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
@@ -403,11 +404,9 @@ function layoutProjectWindow(state: ProjectWindowState) {
     grokBounds = { x: lw, y: 0, width: width - lw, height };
   state.localView.setBounds({ x: 0, y: 0, width: lw, height });
   const hidden = { x: width, y: 0, width: 0, height };
-  state.grokView.setBounds(state.paneProvider === 'grok' ? grokBounds : hidden);
-  state.grokLoadingView.setBounds(
-    state.paneProvider === 'grok' && state.grokLoading ? grokBounds : hidden,
-  );
-  state.codexView.setBounds(state.paneProvider === 'codex' ? grokBounds : hidden);
+  state.grokView.setBounds(hidden);
+  state.grokLoadingView.setBounds(hidden);
+  state.codexView.setBounds(grokBounds);
 }
 function ipcSenderContext(contents: WebContents): IpcSenderContext {
   for (const state of projectWindows.values()) {
@@ -519,17 +518,20 @@ async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
   const dev = process.env.VITE_DEV_SERVER_URL;
   if (dev) {
     const url = new URL(dev);
-    if (tool === 'codex-pane') url.searchParams.set('codex-pane', '1');
+    if (tool === 'assistant-pane') url.searchParams.set('assistant-pane', '1');
+    else if (tool === 'codex-pane') url.searchParams.set('codex-pane', '1');
     else if (tool) url.searchParams.set('tool', tool);
     await v.webContents.loadURL(url.toString());
   } else
     await v.webContents.loadFile(
       path.resolve(__dirname, '../../dist-renderer/index.html'),
-      tool === 'codex-pane'
-        ? { query: { 'codex-pane': '1' } }
-        : tool
-          ? { query: { tool } }
-          : undefined,
+      tool === 'assistant-pane'
+        ? { query: { 'assistant-pane': '1' } }
+        : tool === 'codex-pane'
+          ? { query: { 'codex-pane': '1' } }
+          : tool
+            ? { query: { tool } }
+            : undefined,
     );
 }
 function configureGrokContents(contents: WebContents, oauthFlow = false) {
@@ -735,7 +737,7 @@ function createProjectWindow(
       localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
     });
   void loadRenderer(localView);
-  void loadRenderer(codexView, 'codex-pane');
+  void loadRenderer(codexView, 'assistant-pane');
   void state.grokNavigationQueue
     .navigate(grokView.webContents, GROK_URL)
     .catch((error) => console.warn('Initial Grok navigation failed:', error));
