@@ -504,10 +504,7 @@ function App() {
         context = grokContextStage(stage);
       if (visible && context && project) {
         setGrok(true);
-        const contextLoad =
-          paneProvider === 'codex'
-            ? window.batchStudio.codex.setContext(project.rootPath, context)
-            : window.batchStudio.grok.setContext(project.rootPath, context);
+        const contextLoad = window.batchStudio.assistant.setContext(project.rootPath, context);
         const visibility = window.batchStudio.grok.setVisible(true);
         const [s] = await Promise.all([visibility, contextLoad]);
         if (!cancelled) {
