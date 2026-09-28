@@ -1,3 +1,5 @@
+import type { AgentEvent } from '../shared/types.js';
+
 const SECRET_NAME = /(?:token|secret|password|credential|authorization|api[_-]?key)/i;
 const SECRET_ASSIGNMENT =
   /((?:token|secret|password|credential|authorization|api[_-]?key)\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi;
@@ -22,4 +24,15 @@ export function sanitizeAgentDiagnostic(
     .replace(SECRET_QUERY, '$1[REDACTED]')
     .replace(SECRET_PREFIX, '[REDACTED]');
   return text.slice(0, MAX_DIAGNOSTIC);
+}
+
+export function sanitizeAgentEvent(
+  event: AgentEvent,
+  env: NodeJS.ProcessEnv = process.env,
+): AgentEvent {
+  if (event.type === 'turn.failed')
+    return { ...event, error: sanitizeAgentDiagnostic(event.error, env) };
+  if (event.type === 'activity' && event.detail)
+    return { ...event, detail: sanitizeAgentDiagnostic(event.detail, env) };
+  return event;
 }
