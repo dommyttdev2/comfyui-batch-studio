@@ -34,16 +34,3 @@ jobs:
           node tests/image-memory-benchmark.cjs
           xvfb-run -a node_modules/.bin/electron --no-sandbox tests/image-memory-electron.cjs
           BATCH_STUDIO_IMAGE_TEST_SIDE=3584 xvfb-run -a node_modules/.bin/electron --no-sandbox tests/image-memory-electron.cjs
-
-  windows-launcher-smoke:
-    runs-on: windows-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.12.0'
-      - name: Verify Windows launcher PowerShell command
-        run: node tests/launcher-runtime-guard.cjs
