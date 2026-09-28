@@ -5,7 +5,7 @@ import type {
   AgentModelSelection,
   AssistantPaneSnapshot,
 } from '../shared/types';
-import './codex-pane.css';
+import './assistant-pane.css';
 
 type ActivityItem = {
   id: string;
@@ -286,14 +286,14 @@ export function AssistantPane() {
   const available = availability?.state === 'available';
 
   return (
-    <main className="codex-pane assistant-pane">
-      <header className="codex-heading">
+    <main className="assistant-pane assistant-pane">
+      <header className="assistant-heading">
         <div>
           <strong>{context ? label : 'AI Assistant'}</strong>
           <small>{context ? stageTitles[context.stage] : '工程を選択してください'}</small>
         </div>
         {context && (
-          <div className="codex-account">
+          <div className="assistant-account">
             <small>
               {availability
                 ? availability.state === 'available'
@@ -306,8 +306,8 @@ export function AssistantPane() {
       </header>
 
       {context && snapshot?.capabilities?.modelSelection && (
-        <section className="codex-runtime" aria-label="AIモデル設定">
-          <div className="codex-model-controls">
+        <section className="assistant-runtime" aria-label="AIモデル設定">
+          <div className="assistant-model-controls">
             <label>
               使用するモデル
               <select
@@ -357,7 +357,7 @@ export function AssistantPane() {
       )}
 
       {context && (
-        <section className="codex-history">
+        <section className="assistant-history">
           <label htmlFor="assistant-chat-history">この工程の会話履歴</label>
           <select
             id="assistant-chat-history"
@@ -379,42 +379,42 @@ export function AssistantPane() {
       )}
 
       {error && (
-        <div className="codex-error" role="alert">
+        <div className="assistant-error" role="alert">
           {error}
         </div>
       )}
 
-      <div className="codex-messages" ref={scrollRef} role="log" aria-live="polite">
+      <div className="assistant-messages" ref={scrollRef} role="log" aria-live="polite">
         {loading && <p>会話履歴を復元しています…</p>}
         {!context && <p>企画工程を開くと、選択中のAI providerの会話を表示します。</p>}
         {context && !loading && messages.length === 0 && !stream && (
           <p>この工程の{label}会話を開始できます。</p>
         )}
         {messages.map((message) => (
-          <article key={message.id} className={'codex-message ' + message.role}>
+          <article key={message.id} className={'assistant-message ' + message.role}>
             <strong>{message.role === 'user' ? 'あなた' : label}</strong>
             <p>{message.text}</p>
           </article>
         ))}
         {stream && (
-          <article className="codex-message assistant">
+          <article className="assistant-message assistant">
             <strong>{label} · 回答中</strong>
             <p>{stream}</p>
           </article>
         )}
         {(activity.length > 0 || busy) && (
-          <section className="codex-activity" aria-label="AIの作業状況">
-            <div className="codex-activity-heading">
+          <section className="assistant-activity" aria-label="AIの作業状況">
+            <div className="assistant-activity-heading">
               <strong>作業状況</strong>
               {busy && <span>進行中</span>}
             </div>
             {activity.length === 0 ? (
               <p>作業イベントを待っています。</p>
             ) : (
-              <ol className="codex-activity-list">
+              <ol className="assistant-activity-list">
                 {activity.map((item) => (
-                  <li key={item.id} className="codex-activity-item">
-                    <div className="codex-activity-item-heading">
+                  <li key={item.id} className="assistant-activity-item">
+                    <div className="assistant-activity-item-heading">
                       <strong>{item.label}</strong>
                       <small>
                         {item.status === 'running'
@@ -435,9 +435,9 @@ export function AssistantPane() {
       </div>
 
       {context && (
-        <section className="codex-compose">
+        <section className="assistant-compose">
           {!available && availability && (
-            <div className="codex-task-disabled-reason" role="status">
+            <div className="assistant-task-disabled-reason" role="status">
               {availability.message ?? `${label} CLIを利用できません。`}
             </div>
           )}
@@ -448,7 +448,7 @@ export function AssistantPane() {
             disabled={loading || busy || !available}
             onChange={(event) => setInput(event.target.value)}
           />
-          <div className="codex-actions">
+          <div className="assistant-actions">
             <button
               className="primary"
               disabled={loading || busy || !available || !input.trim()}

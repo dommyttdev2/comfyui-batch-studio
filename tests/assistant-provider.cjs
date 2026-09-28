@@ -52,29 +52,9 @@ matchCode(
   'Switching agents must persist the selected provider',
 );
 matchCode(
-  read('src/renderer/App.tsx'),
-  /missingIpcHandler\(error, 'assistant:get-provider'\)[\s\S]*?codex\.getProvider\(stage\)/,
-  'A renderer updated under an older main process must restore through the legacy provider channel',
-);
-matchCode(
-  read('src/renderer/App.tsx'),
-  /missingIpcHandler\(error, 'assistant:set-provider'\)[\s\S]*?codex\.setProvider\(provider, stage\)/,
-  'A renderer updated under an older main process must save through the legacy provider channel',
-);
-matchCode(
   read('src/main/main.ts'),
   /assistantProviderState\.resolve\(/,
   'Existing project agent selection must be restored',
-);
-matchCode(
-  read('src/main/main.ts'),
-  /grokHistory\s*&&\s*!codexHistory/,
-  'Old Grok projects must retain their Grok chat when switching the global default',
-);
-matchCode(
-  read('src/main/main.ts'),
-  /codexHistory\s*&&\s*!grokHistory/,
-  'Old Codex projects must retain their Codex chat when switching the global default',
 );
 
 matchCode(
@@ -120,11 +100,21 @@ assert.ok(
   ),
   'Grok must not require a Codex-specific API just to load its selection',
 );
+doesNotMatchCode(
+  read('src/renderer/App.tsx'),
+  /window\.batchStudio\.codex|window\.batchStudio\.grok/,
+  'App must use only the provider-neutral assistant preload API',
+);
+doesNotMatchCode(
+  read('src/main/main.ts'),
+  /IPC\.CODEX_|IPC\.GROK_SET_/,
+  'Main process must not retain provider-specific pane IPC aliases',
+);
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
 const main = read('src/main/main.ts');
 const stages = read('src/renderer/GrokStages.tsx');
-const codex = read('src/renderer/CodexPane.tsx');
+const pane = read('src/renderer/AssistantPane.tsx');
 matchCode(
   ipc,
   /AGENT_TASK_START:/,
@@ -160,10 +150,10 @@ matchCode(
   /contextStageForTask\(stage as GrokTask\['stage'\]\)/,
   'A shared AI task must resolve to its exact project context stage',
 );
-matchCode(
-  codex,
-  /onStageTaskSelected\([\s\S]*setTask\(selected\)/,
-  'The legacy Codex pane selection listener may remain during the migration window',
+doesNotMatchCode(
+  pane,
+  /selectStageTask|sendTask|grokTask/,
+  'The common AssistantPane must not contain provider-specific task controls',
 );
 for (const expected of [
   "'story-initial'",
@@ -203,19 +193,19 @@ for (const expected of [
   assert.equal(
     await store.resolve(projectLegacy, 'codex', async () => 'grok'),
     'grok',
-    'Legacy Grok history must take precedence over a changed default',
+    'A migration callback may preserve a prior Grok preference',
   );
   assert.equal(
     await store.resolve(projectCodex, 'grok', async () => 'codex'),
     'codex',
-    'Legacy Codex history must take precedence over a changed default',
+    'A migration callback may preserve a prior Codex preference',
   );
   await store.remember(projectA, 'codex');
   await store.remember(projectB, 'grok');
   assert.equal(
     await store.resolve(projectA, 'grok', async () => 'grok'),
     'codex',
-    'An explicit project choice must override the global setting and old chats',
+    'An explicit project choice must override the global setting and inferred history',
   );
   const afterRestart = new AssistantProviderStore(userData);
   assert.equal(await afterRestart.get(projectA), 'codex', 'Project choice must survive restart');
@@ -275,9 +265,13 @@ for (const expected of [
   const migratedOnDisk = JSON.parse(
     fs.readFileSync(path.join(legacyDirectory, 'assistant-provider-state.json'), 'utf8'),
   );
+  const migratedKey =
+    process.platform === 'win32'
+      ? path.resolve(legacyRoot).toLowerCase()
+      : path.resolve(legacyRoot);
   assert.equal(migratedOnDisk.schemaVersion, 2);
-  assert.equal(migratedOnDisk.projects[legacyRoot].stages.story, 'codex');
-  assert.equal(migratedOnDisk.projects[legacyRoot].stages.caption, 'grok');
+  assert.equal(migratedOnDisk.projects[migratedKey].stages.story, 'codex');
+  assert.equal(migratedOnDisk.projects[migratedKey].stages.caption, 'grok');
 
   const firstOpenRoot = path.join(userData, 'project-first-open');
   const firstProvider = await store.resolve(firstOpenRoot, 'grok', async () => null, 'models');

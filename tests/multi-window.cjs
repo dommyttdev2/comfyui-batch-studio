@@ -87,29 +87,34 @@ doesNotMatchCode(
   /let mainWindow:/,
   'Project windows must not use a single global mainWindow',
 );
-doesNotMatchCode(main, /let grokView:/, 'Grok views must be Project Window-local');
-doesNotMatchCode(main, /let activeGrokContext:/, 'Grok context must be Project Window-local');
+doesNotMatchCode(main, /let grokView:/, 'Legacy Grok Web views must be removed');
+doesNotMatchCode(main, /let codexView:/, 'Legacy Codex views must be removed');
+doesNotMatchCode(main, /grokLoadingView|GROK_PARTITION|GrokNavigationQueue/);
 
 matchCode(
   main,
-  /grokLoadingView:WebContentsView/,
-  'Project windows must own a dedicated Grok loading placeholder view',
-);
-matchCode(main, /Grokを読み込み中…/, 'The Grok pane must explain that Grok is still loading');
-matchCode(
-  main,
-  /state\.grokLoading=true;layoutProjectWindow\(state\)/,
-  'Grok context loading must expose the placeholder before awaiting navigation',
+  /assistantView:WebContentsView/,
+  'Project windows must own one provider-neutral AssistantPane view',
 );
 matchCode(
   main,
-  /state\.grokLoading\?grokBounds/,
-  'The loading placeholder must occupy the Grok pane while context navigation is pending',
+  /window\.contentView\.addChildView\(localView\).*?window\.contentView\.addChildView\(assistantView\)/s,
+  'Project windows must contain the local UI and one AssistantPane view',
+);
+matchCode(
+  main,
+  /state\.assistantView\.setBounds/,
+  'Project window layout must size the common AssistantPane',
+);
+matchCode(
+  main,
+  /loadRenderer\(assistantView,'assistant-pane'\)/,
+  'The right pane must load the common AssistantPane renderer',
 );
 matchCode(
   app,
-  /setGrok\(true\).*?grok\.setContext\(project\.rootPath,context\).*?grok\.setVisible\(true\)/,
-  'Renderer must reserve the Grok pane before waiting for Grok context loading',
+  /assistant\.setVisible\(true\).*?assistant\.setContext\(project\.rootPath,context\)/s,
+  'Renderer must reserve the AssistantPane and select the common context',
 );
 
 matchCode(

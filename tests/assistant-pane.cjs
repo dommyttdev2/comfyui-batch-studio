@@ -79,13 +79,18 @@ matchCode(
 );
 matchCode(
   main,
-  /loadRenderer\(codexView, 'assistant-pane'\)/,
+  /loadRenderer\(assistantView, 'assistant-pane'\)/,
   'The right local view must render AssistantPane',
 );
 matchCode(
   main,
-  /state\.grokView\.setBounds\(hidden\)[\s\S]*state\.codexView\.setBounds\(grokBounds\)/,
-  'Grok Web must stay hidden while the common local pane is active',
+  /assistantView: WebContentsView/,
+  'Project windows must own one provider-neutral AssistantPane view',
+);
+doesNotMatchCode(
+  main,
+  /grokView|grokLoadingView|codexView/,
+  'Legacy provider views must be removed',
 );
 matchCode(
   preload,

@@ -11,7 +11,7 @@ import {
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions, WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { IPC } from '../shared/ipc.js';
 import { PickerSelectionGate } from './picker-selection-gate.js';
@@ -21,23 +21,14 @@ import type {
   CivitaiCatalogStatus,
   CivitaiConnectionInput,
   GrokContextStage,
-  GrokPaneState,
+  AssistantPaneState,
   ExecutionRun,
   ProjectBriefInput,
   ProjectSettings,
   PromptPlanArtifact,
   GrokTask,
   AssistantPaneProvider,
-  CodexContext,
-  CodexMessage,
-  CodexSnapshot,
-  CodexAccountStatus,
   AutoArtifactEvent,
-  CodexSendResult,
-  CodexTurnStatus,
-  CodexModelOption,
-  CodexModelSelection,
-  CodexModelSettings,
   ThumbnailSlotKey,
   MarketplaceSourceType,
   R2ConnectionInput,
@@ -67,7 +58,6 @@ import { readGrokLoraSelectionHistory } from './grok-lora-history.js';
 import { manualResetFrom, type ManualResetScope } from './model-downstream-reset.js';
 import { scanProject } from './project-scan.js';
 import { readProjectMeta, saveProjectSettings } from './project-meta.js';
-import { artifactFileOutputRules, buildGrokTask } from './grok-context.js';
 import { catalogStatus } from './model-catalog.js';
 import { compileWorkflow } from './compiler.js';
 import { checkAvailability, checkLoraFileAvailability } from './availability.js';
@@ -92,62 +82,21 @@ import {
 import { LocalExecutionService, verifyLocalOutputs } from './local-execution.js';
 import { ComfyUiClient } from './comfyui-client.js';
 import { ExecutionCoordinator } from './execution-coordinator.js';
-import {
-  canonicalGrokConversationUrl,
-  GROK_PARTITION,
-  isGrokNavigationUrl,
-  isOAuthPopupUrl,
-  isSafeExternalUrl,
-  isSecureWebUrl,
-} from './grok-navigation.js';
-import { GrokNavigationQueue, LatestGrokContextQueue } from './grok-navigation-queue.js';
 import { CivitaiCatalogService } from './civitai-catalog.js';
 import { CivitaiRequestPolicy } from './civitai-request-policy.js';
 import { CivitaiConfigStore } from './civitai-config.js';
 import { UiStateStore } from './ui-state.js';
-import { GrokChatStateStore } from './grok-chat-state.js';
-import { CodexChatStateStore } from './codex-chat-state.js';
-import { codexTaskFileForTurn, latestCompletedArtifactTurn } from './codex-artifact-turn.js';
-import { readCodexHistory } from './codex-thread-history.js';
-import {
-  prepareCodexFileWorkspace,
-  workspaceOutputInstruction,
-  readCodexOutput,
-  rememberCodexWorkspace,
-  findCodexWorkspace,
-  type FileArtifactWorkspace,
-} from './codex-file-artifact.js';
-import { promptPlanPatchBase } from './prompt-plan-patch.js';
-import {
-  codexActivityFromHistory,
-  emptyCodexActivity,
-  safeCodexActivityEvent,
-} from '../shared/codex-activity.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
-import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
-import { CodexCliAdapter, AgentTurnCancelledError } from './codex-cli-adapter.js';
+import { CodexCliAdapter } from './codex-cli-adapter.js';
 import { AgentSessionStateStore } from './agent-session-state.js';
 import type { AgentCliAdapter } from './agent-cli-adapter.js';
 import { AgentConversationStore } from './agent-conversation-store.js';
 import { AgentConversationRunner } from './agent-conversation-runner.js';
 import { AgentModelSelectionStore } from './agent-model-selection.js';
-import {
-  prepareAgentWorkspace,
-  agentWorkspaceOutputInstruction,
-  readAgentWorkspaceOutput,
-  rememberAgentWorkspace,
-  type AgentWorkspace,
-} from './agent-workspace.js';
-import { CodexTurnMonitor } from './codex-turn-monitor.js';
-import {
-  expectedArtifact,
-  importAutoArtifact,
-  latestAutoArtifact,
-} from './agent-artifact-import.js';
-import { GrokAutoArtifactWatcher } from './grok-auto-artifact-watcher.js';
+import { importAutoArtifact } from './agent-artifact-import.js';
 import { GrokCliAdapter } from './grok-cli-adapter.js';
 import { GrokCliTaskRunner } from './grok-cli-task-runner.js';
-import { CodexModelSelectionStore } from './codex-model-selection.js';
+import { CodexCliTaskRunner } from './codex-cli-task-runner.js';
 import { R2ConfigStore } from './r2-config.js';
 import { R2Manager } from './r2-manager.js';
 import { R2ObjectIndex } from './r2-object-index.js';
@@ -217,37 +166,12 @@ import {
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
-const GROK_URL = 'https://grok.com/';
-const GROK_LOADING_HTML = `<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8" />
-<meta name="color-scheme" content="dark" />
-<style>
-html,body{width:100%;height:100%;margin:0;background:#101318;color:#e8ebef;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
-body{display:grid;place-items:center}
-.loading{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
-.spinner{width:30px;height:30px;border:3px solid #39414d;border-top-color:#3474ef;border-radius:50%;animation:spin .8s linear infinite}
-.title{font-size:15px;font-weight:600}
-.note{font-size:12px;color:#8993a2}
-@keyframes spin{to{transform:rotate(360deg)}}
-</style>
-</head>
-<body>
-<div class="loading" role="status" aria-live="polite">
-<div class="spinner" aria-hidden="true"></div>
-<div class="title">Grokを読み込み中…</div>
-<div class="note">読み込みが完了すると、このPaneにGrokが表示されます。</div>
-</div>
-</body>
-</html>`;
 type StandaloneWindowTool = 'r2' | 'civit' | 'vastai';
 type RendererWindowTool =
   | StandaloneWindowTool
   | 'thumbnail-picker'
   | 'marketplace-picker'
-  | 'assistant-pane'
-  | 'codex-pane';
+  | 'assistant-pane';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
   selection: PickerSelectionGate;
@@ -314,24 +238,14 @@ const pendingWindowCloses = new Set<number>();
 type ProjectWindowState = {
   window: BaseWindow;
   localView: WebContentsView;
-  grokView: WebContentsView;
-  codexView: WebContentsView;
+  assistantView: WebContentsView;
   paneProvider: AssistantPaneProvider;
   assistantSelectionGeneration: number;
-  codexContext: CodexContext | null;
   assistantContext: AssistantPaneContext | null;
-  grokLoadingView: WebContentsView;
   projectRoot: string | null;
   restoreLastProject: boolean;
-  grokVisible: boolean;
-  grokLoading: boolean;
-  grokLoadingGeneration: number;
+  assistantVisible: boolean;
   localRatio: number;
-  activeGrokContext: { root: string; stage: GrokContextStage } | null;
-  restoringGrokContext: boolean;
-  grokArtifactWatcher: GrokAutoArtifactWatcher | null;
-  grokNavigationQueue: GrokNavigationQueue;
-  grokContextQueue: LatestGrokContextQueue<GrokPaneState>;
   lastFocusedAt: number;
 };
 const projectWindows = new Map<number, ProjectWindowState>();
@@ -343,33 +257,15 @@ let lastFocusedProjectWindowId: number | null = null,
   civitaiPolicy: CivitaiRequestPolicy | null = null,
   civitaiConfig: CivitaiConfigStore | null = null,
   uiState: UiStateStore | null = null,
-  grokChatState: GrokChatStateStore | null = null,
-  codexChatState: CodexChatStateStore | null = null,
   assistantProviderState: AssistantProviderStore | null = null,
-  codexAppServer: CodexAppServer | null = null,
   codexCliAdapter: CodexCliAdapter | null = null,
   grokCliAdapter: GrokCliAdapter | null = null,
   grokCliTaskRunner: GrokCliTaskRunner | null = null,
+  codexCliTaskRunner: CodexCliTaskRunner | null = null,
   agentSessionState: AgentSessionStateStore | null = null,
   agentConversationStore: AgentConversationStore | null = null,
   agentConversationRunner: AgentConversationRunner | null = null,
   agentModelSelections: AgentModelSelectionStore | null = null,
-  codexCliActiveTurnIds = new Map<string, string>(),
-  codexBusy = new Set<string>(),
-  codexTurnStartRequests = new Map<string, Promise<string>>(),
-  codexActiveTurnIds = new Map<string, string>(),
-  codexInterruptRequests = new Map<string, Promise<void>>(),
-  codexPendingArtifacts = new Map<
-    string,
-    {
-      root: string;
-      stage: GrokTask['stage'];
-      fileName: string;
-      workspace?: FileArtifactWorkspace | AgentWorkspace;
-    }
-  >(),
-  codexTurnMonitor = new CodexTurnMonitor(),
-  codexModelSelections: CodexModelSelectionStore | null = null,
   r2Manager: R2Manager | null = null,
   r2ObjectIndex: R2ObjectIndex | null = null,
   appSettingsStore: AppSettingsStore | null = null,
@@ -386,32 +282,25 @@ function projectRootKey(root: string) {
   const resolved = path.resolve(root);
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
-function paneState(state: ProjectWindowState): GrokPaneState {
-  return { visible: state.grokVisible, ratio: state.localRatio };
+function paneState(state: ProjectWindowState): AssistantPaneState {
+  return { visible: state.assistantVisible, ratio: state.localRatio };
 }
 function layoutProjectWindow(state: ProjectWindowState) {
   const { width, height } = state.window.getContentBounds();
-  if (!state.grokVisible || width < 840) {
+  if (!state.assistantVisible || width < 840) {
     state.localView.setBounds({ x: 0, y: 0, width, height });
-    state.grokView.setBounds({ x: width, y: 0, width: 0, height });
-    state.grokLoadingView.setBounds({ x: width, y: 0, width: 0, height });
-    state.codexView.setBounds({ x: width, y: 0, width: 0, height });
+    state.assistantView.setBounds({ x: width, y: 0, width: 0, height });
     return;
   }
-  const lw = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio))),
-    grokBounds = { x: lw, y: 0, width: width - lw, height };
-  state.localView.setBounds({ x: 0, y: 0, width: lw, height });
-  const hidden = { x: width, y: 0, width: 0, height };
-  state.grokView.setBounds(hidden);
-  state.grokLoadingView.setBounds(hidden);
-  state.codexView.setBounds(grokBounds);
+  const localWidth = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio)));
+  state.localView.setBounds({ x: 0, y: 0, width: localWidth, height });
+  state.assistantView.setBounds({ x: localWidth, y: 0, width: width - localWidth, height });
 }
 function projectWindowForSender(contents: WebContents) {
   for (const state of projectWindows.values())
     if (
       state.localView.webContents.id === contents.id ||
-      state.grokView.webContents.id === contents.id ||
-      state.codexView.webContents.id === contents.id
+      state.assistantView.webContents.id === contents.id
     )
       return state;
   throw new Error('Project Window was not found for IPC sender.');
@@ -461,7 +350,6 @@ async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
   if (dev) {
     const url = new URL(dev);
     if (tool === 'assistant-pane') url.searchParams.set('assistant-pane', '1');
-    else if (tool === 'codex-pane') url.searchParams.set('codex-pane', '1');
     else if (tool) url.searchParams.set('tool', tool);
     await v.webContents.loadURL(url.toString());
   } else
@@ -469,67 +357,10 @@ async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
       path.resolve(__dirname, '../../dist-renderer/index.html'),
       tool === 'assistant-pane'
         ? { query: { 'assistant-pane': '1' } }
-        : tool === 'codex-pane'
-          ? { query: { 'codex-pane': '1' } }
-          : tool
-            ? { query: { tool } }
-            : undefined,
+        : tool
+          ? { query: { tool } }
+          : undefined,
     );
-}
-function configureGrokContents(contents: WebContents, oauthFlow = false) {
-  contents.setWindowOpenHandler(({ url }) => {
-    const startsOAuth = isOAuthPopupUrl(url);
-    if (startsOAuth || isGrokNavigationUrl(url) || (oauthFlow && isSecureWebUrl(url))) {
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          width: 560,
-          height: 760,
-          autoHideMenuBar: true,
-          webPreferences: {
-            partition: GROK_PARTITION,
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: true,
-          },
-        },
-      };
-    }
-    if (isSafeExternalUrl(url)) void shell.openExternal(url);
-    return { action: 'deny' };
-  });
-  contents.on('will-navigate', (e, url) => {
-    const allow = oauthFlow ? isSecureWebUrl(url) : isGrokNavigationUrl(url);
-    if (!allow) {
-      e.preventDefault();
-      if (isSafeExternalUrl(url)) void shell.openExternal(url);
-    }
-  });
-  contents.on('did-create-window', (window, details) =>
-    configureGrokContents(window.webContents, oauthFlow || isOAuthPopupUrl(details.url)),
-  );
-}
-function chatStore() {
-  if (!grokChatState) throw new Error('Grok chat state storeが初期化されていません。');
-  return grokChatState;
-}
-async function rememberGrokConversation(state: ProjectWindowState, url: string) {
-  if (state.restoringGrokContext || !state.activeGrokContext) return;
-  const canonical = canonicalGrokConversationUrl(url);
-  if (!canonical) return;
-  await chatStore().remember(
-    state.activeGrokContext.root,
-    state.activeGrokContext.stage,
-    canonical,
-  );
-}
-function attachGrokHistoryTracking(state: ProjectWindowState) {
-  state.grokView.webContents.on('did-navigate', (_e, url) => {
-    void rememberGrokConversation(state, url);
-  });
-  state.grokView.webContents.on('did-navigate-in-page', (_e, url) => {
-    void rememberGrokConversation(state, url);
-  });
 }
 async function rememberMostRecentOpenProject(clearIfNone = true) {
   const candidate = [...projectWindows.values()]
@@ -563,24 +394,9 @@ function createProjectWindow(
         sandbox: true,
       },
     }),
-    codexView = new WebContentsView({
+    assistantView = new WebContentsView({
       webPreferences: {
         preload: path.resolve(__dirname, '../preload/index.cjs'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-      },
-    }),
-    grokView = new WebContentsView({
-      webPreferences: {
-        partition: GROK_PARTITION,
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-      },
-    }),
-    grokLoadingView = new WebContentsView({
-      webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
@@ -589,39 +405,21 @@ function createProjectWindow(
     state: ProjectWindowState = {
       window,
       localView,
-      grokView,
-      codexView,
+      assistantView,
       paneProvider: 'grok',
       assistantSelectionGeneration: 0,
-      codexContext: null,
       assistantContext: null,
-      grokLoadingView,
       projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
       restoreLastProject: Boolean(options.restoreLastProject),
-      grokVisible: false,
-      grokLoading: false,
-      grokLoadingGeneration: 0,
+      assistantVisible: false,
       localRatio: 0.45,
-      activeGrokContext: null,
-      restoringGrokContext: false,
-      grokArtifactWatcher: null,
-      grokNavigationQueue: new GrokNavigationQueue(),
-      grokContextQueue: new LatestGrokContextQueue<GrokPaneState>(),
       lastFocusedAt: ++projectWindowFocusSequence,
     };
   const windowId = window.id;
   projectWindows.set(windowId, state);
   lastFocusedProjectWindowId = windowId;
   window.contentView.addChildView(localView);
-  window.contentView.addChildView(grokView);
-  window.contentView.addChildView(grokLoadingView);
-  window.contentView.addChildView(codexView);
-  void grokLoadingView.webContents
-    .loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(GROK_LOADING_HTML)}`)
-    .catch((error) => console.warn('Grok loading placeholder failed:', error));
-  configureGrokContents(grokView.webContents);
-  attachGrokHistoryTracking(state);
-  state.grokArtifactWatcher = new GrokAutoArtifactWatcher(grokView.webContents, notifyAutoArtifact);
+  window.contentView.addChildView(assistantView);
   window.on('focus', () => {
     state.lastFocusedAt = ++projectWindowFocusSequence;
     lastFocusedProjectWindowId = windowId;
@@ -664,11 +462,8 @@ function createProjectWindow(
     for (const picker of marketplacePickerWindows.values()) {
       if (picker.opener.id === localView.webContents.id) picker.window.close();
     }
-    state.grokArtifactWatcher?.dispose();
     localView.webContents.close();
-    grokView.webContents.close();
-    grokLoadingView.webContents.close();
-    codexView.webContents.close();
+    assistantView.webContents.close();
     projectWindows.delete(windowId);
     if (lastFocusedProjectWindowId === windowId) lastFocusedProjectWindowId = null;
     void rememberMostRecentOpenProject(false);
@@ -679,10 +474,7 @@ function createProjectWindow(
       localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
     });
   void loadRenderer(localView);
-  void loadRenderer(codexView, 'assistant-pane');
-  void state.grokNavigationQueue
-    .navigate(grokView.webContents, GROK_URL)
-    .catch((error) => console.warn('Initial Grok navigation failed:', error));
+  void loadRenderer(assistantView, 'assistant-pane');
   return state;
 }
 function openStandaloneToolWindow(tool: StandaloneWindowTool) {
@@ -1939,51 +1731,6 @@ function integratedCatalogStatus(): CivitaiCatalogStatus {
 async function scanWithCatalog(root: string) {
   return scanProject(root);
 }
-async function setGrokContext(state: ProjectWindowState, root: string, stage: GrokContextStage) {
-  validRoot(root);
-  validGrokContextStage(stage);
-  const resolvedRoot = path.resolve(root),
-    key = `${resolvedRoot}\0${stage}`,
-    loadingGeneration = ++state.grokLoadingGeneration;
-  state.grokLoading = true;
-  layoutProjectWindow(state);
-  try {
-    return await state.grokContextQueue.run(key, async (isLatest) => {
-      if (!isLatest()) return paneState(state);
-      if (state.activeGrokContext) {
-        const current = canonicalGrokConversationUrl(state.grokView.webContents.getURL());
-        if (current)
-          await chatStore().remember(
-            state.activeGrokContext.root,
-            state.activeGrokContext.stage,
-            current,
-          );
-      }
-      if (!isLatest()) return paneState(state);
-      state.activeGrokContext = { root: resolvedRoot, stage };
-      const saved = await chatStore().get(resolvedRoot, stage);
-      if (!isLatest()) return paneState(state);
-      const target = saved ?? GROK_URL,
-        current = state.grokView.webContents.getURL(),
-        currentCanonical = canonicalGrokConversationUrl(current);
-      const alreadyThere = saved ? currentCanonical === saved : current === GROK_URL;
-      if (!alreadyThere) {
-        state.restoringGrokContext = true;
-        try {
-          await state.grokNavigationQueue.navigate(state.grokView.webContents, target);
-        } finally {
-          state.restoringGrokContext = false;
-        }
-      }
-      return paneState(state);
-    });
-  } finally {
-    if (loadingGeneration === state.grokLoadingGeneration) {
-      state.grokLoading = false;
-      layoutProjectWindow(state);
-    }
-  }
-}
 function assistantContextFor(state: ProjectWindowState): AssistantPaneContext {
   if (!state.assistantContext) throw new Error('AI工程が選択されていません。');
   return state.assistantContext;
@@ -2000,7 +1747,7 @@ function setAssistantContext(
     provider: state.paneProvider,
   };
   state.assistantContext = context;
-  state.codexView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, context);
+  state.assistantView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, context);
   return context;
 }
 
@@ -2051,30 +1798,6 @@ async function assistantSnapshot(state: ProjectWindowState): Promise<AssistantPa
   };
 }
 
-function codexService() {
-  if (!codexAppServer || !codexChatState) throw new Error('Codexが初期化されていません。');
-  return { server: codexAppServer, store: codexChatState };
-}
-function codexCliTransportEnabled() {
-  return (process.env.BATCH_STUDIO_CODEX_TRANSPORT ?? '').trim().toLowerCase() === 'cli';
-}
-function isAgentWorkspace(
-  workspace: FileArtifactWorkspace | AgentWorkspace,
-): workspace is AgentWorkspace {
-  return (
-    'provider' in workspace &&
-    workspace.provider === 'codex' &&
-    'inputDirectory' in workspace &&
-    typeof workspace.inputDirectory === 'string' &&
-    'outputDirectory' in workspace &&
-    typeof workspace.outputDirectory === 'string'
-  );
-}
-function codexCliService() {
-  if (!codexCliAdapter || !agentSessionState || !codexChatState)
-    throw new Error('Codex CLIが初期化されていません。');
-  return { adapter: codexCliAdapter, sessions: agentSessionState, legacyStore: codexChatState };
-}
 function notifyAgentEvent(
   provider: AgentProvider,
   context: { root: string; stage: GrokContextStage },
@@ -2092,387 +1815,8 @@ function notifyAgentEvent(
       projectRootKey(state.assistantContext.root) === projectRootKey(context.root) &&
       state.assistantContext.stage === context.stage
     )
-      state.codexView.webContents.send(IPC.AGENT_EVENT, envelope);
+      state.assistantView.webContents.send(IPC.AGENT_EVENT, envelope);
   }
-}
-function forwardCodexCliEvent(
-  context: CodexContext,
-  taskStage: GrokTask['stage'],
-  threadId: string,
-  turnId: string,
-  event: AgentEvent,
-) {
-  notifyAgentEvent('codex', context, taskStage, event);
-  if (event.type === 'turn.started') {
-    forwardCodexNotification({
-      method: 'turn/started',
-      params: { threadId, turn: { id: turnId, status: 'inProgress' } },
-    });
-    return;
-  }
-  if (event.type === 'message.delta') {
-    forwardCodexNotification({
-      method: 'item/agentMessage/delta',
-      params: { threadId, delta: event.text },
-    });
-    return;
-  }
-  if (event.type === 'turn.completed') {
-    codexCliActiveTurnIds.delete(threadId);
-    forwardCodexNotification({
-      method: 'turn/completed',
-      params: { threadId, turn: { id: turnId, status: 'completed' } },
-    });
-    return;
-  }
-  if (event.type === 'turn.failed') {
-    codexCliActiveTurnIds.delete(threadId);
-    forwardCodexNotification({
-      method: 'turn/completed',
-      params: {
-        threadId,
-        turn: { id: turnId, status: 'failed', error: { message: event.error } },
-      },
-    });
-    return;
-  }
-  if (event.type === 'turn.cancelled') {
-    codexCliActiveTurnIds.delete(threadId);
-    forwardCodexNotification({
-      method: 'turn/completed',
-      params: { threadId, turn: { id: turnId, status: 'interrupted' } },
-    });
-  }
-}
-function codexContextFor(state: ProjectWindowState): CodexContext {
-  const context = state.codexContext;
-  if (
-    !context ||
-    !state.projectRoot ||
-    projectRootKey(context.root) !== projectRootKey(state.projectRoot)
-  )
-    throw new Error('Codexを利用するプロジェクトと工程を選択してください。');
-  return context;
-}
-function forwardCodexNotification(notification: CodexNotification) {
-  const threadId = notification.params.threadId;
-  const status =
-    typeof threadId === 'string' ? codexTurnMonitor.notification(threadId, notification) : null;
-  if (notification.method === 'turn/started' && typeof threadId === 'string') {
-    const turn = notification.params.turn as Record<string, unknown> | undefined;
-    const turnId = typeof turn?.id === 'string' ? turn.id : notification.params.turnId;
-    if (typeof turnId === 'string' && codexBusy.has(threadId))
-      codexActiveTurnIds.set(threadId, turnId);
-  }
-  if (notification.method === 'turn/completed' && typeof threadId === 'string') {
-    codexBusy.delete(threadId);
-    codexActiveTurnIds.delete(threadId);
-  }
-  for (const state of projectWindows.values()) {
-    const context = state.codexContext;
-    if (!context) continue;
-    // Account notifications are global; turn notifications belong only to the active stage thread.
-    if (!notification.method.startsWith('account/')) {
-      if (typeof threadId !== 'string' || threadId !== stateCodexActiveThread.get(state.window.id))
-        continue;
-    }
-    // Never forward raw item objects, raw reasoning or artifact answer deltas.
-    // Only an allowlisted, length-bounded progress projection reaches the renderer.
-    const isSafeMessageDelta =
-      notification.method === 'item/agentMessage/delta' &&
-      !codexPendingArtifacts.has(threadId as string);
-    // Forward only the fields consumed by the UI, never full Turn/Item objects.
-    if (notification.method.startsWith('account/'))
-      state.codexView.webContents.send(IPC.CODEX_EVENT, {
-        method: notification.method,
-        params: {},
-      });
-    if (notification.method === 'turn/started' || notification.method === 'turn/completed') {
-      const turn = notification.params.turn as Record<string, unknown> | undefined;
-      state.codexView.webContents.send(IPC.CODEX_EVENT, {
-        method: notification.method,
-        params: {
-          threadId,
-          turn: { id: turn?.id, status: turn?.status },
-        },
-      });
-    }
-    if (isSafeMessageDelta)
-      state.codexView.webContents.send(IPC.CODEX_EVENT, {
-        method: notification.method,
-        params: {
-          threadId,
-          delta: notification.params.delta,
-        },
-      });
-    const activity = safeCodexActivityEvent(notification.method, notification.params);
-    if (activity)
-      state.codexView.webContents.send(IPC.CODEX_EVENT, {
-        method: 'batch-studio/activity',
-        params: { threadId, activity },
-      });
-    if (status)
-      state.codexView.webContents.send(IPC.CODEX_EVENT, {
-        method: 'batch-studio/turn-status',
-        params: { threadId, status },
-      });
-  }
-  if (notification.method === 'turn/completed' && typeof threadId === 'string') {
-    const pending = codexPendingArtifacts.get(threadId);
-    if (pending) {
-      codexPendingArtifacts.delete(threadId);
-      void collectCodexArtifact(threadId, pending, notification.params);
-    }
-  }
-}
-const stateCodexActiveThread = new Map<number, string | null>();
-function messageText(item: Record<string, unknown>): string {
-  if (typeof item.text === 'string') return item.text;
-  if (!Array.isArray(item.content)) return '';
-  return item.content
-    .filter(
-      (content): content is { text: string } =>
-        typeof content === 'object' &&
-        content !== null &&
-        typeof (content as { text?: unknown }).text === 'string',
-    )
-    .map((content) => content.text)
-    .join('\n');
-}
-function codexMessages(result: unknown): CodexMessage[] {
-  const thread = (result as { thread?: { turns?: unknown[] } } | null)?.thread;
-  if (!Array.isArray(thread?.turns)) return [];
-  const messages: CodexMessage[] = [];
-  for (const turn of thread.turns) {
-    const artifactFile = codexTaskFileForTurn(turn);
-    const items = (turn as { items?: unknown[] } | null)?.items;
-    if (!Array.isArray(items)) continue;
-    for (const item of items) {
-      if (!item || typeof item !== 'object') continue;
-      const record = item as Record<string, unknown>;
-      const role =
-        record.type === 'userMessage'
-          ? 'user'
-          : record.type === 'agentMessage'
-            ? 'assistant'
-            : null;
-      const text = messageText(record);
-      if (role && text)
-        messages.push({
-          id: String(record.id ?? messages.length),
-          role,
-          text: artifactFile
-            ? role === 'user'
-              ? `工程用の依頼を送信（${artifactFile}）`
-              : `${artifactFile} の取り込み結果は下に表示します。JSON本文は表示しません。`
-            : text,
-        });
-    }
-  }
-  return messages;
-}
-function codexTurnStatus(threadId: string | null): CodexTurnStatus {
-  return threadId
-    ? (codexTurnMonitor.get(threadId) ?? {
-        phase: 'unknown',
-        startedAt: null,
-        updatedAt: null,
-        finishedAt: null,
-        error: null,
-      })
-    : { phase: 'idle', startedAt: null, updatedAt: null, finishedAt: null, error: null };
-}
-async function codexArtifactFor(
-  context: CodexContext,
-  threadId: string | null,
-  lastTurnId?: string,
-): Promise<AutoArtifactEvent | null> {
-  if (!threadId) return null;
-  const pending = codexPendingArtifacts.get(threadId);
-  if (pending && projectRootKey(pending.root) === projectRootKey(context.root))
-    return {
-      provider: 'codex',
-      root: pending.root,
-      stage: pending.stage,
-      fileName: pending.fileName,
-      sourceId: threadId,
-      phase: 'waiting',
-    };
-  if (!lastTurnId) return null;
-  return (
-    (await latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/' + lastTurnId)) ??
-    latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/')
-  );
-}
-async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> {
-  const context = codexContextFor(state);
-  const { server, store } = codexService();
-  const saved = await store.get(context.root, context.stage);
-  const artifact = await codexArtifactFor(context, saved.activeThreadId);
-  stateCodexActiveThread.set(state.window.id, saved.activeThreadId);
-  if (!saved.activeThreadId)
-    return {
-      ...context,
-      ...saved,
-      messages: [],
-      activity: emptyCodexActivity(),
-      busy: false,
-      status: codexTurnStatus(null),
-      artifact,
-    };
-
-  // A thread/start ID exists before its first rollout is persisted. Reading or
-  // resuming it while the first turn is running fails with "no rollout found".
-  const busy = codexBusy.has(saved.activeThreadId);
-  if (busy)
-    return {
-      ...context,
-      ...saved,
-      messages: [],
-      activity: emptyCodexActivity(),
-      busy: true,
-      status: codexTurnStatus(saved.activeThreadId),
-      artifact,
-    };
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      // Reading history must never resume a thread; resume belongs to send only.
-      const read = await readCodexHistory(
-        (method, params) => server.request(method, params),
-        saved.activeThreadId,
-      );
-      const turns = (read as { thread?: { turns?: Array<{ id?: unknown }> } } | null)?.thread
-        ?.turns;
-      const lastTurn = turns?.at(-1);
-      const lastTurnId = typeof lastTurn?.id === 'string' ? lastTurn.id : null;
-      return {
-        ...context,
-        ...saved,
-        messages: codexMessages(read),
-        activity: codexActivityFromHistory(read),
-        busy: false,
-        status: codexTurnMonitor.fromRead(saved.activeThreadId, read),
-        artifact:
-          lastTurnId && codexTaskFileForTurn(lastTurn)
-            ? await codexArtifactFor(context, saved.activeThreadId, lastTurnId)
-            : null,
-      };
-    } catch (error) {
-      if (!(error instanceof Error) || !/no rollout found for thread id/i.test(error.message))
-        throw error;
-      if (attempt < 3) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        continue;
-      }
-      // Do not delete a possibly recoverable conversation ID. The user can
-      // retry restoration or explicitly start a new chat.
-      return {
-        ...context,
-        ...saved,
-        messages: [],
-        activity: emptyCodexActivity(),
-        busy: false,
-        historyUnavailable: true,
-        status: codexTurnStatus(saved.activeThreadId),
-        artifact,
-      };
-    }
-  }
-  throw new Error('Unexpected Codex snapshot state.');
-}
-
-async function codexAccount(): Promise<CodexAccountStatus> {
-  const { server } = codexService();
-  const result = await server.request<{
-    account?: { type?: string; planType?: string } | null;
-  }>('account/read', {});
-  return {
-    authenticated: result.account?.type === 'chatgpt',
-    authMode: result.account?.type ?? null,
-    planType: result.account?.planType ?? null,
-  };
-}
-async function codexAvailableModels(): Promise<CodexModelOption[]> {
-  const { server } = codexService();
-  const models: CodexModelOption[] = [];
-  let cursor: string | null = null;
-  for (let page = 0; page < 10; page++) {
-    const response: {
-      data?: Array<{
-        id?: unknown;
-        model?: unknown;
-        displayName?: unknown;
-        hidden?: unknown;
-        isDefault?: unknown;
-        defaultReasoningEffort?: unknown;
-        supportedReasoningEfforts?: Array<{
-          reasoningEffort?: unknown;
-          description?: unknown;
-        }>;
-      }>;
-      nextCursor?: string | null;
-    } = await server.request('model/list', { limit: 100, includeHidden: false, cursor });
-    if (!Array.isArray(response.data)) throw new Error('Codexからモデル一覧を取得できません。');
-    for (const item of response.data) {
-      const id =
-        typeof item.model === 'string' && item.model
-          ? item.model
-          : typeof item.id === 'string'
-            ? item.id
-            : '';
-      const efforts = Array.isArray(item.supportedReasoningEfforts)
-        ? item.supportedReasoningEfforts
-            .filter(
-              (effort) => typeof effort.reasoningEffort === 'string' && effort.reasoningEffort,
-            )
-            .map((effort) => ({
-              reasoningEffort: effort.reasoningEffort as string,
-              description: typeof effort.description === 'string' ? effort.description : '',
-            }))
-        : [];
-      if (
-        !id ||
-        item.hidden === true ||
-        efforts.length === 0 ||
-        models.some((model) => model.id === id)
-      )
-        continue;
-      const defaultEffort =
-        typeof item.defaultReasoningEffort === 'string' &&
-        efforts.some((effort) => effort.reasoningEffort === item.defaultReasoningEffort)
-          ? item.defaultReasoningEffort
-          : efforts[0].reasoningEffort;
-      models.push({
-        id,
-        displayName: typeof item.displayName === 'string' ? item.displayName : id,
-        isDefault: item.isDefault === true,
-        defaultReasoningEffort: defaultEffort,
-        supportedReasoningEfforts: efforts,
-      });
-    }
-    if (!response.nextCursor) break;
-    if (response.nextCursor === cursor)
-      throw new Error('Codexのモデル一覧のページ送りに失敗しました。');
-    cursor = response.nextCursor;
-    if (page === 9) throw new Error('Codexのモデル一覧が多すぎます。');
-  }
-  if (!models.length) throw new Error('Codexで使用できるモデルが見つかりません。');
-  return models;
-}
-async function codexModelSettings(context: CodexContext): Promise<CodexModelSettings> {
-  if (!codexModelSelections) throw new Error('Codexモデル設定が初期化されていません。');
-  const [models, saved] = await Promise.all([
-    codexAvailableModels(),
-    codexModelSelections.get(context.root, context.stage),
-  ]);
-  const requested = models.find((model) => model.id === saved?.model);
-  const model = requested ?? models.find((entry) => entry.isDefault) ?? models[0];
-  const effort =
-    requested &&
-    model.supportedReasoningEfforts.some((item) => item.reasoningEffort === saved?.effort)
-      ? saved!.effort
-      : model.defaultReasoningEffort;
-  return { models, selection: { model: model.id, effort } };
 }
 function assistantAdapter(provider: AgentProvider): AgentCliAdapter {
   const adapter = provider === 'codex' ? codexCliAdapter : grokCliAdapter;
@@ -2486,23 +1830,6 @@ async function assistantModelSettings(
   provider: AgentProvider,
 ): Promise<AgentModelSettings> {
   if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
-  if (provider === 'codex') {
-    const settings = await codexModelSettings({ root, stage });
-    return {
-      models: settings.models.map((model) => ({
-        id: model.id,
-        displayName: model.displayName,
-        supportedReasoningEfforts: model.supportedReasoningEfforts.map(
-          (effort) => effort.reasoningEffort,
-        ),
-      })),
-      selection: {
-        model: settings.selection.model,
-        reasoningEffort: settings.selection.effort,
-      },
-    };
-  }
-
   const adapter = assistantAdapter(provider);
   if (!adapter.getModels) return { models: [], selection: { model: null } };
   const available = await adapter.getModels();
@@ -2513,10 +1840,14 @@ async function assistantModelSettings(
   const model = requested ?? fallback;
   const requestedEffort = saved?.reasoningEffort;
   const supported = model?.supportedReasoningEfforts;
+  const defaultEffort =
+    model?.id === available.selection.model
+      ? available.selection.reasoningEffort
+      : (supported?.[0] ?? available.selection.reasoningEffort);
   const reasoningEffort =
     requestedEffort && (!supported?.length || supported.includes(requestedEffort))
       ? requestedEffort
-      : available.selection.reasoningEffort;
+      : defaultEffort;
   return {
     models: available.models,
     selection: {
@@ -2555,443 +1886,18 @@ async function assistantChooseModel(
     model: requested.model,
     ...(requested.reasoningEffort != null ? { reasoningEffort: requested.reasoningEffort } : {}),
   };
-  if (provider === 'codex' && normalized.model) {
-    const codexSettings = await codexModelSettings({ root, stage });
-    const codexModel = codexSettings.models.find((item) => item.id === normalized.model);
-    const effort =
-      normalized.reasoningEffort ??
-      codexModel?.defaultReasoningEffort ??
-      codexSettings.selection.effort;
-    if (!codexModel?.supportedReasoningEfforts.some((item) => item.reasoningEffort === effort))
-      throw new Error('選択したCodexモデルと推論強度を利用できません。');
-    if (!codexModelSelections || !agentModelSelections)
-      throw new Error('AIモデル設定が初期化されていません。');
-    const selected = { model: normalized.model, reasoningEffort: effort };
-    await Promise.all([
-      codexModelSelections.remember(root, stage, { model: normalized.model, effort }),
-      agentModelSelections.remember(root, stage, provider, selected),
-    ]);
-    return selected;
-  }
   if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
   await agentModelSelections.remember(root, stage, provider, normalized);
   return normalized;
 }
 
-async function codexChooseModel(
-  state: ProjectWindowState,
-  selection: unknown,
-): Promise<CodexModelSelection> {
-  const context = codexContextFor(state);
-  if (
-    !selection ||
-    typeof selection !== 'object' ||
-    typeof (selection as CodexModelSelection).model !== 'string' ||
-    typeof (selection as CodexModelSelection).effort !== 'string'
-  )
-    throw new Error('Codexモデルと推論強度を選択してください。');
-  const requested = selection as CodexModelSelection;
-  const saved = await codexService().store.get(context.root, context.stage);
-  if (saved.activeThreadId && codexBusy.has(saved.activeThreadId))
-    throw new Error('回答生成中はモデルと推論強度を変更できません。');
-  const models = await codexAvailableModels();
-  const model = models.find((item) => item.id === requested.model);
-  if (
-    !model ||
-    !model.supportedReasoningEfforts.some((item) => item.reasoningEffort === requested.effort)
-  )
-    throw new Error('このモデルと推論強度の組み合わせはCodexで利用できません。');
-  if (!codexModelSelections) throw new Error('Codexモデル設定が初期化されていません。');
-  await codexModelSelections.remember(context.root, context.stage, requested);
-  return requested;
-}
-function defaultTaskStage(context: GrokContextStage): GrokTask['stage'] {
-  if (context === 'story') return 'story-initial';
-  if (context === 'models') return 'models';
-  if (context === 'prompt-plan') return 'prompt-plan';
-  return 'caption';
-}
-
-async function codexSendViaCli(
-  state: ProjectWindowState,
-  message: string,
-  artifactStage?: GrokTask['stage'],
-  workspace?: AgentWorkspace,
-): Promise<CodexSendResult> {
-  const context = codexContextFor(state);
-  const input = message.trim();
-  if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
-  const { adapter, sessions, legacyStore } = codexCliService();
-  const availability = await adapter.checkAvailability();
-  if (availability.state !== 'available')
-    throw new Error(availability.message ?? 'Codex CLIを利用できません。');
-
-  const taskStage = artifactStage ?? defaultTaskStage(context.stage);
-  const settings = await codexModelSettings(context);
-  const saved = await legacyStore.get(context.root, context.stage);
-  const existingThreadId = saved.activeThreadId;
-  if (existingThreadId && codexBusy.has(existingThreadId))
-    throw new Error('このチャットは回答生成中です。');
-
-  let observedThreadId: string | null = existingThreadId;
-  let ready = false;
-  const queued: AgentEvent[] = [];
-  const dispatch = (event: AgentEvent) => {
-    if (event.type === 'session.started') {
-      observedThreadId = event.sessionId;
-      notifyAgentEvent('codex', context, taskStage, event);
-      return;
-    }
-    if (!ready) {
-      queued.push(event);
-      return;
-    }
-    if (!observedThreadId) return;
-    const activeTurnId = codexCliActiveTurnIds.get(observedThreadId);
-    if (activeTurnId)
-      forwardCodexCliEvent(context, taskStage, observedThreadId, activeTurnId, event);
-    else notifyAgentEvent('codex', context, taskStage, event);
-  };
-  const request = {
-    context,
-    taskStage,
-    prompt: input,
-    extra: '',
-    ...(workspace ? { workspace } : {}),
-    model: {
-      model: settings.selection.model,
-      reasoningEffort: settings.selection.effort,
-    },
-  };
-  const turn = existingThreadId
-    ? await adapter.resumeTask(existingThreadId, request, dispatch)
-    : await adapter.startTask(request, dispatch);
-  const threadId = turn.sessionId;
-  observedThreadId = threadId;
-
-  await Promise.all([
-    legacyStore.remember(context.root, context.stage, threadId),
-    sessions.remember(context.root, context.stage, 'codex', threadId),
-  ]);
-  stateCodexActiveThread.set(state.window.id, threadId);
-  codexBusy.add(threadId);
-  codexCliActiveTurnIds.set(threadId, turn.turnId);
-  codexTurnMonitor.sending(threadId);
-
-  const artifactFile = artifactStage ? expectedArtifact(artifactStage) : null;
-  if (artifactFile && artifactStage)
-    codexPendingArtifacts.set(threadId, {
-      root: context.root,
-      stage: artifactStage,
-      fileName: artifactFile,
-      workspace,
-    });
-  if (workspace) await rememberAgentWorkspace(context.root, workspace, threadId, turn.turnId);
-
-  ready = true;
-  for (const event of queued.splice(0))
-    forwardCodexCliEvent(context, taskStage, threadId, turn.turnId, event);
-
-  void adapter.waitForCompletion(turn.turnId).catch((error) => {
-    if (error instanceof AgentTurnCancelledError) return;
-    // Post-start failures are already projected as AgentEvent turn.failed by the adapter.
-    // This catch prevents an unhandled rejection while the event path remains authoritative.
-  });
-
-  return {
-    ...(await legacyStore.get(context.root, context.stage)),
-    status: codexTurnStatus(threadId),
-    artifact:
-      artifactFile && artifactStage
-        ? {
-            provider: 'codex',
-            root: context.root,
-            stage: artifactStage,
-            fileName: artifactFile,
-            sourceId: threadId,
-            phase: 'waiting',
-          }
-        : null,
-  };
-}
-
-async function codexSend(
-  state: ProjectWindowState,
-  message: string,
-  artifactStage?: GrokTask['stage'],
-  workspace?: FileArtifactWorkspace | AgentWorkspace,
-  forceCli = false,
-): Promise<CodexSendResult> {
-  const context = codexContextFor(state);
-  const input = message.trim();
-  if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
-  if (forceCli || codexCliTransportEnabled()) {
-    const cliWorkspace: AgentWorkspace | undefined = workspace
-      ? isAgentWorkspace(workspace)
-        ? workspace
-        : {
-            ...workspace,
-            provider: 'codex',
-            inputDirectory: path.join(workspace.directory, 'input'),
-            outputDirectory: path.join(workspace.directory, 'output'),
-          }
-      : undefined;
-    return codexSendViaCli(state, input, artifactStage, cliWorkspace);
-  }
-  if (workspace && isAgentWorkspace(workspace))
-    throw new Error('共通Agent WorkspaceをCodex App Server経路では使用できません。');
-  const account = await codexAccount();
-  if (!account.authenticated)
-    throw new Error(
-      'ChatGPTアカウントでCodexにサインインしてください。APIキー認証では送信しません。',
-    );
-  const { server, store } = codexService();
-  const settings = await codexModelSettings(context);
-  const saved = await store.get(context.root, context.stage);
-  let threadId = saved.activeThreadId;
-  if (threadId && codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
-  // All file-producing turns run in a disposable workspace, not the project.
-  // Normal conversations remain read-only, including after a writable turn.
-  const cwd = workspace?.directory ?? context.root;
-  const sandbox = workspace ? 'workspace-write' : 'read-only';
-  if (!threadId) {
-    const started = await server.request<{ thread: { id: string } }>('thread/start', {
-      cwd,
-      approvalPolicy: 'never',
-      sandbox,
-      serviceName: 'comfyui_batch_studio',
-      ephemeral: false,
-    });
-    threadId = started.thread.id;
-    await store.remember(context.root, context.stage, threadId);
-  } else {
-    await server.request('thread/resume', {
-      threadId,
-      cwd,
-      approvalPolicy: 'never',
-      sandbox,
-    });
-  }
-  if (codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
-  stateCodexActiveThread.set(state.window.id, threadId);
-  codexBusy.add(threadId);
-  const artifactFile = artifactStage ? expectedArtifact(artifactStage) : null;
-  if (artifactFile && artifactStage)
-    codexPendingArtifacts.set(threadId, {
-      root: context.root,
-      stage: artifactStage,
-      fileName: artifactFile,
-      workspace,
-    });
-  codexTurnMonitor.sending(threadId);
-  try {
-    const turnStart = server.request<{ turn: { id: string } }>('turn/start', {
-      threadId,
-      input: [{ type: 'text', text: input, text_elements: [] }],
-      ...(workspace
-        ? {
-            cwd,
-            approvalPolicy: 'never',
-            sandboxPolicy: {
-              type: 'workspaceWrite',
-              writableRoots: [cwd],
-              networkAccess: false,
-            },
-          }
-        : { cwd, sandboxPolicy: { type: 'readOnly', networkAccess: false } }),
-      model: settings.selection.model,
-      effort: settings.selection.effort,
-      summary: 'auto',
-    });
-    const turnIdRequest = turnStart.then((result) => {
-      if (typeof result?.turn?.id !== 'string') throw new Error('CodexターンIDを取得できません。');
-      return result.turn.id;
-    });
-    codexTurnStartRequests.set(threadId, turnIdRequest);
-    const turnId = await turnIdRequest;
-    if (codexBusy.has(threadId)) codexActiveTurnIds.set(threadId, turnId);
-    if (workspace && codexBusy.has(threadId))
-      await rememberCodexWorkspace(context.root, workspace, threadId, turnId);
-  } catch (error) {
-    // A completed turn can race with turn/start returning. Do not replace its
-    // terminal state with a send failure or discard an artifact after completion.
-    if (codexBusy.has(threadId)) {
-      codexBusy.delete(threadId);
-      codexPendingArtifacts.delete(threadId);
-      codexActiveTurnIds.delete(threadId);
-      codexTurnMonitor.failedToSend(
-        threadId,
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-    throw error;
-  } finally {
-    codexTurnStartRequests.delete(threadId);
-  }
-  // Return metadata without reading a rollout that may not yet be persisted.
-  return {
-    ...(await store.get(context.root, context.stage)),
-    status: codexTurnStatus(threadId),
-    artifact:
-      artifactFile && artifactStage
-        ? {
-            provider: 'codex',
-            root: context.root,
-            stage: artifactStage,
-            fileName: artifactFile,
-            sourceId: threadId,
-            phase: 'waiting',
-          }
-        : null,
-  };
-}
-async function codexStopTurn(state: ProjectWindowState, forceCli = false): Promise<CodexSnapshot> {
-  const context = codexContextFor(state);
-  if (forceCli || codexCliTransportEnabled()) {
-    const { adapter, legacyStore } = codexCliService();
-    const saved = await legacyStore.get(context.root, context.stage);
-    const threadId = saved.activeThreadId;
-    if (!threadId || !codexBusy.has(threadId)) return codexSnapshot(state);
-    const turnId = codexCliActiveTurnIds.get(threadId);
-    if (!turnId) throw new Error('中止対象のCodex CLI turnを特定できません。');
-    await adapter.stop(turnId);
-    return codexSnapshot(state);
-  }
-  const { server, store } = codexService();
-  const saved = await store.get(context.root, context.stage);
-  const threadId = saved.activeThreadId;
-  if (!threadId || !codexBusy.has(threadId)) return codexSnapshot(state);
-  let interrupt = codexInterruptRequests.get(threadId);
-  if (!interrupt) {
-    interrupt = (async () => {
-      // The stop button can be pressed before turn/start returns its turn ID.
-      const turnId =
-        codexActiveTurnIds.get(threadId) ?? (await codexTurnStartRequests.get(threadId));
-      if (!turnId) throw new Error('中止対象のCodexターンを特定できません。');
-      if (!codexBusy.has(threadId)) return;
-      await server.request('turn/interrupt', { threadId, turnId });
-    })();
-    codexInterruptRequests.set(threadId, interrupt);
-  }
-  try {
-    await interrupt;
-  } finally {
-    if (codexInterruptRequests.get(threadId) === interrupt) codexInterruptRequests.delete(threadId);
-  }
-  // Do not mark the turn interrupted locally. turn/completed provides the
-  // authoritative terminal status and releases the busy lock.
-  return codexSnapshot(state);
-}
 function notifyAutoArtifact(event: AutoArtifactEvent) {
   for (const state of projectWindows.values()) {
     if (state.projectRoot && projectRootKey(state.projectRoot) === projectRootKey(event.root)) {
       state.localView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);
-      state.codexView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);
+      state.assistantView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);
     }
   }
-}
-async function collectCodexArtifact(
-  threadId: string,
-  pending: {
-    root: string;
-    stage: GrokTask['stage'];
-    fileName: string;
-    workspace?: FileArtifactWorkspace | AgentWorkspace;
-  },
-  params: Record<string, unknown>,
-): Promise<AutoArtifactEvent | null> {
-  const turn = params.turn as { status?: unknown; id?: unknown } | undefined;
-  if (turn?.status !== 'completed') {
-    const failed: AutoArtifactEvent = {
-      provider: 'codex',
-      root: pending.root,
-      stage: pending.stage,
-      fileName: pending.fileName,
-      sourceId: threadId,
-      phase: 'failed',
-      message: 'Codexが正常終了していないため、成果物は取り込みません。',
-    };
-    notifyAutoArtifact(failed);
-    return failed;
-  }
-  if (pending.workspace) {
-    try {
-      const raw = isAgentWorkspace(pending.workspace)
-        ? await readAgentWorkspaceOutput(pending.workspace)
-        : await readCodexOutput(pending.workspace);
-      const turnId = typeof turn.id === 'string' ? turn.id : 'last';
-      return await importAutoArtifact(
-        pending.root,
-        'codex',
-        pending.stage,
-        threadId + '/' + turnId,
-        raw,
-        notifyAutoArtifact,
-      );
-    } catch (error) {
-      const failed: AutoArtifactEvent = {
-        provider: 'codex',
-        root: pending.root,
-        stage: pending.stage,
-        fileName: pending.fileName,
-        sourceId: threadId,
-        phase: 'failed',
-        message: error instanceof Error ? error.message : String(error),
-      };
-      notifyAutoArtifact(failed);
-      return failed;
-    }
-  }
-  // Backward compatibility for artifact turns created before file-based output.
-  const server = codexService().server;
-  for (let attempt = 0; attempt < 6; attempt++) {
-    try {
-      const read = await readCodexHistory(
-        (method, params) => server.request(method, params),
-        threadId,
-      );
-      const turns = read.thread?.turns ?? [];
-      const current =
-        typeof turn.id === 'string'
-          ? turns.find((candidate) => candidate.id === turn.id)
-          : turns.at(-1);
-      if (!current || codexTaskFileForTurn(current) !== pending.fileName)
-        throw new Error('Codexの完了した依頼と成果物を対応付けられません。');
-      const items = current.items ?? [];
-      const reply = [...items]
-        .reverse()
-        .find((item) => (item as { type?: string } | null)?.type === 'agentMessage');
-      const raw =
-        reply && typeof reply === 'object' ? messageText(reply as Record<string, unknown>) : '';
-      if (!raw.trim()) throw new Error('Codexの完成した成果物本文がありません。');
-      const sourceId = threadId + '/' + String(current.id ?? 'last');
-      return importAutoArtifact(
-        pending.root,
-        'codex',
-        pending.stage,
-        sourceId,
-        raw,
-        notifyAutoArtifact,
-      );
-    } catch (error) {
-      if (attempt < 5) {
-        await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
-        continue;
-      }
-      const failed: AutoArtifactEvent = {
-        provider: 'codex',
-        root: pending.root,
-        stage: pending.stage,
-        fileName: pending.fileName,
-        sourceId: threadId,
-        phase: 'failed',
-        message: error instanceof Error ? error.message : String(error),
-      };
-      notifyAutoArtifact(failed);
-      return failed;
-    }
-  }
-  return null;
 }
 const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
   story: ['story-initial', 'story-finalize', 'story-fix'],
@@ -3008,119 +1914,6 @@ function contextStageForTask(stage: GrokTask['stage']): GrokContextStage {
   }
   throw new Error('Invalid task stage.');
 }
-const codexReturnFile: Record<GrokContextStage, string> = {
-  story: 'story.md',
-  models: 'model_loras.json',
-  'prompt-plan': 'prompt_plan.json',
-  caption: 'caption_content.json',
-};
-async function codexSendTask(
-  state: ProjectWindowState,
-  stage: GrokTask['stage'],
-  extra: string,
-  forceCli = false,
-): Promise<CodexSendResult> {
-  const context = codexContextFor(state);
-  const useCli = forceCli || codexCliTransportEnabled();
-  if (!codexTaskContexts[context.stage].includes(stage))
-    throw new Error('選択した工程に対応しない依頼です。');
-  if (stage === 'prompt-plan-patch') {
-    const baseline = await promptPlanPatchBase(context.root);
-    const workspace = useCli
-      ? await prepareAgentWorkspace(app.getPath('userData'), 'codex', stage, [
-          { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
-        ])
-      : await prepareCodexFileWorkspace(app.getPath('userData'), stage, [
-          { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
-        ]);
-    const patchPrompt = `## Task
-あなたはComfyUI Batch StudioのPrompt Plan Schema v2を修正します。
-これは相談や全文再生成ではなく、この会話で合意した変更を、現在の既存計画へ部分適用するための差分生成依頼です。
-作業ディレクトリの input/1-prompt_plan.json を読み込み、該当Branch/Leafを実際に確認してください。入力ファイルは変更しません。
-現在のファイル本文のSHA-256（UTF-8のバイト列）: ${baseline.baseSha256}
-現在の計画: ${baseline.branches} Branch / ${baseline.leaves} Leaf。
-この会話の修正対象以外のBranch/Leaf、ID、枚数、モデル設定、タグを絶対に変更しないでください。
-
-## 差分JSON形式（厳守）
-{
-  "schemaVersion": 1,
-  "baseSha256": "${baseline.baseSha256}",
-  "operations": [
-    {
-      "scope": "branch",
-      "branchId": "既存Branch ID（例: b19）",
-      "path": "prompt.triggerWords",
-      "before": [{"modelRef": "実際の既存ref", "words": ["修正前の値"]}],
-      "after": [{"modelRef": "実際の既存ref", "words": ["修正後の値"]}]
-    }
-  ]
-}
-- 上記のbefore/afterは構造例であり、実際の元ファイルから対象配列の全要素を正確に転記してください。推測で記載しないでください。
-- 操作対象は、commonならscope=commonでpath=triggerWords、positive.category、positive.camera.pov/angle/framing/gaze/focus、negative.category、Branch/Leafならscope=branch/leafでpathの先頭にprompt.を付けた同じ形式です。
-- BranchにはbranchId、LeafにはbranchIdとleafIdを指定します。共通Scopeにはどちらも指定しません。
-- beforeとafterはどちらも対象の配列全体を入れ、beforeは現在のファイル内容と完全一致させてください。変更対象外の要素は維持してください。
-- この差分はBatch Studioが基準ハッシュとbeforeを照合して原子的に下書きへ適用し、計画全件を検証します。
-- JSONは上記3つのroot fieldのみ、operationはscope/branchId/leafId/path/before/afterのみを使用してください。
-- 同じscope・Branch・Leaf・pathへの変更は1操作に統合してください。操作数は100件以下です。
-- 修正する既存配列が見つからない、または配列の全値を正確に読めない場合、差分を作成したと主張せず理由を示してください。
-- 原本全体や修正案だけの会話は出力しません。次の出力契約に従い、差分JSONをファイルに書き込んでください。
-${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
-    return codexSend(
-      state,
-      patchPrompt +
-        '\n\n' +
-        (isAgentWorkspace(workspace)
-          ? agentWorkspaceOutputInstruction(workspace)
-          : workspaceOutputInstruction(workspace)),
-      stage,
-      workspace,
-      forceCli,
-    );
-  }
-  const task = await buildGrokTask(context.root, stage, extra);
-  // Only replace provider-specific file instructions. The shared Schema v2
-  // JSON example and all validation rules must reach both Grok and Codex.
-  const prompt = task.prompt
-    .replace(artifactFileOutputRules(codexReturnFile[context.stage]), '')
-    .replaceAll('Grok', 'Codex');
-  if (stage === 'story-initial')
-    return codexSend(
-      state,
-      prompt +
-        '\n\n## Codex向け出力契約\nこれは対話用の検討依頼です。成果物ファイルはまだ作成しません。',
-      stage,
-      undefined,
-      forceCli,
-    );
-  const references: Array<{ name: string; content: string }> = [];
-  const referenceGuide: string[] = [];
-  for (const attachment of task.attachments) {
-    if (!attachment.exists) continue;
-    const content = await readFile(attachment.path, 'utf8');
-    const filename = (attachment.name.split(/[\\/]/).at(-1) ?? 'reference.txt').replace(
-      /[^a-zA-Z0-9_.-]/g,
-      '_',
-    );
-    references.push({ name: filename, content });
-    referenceGuide.push('input/' + references.length + '-' + filename + ' — ' + attachment.purpose);
-  }
-  const workspace = useCli
-    ? await prepareAgentWorkspace(app.getPath('userData'), 'codex', stage, references)
-    : await prepareCodexFileWorkspace(app.getPath('userData'), stage, references);
-  return codexSend(
-    state,
-    prompt +
-      (referenceGuide.length ? '\n\n## 参照ファイル\n' + referenceGuide.join('\n') : '') +
-      '\n\n' +
-      (isAgentWorkspace(workspace)
-        ? agentWorkspaceOutputInstruction(workspace)
-        : workspaceOutputInstruction(workspace)),
-    stage,
-    workspace,
-    forceCli,
-  );
-}
-
 function validCivitaiUrl(value: unknown) {
   if (typeof value !== 'string') return false;
   try {
@@ -3362,10 +2155,9 @@ function register() {
     )
       throw new Error('Runの停止がキャンセルされました。');
     state.projectRoot = null;
-    state.activeGrokContext = null;
-    state.codexContext = null;
-    state.codexView.webContents.send(IPC.CODEX_CONTEXT_CHANGED, null);
-    state.grokVisible = false;
+    state.assistantContext = null;
+    state.assistantView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, null);
+    state.assistantVisible = false;
     layoutProjectWindow(state);
     await rememberMostRecentOpenProject();
   });
@@ -3469,27 +2261,6 @@ function register() {
     await ensureProjectWritable(root);
     return savePromptPlan(root, plan);
   });
-  ipcMain.handle(IPC.AUTO_ARTIFACT_GROK_ARM, (event, root: unknown, stage: unknown) => {
-    validRoot(root);
-    const state = projectWindowForSender(event.sender);
-    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
-      throw new Error('選択中のプロジェクトと自動取り込み対象が一致しません。');
-    if (
-      !Object.values(codexTaskContexts)
-        .flat()
-        .includes(stage as GrokTask['stage'])
-    )
-      throw new Error('Invalid Grok artifact stage.');
-    if (!state.grokArtifactWatcher) throw new Error('Grokの監視が初期化されていません。');
-    return state.grokArtifactWatcher.arm(state.projectRoot, stage as GrokTask['stage']);
-  });
-  ipcMain.handle(
-    IPC.GROK_TASK_BUILD,
-    (_e, root: unknown, stage: GrokTask['stage'], extra: unknown) => {
-      validRoot(root);
-      return buildGrokTask(root, stage, typeof extra === 'string' ? extra : '');
-    },
-  );
   ipcMain.handle(IPC.FILE_SHOW_IN_FOLDER, (_e, filePath: unknown) => {
     if (typeof filePath !== 'string' || !path.isAbsolute(filePath))
       throw new Error('Invalid file path');
@@ -4831,19 +3602,16 @@ function register() {
       root,
       defaultProvider,
       async () => {
+        if (!agentSessionState) return null;
         const stages: GrokContextStage[] = ['story', 'models', 'prompt-plan', 'caption'];
-        // Existing projects created before this preference was introduced may
-        // already have a history in one provider. Preserve that provider.
-        const grokHistory = grokChatState
-          ? (await Promise.all(stages.map((stage) => grokChatState!.get(root, stage)))).some(
-              Boolean,
-            )
-          : false;
-        const codexHistory = codexChatState
-          ? (await Promise.all(stages.map((stage) => codexChatState!.get(root, stage)))).some(
-              (chats) => chats.threadIds.length > 0,
-            )
-          : false;
+        const [grokHistory, codexHistory] = await Promise.all([
+          Promise.all(stages.map((value) => agentSessionState!.get(root, value, 'grok'))).then(
+            (states) => states.some((value) => value.sessionIds.length > 0),
+          ),
+          Promise.all(stages.map((value) => agentSessionState!.get(root, value, 'codex'))).then(
+            (states) => states.some((value) => value.sessionIds.length > 0),
+          ),
+        ]);
         if (grokHistory && !codexHistory) return 'grok';
         if (codexHistory && !grokHistory) return 'codex';
         return null;
@@ -4856,9 +3624,7 @@ function register() {
     layoutProjectWindow(state);
     return provider;
   };
-  // Legacy Codex-named channels are retained for existing preload consumers.
   ipcMain.handle(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider);
-  ipcMain.handle(IPC.CODEX_GET_PROVIDER, getAssistantProvider);
   const setAssistantProvider = async (
     event: IpcMainInvokeEvent,
     provider: unknown,
@@ -4883,20 +3649,17 @@ function register() {
       state.assistantContext.stage === stage
     ) {
       state.assistantContext = { ...state.assistantContext, provider };
-      state.codexView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, state.assistantContext);
+      state.assistantView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, state.assistantContext);
     }
     layoutProjectWindow(state);
     return paneState(state);
   };
   ipcMain.handle(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider);
-  ipcMain.handle(IPC.CODEX_SET_PROVIDER, setAssistantProvider);
 
   const assistantTaskBusy = async (context: AssistantPaneContext) => {
     if (context.provider === 'grok')
       return grokCliTaskRunner?.isBusy(context.root, context.stage) ?? false;
-    if (!agentSessionState) return false;
-    const sessions = await agentSessionState.get(context.root, context.stage, 'codex');
-    return Boolean(sessions.activeSessionId && codexBusy.has(sessions.activeSessionId));
+    return codexCliTaskRunner?.isBusy(context.root, context.stage) ?? false;
   };
 
   ipcMain.handle(IPC.ASSISTANT_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
@@ -4927,17 +3690,7 @@ function register() {
       throw new Error('共通AI conversation runtimeが初期化されていません。');
     if (await assistantTaskBusy(context))
       throw new Error('工程用AIタスクの実行中は通常メッセージを送信できません。');
-    const turn = await agentConversationRunner.send(
-      context.root,
-      context.stage,
-      context.provider,
-      message,
-    );
-    if (context.provider === 'codex' && codexChatState) {
-      await codexChatState.remember(context.root, context.stage, turn.sessionId);
-      stateCodexActiveThread.set(state.window.id, turn.sessionId);
-    }
-    return turn;
+    return agentConversationRunner.send(context.root, context.stage, context.provider, message);
   });
 
   ipcMain.handle(IPC.ASSISTANT_STOP_TURN, async (event) => {
@@ -4958,10 +3711,6 @@ function register() {
     )
       throw new Error('回答生成中は新しい会話へ切り替えられません。');
     await agentSessionState.clearActive(context.root, context.stage, context.provider);
-    if (context.provider === 'codex' && codexChatState) {
-      await codexChatState.clearActive(context.root, context.stage);
-      stateCodexActiveThread.set(state.window.id, null);
-    }
     return assistantSnapshot(state);
   });
 
@@ -4977,10 +3726,6 @@ function register() {
     )
       throw new Error('回答生成中は会話履歴を切り替えられません。');
     await agentSessionState.activate(context.root, context.stage, context.provider, sessionId);
-    if (context.provider === 'codex' && codexChatState) {
-      await codexChatState.remember(context.root, context.stage, sessionId);
-      stateCodexActiveThread.set(state.window.id, sessionId);
-    }
     return assistantSnapshot(state);
   });
 
@@ -5053,21 +3798,13 @@ function register() {
         );
         return;
       }
-
-      const previousContext = request.state.codexContext;
-      if (
-        !previousContext ||
-        projectRootKey(previousContext.root) !== projectRootKey(request.root) ||
-        previousContext.stage !== request.contextStage
-      ) {
-        request.state.codexContext = { root: request.root, stage: request.contextStage };
-        stateCodexActiveThread.set(request.state.window.id, null);
-        request.state.codexView.webContents.send(
-          IPC.CODEX_CONTEXT_CHANGED,
-          request.state.codexContext,
-        );
-      }
-      await codexSendTask(request.state, request.stage, request.extra, true);
+      if (!codexCliTaskRunner) throw new Error('Codex CLIが初期化されていません。');
+      await codexCliTaskRunner.run(
+        request.root,
+        request.contextStage,
+        request.stage,
+        request.extra,
+      );
     },
   );
 
@@ -5078,232 +3815,34 @@ function register() {
       await grokCliTaskRunner.stop(request.root, request.contextStage);
       return;
     }
-    if (
-      !request.state.codexContext ||
-      projectRootKey(request.state.codexContext.root) !== projectRootKey(request.root) ||
-      request.state.codexContext.stage !== request.contextStage
-    )
-      request.state.codexContext = { root: request.root, stage: request.contextStage };
-    await codexStopTurn(request.state, true);
+    if (!codexCliTaskRunner) throw new Error('Codex CLIが初期化されていません。');
+    await codexCliTaskRunner.stop(request.root, request.contextStage);
   });
-  ipcMain.handle(IPC.CODEX_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
+  ipcMain.handle(IPC.ASSISTANT_SET_VISIBLE, (event, visible: unknown) => {
     const state = projectWindowForSender(event.sender);
-    if (event.sender.id !== state.localView.webContents.id)
-      throw new Error('Only the project window can select an AI context.');
-    validRoot(root);
-    validGrokContextStage(stage);
-    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
-      throw new Error('This project is not active in the current window.');
-    state.codexContext = { root: path.resolve(root), stage };
-    stateCodexActiveThread.set(state.window.id, null);
-    state.codexView.webContents.send(IPC.CODEX_CONTEXT_CHANGED, state.codexContext);
-  });
-  ipcMain.handle(IPC.CODEX_CONTEXT, (event) => {
-    const state = projectWindowForSender(event.sender);
-    return state.codexContext;
-  });
-  ipcMain.handle(IPC.CODEX_SELECT_STAGE_TASK, (event, root: unknown, stage: unknown) => {
-    const state = projectWindowForSender(event.sender);
-    if (event.sender.id !== state.localView.webContents.id)
-      throw new Error('Only the project window can select a Codex task.');
-    validRoot(root);
-    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
-      throw new Error('This project is not active in the current window.');
-    if (state.paneProvider !== 'codex') throw new Error('Codex is not the selected AI provider.');
-    const context = codexContextFor(state);
-    if (
-      projectRootKey(root) !== projectRootKey(context.root) ||
-      !codexTaskContexts[context.stage].includes(stage as GrokTask['stage'])
-    )
-      throw new Error('選択した依頼は現在の工程に対応していません。');
-    state.codexView.webContents.send(IPC.CODEX_STAGE_TASK_SELECTED, stage);
-  });
-
-  ipcMain.handle(IPC.CODEX_STATUS, () => codexAccount());
-  ipcMain.handle(IPC.CODEX_SIGN_IN, async () => {
-    const { server } = codexService();
-    const response = await server.request<{ type: string; authUrl?: string }>(
-      'account/login/start',
-      { type: 'chatgpt', useHostedLoginSuccessPage: true, appBrand: 'chatgpt' },
-    );
-    if (response.type !== 'chatgpt' || !response.authUrl)
-      throw new Error('CodexのサインインURLを取得できません。');
-    const url = new URL(response.authUrl);
-    if (
-      url.protocol !== 'https:' ||
-      !['chatgpt.com', 'auth.openai.com'].includes(url.hostname.toLowerCase())
-    )
-      throw new Error('Codexが予期しないサインインURLを返しました。');
-    await shell.openExternal(url.toString());
-  });
-  ipcMain.handle(IPC.CODEX_SNAPSHOT, (event) =>
-    codexSnapshot(projectWindowForSender(event.sender)),
-  );
-  ipcMain.handle(IPC.CODEX_MODELS, (event) =>
-    codexModelSettings(codexContextFor(projectWindowForSender(event.sender))),
-  );
-  ipcMain.handle(IPC.CODEX_SELECT_MODEL, (event, selection: unknown) =>
-    codexChooseModel(projectWindowForSender(event.sender), selection),
-  );
-  ipcMain.handle(IPC.CODEX_NEW_CHAT, async (event) => {
-    const state = projectWindowForSender(event.sender);
-    const context = codexContextFor(state);
-    const { store } = codexService();
-    await store.clearActive(context.root, context.stage);
-    stateCodexActiveThread.set(state.window.id, null);
-    return codexSnapshot(state);
-  });
-  ipcMain.handle(IPC.CODEX_RESTORE_CHAT, async (event, id: unknown) => {
-    const state = projectWindowForSender(event.sender);
-    const context = codexContextFor(state);
-    if (typeof id !== 'string' || !id) throw new Error('Invalid Codex thread ID.');
-    const { store } = codexService();
-    const saved = await store.get(context.root, context.stage);
-    if (!saved.threadIds.includes(id)) throw new Error('Chat is not part of this stage.');
-    await store.remember(context.root, context.stage, id);
-    stateCodexActiveThread.set(state.window.id, id);
-    return codexSnapshot(state);
-  });
-  ipcMain.handle(IPC.CODEX_STOP_TURN, (event) =>
-    codexStopTurn(projectWindowForSender(event.sender)),
-  );
-  ipcMain.handle(IPC.CODEX_SEND, (event, input: unknown) => {
-    if (typeof input !== 'string') throw new Error('Invalid Codex prompt.');
-    return codexSend(projectWindowForSender(event.sender), input);
-  });
-  ipcMain.handle(IPC.CODEX_SEND_TASK, (event, stage: unknown, extra: unknown) => {
-    const validStages = Object.values(codexTaskContexts).flat();
-    if (!validStages.includes(stage as GrokTask['stage'])) throw new Error('Invalid task stage.');
-    if (extra != null && (typeof extra !== 'string' || extra.length > 30_000))
-      throw new Error('Invalid additional instructions.');
-    return codexSendTask(
-      projectWindowForSender(event.sender),
-      stage as GrokTask['stage'],
-      typeof extra === 'string' ? extra : '',
-    );
-  });
-  ipcMain.handle(IPC.CODEX_LATEST_ARTIFACT, async (event) => {
-    const state = projectWindowForSender(event.sender);
-    const context = codexContextFor(state);
-    const saved = await codexService().store.get(context.root, context.stage);
-    return codexArtifactFor(context, saved.activeThreadId);
-  });
-  ipcMain.handle(IPC.CODEX_RETRY_ARTIFACT, async (event) => {
-    const context = codexContextFor(projectWindowForSender(event.sender));
-    const saved = await codexService().store.get(context.root, context.stage);
-    const threadId = saved.activeThreadId;
-    if (!threadId || codexBusy.has(threadId))
-      throw new Error('再取得できる完了済みのCodex会話がありません。');
-    const read = await readCodexHistory(
-      (method, params) => codexService().server.request(method, params),
-      threadId,
-    );
-    const fileName = expectedArtifact(context.stage === 'story' ? 'story-finalize' : context.stage);
-    const allowedFiles =
-      context.stage === 'prompt-plan'
-        ? ['prompt_plan.json', 'prompt_plan_patch.json']
-        : fileName
-          ? [fileName]
-          : [];
-    const turn = latestCompletedArtifactTurn(read.thread?.turns ?? [], allowedFiles);
-    if (!turn) throw new Error('この工程の完了済みArtifact依頼が見つかりません。');
-    const taskStage =
-      context.stage === 'story'
-        ? 'story-finalize'
-        : context.stage === 'models'
-          ? 'models'
-          : context.stage === 'prompt-plan'
-            ? codexTaskFileForTurn(turn) === 'prompt_plan_patch.json'
-              ? 'prompt-plan-patch'
-              : 'prompt-plan'
-            : 'caption';
-    const workspace =
-      typeof turn.id === 'string'
-        ? await findCodexWorkspace(
-            context.root,
-            app.getPath('userData'),
-            threadId,
-            turn.id,
-            taskStage,
-          )
-        : null;
-    if (workspace) {
-      const raw = await readCodexOutput(workspace);
-      return importAutoArtifact(
-        context.root,
-        'codex',
-        taskStage,
-        threadId + '/' + turn.id,
-        raw,
-        notifyAutoArtifact,
-      );
-    }
-    // Older tasks sent before file-based generation still carry their answer
-    // in the completed turn. Never use the reply for a new file-based turn.
-    const reply = [...(turn.items ?? [])]
-      .reverse()
-      .find((item) => (item as { type?: string } | null)?.type === 'agentMessage');
-    const raw =
-      reply && typeof reply === 'object' ? messageText(reply as Record<string, unknown>) : '';
-    if (!raw.trim()) throw new Error('Codexの回答から成果物本文を取得できません。');
-    return importAutoArtifact(
-      context.root,
-      'codex',
-      taskStage,
-      threadId + '/' + String(turn.id ?? 'last'),
-      raw,
-      notifyAutoArtifact,
-    );
-  });
-  ipcMain.handle(IPC.CODEX_SAVE_RESPONSE, async (event, response: unknown) => {
-    const state = projectWindowForSender(event.sender);
-    const context = codexContextFor(state);
-    if (typeof response !== 'string' || response.length > 10_000_000)
-      throw new Error('Invalid Codex response.');
-    const selected = await dialog.showSaveDialog(state.window, {
-      title: 'Codexの回答をファイルとして保存',
-      defaultPath: path.join(app.getPath('downloads'), codexReturnFile[context.stage]),
-      filters: [
-        {
-          name: '工程の成果物',
-          extensions: [path.extname(codexReturnFile[context.stage]).slice(1)],
-        },
-      ],
-    });
-    if (selected.canceled || !selected.filePath) return null;
-    await writeFile(selected.filePath, response, 'utf8');
-    return selected.filePath;
-  });
-  ipcMain.handle(IPC.GROK_SET_VISIBLE, (event, v: unknown) => {
-    const state = projectWindowForSender(event.sender);
-    state.grokVisible = v === true;
+    state.assistantVisible = visible === true;
     layoutProjectWindow(state);
     return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
-    validRoot(root);
-    validGrokContextStage(stage);
-    return setGrokContext(projectWindowForSender(event.sender), root, stage);
-  });
-  ipcMain.handle(IPC.GROK_SET_RATIO, (event, r: unknown) => {
-    if (typeof r !== 'number' || !Number.isFinite(r)) throw new Error('Invalid ratio');
+  ipcMain.handle(IPC.ASSISTANT_SET_RATIO, (event, ratio: unknown) => {
+    if (typeof ratio !== 'number' || !Number.isFinite(ratio)) throw new Error('Invalid ratio');
     const state = projectWindowForSender(event.sender);
-    state.localRatio = Math.max(0.3, Math.min(0.7, r));
+    state.localRatio = Math.max(0.3, Math.min(0.7, ratio));
     layoutProjectWindow(state);
     return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_SET_DIVIDER_X, (event, x: unknown) => {
-    if (typeof x !== 'number' || !Number.isFinite(x)) throw new Error('Invalid divider position');
-    const state = projectWindowForSender(event.sender),
-      bounds = state.window.getContentBounds();
-    state.localRatio = Math.max(0.3, Math.min(0.7, (x - bounds.x) / Math.max(bounds.width, 1)));
+  ipcMain.handle(IPC.ASSISTANT_SET_DIVIDER_X, (event, screenX: unknown) => {
+    if (typeof screenX !== 'number' || !Number.isFinite(screenX))
+      throw new Error('Invalid divider position');
+    const state = projectWindowForSender(event.sender);
+    const bounds = state.window.getContentBounds();
+    state.localRatio = Math.max(
+      0.3,
+      Math.min(0.7, (screenX - bounds.x) / Math.max(bounds.width, 1)),
+    );
     layoutProjectWindow(state);
     return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_RELOAD, (event) =>
-    projectWindowForSender(event.sender).grokView.webContents.reload(),
-  );
-  ipcMain.handle(IPC.GROK_OPEN_EXTERNAL, () => shell.openExternal(GROK_URL));
 }
 
 function maybeQuitAfterExecution() {
@@ -5393,9 +3932,6 @@ async function initializeApplication() {
   );
   civitaiCatalog = new CivitaiCatalogService(path.join(userData, 'civitai'));
   ensureCatalogRuntimePath();
-  grokChatState = new GrokChatStateStore(userData);
-  codexChatState = new CodexChatStateStore(userData);
-  codexModelSelections = new CodexModelSelectionStore(userData);
   assistantProviderState = new AssistantProviderStore(userData);
   agentSessionState = new AgentSessionStateStore(userData);
   agentConversationStore = new AgentConversationStore(userData);
@@ -5411,6 +3947,15 @@ async function initializeApplication() {
     resolveModel: async (root, stage) =>
       (await assistantModelSettings(root, stage, 'grok')).selection,
   });
+  codexCliTaskRunner = new CodexCliTaskRunner({
+    userDataPath: userData,
+    adapter: codexCliAdapter,
+    sessions: agentSessionState,
+    onEvent: (context, event) => notifyAgentEvent('codex', context, context.taskStage, event),
+    onArtifact: notifyAutoArtifact,
+    resolveModel: async (root, stage) =>
+      (await assistantModelSettings(root, stage, 'codex')).selection,
+  });
   agentConversationRunner = new AgentConversationRunner({
     userDataPath: userData,
     sessions: agentSessionState,
@@ -5419,21 +3964,6 @@ async function initializeApplication() {
     model: async (root, stage, provider) =>
       (await assistantModelSettings(root, stage, provider)).selection,
     onEvent: notifyAgentEvent,
-  });
-  codexAppServer = new CodexAppServer();
-  codexAppServer.on('notification', forwardCodexNotification);
-  codexAppServer.on('disconnected', (message: string) => {
-    codexTurnMonitor.disconnected();
-    codexBusy.clear();
-    codexTurnStartRequests.clear();
-    codexActiveTurnIds.clear();
-    codexInterruptRequests.clear();
-    codexPendingArtifacts.clear();
-    for (const state of projectWindows.values())
-      state.codexView.webContents.send(IPC.CODEX_EVENT, {
-        method: 'disconnected',
-        params: { message },
-      });
   });
   const r2Config = new R2ConfigStore(userData);
   r2Manager = new R2Manager(r2Config, userData);
@@ -5458,7 +3988,6 @@ app.on('will-quit', () => {
   void codexCliAdapter?.shutdown().catch(() => {});
   void grokCliTaskRunner?.shutdown().catch(() => {});
   void agentConversationRunner?.shutdown().catch(() => {});
-  codexAppServer?.stop();
 });
 app.on('window-all-closed', () => {
   if (!executionCoordinator.hasActiveRuns() && process.platform !== 'darwin') app.quit();

@@ -2,12 +2,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { EventEmitter } = require('node:events');
 
 const repo = path.resolve(__dirname, '..');
 const shared = fs.readFileSync(path.join(repo, 'src/shared/ipc.ts'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src/preload/index.cjs'), 'utf8');
 const main = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+
 function constants(source, marker) {
   const start = source.indexOf(marker);
   assert.notEqual(start, -1, `Missing ${marker}`);
@@ -15,6 +15,7 @@ function constants(source, marker) {
   assert.ok(literal, `Cannot parse ${marker}`);
   return vm.runInNewContext(`(${literal[1]})`);
 }
+
 const expected = constants(shared, 'export const IPC =');
 const actual = constants(preload, 'const I =');
 assert.deepEqual(
@@ -25,7 +26,45 @@ assert.deepEqual(
 for (const key of Object.keys(expected))
   assert.equal(actual[key], expected[key], `IPC channel mismatch: ${key}`);
 
-const events = new EventEmitter();
+for (const key of [
+  'ASSISTANT_GET_PROVIDER',
+  'ASSISTANT_SET_PROVIDER',
+  'ASSISTANT_SET_CONTEXT',
+  'ASSISTANT_CONTEXT',
+  'ASSISTANT_CONTEXT_CHANGED',
+  'ASSISTANT_SNAPSHOT',
+  'ASSISTANT_SEND',
+  'ASSISTANT_STOP_TURN',
+  'ASSISTANT_NEW_CONVERSATION',
+  'ASSISTANT_RESTORE_CONVERSATION',
+  'ASSISTANT_MODELS',
+  'ASSISTANT_SELECT_MODEL',
+  'ASSISTANT_SET_VISIBLE',
+  'ASSISTANT_SET_RATIO',
+  'ASSISTANT_SET_DIVIDER_X',
+  'AGENT_TASK_START',
+  'AGENT_TASK_STOP',
+  'AGENT_EVENT',
+]) {
+  assert.ok(expected[key], `Missing provider-neutral IPC channel: ${key}`);
+}
+
+assert.equal(
+  Object.keys(expected).some((key) => key.startsWith('CODEX_') || key.startsWith('GROK_SET_')),
+  false,
+  'Provider-specific pane IPC channels must be removed',
+);
+assert.equal(
+  Object.keys(expected).includes('AUTO_ARTIFACT_GROK_ARM'),
+  false,
+  'Grok Web artifact arming IPC must be removed',
+);
+assert.equal(
+  Object.keys(expected).includes('GROK_TASK_BUILD'),
+  false,
+  'Grok Web prompt builder IPC must be removed',
+);
+
 const calls = [];
 let bridge;
 vm.runInNewContext(preload, {
@@ -40,13 +79,15 @@ vm.runInNewContext(preload, {
       ipcRenderer: {
         invoke: async (...args) => {
           calls.push(args);
+          return undefined;
         },
-        on: (channel, listener) => events.on(channel, listener),
-        removeListener: (channel, listener) => events.removeListener(channel, listener),
+        on: () => {},
+        removeListener: () => {},
       },
     };
   },
 });
+
 (async () => {
   await bridge.assistant.startTask('project-root', 'story-finalize', 'make it concise');
   assert.deepEqual(calls.at(-1), [
@@ -57,36 +98,30 @@ vm.runInNewContext(preload, {
   ]);
   await bridge.assistant.stopTask('project-root', 'story-finalize');
   assert.deepEqual(calls.at(-1), [expected.AGENT_TASK_STOP, 'project-root', 'story-finalize']);
+  await bridge.assistant.setVisible(true);
+  assert.deepEqual(calls.at(-1), [expected.ASSISTANT_SET_VISIBLE, true]);
+  await bridge.assistant.setRatio(0.5);
+  assert.deepEqual(calls.at(-1), [expected.ASSISTANT_SET_RATIO, 0.5]);
+  await bridge.assistant.setDividerScreenX(900);
+  assert.deepEqual(calls.at(-1), [expected.ASSISTANT_SET_DIVIDER_X, 900]);
 
-  await bridge.codex.selectStageTask('project-root', 'execution');
-  assert.deepEqual(calls.at(-1), [expected.CODEX_SELECT_STAGE_TASK, 'project-root', 'execution']);
-  const selected = [];
-  const remove = bridge.codex.onStageTaskSelected((stage) => selected.push(stage));
-  events.emit(expected.CODEX_STAGE_TASK_SELECTED, {}, 'execution');
-  remove();
-  events.emit(expected.CODEX_STAGE_TASK_SELECTED, {}, 'caption');
-  assert.deepEqual(selected, ['execution']);
-  const handler = main.slice(
-    main.indexOf('ipcMain.handle(IPC.CODEX_SELECT_STAGE_TASK'),
-    main.indexOf('ipcMain.handle(IPC.CODEX_STATUS'),
-  );
-  assert.match(handler, /event\.sender\.id !== state\.localView\.webContents\.id/);
-  assert.match(
-    handler,
-    /state\.codexView\.webContents\.send\(IPC\.CODEX_STAGE_TASK_SELECTED, stage\)/,
-  );
   const commonHandler = main.slice(
     main.indexOf('const validateAgentTaskRequest'),
-    main.indexOf('ipcMain.handle(IPC.CODEX_SET_CONTEXT'),
+    main.indexOf('ipcMain.handle(IPC.ASSISTANT_SET_VISIBLE'),
   );
   assert.match(commonHandler, /grokCliTaskRunner\.run/);
-  assert.match(
-    commonHandler,
-    /codexSendTask\(request\.state, request\.stage, request\.extra, true\)/,
-  );
+  assert.match(commonHandler, /codexCliTaskRunner\.run/);
   assert.match(commonHandler, /grokCliTaskRunner\.stop/);
-  assert.match(commonHandler, /codexStopTurn\(request\.state, true\)/);
-  console.log('IPC contract and provider-neutral agent task routing tests passed.');
+  assert.match(commonHandler, /codexCliTaskRunner\.stop/);
+  assert.doesNotMatch(commonHandler, /codexSendTask|codexStopTurn/);
+
+  assert.match(main, /ipcMain\.handle\(IPC\.ASSISTANT_SET_VISIBLE/);
+  assert.match(main, /state\.assistantVisible = visible === true/);
+  assert.match(main, /ipcMain\.handle\(IPC\.ASSISTANT_SET_RATIO/);
+  assert.match(main, /ipcMain\.handle\(IPC\.ASSISTANT_SET_DIVIDER_X/);
+  assert.doesNotMatch(main, /IPC\.CODEX_|IPC\.GROK_SET_|IPC\.AUTO_ARTIFACT_GROK_ARM/);
+
+  console.log('Provider-neutral IPC and assistant task routing tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

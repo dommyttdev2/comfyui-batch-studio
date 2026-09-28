@@ -37,7 +37,7 @@ Batch Studio Electron Main Process が次を担当する。
 - Model / Version / strength baseline / collection thumbnailのTTL付きmetadata cache。
 - API request / retry / 429 / 5xx / network / cache hit-miss / page / membership / elapsed metrics。
 
-RendererへAPI keyを永続化しない。Grok WebへAPI keyを渡さない。
+RendererへAPI keyを永続化しない。AI agent workspaceへAPI keyを渡さない。
 
 標準保存先はElectron `app.getPath('userData')` 配下の `civitai/model_catalog.json` とする。Projectは `project_meta.json.settings.catalogPath` を介してこのCatalogを参照する。
 
@@ -226,7 +226,7 @@ Batch Studio Electron Main Process がCloudflare R2の実体操作を所有す�
 
 設定値はElectron `app.getPath('userData')/r2/` 配下に保持する。Secret Access KeyとCloudflare API TokenはElectron `safeStorage` で暗号化し、暗号化不能時に平文へfallback保存しない。
 
-Rendererへ返すconnection statusにはSecret本体を含めず、`secretConfigured` / `metricsTokenConfigured` のboolだけを返す。Grok Web、Project artifact、Grok attachment候補、Remote hostへSecretを渡さない。
+Rendererへ返すconnection statusにはSecret本体を含めず、`secretConfigured` / `metricsTokenConfigured` のboolだけを返す。AssistantPane、Project artifact、AI agent workspace、Remote hostへSecretを渡さない。
 
 環境変数も利用可能:
 
@@ -394,18 +394,19 @@ R2 credential / upload state / batch download templateはProject artifactでは�
 
 ## 6. Secret boundary
 
-| Secret / Data | Owner | Batch Studio | Remote / Grok |
+| Secret / Data | Owner | Batch Studio | Remote / AI agent |
 | --- | --- | --- | --- |
 | Civitai API key | Batch Studio Main Process / environment | Civitai通信だけに使用・Projectへ保存しない | 渡さない |
-| R2 credential | Batch Studio Main Process / `safeStorage` | R2通信・signed URL生成だけに使用 | Remote/Grokへ渡さない |
+| R2 credential | Batch Studio Main Process / `safeStorage` | R2通信・signed URL生成だけに使用 | Remote/AI agentへcredential本体を渡さない |
 | Cloudflare API Token | Batch Studio Main Process / `safeStorage` | optional metrics取得だけに使用 | 渡さない |
-| SSH private key contents | Local filesystem | SSH認証時だけ読む・Projectへコピーしない | Remote/Grokへ渡さない |
-| SSH private key path | app-wide settings | Remote接続設定として参照 | Grokへ渡さない |
-| R2 signed URL | Main Process | 必要直前に発行 | Remoteには対象operation用のみ渡す。Grokへ渡さない |
-| Grok Cookie | Grok Web persistent session | Projectへ保存しない | Web session自身のみ |
-| model binary | Local/R2/Remote | 所在確認 / R2管理 / execution staging | Grokへ添付しない |
-| model_catalog.json | Batch Studio app data | 生成・読む | Model選定時にGrok添付可 |
-| project artifacts | Project filesystem | 読書き | Grokへ必要分だけ手動添付 |
+| SSH private key contents | Local filesystem | SSH認証時だけ読む・Projectへコピーしない | AI agentへ渡さない |
+| SSH private key path | app-wide settings | Remote接続設定として参照 | AI agentへ渡さない |
+| R2 signed URL | Main Process | 必要直前に発行 | Remoteには対象operation用のみ渡す。AI agentへ渡さない |
+| Grok / Codex CLI auth data | 各provider CLI | Batch StudioはCLIを起動するがcredentialをProject/workspaceへ複製しない | provider CLI自身が所有 |
+| model binary | Local/R2/Remote | 所在確認 / R2管理 / execution staging | AI agent workspaceへ渡さない |
+| model_catalog.json | Batch Studio app data | 生成・読む | Model選定taskで必要な参照入力として隔離workspaceへコピー可 |
+| project artifacts | Project filesystem | 読書き | taskに必要なファイルだけ隔離workspaceへコピー |
+
 
 ## 7. Integration failure policy
 

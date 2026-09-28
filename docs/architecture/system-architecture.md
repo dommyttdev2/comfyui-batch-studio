@@ -6,26 +6,25 @@ Status: Active
 
 ComfyUI Batch Studio は Electron デスクトップアプリとする。
 
-Grok Web は通常の iframe としてローカル UI に埋め込まず、Electron の外部 Web 用 `WebContentsView` として表示する。
+Project Window は Local Renderer と provider-neutral な `AssistantPane` の2つの local `WebContentsView` を持つ。Story / Models / Prompt Plan / Caption では必要に応じて左右分割し、それ以外の工程ではLocal UIを全幅で使用する。
 
 ```text
 ┌──────────────────────── ComfyUI Batch Studio ────────────────────────┐
 │ Electron Main                                                        │
 │                                                                      │
 │  ┌──────────────────── Local Renderer ─────────────────────┐          │
-│  │ Project / Story / Catalog / Models / Prompt Plan /      │          │
-│  │ Workflow / Model Availability + R2 / Preflight /        │          │
-│  │ Execution                                                │          │
+│  │ Project / Story / Models / Prompt Plan / Workflow /     │          │
+│  │ Availability / Preflight / Execution / post-processing  │          │
 │  └──────────────────────────────────────────────────────────┘          │
 │                                                                      │
-│  ┌──────────────────── Grok WebContentsView ────────────────┐          │
-│  │ https://grok.com/                                        │          │
-│  │ User-operated login / paste / attach / send / chat       │          │
+│  ┌──────────────────── AssistantPane ───────────────────────┐          │
+│  │ selected provider: Grok CLI / Codex CLI                  │          │
+│  │ conversation / history / streaming / activity / model    │          │
 │  └──────────────────────────────────────────────────────────┘          │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-Grokが必要な工程では左右分割を基本とし、境界dividerをマウスでresize可能とする。Grok不要工程ではLocal UIを全幅で使用する。
+外部AIのWebページはProject Windowへ埋め込まない。AI通信はMain Processのprovider adapterからCLIを起動し、structured eventsを共通 `AgentEvent` へ正規化する。
 
 ## 2. Main Process Services
 
@@ -47,15 +46,38 @@ Grokが必要な工程では左右分割を基本とし、境界dividerをマウ
 - 差分表示用データ生成。
 - Artifact hash / dependency stale detection。
 
-### 2.3 Grok Context Builder / Grok Session State
+### 2.3 AI Agent Runtime
 
-- 工程別プロンプトの組み立て。
-- 添付候補ファイルの列挙。
-- 秘密情報の除外。
-- Clipboard 用文字列生成。
-- Project × Grok工程ごとの最後のconversation URL保存・復元。
+AI連携はprovider-neutral runtimeとしてMain Processが所有する。
 
-Grok DOM への書込や回答取得は行わない。
+```text
+AssistantPane / Stage UI
+        |
+        v
+Common Assistant IPC
+        |
+        +--> AgentConversationRunner --> AgentCliAdapter
+        |                               +--> Grok CLI
+        |                               +--> Codex CLI
+        |
+        +--> GrokCliTaskRunner / CodexCliTaskRunner
+                |
+                +--> isolated AgentWorkspace
+                +--> Artifact validation/import
+```
+
+責務:
+
+- Project × stage × provider の選択状態を `AssistantProviderStore` で保持。
+- session IDを `AgentSessionStateStore` で保持。
+- UI表示用の安全な会話本文を `AgentConversationStore` で保持。
+- model / reasoning設定を `AgentModelSelectionStore` で保持。
+- 通常会話のstart / resume / streaming / stopを `AgentConversationRunner` へ集約。
+- 工程成果物taskはprovider別CLI task runnerを使い、隔離workspaceへ参照入力と成果物出力を限定。
+- provider固有CLI出力を `AgentEvent` へ正規化し、raw reasoning本文はUIへ渡さない。
+- Codex model catalogは `codex debug models` を使用し、App Serverへ依存しない。
+
+意味契約とworkspace契約は `../contracts/agent-contract.md` を正本とする。
 
 ### 2.4 Integrated Civitai Catalog Service
 
@@ -150,13 +172,16 @@ Local / Remote の個別実行手順は `remote-execution.md` を正本とする
 
 ### 2.9 Project Window Manager / Execution Coordinator
 
-Multi Windowでは各Project WindowがLocal Renderer / Grok View / window-local UI stateを所有し、Executionを所有しない。
+Multi Windowでは各Project WindowがLocal Renderer / AssistantPane / window-local UI stateを所有し、Executionを所有しない。
 
 ```text
 Project Window A ----+
 Project Window B ----+--> Main Process
 Project Window C ----+      |
                             +-- ProjectWindowManager
+                            |     +-- Local Renderer View
+                            |     +-- AssistantPane View
+                            +-- Agent Runtime
                             +-- ExecutionCoordinator
                                   +-- LocalExecutionService
                                   +-- RemoteExecutionService
@@ -194,34 +219,30 @@ Renderer から Main process へは preload で許可した最小限の IPC だ�
 
 R2 Secret本体、SSH秘密鍵本文、Civitai API keyをRendererへ返さない。R2設定画面は保存済みSecretについてconfigured boolのみ受け取る。
 
-## 4. Grok Web の信頼境界
+## 4. AI Agent の信頼境界
 
-Grok WebContents は Local Renderer とは別の信頼領域とする。
+AI provider CLIはLocal Rendererから直接起動しない。Main Processだけが子process、session、workspace、model selectionを扱う。
 
-### 4.1 必須設定
+### 4.1 CLI execution
 
-- `nodeIntegration: false`
-- Grok 用 preload なし。
-- Local IPC を Grok へ公開しない。
-- Local file system API を公開しない。
-- Local Renderer の DOM と混在させない。
+- RendererへNode.js child process APIを公開しない。
+- provider CLIへProject全体のwrite権限を与えない。
+- 通常会話は原則read-only、工程成果物taskは隔離workspaceだけwrite可能とする。
+- approval policyやnetwork policyはadapterが明示する。
+- prompt本文はstdinで渡し、ユーザー入力をshell command文字列へ連結しない。
 
-### 4.2 Session
+### 4.2 Workspace
 
-Grok ログイン session はアプリ専用の永続 partition に保存可能とするが、次へ複製しない。
+工程taskの参照ファイルは必要なものだけ `input/` へコピーし、成果物は `output/` から検証して取り込む。
 
-- Project files
-- `project_meta.json`
-- Application log
-- `model_catalog.json`
-- R2 configuration
-- SSH private key contents
+- Project本体をagentの書込先にしない。
+- symlink / path escapeを拒否する。
+- Secret、Cookie、API key、SSH private key、model binaryをworkspaceへ入れない。
+- invalid / incomplete / cancelled outputはProject Draftへ反映しない。
 
-Project × Grok工程の復帰用conversation URLはapp-wide stateに保存してよいが、conversation本文やCookieをProjectへ保存しない。
+### 4.3 Session / history
 
-### 4.3 Navigation
-
-Grokログインに必要なOAuth popupはGrokと同じpersistent partitionを使用する。認証flow内のsecure redirect chainは同じElectron sessionに保持し、通常の非Grok外部navigationは既定ブラウザへ引き渡す。
+session IDと安全な会話本文はapp-wide `userData` に保存可能とするが、providerのraw rolloutやraw reasoningをProject Artifactの正本にしない。
 
 ## 5. データフロー
 
@@ -231,12 +252,11 @@ User Brief
    v
 Project Service
    |
-   +--> Grok Context Builder --> Clipboard --> User --> Grok Web
-   |                                               |
-   |                                               v
-   |                                          story/models/plan text
-   |                                               |
-   +<---------------- Artifact Service <-----------+
+   +--> AI Agent Runtime
+   |       |
+   |       +--> Grok CLI / Codex CLI
+   |       +--> normal conversation -> AssistantPane
+   |       +--> stage task -> isolated workspace -> Artifact Service
    |
    +--> Civitai Catalog Service --> app-wide model_catalog.json
    |             |
@@ -274,7 +294,7 @@ Project Service
 
 ## 6. ファイル書込原則
 
-- Grok 会話そのものを正本にしない。
+- AI agent の会話そのものをProject Artifactの正本にしない。
 - 受け取った成果物はまず Draft とする。
 - 検証結果を表示する。
 - ユーザーの明示操作で確定する。

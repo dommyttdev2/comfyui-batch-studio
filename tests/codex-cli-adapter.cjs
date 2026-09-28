@@ -23,13 +23,13 @@ execFileSync(
 );
 
 const main = source('src/main/main.ts');
-assert.match(main, /BATCH_STUDIO_CODEX_TRANSPORT/);
-assert.match(main, /adapter\.resumeTask\(existingThreadId/);
-assert.match(main, /prepareAgentWorkspace\(app\.getPath\('userData'\), 'codex'/);
-assert.match(main, /readAgentWorkspaceOutput\(pending\.workspace\)/);
-assert.match(main, /rememberAgentWorkspace\(context\.root, workspace, threadId, turn\.turnId\)/);
-assert.match(main, /codexCliActiveTurnIds/);
-assert.match(source('src/main/codex-artifact-turn.ts'), /Batch Studio向け成果物出力契約/);
+const runner = source('src/main/codex-cli-task-runner.ts');
+assert.match(main, /codexCliTaskRunner = new CodexCliTaskRunner/);
+assert.doesNotMatch(main, /BATCH_STUDIO_CODEX_TRANSPORT|CodexAppServer|codexAppServer/);
+assert.match(runner, /adapter\.resumeTask\(saved\.activeSessionId/);
+assert.match(runner, /prepareAgentWorkspace\(this\.userDataPath, 'codex'/);
+assert.match(runner, /readAgentWorkspaceOutput\(run\.workspace\)/);
+assert.match(runner, /rememberAgentWorkspace\(root, workspace, turn\.sessionId, turn\.turnId\)/);
 
 class FakeChild extends EventEmitter {
   constructor(pid) {
@@ -379,6 +379,80 @@ function task(root, workspace = true) {
       version: '1.2.3',
       message: null,
     });
+  }
+
+  {
+    const queued = [
+      {
+        stdout: JSON.stringify({
+          models: [
+            {
+              slug: 'gpt-6-sol',
+              display_name: 'GPT-6-Sol',
+              default_reasoning_level: 'medium',
+              supported_reasoning_levels: [
+                { effort: 'low', description: 'Low' },
+                { effort: 'medium', description: 'Medium' },
+                { effort: 'high', description: 'High' },
+              ],
+              visibility: 'list',
+              priority: 2,
+            },
+            {
+              slug: 'hidden-model',
+              display_name: 'Hidden',
+              default_reasoning_level: 'high',
+              supported_reasoning_levels: [{ effort: 'high' }],
+              visibility: 'hide',
+              priority: 1,
+            },
+            {
+              slug: 'gpt-6-astra',
+              display_name: 'GPT-6-Astra',
+              default_reasoning_level: 'low',
+              supported_reasoning_levels: [
+                { effort: 'low' },
+                { effort: 'medium' },
+                { effort: 'high' },
+              ],
+              visibility: 'list',
+              priority: 1,
+            },
+          ],
+        }),
+        code: 0,
+      },
+    ];
+    const calls = [];
+    const adapter = new CodexCliAdapter({
+      platform: 'linux',
+      spawnProcess: (command, args) => {
+        const child = new FakeChild(640 + queued.length);
+        const response = queued.shift();
+        calls.push({ command, args: [...args] });
+        queueMicrotask(() => {
+          child.stdout.write(response.stdout);
+          child.close(response.code);
+        });
+        return child;
+      },
+    });
+    assert.deepEqual(await adapter.getModels(), {
+      models: [
+        {
+          id: 'gpt-6-astra',
+          displayName: 'GPT-6-Astra',
+          supportedReasoningEfforts: ['low', 'medium', 'high'],
+        },
+        {
+          id: 'gpt-6-sol',
+          displayName: 'GPT-6-Sol',
+          supportedReasoningEfforts: ['low', 'medium', 'high'],
+        },
+      ],
+      selection: { model: 'gpt-6-astra', reasoningEffort: 'low' },
+    });
+    assert.deepEqual(calls[0], { command: 'codex', args: ['debug', 'models'] });
   }
 
   {
