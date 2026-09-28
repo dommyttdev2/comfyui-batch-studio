@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './stage-reset.css';
 
 export type ResetScope =
@@ -79,7 +79,73 @@ export function StageResetMenu({
     [confirming, setConfirming] = useState(false),
     [busy, setBusy] = useState(false),
     [resetError, setResetError] = useState('');
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuItemRef = useRef<HTMLButtonElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const copy = COPY[scope];
+
+  const restoreTriggerFocus = () => {
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+
+  const closeMenu = () => {
+    setMenu(false);
+    restoreTriggerFocus();
+  };
+
+  const cancelReset = () => {
+    if (busy) return;
+    setResetError('');
+    setConfirming(false);
+    restoreTriggerFocus();
+  };
+
+  useEffect(() => {
+    if (!menu) return;
+    requestAnimationFrame(() => menuItemRef.current?.focus());
+  }, [menu]);
+
+  useEffect(() => {
+    if (!confirming) return;
+    requestAnimationFrame(() => cancelRef.current?.focus());
+  }, [confirming]);
+
+  useEffect(() => {
+    if (!confirming) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (busy) return;
+        event.preventDefault();
+        cancelReset();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const modal = modalRef.current;
+      if (!modal) return;
+      const focusable = Array.from(
+        modal.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (!focusable.length) {
+        event.preventDefault();
+        modal.focus();
+        return;
+      }
+      const first = focusable[0],
+        last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [confirming, busy]);
   const execute = async () => {
     if (busy) return;
     setResetError('');
@@ -88,6 +154,7 @@ export function StageResetMenu({
       await onReset(scope);
       setConfirming(false);
       setMenu(false);
+      restoreTriggerFocus();
     } catch (cause) {
       setResetError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -98,18 +165,40 @@ export function StageResetMenu({
     <>
       <div className="stage-reset-menu">
         <button
+          ref={triggerRef}
           type="button"
           className="stage-reset-trigger"
           aria-label={`${copy.title}のメニュー`}
           aria-expanded={menu}
+          aria-haspopup="menu"
           onClick={() => setMenu((v) => !v)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              setMenu(true);
+            } else if (event.key === 'Escape' && menu) {
+              event.preventDefault();
+              closeMenu();
+            }
+          }}
         >
           ︙
         </button>
         {menu && (
-          <div className="stage-reset-popover">
+          <div
+            className="stage-reset-popover"
+            role="menu"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                closeMenu();
+              }
+            }}
+          >
             <button
+              ref={menuItemRef}
               type="button"
+              role="menuitem"
               onClick={() => {
                 setResetError('');
                 setConfirming(true);
@@ -123,14 +212,20 @@ export function StageResetMenu({
       </div>
       {confirming && (
         <div
+          ref={modalRef}
           className="modal stage-reset-modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby={`reset-title-${scope}`}
+          aria-describedby={`reset-description-${scope}`}
+          tabIndex={-1}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy) cancelReset();
+          }}
         >
           <div className="modalcard">
             <h2 id={`reset-title-${scope}`}>{copy.title}</h2>
-            <p>この工程と、それより後の成果物をリセットします。</p>
+            <p id={`reset-description-${scope}`}>この工程と、それより後の成果物をリセットします。</p>
             <div className="stage-reset-summary">
               <section>
                 <h3>保持されます</h3>
@@ -162,14 +257,7 @@ export function StageResetMenu({
               に退避します。
             </p>
             <div className="actions">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setResetError('');
-                  setConfirming(false);
-                }}
-              >
+              <button ref={cancelRef} type="button" disabled={busy} onClick={cancelReset}>
                 キャンセル
               </button>
               <button
