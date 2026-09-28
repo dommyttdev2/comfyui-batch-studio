@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import './stage-reset.css';
 
 export type ResetScope =
@@ -85,21 +85,21 @@ export function StageResetMenu({
   const cancelRef = useRef<HTMLButtonElement>(null);
   const copy = COPY[scope];
 
-  const restoreTriggerFocus = () => {
+  const restoreTriggerFocus = useCallback(() => {
     requestAnimationFrame(() => triggerRef.current?.focus());
-  };
+  }, []);
 
-  const closeMenu = () => {
+  const closeMenu = useCallback(() => {
     setMenu(false);
     restoreTriggerFocus();
-  };
+  }, [restoreTriggerFocus]);
 
-  const cancelReset = () => {
+  const cancelReset = useCallback(() => {
     if (busy) return;
     setResetError('');
     setConfirming(false);
     restoreTriggerFocus();
-  };
+  }, [busy, restoreTriggerFocus]);
 
   useEffect(() => {
     if (!menu) return;
@@ -115,9 +115,9 @@ export function StageResetMenu({
     if (!confirming) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (busy) return;
         event.preventDefault();
-        cancelReset();
+        event.stopPropagation();
+        if (!busy) cancelReset();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -145,7 +145,7 @@ export function StageResetMenu({
     };
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [confirming, busy]);
+  }, [confirming, busy, cancelReset]);
   const execute = async () => {
     if (busy) return;
     setResetError('');
@@ -171,6 +171,7 @@ export function StageResetMenu({
           aria-label={`${copy.title}のメニュー`}
           aria-expanded={menu}
           aria-haspopup="menu"
+          aria-controls={menu ? `stage-reset-menu-${scope}` : undefined}
           onClick={() => setMenu((v) => !v)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -186,12 +187,15 @@ export function StageResetMenu({
         </button>
         {menu && (
           <div
+            id={`stage-reset-menu-${scope}`}
             className="stage-reset-popover"
             role="menu"
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 event.preventDefault();
                 closeMenu();
+              } else if (event.key === 'Tab') {
+                setMenu(false);
               }
             }}
           >
