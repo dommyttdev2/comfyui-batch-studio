@@ -10,7 +10,7 @@ import type {
   AgentTurn,
 } from '../shared/types.js';
 import type { AgentCliAdapter, AgentEventSink } from './agent-cli-adapter.js';
-import { sanitizeAgentDiagnostic } from './agent-cli-diagnostic.js';
+import { sanitizeAgentDiagnostic, sanitizeAgentEvent } from './agent-cli-diagnostic.js';
 import { CodexCliEventParser, CodexCliProtocolError } from './codex-cli-events.js';
 
 export class CodexCliResumeMismatchError extends Error {
@@ -444,7 +444,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
         }
       }
 
-      for (const event of normalized.events) onEvent(event);
+      for (const event of normalized.events) onEvent(sanitizeAgentEvent(event, this.env));
       if (normalized.terminal === 'failed') {
         fail(new Error(normalized.error || 'Codex CLI turn failed.'), false);
         void this.killProcessTree(child);
