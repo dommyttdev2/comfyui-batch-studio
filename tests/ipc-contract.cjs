@@ -57,8 +57,8 @@ vm.runInNewContext(preload, {
   events.emit(expected.CODEX_STAGE_TASK_SELECTED, {}, 'caption');
   assert.deepEqual(selected, ['execution']);
   const handler = main.slice(
-    main.indexOf('ipcMain.handle(IPC.CODEX_SELECT_STAGE_TASK'),
-    main.indexOf('ipcMain.handle(IPC.CODEX_STATUS'),
+    main.indexOf('handleIpc(IPC.CODEX_SELECT_STAGE_TASK'),
+    main.indexOf('handleIpc(IPC.CODEX_STATUS'),
   );
   assert.match(handler, /event\.sender\.id !== state\.localView\.webContents\.id/);
   assert.match(
