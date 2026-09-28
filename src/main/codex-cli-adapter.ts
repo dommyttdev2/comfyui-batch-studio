@@ -480,7 +480,10 @@ export class CodexCliAdapter implements AgentCliAdapter {
         return;
       }
       if (running.failed) return;
-      const detail = sanitizeAgentDiagnostic(Buffer.concat(stderr).toString('utf8').trim(), this.env);
+      const detail = sanitizeAgentDiagnostic(
+        Buffer.concat(stderr).toString('utf8').trim(),
+        this.env,
+      );
       if (code !== 0 || signal) {
         fail(
           new Error(
@@ -546,8 +549,14 @@ export class CodexCliAdapter implements AgentCliAdapter {
         finish({ ok: false, output: '', detail: sanitizeAgentDiagnostic(error, this.env) }),
       );
       child.once('close', (code, signal) => {
-        const out = sanitizeAgentDiagnostic(Buffer.concat(stdout).toString('utf8').trim(), this.env);
-        const err = sanitizeAgentDiagnostic(Buffer.concat(stderr).toString('utf8').trim(), this.env);
+        const out = sanitizeAgentDiagnostic(
+          Buffer.concat(stdout).toString('utf8').trim(),
+          this.env,
+        );
+        const err = sanitizeAgentDiagnostic(
+          Buffer.concat(stderr).toString('utf8').trim(),
+          this.env,
+        );
         finish({
           ok: code === 0 && !signal,
           output: [out, err].filter(Boolean).join('\n'),
