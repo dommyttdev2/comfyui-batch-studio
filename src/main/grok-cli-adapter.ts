@@ -129,7 +129,6 @@ async function defaultKillProcessTree(child: ChildProcessWithoutNullStreams): Pr
   }
 }
 
-
 function parseModels(output: string): AgentModelSettings {
   const defaultModel = output.match(/^Default model:\s*(\S+)/m)?.[1] ?? null;
   const models: AgentModelOption[] = [];
