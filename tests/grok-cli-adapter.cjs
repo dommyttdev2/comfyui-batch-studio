@@ -322,10 +322,13 @@ async function nextTick() {
 
   {
     const children = [];
+    const events = [];
+    const secret = 'xai-phase7-secret-123456';
     const sessionId = '66666666-6666-4666-8666-666666666666';
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-cli-exit-'));
     const adapter = new GrokCliAdapter({
       platform: 'linux',
+      env: { XAI_API_KEY: secret },
       createTurnId: () => 'exit-turn',
       createSessionId: () => sessionId,
       spawnProcess: () => {
@@ -334,10 +337,16 @@ async function nextTick() {
         return child;
       },
     });
-    await adapter.startTask(task(root, false), () => {});
-    children[0].stderr.write('Not logged in. Run grok login.');
+    await adapter.startTask(task(root, false), (event) => events.push(event));
+    children[0].stderr.write('Not logged in. XAI_API_KEY=' + secret);
     children[0].close(1);
-    await assert.rejects(adapter.waitForCompletion('exit-turn'), /code 1.*Not logged in/);
+    await assert.rejects(adapter.waitForCompletion('exit-turn'), (error) => {
+      assert.match(error.message, /code 1.*Not logged in/);
+      assert.doesNotMatch(error.message, /phase7-secret/);
+      assert.match(error.message, /\[REDACTED\]/);
+      return true;
+    });
+    assert.doesNotMatch(JSON.stringify(events), /phase7-secret/);
   }
 
   {
