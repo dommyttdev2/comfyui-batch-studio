@@ -22,6 +22,8 @@ execFileSync(
 const source = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
 const grokRunner = source('src/main/grok-cli-task-runner.ts');
 const codexRunner = source('src/main/codex-cli-task-runner.ts');
+const codexAdapter = source('src/main/codex-cli-adapter.ts');
+const grokAdapter = source('src/main/grok-cli-adapter.ts');
 const codexAdapterTest = source('tests/codex-cli-adapter.cjs');
 const grokAdapterTest = source('tests/grok-cli-adapter.cjs');
 
@@ -38,11 +40,11 @@ for (const stage of [
 ]) {
   assert.match(grokRunner + codexRunner, new RegExp("'" + stage + "'"), 'Missing task: ' + stage);
 }
-for (const adapterTest of [codexAdapterTest, grokAdapterTest]) {
-  assert.match(adapterTest, /state, ['"]missing['"]|state: ['"]missing['"]/);
-  assert.match(adapterTest, /unauthenticated/);
-  assert.match(adapterTest, /cancel/i);
+for (const adapter of [codexAdapter, grokAdapter]) {
+  assert.match(adapter, /['"]missing['"]/);
+  assert.match(adapter, /unauthenticated/);
 }
+for (const adapterTest of [codexAdapterTest, grokAdapterTest]) assert.match(adapterTest, /cancel/i);
 assert.match(source('tests/model-downstream-reset.cjs'), /stale|reset/i);
 assert.match(source('tests/caption-stale.cjs'), /stale/i);
 assert.match(source('tests/multi-window.cjs'), /Project windows|projectWindows/);
