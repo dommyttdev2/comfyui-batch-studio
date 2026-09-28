@@ -10,6 +10,10 @@ const picker = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'ThumbnailPickerWindow.tsx'),
   'utf8',
 );
+const sharedPicker = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'ImagePickerGrid.tsx'),
+  'utf8',
+);
 const standalone = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'StandaloneToolApp.tsx'),
   'utf8',
@@ -73,7 +77,7 @@ matchCode(thumbnailCache, /timing\.hit = true/, 'cache hits must be distinguishe
 matchCode(picker, /'list_painted'/, 'initial React list rendering must be measured');
 matchCode(picker, /'first_image_painted'/, 'first image paint must be measured');
 matchCode(picker, /'grid_painted'/, 'search and size changes must be measured');
-matchCode(picker, /onLoad=/, 'image decode completion must be measured');
+matchCode(sharedPicker, /onLoad=/, 'image decode completion must be measured');
 matchCode(thumbnailTypes, /logPickerPerf:/, 'typed preload must expose renderer metrics');
 matchCode(thumbnailIpc, /THUMBNAIL_PICKER_PERF/, 'IPC contract must expose renderer metrics');
 matchCode(preload, /logPickerPerf:/, 'preload must forward renderer metrics');
@@ -228,9 +232,9 @@ matchCode(
   'picker window must list final artifact images',
 );
 matchCode(
-  picker,
-  /IntersectionObserver[\s\S]*readPreview\(item\.path\)/,
-  'image picker previews must load lazily',
+  sharedPicker,
+  /IntersectionObserver[\s\S]*readPreview\(item\)/,
+  'image picker previews must load lazily through the shared provider adapter',
 );
 matchCode(
   main,
@@ -258,14 +262,19 @@ matchCode(
   'preload IPC constants must define gallery and picker channels',
 );
 matchCode(
-  picker,
+  sharedPicker,
   /\['large', '大'\][\s\S]*\['medium', '中'\][\s\S]*\['small', '小'\]/,
-  'image picker must expose large medium small display sizes',
+  'shared image picker must expose large medium small display sizes',
+);
+matchCode(
+  sharedPicker,
+  /<VirtualPickerGrid[\s\S]*size=\{session\.size\}/,
+  'shared image picker grid must reflect the selected display size',
 );
 matchCode(
   picker,
-  /<VirtualPickerGrid[\s\S]*size=\{size\}/,
-  'image picker grid must reflect the selected display size',
+  /<ImagePickerGrid[\s\S]*provider=\{provider\}/,
+  'thumbnail picker must delegate rendering and selection state to the shared picker',
 );
 matchCode(
   thumbnailCss,
@@ -293,9 +302,14 @@ matchCode(
   'thumbnail picker window must not show the application menu bar',
 );
 matchCode(
+  sharedPicker,
+  /tentativeRef\.current === item\.path[\s\S]*\.commit\(item\.path\)[\s\S]*\.preview\(item\.path\)/,
+  'shared picker must preview on first click and commit the same image on the second click',
+);
+matchCode(
   picker,
-  /tentativeRef\.current === item\.path[\s\S]*commitPicker\(item\.path\)[\s\S]*previewPicker\(item\.path\)/,
-  'first click must preview while selecting the same image again commits it',
+  /preview: \(path\) => window\.batchStudio\.thumbnail\.previewPicker\(path\)[\s\S]*commit: \(path\) => window\.batchStudio\.thumbnail\.commitPicker\(path\)/,
+  'thumbnail picker provider must bind the shared state machine to thumbnail IPC',
 );
 matchCode(
   main,
