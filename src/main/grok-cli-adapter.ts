@@ -13,7 +13,7 @@ import type {
   AgentTurn,
 } from '../shared/types.js';
 import type { AgentCliAdapter, AgentEventSink } from './agent-cli-adapter.js';
-import { sanitizeAgentDiagnostic } from './agent-cli-diagnostic.js';
+import { sanitizeAgentDiagnostic, sanitizeAgentEvent } from './agent-cli-diagnostic.js';
 import { GrokCliEventParser, GrokCliProtocolError } from './grok-cli-events.js';
 
 export class GrokTurnCancelledError extends Error {
@@ -129,9 +129,6 @@ async function defaultKillProcessTree(child: ChildProcessWithoutNullStreams): Pr
   }
 }
 
-function errorText(error: unknown) {
-  return sanitizeAgentDiagnostic(error);
-}
 
 function parseModels(output: string): AgentModelSettings {
   const defaultModel = output.match(/^Default model:\s*(\S+)/m)?.[1] ?? null;
@@ -371,7 +368,7 @@ export class GrokCliAdapter implements AgentCliAdapter {
         void this.killProcessTree(child);
         return;
       }
-      for (const event of normalized.events) onEvent(event);
+      for (const event of normalized.events) onEvent(sanitizeAgentEvent(event, this.env));
       if (normalized.terminal === 'completed') running.terminal = true;
       if (normalized.terminal === 'cancelled') {
         running.cancelled = true;
