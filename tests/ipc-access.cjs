@@ -105,7 +105,7 @@ execFileSync(
   );
   assert.match(
     mainSource,
-    /validateThumbnailPickerImage[\s\S]*assertFinalArtifactImage\(state\.root,imagePath\)/,
+    /validateThumbnailPickerImage[\s\S]*assertFinalArtifactImage\(state\.root,\s*imagePath\)/,
     'thumbnail picker paths must use the final-artifact realpath scope check',
   );
   assert.equal(
