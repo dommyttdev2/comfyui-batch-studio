@@ -54,7 +54,7 @@ matchCode(
 );
 matchCode(
   resetMenuSource,
-  /event\.key==='Tab'[\s\S]*event\.shiftKey[\s\S]*last\.focus\(\)[\s\S]*first\.focus\(\)/,
+  /event\.key!=='Tab'[\s\S]*event\.shiftKey[\s\S]*last\.focus\(\)[\s\S]*first\.focus\(\)/,
   'reset dialog must trap forward and reverse Tab navigation',
 );
 matchCode(
