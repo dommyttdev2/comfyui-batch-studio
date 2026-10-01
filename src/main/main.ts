@@ -2152,50 +2152,16 @@ function forwardCodexCliEvent(
   context: CodexContext,
   taskStage: GrokTask['stage'],
   threadId: string,
-  turnId: string,
+  _turnId: string,
   event: AgentEvent,
 ) {
   notifyAgentEvent('codex', context, taskStage, event);
-  if (event.type === 'turn.started') {
-    forwardCodexNotification({
-      method: 'turn/started',
-      params: { threadId, turn: { id: turnId, status: 'inProgress' } },
-    });
-    return;
-  }
-  if (event.type === 'message.delta') {
-    forwardCodexNotification({
-      method: 'item/agentMessage/delta',
-      params: { threadId, delta: event.text },
-    });
-    return;
-  }
-  if (event.type === 'turn.completed') {
+  if (
+    event.type === 'turn.completed' ||
+    event.type === 'turn.failed' ||
+    event.type === 'turn.cancelled'
+  )
     codexCliActiveTurnIds.delete(threadId);
-    forwardCodexNotification({
-      method: 'turn/completed',
-      params: { threadId, turn: { id: turnId, status: 'completed' } },
-    });
-    return;
-  }
-  if (event.type === 'turn.failed') {
-    codexCliActiveTurnIds.delete(threadId);
-    forwardCodexNotification({
-      method: 'turn/completed',
-      params: {
-        threadId,
-        turn: { id: turnId, status: 'failed', error: { message: event.error } },
-      },
-    });
-    return;
-  }
-  if (event.type === 'turn.cancelled') {
-    codexCliActiveTurnIds.delete(threadId);
-    forwardCodexNotification({
-      method: 'turn/completed',
-      params: { threadId, turn: { id: turnId, status: 'interrupted' } },
-    });
-  }
 }
 function codexContextFor(state: ProjectWindowState): CodexContext {
   const context = state.codexContext;
