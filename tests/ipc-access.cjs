@@ -4,12 +4,10 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
-const mainSource = [
-  fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8'),
-  fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-registration.ts'), 'utf8'),
-].join('\n');
+const mainSource = readMainProcessSource(repo);
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-ipc-access-'));
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(
