@@ -1151,12 +1151,22 @@ export interface AgentWorkspaceDescriptor {
   fileName: string;
 }
 
+export interface AgentConversationWorkspaceDescriptor {
+  workspaceId: string;
+  directory: string;
+  inputDirectory: string;
+}
+
+export type AgentTaskWorkspaceDescriptor =
+  | AgentWorkspaceDescriptor
+  | AgentConversationWorkspaceDescriptor;
+
 export interface AgentTaskRequest {
   context: AgentContext;
   taskStage: GrokTask['stage'];
   prompt: string;
   extra: string;
-  workspace?: AgentWorkspaceDescriptor;
+  workspace?: AgentTaskWorkspaceDescriptor;
   model?: AgentModelSelection;
 }
 
