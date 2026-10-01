@@ -21,6 +21,13 @@ execFileSync(
 );
 
 const read = (relative) => fs.readFileSync(path.join(repo, relative), 'utf8');
+const ipc = read('src/shared/ipc.ts');
+const preload = read('src/preload/index.cjs');
+const main = read('src/main/main.ts');
+const assistantIpc = read('src/main/ipc-registration/assistant.ts');
+const stages = read('src/renderer/GrokStages.tsx');
+const pane = read('src/renderer/AssistantPane.tsx');
+
 matchCode(
   read('src/main/app-settings.ts'),
   /schemaVersion:\s*8/,
@@ -106,12 +113,6 @@ doesNotMatchCode(
   /IPC\.CODEX_|IPC\.GROK_SET_/,
   'Main process must not retain provider-specific pane IPC aliases',
 );
-const ipc = read('src/shared/ipc.ts');
-const preload = read('src/preload/index.cjs');
-const main = read('src/main/main.ts');
-const assistantIpc = read('src/main/ipc-registration/assistant.ts');
-const stages = read('src/renderer/GrokStages.tsx');
-const pane = read('src/renderer/AssistantPane.tsx');
 matchCode(
   ipc,
   /AGENT_TASK_START:/,
