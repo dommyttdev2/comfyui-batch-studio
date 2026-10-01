@@ -126,7 +126,7 @@ doesNotMatchCode(
 );
 matchCode(
   app,
-  /setGrok\(true\).*?assistant\.setContext\(project\.rootPath,context\).*?grok\.setVisible\(true\)/,
+  /setGrok\(true\).*?assistant\.setContext\(project\.rootPath,context\).*?assistant\.setVisible\(true\)/,
   'Renderer must reserve the shared AssistantPane before waiting for assistant context loading',
 );
 
