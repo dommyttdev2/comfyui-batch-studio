@@ -28,6 +28,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
     path,
     projectWindowForSender,
     r2LookupFor,
+    readProjectMeta,
     reconcilePersistedExecutionRuns,
     remoteExecutor,
     remoteSceneExecutor,
