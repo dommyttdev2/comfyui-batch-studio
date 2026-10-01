@@ -518,14 +518,19 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
     assert.ok(parallelRun.progress.models.every((model) => model.state === 'ready'));
     assert.equal(parallelRun.evidence.filter((e) => e.kind === 'MODEL_VERIFIED').length, 6);
 
-    if (process.platform !== 'win32') {
-      const workerPath = path.join(runtime, 'worker.py'),
-        modelsRoot = path.join(runtime, 'remote-comfy', 'models'),
-        runRoot = path.join(runtime, 'worker-run');
-      fs.mkdirSync(path.join(modelsRoot, 'checkpoints'), { recursive: true });
-      fs.mkdirSync(runRoot, { recursive: true });
-      fs.writeFileSync(workerPath, worker.REMOTE_WORKER_FILE);
-      const pythonTest = String.raw`
+    if (process.platform === 'win32') {
+      console.log('Remote model worker aria2 integration skipped on Windows; covered by Linux CI.');
+      console.log('Remote model staging tests passed.');
+      return;
+    }
+
+    const workerPath = path.join(runtime, 'worker.py'),
+      modelsRoot = path.join(runtime, 'remote-comfy', 'models'),
+      runRoot = path.join(runtime, 'worker-run');
+    fs.mkdirSync(path.join(modelsRoot, 'checkpoints'), { recursive: true });
+    fs.mkdirSync(runRoot, { recursive: true });
+    fs.writeFileSync(workerPath, worker.REMOTE_WORKER_FILE);
+    const pythonTest = String.raw`
 import hashlib,importlib.util,os,sys
 worker_path=sys.argv[1]; model_root=sys.argv[2]
 spec=importlib.util.spec_from_file_location("batch_worker",worker_path); w=importlib.util.module_from_spec(spec); spec.loader.exec_module(w)
@@ -574,14 +579,11 @@ except w.WorkerError as e:
  assert e.code=="MODEL_DOWNLOAD_HTTP_403"
 assert not os.path.exists(target)
 print("worker aria2 staging regression passed")
-  `;
-      const py = spawnSync('python', ['-c', pythonTest, workerPath, modelsRoot], {
-        encoding: 'utf8',
-      });
-      assert.equal(py.status, 0, py.stderr || py.stdout);
-      } else {
-      console.log('Remote model worker aria2 integration skipped on Windows; covered by Linux CI.');
-    }
+`;
+    const py = spawnSync('python', ['-c', pythonTest, workerPath, modelsRoot], {
+      encoding: 'utf8',
+    });
+    assert.equal(py.status, 0, py.stderr || py.stdout);
     console.log('Remote model staging tests passed.');
   } finally {
     fs.rmSync(runtime, { recursive: true, force: true });
