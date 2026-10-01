@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-cli-adapter-'));
@@ -22,7 +23,7 @@ execFileSync(
   { cwd: repo, stdio: 'inherit' },
 );
 
-const main = source('src/main/main.ts') + source('src/main/ipc-registration.ts');
+const main = readMainProcessSource(repo);
 assert.match(main, /BATCH_STUDIO_CODEX_TRANSPORT/);
 assert.match(main, /adapter\.resumeTask\(existingThreadId/);
 assert.match(main, /prepareAgentWorkspace\(app\.getPath\('userData'\), 'codex'/);
