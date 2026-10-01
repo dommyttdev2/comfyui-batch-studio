@@ -173,6 +173,4 @@ export const IPC = {
   // Transitional internal channels retained until the modular main-process cleanup is complete.
   CODEX_CONTEXT_CHANGED: 'codex:context-changed',
   CODEX_EVENT: 'codex:event',
-  AUTO_ARTIFACT_GROK_ARM: 'auto-artifact:grok-arm',
-  GROK_TASK_BUILD: 'grok-task:build',
 } as const;
