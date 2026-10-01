@@ -30,10 +30,7 @@ export interface IpcAccessDecision {
 type IpcChannel = (typeof IPC)[keyof typeof IPC];
 
 const policies = new Map<IpcChannel, IpcAccessPolicy>();
-const policy = (
-  definition: IpcAccessPolicy,
-  ...channels: IpcChannel[]
-) => {
+const policy = (definition: IpcAccessPolicy, ...channels: IpcChannel[]) => {
   for (const channel of channels) {
     if (policies.has(channel)) throw new Error(`Duplicate IPC access policy: ${channel}`);
     policies.set(channel, definition);
@@ -185,10 +182,7 @@ policy(
   IPC.EXECUTION_RESTART_FROM_SCRATCH,
 );
 
-policy(
-  { senders: THUMBNAIL_READERS, rootArg: 0 },
-  IPC.THUMBNAIL_LIST_IMAGES,
-);
+policy({ senders: THUMBNAIL_READERS, rootArg: 0 }, IPC.THUMBNAIL_LIST_IMAGES);
 
 policy(
   { senders: MARKETPLACE_READERS, rootArg: 0 },
@@ -229,10 +223,7 @@ policy(
   IPC.MARKETPLACE_PICKER_COMMIT,
 );
 
-policy(
-  { senders: PICKER_CACHE_WRITERS },
-  IPC.THUMBNAIL_STORE_WEBP_PREVIEW,
-);
+policy({ senders: PICKER_CACHE_WRITERS }, IPC.THUMBNAIL_STORE_WEBP_PREVIEW);
 
 policy(
   { senders: CIVIT_TOOL },
@@ -327,7 +318,7 @@ export function authorizeIpcAccess(
 
   const writeRoot = definition.write
     ? definition.writeRootFromSender
-      ? sender.projectRoot ?? null
+      ? (sender.projectRoot ?? null)
       : requestedRoot
     : null;
   if (definition.write && !writeRoot) {
