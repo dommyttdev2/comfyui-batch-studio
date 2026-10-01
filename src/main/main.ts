@@ -158,6 +158,7 @@ import {
 import {
   readCachedThumbnailImage,
   storeWebpThumbnailPreview,
+  thumbnailCachePruneMetrics,
   type ThumbnailCacheTiming,
 } from './thumbnail-image-cache.js';
 import {
