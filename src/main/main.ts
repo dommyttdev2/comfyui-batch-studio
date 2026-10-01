@@ -2234,7 +2234,6 @@ function createIpcRegistrationDependencies() {
     statusSnapshots,
     stopRunForExit,
     storeWebpThumbnailPreview,
-    thumbnailCachePruneMetrics,
     thumbnailPickerForSender,
     thumbnailPickerWindows,
     validCivitaiUrl,
