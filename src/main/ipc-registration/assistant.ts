@@ -232,6 +232,32 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
     return assistantChooseModel(context.root, context.stage, context.provider, selection);
   });
 
+  handleIpc(IPC.ASSISTANT_SET_VISIBLE, (event, visible: unknown) => {
+    const state = projectWindowForSender(event.sender);
+    state.grokVisible = visible === true;
+    layoutProjectWindow(state);
+    return paneState(state);
+  });
+  handleIpc(IPC.ASSISTANT_SET_RATIO, (event, ratio: unknown) => {
+    if (typeof ratio !== 'number' || !Number.isFinite(ratio)) throw new Error('Invalid ratio');
+    const state = projectWindowForSender(event.sender);
+    state.localRatio = Math.max(0.3, Math.min(0.7, ratio));
+    layoutProjectWindow(state);
+    return paneState(state);
+  });
+  handleIpc(IPC.ASSISTANT_SET_DIVIDER_X, (event, screenX: unknown) => {
+    if (typeof screenX !== 'number' || !Number.isFinite(screenX))
+      throw new Error('Invalid divider position');
+    const state = projectWindowForSender(event.sender);
+    const bounds = state.window.getContentBounds();
+    state.localRatio = Math.max(
+      0.3,
+      Math.min(0.7, (screenX - bounds.x) / Math.max(bounds.width, 1)),
+    );
+    layoutProjectWindow(state);
+    return paneState(state);
+  });
+
   const validateAgentTaskRequest = (
     event: IpcMainInvokeEvent,
     root: unknown,
