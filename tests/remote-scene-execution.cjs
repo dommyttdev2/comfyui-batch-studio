@@ -6,13 +6,6 @@ const path = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
-if (process.platform === 'win32') {
-  console.log(
-    'Remote scene worker integration: POSIX Remote Worker integration skipped on Windows; covered by Linux CI.',
-  );
-  process.exit(0);
-}
-
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-remote-scene-'));
 const compiled = path.join(runtime, 'compiled');

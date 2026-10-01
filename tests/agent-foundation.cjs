@@ -134,14 +134,10 @@ assert.match(source('src/main/agent-cli-adapter.ts'), /export interface AgentCli
   );
 
   fs.unlinkSync(grokWorkspace.outputPath);
-  if (process.platform === 'win32') {
-    fs.symlinkSync(grokWorkspace.inputDirectory, grokWorkspace.outputPath, 'junction');
-  } else {
-    fs.symlinkSync(
-      path.join(grokWorkspace.inputDirectory, '2-models.json'),
-      grokWorkspace.outputPath,
-    );
-  }
+  fs.symlinkSync(
+    path.join(grokWorkspace.inputDirectory, '2-models.json'),
+    grokWorkspace.outputPath,
+  );
   await assert.rejects(readAgentWorkspaceOutput(grokWorkspace), /通常のファイルではない/);
 
   console.log('Common agent session, workspace, event IPC and adapter contracts passed.');

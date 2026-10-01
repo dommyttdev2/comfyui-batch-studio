@@ -8,23 +8,12 @@ const path = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
-if (process.platform === 'win32') {
-  console.log(
-    'Remote artifact worker integration: POSIX Remote Worker integration skipped on Windows; covered by Linux CI.',
-  );
-  process.exit(0);
-}
-
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-remote-artifact-'));
 const compiled = path.join(runtime, 'compiled');
 // Compiled service modules live outside the repository; link its installed
 // runtime dependencies so ESM can resolve the R2 SDK during integration tests.
-fs.symlinkSync(
-  path.join(repo, 'node_modules'),
-  path.join(runtime, 'node_modules'),
-  process.platform === 'win32' ? 'junction' : 'dir',
-);
+fs.symlinkSync(path.join(repo, 'node_modules'), path.join(runtime, 'node_modules'), 'dir');
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(
   process.execPath,

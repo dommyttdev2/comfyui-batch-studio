@@ -30,11 +30,7 @@ execFileSync(
   );
 
   // Race independent stage writes, including callers referring to the same root differently.
-  const aliases = [
-    root,
-    path.join(root, '.'),
-    process.platform === 'win32' ? root.toUpperCase() : path.join(root, 'subdir', '..'),
-  ];
+  const aliases = [root, path.join(root, '.'), path.join(root, 'subdir', '..')];
   await Promise.all(
     Array.from({ length: 60 }, (_, index) =>
       index % 2 === 0

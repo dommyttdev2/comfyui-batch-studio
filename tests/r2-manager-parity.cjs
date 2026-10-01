@@ -11,11 +11,7 @@ const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-r2-parity-'));
 // Compiled test modules live outside the repository. Make dependencies available
 // from that location so the imported R2Manager can resolve the AWS SDK.
-fs.symlinkSync(
-  path.join(repo, 'node_modules'),
-  path.join(runtime, 'node_modules'),
-  process.platform === 'win32' ? 'junction' : 'dir',
-);
+fs.symlinkSync(path.join(repo, 'node_modules'), path.join(runtime, 'node_modules'), 'dir');
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(
   process.execPath,
