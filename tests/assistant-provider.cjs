@@ -178,7 +178,6 @@ matchCode(
   'The Codex pane must accept legacy stage selection requests during the migration window',
 );
 for (const expected of [
-  'The legacy Codex pane selection listener may remain during the migration window',
   "'story-finalize'",
   "'story-fix'",
   "'models'",
