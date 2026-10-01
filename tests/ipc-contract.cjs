@@ -33,7 +33,7 @@ for (const key of Object.keys(expected))
 const keySet = (source, pattern) => new Set([...source.matchAll(pattern)].map((match) => match[1]));
 const invokes = keySet(preload, /ipcRenderer\.invoke\(I\.([A-Z0-9_]+)/g);
 const listens = keySet(preload, /ipcRenderer\.on\(I\.([A-Z0-9_]+)/g);
-const handles = keySet(main, /ipcMain\.handle\(\s*IPC\.([A-Z0-9_]+)/g);
+const handles = keySet(main, /handleIpc\(\s*IPC\.([A-Z0-9_]+)/g);
 const sends = keySet(main, /\.send\(\s*IPC\.([A-Z0-9_]+)/g);
 
 for (const key of invokes) {
