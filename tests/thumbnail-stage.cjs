@@ -232,6 +232,11 @@ matchCode(
   'picker window must list final artifact images',
 );
 matchCode(
+  main,
+  /validateThumbnailPickerImage[\s\S]*assertFinalArtifactImage\(state\.root,imagePath\)/,
+  'picker cache reads must reuse final-artifact realpath authorization',
+);
+matchCode(
   sharedPicker,
   /IntersectionObserver[\s\S]*readPreview\(item\)/,
   'image picker previews must load lazily through the shared provider adapter',
