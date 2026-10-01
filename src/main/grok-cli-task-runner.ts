@@ -156,7 +156,8 @@ export class GrokCliTaskRunner {
       ...(taskWorkspace ? { workspace: taskWorkspace } : {}),
       ...(model ? { model } : {}),
     };
-    const forward = (event: AgentEvent) => this.onEvent({ root, stage: contextStage }, event);
+    const forward = (event: AgentEvent) =>
+      this.onEvent({ root, stage: contextStage, taskStage }, event);
     let turn: AgentTurn | null = null;
     try {
       turn = saved.activeSessionId
