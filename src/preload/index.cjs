@@ -172,7 +172,6 @@ const I = {
   AGENT_TASK_STOP: 'agent:task-stop',
   AGENT_EVENT: 'agent:event',
   AUTO_ARTIFACT_EVENT: 'auto-artifact:event',
-  CODEX_EVENT: 'codex:event',
 };
 // END GENERATED IPC CHANNELS
 contextBridge.exposeInMainWorld('batchStudio', {
