@@ -18,8 +18,8 @@ import type {
 } from '../shared/types.js';
 import type { ThumbnailCacheTiming } from './thumbnail-image-cache.js';
 import type { PickerMetrics } from './thumbnail-picker-perf.js';
+import type { IpcRegistrationDependencies } from './main.js';
 
-export type IpcRegistrationDependencies = Record<string, any>;
 
 export function registerIpc(dependencies: IpcRegistrationDependencies) {
   const {
@@ -41,10 +41,12 @@ export function registerIpc(dependencies: IpcRegistrationDependencies) {
     codexAccount,
     codexArtifactFor,
     codexBusy,
+    codexTaskContexts,
     codexChatState,
     codexChooseModel,
     codexContextFor,
     codexModelSettings,
+    codexReturnFile,
     codexSend,
     codexSendTask,
     codexService,
@@ -101,6 +103,7 @@ export function registerIpc(dependencies: IpcRegistrationDependencies) {
     localExecutor,
     logThumbnailPickerPerformance,
     manualResetFrom,
+    maybeQuitAfterExecution,
     marketplacePickerForSender,
     marketplacePickerWindows,
     messageText,
