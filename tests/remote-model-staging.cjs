@@ -526,61 +526,60 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
       fs.mkdirSync(runRoot, { recursive: true });
       fs.writeFileSync(workerPath, worker.REMOTE_WORKER_FILE);
       const pythonTest = String.raw`
-  import hashlib,importlib.util,os,sys
-  worker_path=sys.argv[1]; model_root=sys.argv[2]
-  spec=importlib.util.spec_from_file_location("batch_worker",worker_path); w=importlib.util.module_from_spec(spec); spec.loader.exec_module(w)
-  payload=b"worker-model-payload"
-  class Result:
-   def __init__(self,code=0,out="",err=""): self.returncode=code; self.stdout=out; self.stderr=err
-  w.shutil.which=lambda name: "/fake/aria2c" if name=="aria2c" else None
-  calls=[]
-  def successful_run(args,cwd=None,env=None,input=None,text=True,capture_output=True):
-   assert args[0]=="aria2c"
-   assert all("X-Amz-Signature" not in a for a in args), "signed URL must not appear in process argv"
-   assert input and "X-Amz-Signature=" in input, "signed URL must be supplied through stdin"
-   assert not any(a.startswith("--out=") for a in args), "aria2 ignores global --out in input-file mode"
-   input_lines=input.splitlines()
-   assert len(input_lines)==2 and input_lines[0]==url, "only the signed URL and one per-URI option are expected"
-   assert input_lines[1].startswith(" out="), "the output file must be specified as a per-URI aria2 option"
-   out_name=input_lines[1].strip().split("=",1)[1]
-   assert out_name==os.path.basename(target)+".part", "aria2 must download to the temporary file"
-   out_dir=next(a for a in args if a.startswith("--dir=")).split("=",1)[1]
-   open(os.path.join(out_dir,out_name),"wb").write(payload)
-   calls.append((args,input))
-   return Result()
-  w.subprocess.run=successful_run
-  target=os.path.join(model_root,"checkpoints","model.safetensors")
-  expected=hashlib.sha256(payload).hexdigest()
-  url="https://example.invalid/model?X-Amz-Signature=SECRET"
-  result=w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"expectedSha256":expected})
-  assert result["valid"] and open(target,"rb").read()==payload and not os.path.exists(target+".part")
-  open(target,"wb").write(b"x"*len(payload))
-  result=w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"forceDownload":True})
-  assert result["valid"] and not result["reused"] and open(target,"rb").read()==payload
-  os.unlink(target)
-  try:
-   w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"expectedSha256":"0"*64})
-   raise AssertionError("hash mismatch must fail")
-  except w.WorkerError as e:
-   assert e.code=="MODEL_SHA256_MISMATCH"
-  assert not os.path.exists(target)
-  def expired_run(args,cwd=None,env=None,input=None,text=True,capture_output=True):
-   return Result(22,"","HTTP status=403")
-  w.subprocess.run=expired_run
-  try:
-   w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload)})
-   raise AssertionError("expired URL must fail")
-  except w.WorkerError as e:
-   assert e.code=="MODEL_DOWNLOAD_HTTP_403"
-  assert not os.path.exists(target)
-  print("worker aria2 staging regression passed")
+import hashlib,importlib.util,os,sys
+worker_path=sys.argv[1]; model_root=sys.argv[2]
+spec=importlib.util.spec_from_file_location("batch_worker",worker_path); w=importlib.util.module_from_spec(spec); spec.loader.exec_module(w)
+payload=b"worker-model-payload"
+class Result:
+ def __init__(self,code=0,out="",err=""): self.returncode=code; self.stdout=out; self.stderr=err
+w.shutil.which=lambda name: "/fake/aria2c" if name=="aria2c" else None
+calls=[]
+def successful_run(args,cwd=None,env=None,input=None,text=True,capture_output=True):
+ assert args[0]=="aria2c"
+ assert all("X-Amz-Signature" not in a for a in args), "signed URL must not appear in process argv"
+ assert input and "X-Amz-Signature=" in input, "signed URL must be supplied through stdin"
+ assert not any(a.startswith("--out=") for a in args), "aria2 ignores global --out in input-file mode"
+ input_lines=input.splitlines()
+ assert len(input_lines)==2 and input_lines[0]==url, "only the signed URL and one per-URI option are expected"
+ assert input_lines[1].startswith(" out="), "the output file must be specified as a per-URI aria2 option"
+ out_name=input_lines[1].strip().split("=",1)[1]
+ assert out_name==os.path.basename(target)+".part", "aria2 must download to the temporary file"
+ out_dir=next(a for a in args if a.startswith("--dir=")).split("=",1)[1]
+ open(os.path.join(out_dir,out_name),"wb").write(payload)
+ calls.append((args,input))
+ return Result()
+w.subprocess.run=successful_run
+target=os.path.join(model_root,"checkpoints","model.safetensors")
+expected=hashlib.sha256(payload).hexdigest()
+url="https://example.invalid/model?X-Amz-Signature=SECRET"
+result=w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"expectedSha256":expected})
+assert result["valid"] and open(target,"rb").read()==payload and not os.path.exists(target+".part")
+open(target,"wb").write(b"x"*len(payload))
+result=w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"forceDownload":True})
+assert result["valid"] and not result["reused"] and open(target,"rb").read()==payload
+os.unlink(target)
+try:
+ w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload),"expectedSha256":"0"*64})
+ raise AssertionError("hash mismatch must fail")
+except w.WorkerError as e:
+ assert e.code=="MODEL_SHA256_MISMATCH"
+assert not os.path.exists(target)
+def expired_run(args,cwd=None,env=None,input=None,text=True,capture_output=True):
+ return Result(22,"","HTTP status=403")
+w.subprocess.run=expired_run
+try:
+ w.download_model(model_root,{"path":"checkpoints/model.safetensors","url":url,"expectedSize":len(payload)})
+ raise AssertionError("expired URL must fail")
+except w.WorkerError as e:
+ assert e.code=="MODEL_DOWNLOAD_HTTP_403"
+assert not os.path.exists(target)
+print("worker aria2 staging regression passed")
   `;
       const py = spawnSync('python', ['-c', pythonTest, workerPath, modelsRoot], {
         encoding: 'utf8',
       });
       assert.equal(py.status, 0, py.stderr || py.stdout);
-  
-    } else {
+      } else {
       console.log('Remote model worker aria2 integration skipped on Windows; covered by Linux CI.');
     }
     console.log('Remote model staging tests passed.');
