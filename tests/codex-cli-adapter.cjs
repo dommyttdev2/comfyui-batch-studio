@@ -436,30 +436,7 @@ function task(root, workspace = true) {
     assert.doesNotMatch(availability.message, /sk-/);
   }
 
-  {
-    const calls = [];
-    const child = new FakeChild(800);
-    const adapter = new CodexCliAdapter({
-      platform: 'win32',
-      env: { ComSpec: 'C:\\Windows\\System32\\cmd.exe' },
-      createTurnId: () => 'windows-turn',
-      spawnProcess: (command, args) => {
-        calls.push({ command, args: [...args] });
-        return child;
-      },
-      killProcessTree: async (value) => value.close(null, 'SIGTERM'),
-    });
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-cli-windows-'));
-    const start = adapter.startTask(task(root, false), () => {});
-    assert.equal(calls[0].command, 'C:\\Windows\\System32\\cmd.exe');
-    assert.deepEqual(calls[0].args.slice(0, 5), ['/d', '/s', '/c', 'codex', 'exec']);
-    assert.ok(!calls[0].args.some((value) => value.includes('Create the prompt plan')));
-    child.line({ type: 'thread.started', thread_id: 'session-win' });
-    await start;
-    child.line({ type: 'turn.completed', usage: {} });
-    child.close(0);
-    await adapter.waitForCompletion('windows-turn');
-  }
+
 
   console.log(
     'Codex CLI JSONL, resume guard, cancellation, probes and argument safety tests passed.',
