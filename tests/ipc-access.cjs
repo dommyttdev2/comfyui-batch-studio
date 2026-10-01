@@ -95,7 +95,7 @@ execFileSync(
 
   assert.match(
     mainSource,
-    /function handleIpc<[\s\S]*authorizeIpcAccess\(channel,sender,args\)[\s\S]*ensureProjectWritable\(decision\.writeRoot\)/,
+    /function handleIpc<[\s\S]*authorizeIpcAccess\(channel,\s*sender,\s*args\)[\s\S]*ensureProjectWritable\(decision\.writeRoot\)/,
     'Main must enforce the common authorization and project write guard before handlers',
   );
   assert.match(
