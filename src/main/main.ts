@@ -2513,7 +2513,8 @@ async function codexSendViaCli(
     }
     if (!observedThreadId) return;
     const activeTurnId = codexCliActiveTurnIds.get(observedThreadId);
-    if (activeTurnId) forwardCodexCliEvent(context, taskStage, observedThreadId, activeTurnId, event);
+    if (activeTurnId)
+      forwardCodexCliEvent(context, taskStage, observedThreadId, activeTurnId, event);
     else notifyAgentEvent('codex', context, taskStage, event);
   };
   const request = {
@@ -2553,7 +2554,8 @@ async function codexSendViaCli(
   if (workspace) await rememberAgentWorkspace(context.root, workspace, threadId, turn.turnId);
 
   ready = true;
-  for (const event of queued.splice(0)) forwardCodexCliEvent(context, taskStage, threadId, turn.turnId, event);
+  for (const event of queued.splice(0))
+    forwardCodexCliEvent(context, taskStage, threadId, turn.turnId, event);
 
   void adapter.waitForCompletion(turn.turnId).catch((error) => {
     if (error instanceof AgentTurnCancelledError) return;

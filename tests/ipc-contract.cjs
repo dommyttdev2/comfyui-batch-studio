@@ -113,7 +113,10 @@ vm.runInNewContext(preload, {
     main.indexOf('handleIpc(IPC.CODEX_SET_CONTEXT'),
   );
   assert.match(commonHandler, /grokCliTaskRunner\.run/);
-  assert.match(commonHandler, /codexSendTask\(request\.state, request\.stage, request\.extra, true\)/);
+  assert.match(
+    commonHandler,
+    /codexSendTask\(request\.state, request\.stage, request\.extra, true\)/,
+  );
   assert.match(commonHandler, /grokCliTaskRunner\.stop/);
   assert.match(commonHandler, /codexStopTurn\(request\.state, true\)/);
   console.log('IPC contract and provider-neutral agent task routing tests passed.');
