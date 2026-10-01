@@ -229,7 +229,9 @@ export function StageResetMenu({
         >
           <div className="modalcard">
             <h2 id={`reset-title-${scope}`}>{copy.title}</h2>
-            <p id={`reset-description-${scope}`}>この工程と、それより後の成果物をリセットします。</p>
+            <p id={`reset-description-${scope}`}>
+              この工程と、それより後の成果物をリセットします。
+            </p>
             <div className="stage-reset-summary">
               <section>
                 <h3>保持されます</h3>
