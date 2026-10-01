@@ -50,6 +50,10 @@ import type {
   VastAiSshEndpoint,
   AgentEvent,
   AgentProvider,
+  AgentModelSelection,
+  AgentModelSettings,
+  AssistantPaneContext,
+  AssistantPaneSnapshot,
 } from '../shared/types.js';
 import {
   createProject,
@@ -125,6 +129,10 @@ import { AssistantProviderStore } from './assistant-provider-state.js';
 import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
 import { CodexCliAdapter, AgentTurnCancelledError } from './codex-cli-adapter.js';
 import { AgentSessionStateStore } from './agent-session-state.js';
+import type { AgentCliAdapter } from './agent-cli-adapter.js';
+import { AgentConversationStore } from './agent-conversation-store.js';
+import { AgentConversationRunner } from './agent-conversation-runner.js';
+import { AgentModelSelectionStore } from './agent-model-selection.js';
 import {
   prepareAgentWorkspace,
   agentWorkspaceOutputInstruction,
@@ -241,6 +249,7 @@ type RendererWindowTool =
   | StandaloneWindowTool
   | 'thumbnail-picker'
   | 'marketplace-picker'
+  | 'assistant-pane'
   | 'codex-pane';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
@@ -313,6 +322,7 @@ type ProjectWindowState = {
   paneProvider: AssistantPaneProvider;
   assistantSelectionGeneration: number;
   codexContext: CodexContext | null;
+  assistantContext: AssistantPaneContext | null;
   grokLoadingView: WebContentsView;
   projectRoot: string | null;
   restoreLastProject: boolean;
@@ -344,6 +354,9 @@ let lastFocusedProjectWindowId: number | null = null,
   grokCliAdapter: GrokCliAdapter | null = null,
   grokCliTaskRunner: GrokCliTaskRunner | null = null,
   agentSessionState: AgentSessionStateStore | null = null,
+  agentConversationStore: AgentConversationStore | null = null,
+  agentConversationRunner: AgentConversationRunner | null = null,
+  agentModelSelections: AgentModelSelectionStore | null = null,
   codexCliActiveTurnIds = new Map<string, string>(),
   codexBusy = new Set<string>(),
   codexTurnStartRequests = new Map<string, Promise<string>>(),
@@ -392,11 +405,9 @@ function layoutProjectWindow(state: ProjectWindowState) {
     grokBounds = { x: lw, y: 0, width: width - lw, height };
   state.localView.setBounds({ x: 0, y: 0, width: lw, height });
   const hidden = { x: width, y: 0, width: 0, height };
-  state.grokView.setBounds(state.paneProvider === 'grok' ? grokBounds : hidden);
-  state.grokLoadingView.setBounds(
-    state.paneProvider === 'grok' && state.grokLoading ? grokBounds : hidden,
-  );
-  state.codexView.setBounds(state.paneProvider === 'codex' ? grokBounds : hidden);
+  state.grokView.setBounds(hidden);
+  state.grokLoadingView.setBounds(hidden);
+  state.codexView.setBounds(grokBounds);
 }
 function ipcSenderContext(contents: WebContents): IpcSenderContext {
   for (const state of projectWindows.values()) {
@@ -508,17 +519,20 @@ async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
   const dev = process.env.VITE_DEV_SERVER_URL;
   if (dev) {
     const url = new URL(dev);
-    if (tool === 'codex-pane') url.searchParams.set('codex-pane', '1');
+    if (tool === 'assistant-pane') url.searchParams.set('assistant-pane', '1');
+    else if (tool === 'codex-pane') url.searchParams.set('codex-pane', '1');
     else if (tool) url.searchParams.set('tool', tool);
     await v.webContents.loadURL(url.toString());
   } else
     await v.webContents.loadFile(
       path.resolve(__dirname, '../../dist-renderer/index.html'),
-      tool === 'codex-pane'
-        ? { query: { 'codex-pane': '1' } }
-        : tool
-          ? { query: { tool } }
-          : undefined,
+      tool === 'assistant-pane'
+        ? { query: { 'assistant-pane': '1' } }
+        : tool === 'codex-pane'
+          ? { query: { 'codex-pane': '1' } }
+          : tool
+            ? { query: { tool } }
+            : undefined,
     );
 }
 function configureGrokContents(contents: WebContents, oauthFlow = false) {
@@ -639,6 +653,7 @@ function createProjectWindow(
       paneProvider: 'grok',
       assistantSelectionGeneration: 0,
       codexContext: null,
+      assistantContext: null,
       grokLoadingView,
       projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
       restoreLastProject: Boolean(options.restoreLastProject),
@@ -723,7 +738,7 @@ function createProjectWindow(
       localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
     });
   void loadRenderer(localView);
-  void loadRenderer(codexView, 'codex-pane');
+  void loadRenderer(codexView, 'assistant-pane');
   void state.grokNavigationQueue
     .navigate(grokView.webContents, GROK_URL)
     .catch((error) => console.warn('Initial Grok navigation failed:', error));
@@ -2020,6 +2035,73 @@ async function setGrokContext(state: ProjectWindowState, root: string, stage: Gr
     }
   }
 }
+function assistantContextFor(state: ProjectWindowState): AssistantPaneContext {
+  if (!state.assistantContext) throw new Error('AI工程が選択されていません。');
+  return state.assistantContext;
+}
+
+function setAssistantContext(
+  state: ProjectWindowState,
+  root: string,
+  stage: GrokContextStage,
+): AssistantPaneContext {
+  const context: AssistantPaneContext = {
+    root: path.resolve(root),
+    stage,
+    provider: state.paneProvider,
+  };
+  state.assistantContext = context;
+  state.codexView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, context);
+  return context;
+}
+
+async function assistantSnapshot(state: ProjectWindowState): Promise<AssistantPaneSnapshot> {
+  const context = state.assistantContext;
+  if (!context)
+    return {
+      context: null,
+      availability: null,
+      capabilities: null,
+      sessionIds: [],
+      activeSessionId: null,
+      messages: [],
+      modelSettings: null,
+      busy: false,
+    };
+  if (!agentSessionState || !agentConversationStore || !agentConversationRunner)
+    throw new Error('共通AI runtimeが初期化されていません。');
+
+  const adapter = assistantAdapter(context.provider);
+  const sessions = await agentSessionState.get(context.root, context.stage, context.provider);
+  const [availability, messages] = await Promise.all([
+    adapter.checkAvailability(),
+    agentConversationStore.messages(
+      context.root,
+      context.stage,
+      context.provider,
+      sessions.activeSessionId,
+    ),
+  ]);
+  let modelSettings: AgentModelSettings | null = null;
+  if (availability.state === 'available' && adapter.capabilities.modelSelection) {
+    try {
+      modelSettings = await assistantModelSettings(context.root, context.stage, context.provider);
+    } catch {
+      modelSettings = null;
+    }
+  }
+  return {
+    context: { ...context },
+    availability,
+    capabilities: { ...adapter.capabilities },
+    sessionIds: sessions.sessionIds,
+    activeSessionId: sessions.activeSessionId,
+    messages,
+    modelSettings,
+    busy: agentConversationRunner.isBusy(context.root, context.stage, context.provider),
+  };
+}
+
 function codexService() {
   if (!codexAppServer || !codexChatState) throw new Error('Codexが初期化されていません。');
   return { server: codexAppServer, store: codexChatState };
@@ -2056,10 +2138,10 @@ function notifyAgentEvent(
       continue;
     state.localView.webContents.send(IPC.AGENT_EVENT, envelope);
     if (
-      provider === 'codex' &&
-      state.codexContext &&
-      projectRootKey(state.codexContext.root) === projectRootKey(context.root) &&
-      state.codexContext.stage === context.stage
+      state.assistantContext &&
+      state.assistantContext.provider === provider &&
+      projectRootKey(state.assistantContext.root) === projectRootKey(context.root) &&
+      state.assistantContext.stage === context.stage
     )
       state.codexView.webContents.send(IPC.AGENT_EVENT, envelope);
   }
@@ -2443,6 +2525,110 @@ async function codexModelSettings(context: CodexContext): Promise<CodexModelSett
       : model.defaultReasoningEffort;
   return { models, selection: { model: model.id, effort } };
 }
+function assistantAdapter(provider: AgentProvider): AgentCliAdapter {
+  const adapter = provider === 'codex' ? codexCliAdapter : grokCliAdapter;
+  if (!adapter) throw new Error(`${provider} CLIが初期化されていません。`);
+  return adapter;
+}
+
+async function assistantModelSettings(
+  root: string,
+  stage: GrokContextStage,
+  provider: AgentProvider,
+): Promise<AgentModelSettings> {
+  if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
+  if (provider === 'codex') {
+    const settings = await codexModelSettings({ root, stage });
+    return {
+      models: settings.models.map((model) => ({
+        id: model.id,
+        displayName: model.displayName,
+        supportedReasoningEfforts: model.supportedReasoningEfforts.map(
+          (effort) => effort.reasoningEffort,
+        ),
+      })),
+      selection: {
+        model: settings.selection.model,
+        reasoningEffort: settings.selection.effort,
+      },
+    };
+  }
+
+  const adapter = assistantAdapter(provider);
+  if (!adapter.getModels) return { models: [], selection: { model: null } };
+  const available = await adapter.getModels();
+  const saved = await agentModelSelections.get(root, stage, provider);
+  const requested = available.models.find((model) => model.id === saved?.model);
+  const fallback =
+    available.models.find((model) => model.id === available.selection.model) ?? available.models[0];
+  const model = requested ?? fallback;
+  const requestedEffort = saved?.reasoningEffort;
+  const supported = model?.supportedReasoningEfforts;
+  const reasoningEffort =
+    requestedEffort && (!supported?.length || supported.includes(requestedEffort))
+      ? requestedEffort
+      : available.selection.reasoningEffort;
+  return {
+    models: available.models,
+    selection: {
+      model: model?.id ?? null,
+      ...(reasoningEffort != null ? { reasoningEffort } : {}),
+    },
+  };
+}
+
+async function assistantChooseModel(
+  root: string,
+  stage: GrokContextStage,
+  provider: AgentProvider,
+  selection: unknown,
+): Promise<AgentModelSelection> {
+  if (
+    !selection ||
+    typeof selection !== 'object' ||
+    !('model' in selection) ||
+    ((selection as AgentModelSelection).model !== null &&
+      typeof (selection as AgentModelSelection).model !== 'string')
+  )
+    throw new Error('AIモデルを選択してください。');
+  const requested = selection as AgentModelSelection;
+  const settings = await assistantModelSettings(root, stage, provider);
+  const model = settings.models.find((item) => item.id === requested.model);
+  if (requested.model && !model) throw new Error('選択したモデルは利用できません。');
+  if (
+    requested.reasoningEffort &&
+    model?.supportedReasoningEfforts?.length &&
+    !model.supportedReasoningEfforts.includes(requested.reasoningEffort)
+  )
+    throw new Error('選択した推論強度はこのモデルで利用できません。');
+
+  const normalized: AgentModelSelection = {
+    model: requested.model,
+    ...(requested.reasoningEffort != null ? { reasoningEffort: requested.reasoningEffort } : {}),
+  };
+  if (provider === 'codex' && normalized.model) {
+    const codexSettings = await codexModelSettings({ root, stage });
+    const codexModel = codexSettings.models.find((item) => item.id === normalized.model);
+    const effort =
+      normalized.reasoningEffort ??
+      codexModel?.defaultReasoningEffort ??
+      codexSettings.selection.effort;
+    if (!codexModel?.supportedReasoningEfforts.some((item) => item.reasoningEffort === effort))
+      throw new Error('選択したCodexモデルと推論強度を利用できません。');
+    if (!codexModelSelections || !agentModelSelections)
+      throw new Error('AIモデル設定が初期化されていません。');
+    const selected = { model: normalized.model, reasoningEffort: effort };
+    await Promise.all([
+      codexModelSelections.remember(root, stage, { model: normalized.model, effort }),
+      agentModelSelections.remember(root, stage, provider, selected),
+    ]);
+    return selected;
+  }
+  if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
+  await agentModelSelections.remember(root, stage, provider, normalized);
+  return normalized;
+}
+
 async function codexChooseModel(
   state: ProjectWindowState,
   selection: unknown,
@@ -3122,6 +3308,12 @@ export function createIpcRegistrationDependencies() {
     abandonExecutionRunForRemoteReplacement,
     app,
     assistantProviderState,
+    agentConversationRunner,
+    agentSessionState,
+    assistantChooseModel,
+    assistantContextFor,
+    assistantModelSettings,
+    assistantSnapshot,
     beginEditArtifact,
     buildGrokTask,
     catalogService,
@@ -3246,6 +3438,7 @@ export function createIpcRegistrationDependencies() {
     savePixivTitle,
     saveProjectBrief,
     saveProjectSettings,
+    setAssistantContext,
     savePromptPlan,
     saveThumbnailState,
     scanProject,
@@ -3380,6 +3573,8 @@ async function initializeApplication() {
   codexModelSelections = new CodexModelSelectionStore(userData);
   assistantProviderState = new AssistantProviderStore(userData);
   agentSessionState = new AgentSessionStateStore(userData);
+  agentConversationStore = new AgentConversationStore(userData);
+  agentModelSelections = new AgentModelSelectionStore(userData);
   codexCliAdapter = new CodexCliAdapter();
   grokCliAdapter = new GrokCliAdapter();
   grokCliTaskRunner = new GrokCliTaskRunner({
@@ -3388,6 +3583,17 @@ async function initializeApplication() {
     sessions: agentSessionState,
     onEvent: (context, event) => notifyAgentEvent('grok', context, context.taskStage, event),
     onArtifact: notifyAutoArtifact,
+    resolveModel: async (root, stage) =>
+      (await assistantModelSettings(root, stage, 'grok')).selection,
+  });
+  agentConversationRunner = new AgentConversationRunner({
+    userDataPath: userData,
+    sessions: agentSessionState,
+    conversations: agentConversationStore,
+    adapter: assistantAdapter,
+    model: async (root, stage, provider) =>
+      (await assistantModelSettings(root, stage, provider)).selection,
+    onEvent: notifyAgentEvent,
   });
   codexAppServer = new CodexAppServer();
   codexAppServer.on('notification', forwardCodexNotification);
@@ -3426,6 +3632,7 @@ if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
 app.on('will-quit', () => {
   void codexCliAdapter?.shutdown().catch(() => {});
   void grokCliTaskRunner?.shutdown().catch(() => {});
+  void agentConversationRunner?.shutdown().catch(() => {});
   codexAppServer?.stop();
 });
 app.on('window-all-closed', () => {

@@ -1197,6 +1197,28 @@ export interface AgentEventEnvelope {
   taskStage: GrokTask['stage'];
   event: AgentEvent;
 }
+
+export interface AgentConversationMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  at: number;
+}
+
+export interface AssistantPaneContext extends AgentContext {
+  provider: AgentProvider;
+}
+
+export interface AssistantPaneSnapshot {
+  context: AssistantPaneContext | null;
+  availability: AgentAvailability | null;
+  capabilities: AgentCapabilities | null;
+  sessionIds: string[];
+  activeSessionId: string | null;
+  messages: AgentConversationMessage[];
+  modelSettings: AgentModelSettings | null;
+  busy: boolean;
+}
 export type AutoArtifactPhase =
   | 'waiting'
   | 'detected'
@@ -1604,8 +1626,18 @@ export interface BatchStudioApi {
       provider: AssistantPaneProvider,
       stage: GrokContextStage,
     ) => Promise<GrokPaneState>;
+    setContext: (root: string, stage: GrokContextStage) => Promise<void>;
+    context: () => Promise<AssistantPaneContext | null>;
+    snapshot: () => Promise<AssistantPaneSnapshot>;
+    send: (text: string) => Promise<AgentTurn>;
+    stopTurn: () => Promise<void>;
+    newConversation: () => Promise<AssistantPaneSnapshot>;
+    restoreConversation: (sessionId: string) => Promise<AssistantPaneSnapshot>;
+    models: () => Promise<AgentModelSettings>;
+    selectModel: (selection: AgentModelSelection) => Promise<AgentModelSelection>;
     startTask: (root: string, stage: GrokTask['stage'], extra?: string) => Promise<void>;
     stopTask: (root: string, stage: GrokTask['stage']) => Promise<void>;
+    onContext: (listener: (context: AssistantPaneContext | null) => void) => () => void;
     onEvent: (listener: (event: AgentEventEnvelope) => void) => () => void;
   };
   codex: {

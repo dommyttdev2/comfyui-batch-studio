@@ -119,15 +119,15 @@ matchCode(
   /state\.grokLoading=true;layoutProjectWindow\(state\)/,
   'Grok context loading must expose the placeholder before awaiting navigation',
 );
-matchCode(
+doesNotMatchCode(
   main,
   /state\.grokLoading\?grokBounds/,
-  'The loading placeholder must occupy the Grok pane while context navigation is pending',
+  'The hidden legacy Grok loading view must not occupy the shared AssistantPane',
 );
 matchCode(
   app,
-  /setGrok\(true\).*?grok\.setContext\(project\.rootPath,context\).*?grok\.setVisible\(true\)/,
-  'Renderer must reserve the Grok pane before waiting for Grok context loading',
+  /setGrok\(true\).*?assistant\.setContext\(project\.rootPath,context\).*?grok\.setVisible\(true\)/,
+  'Renderer must reserve the shared AssistantPane before waiting for assistant context loading',
 );
 
 matchCode(
