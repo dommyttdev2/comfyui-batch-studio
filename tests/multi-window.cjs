@@ -19,7 +19,7 @@ matchCode(
 );
 matchCode(
   ipcAccess,
-  /kind:'unknown'[\s\S]*この操作は現在のWindowから実行できません/,
+  /!definition\.senders\.includes\(sender\.kind\)[\s\S]*この操作は現在のWindowから実行できません/,
   'unregistered WebContents must be denied by the shared access policy',
 );
 matchCode(
