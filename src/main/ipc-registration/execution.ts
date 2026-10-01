@@ -48,6 +48,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
     statusSnapshots,
     stopRunForExit,
   } = dependencies;
+  const validRoot: IpcRegistrationDependencies['validRoot'] = dependencies.validRoot;
 
   handleIpc(IPC.WORKFLOW_COMPILE, async (_e, root: unknown) => {
     validRoot(root);
