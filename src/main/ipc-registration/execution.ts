@@ -5,7 +5,6 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
     IPC,
     VastAiInstanceNotFoundError,
     abandonExecutionRunForRemoteReplacement,
-    app,
     checkAvailability,
     checkLoraFileAvailability,
     compileWorkflow,
@@ -19,7 +18,6 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
     finalizeRemoteInstance,
     getCurrentExecutionRunFast,
     getExecutionRun,
-    getFinalArtifactStatus,
     handleIpc,
     inspectExecutionRunStorage,
     isRemotePreGenerationPhase,
@@ -33,7 +31,6 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
     readProjectMeta,
     reconcilePersistedExecutionRuns,
     remoteExecutor,
-    remoteLifecycle,
     remoteSceneExecutor,
     requestForceInterrupt,
     requestStopScheduling,
@@ -41,7 +38,6 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
     resumeExecutionRun,
     resumeExecutionRunFinalization,
     safeExecutionError,
-    saveProjectSettings,
     settingsStore,
     startExecutionRun,
     startExecutionRuntime,
@@ -489,17 +485,4 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
     await startExecutionRuntime(root, next);
     return next;
   });
-  const selectFinalArtifactDirectory = async (root: string) => {
-    const currentStatus = await getFinalArtifactStatus(root);
-    const meta = await readProjectMeta(root);
-    const fallback = meta?.settings.artifactOutputPath?.trim();
-    const result = await dialog.showOpenDialog({
-      title: '最終成果物ディレクトリを選択',
-      defaultPath: currentStatus.directory || fallback || root,
-      properties: ['openDirectory'],
-    });
-    if (result.canceled || !result.filePaths[0]) return currentStatus;
-    await saveProjectSettings(root, { finalArtifactDirectory: result.filePaths[0] });
-    return getFinalArtifactStatus(root);
-  };
 }
