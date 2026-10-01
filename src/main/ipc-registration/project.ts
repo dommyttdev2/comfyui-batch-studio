@@ -160,7 +160,7 @@ export function registerProjectIpc(dependencies: IpcRegistrationDependencies) {
       throw new Error('Runの停止がキャンセルされました。');
     state.projectRoot = null;
     state.assistantContext = null;
-    state.grokVisible = false;
+    state.assistantVisible = false;
     layoutProjectWindow(state);
     await rememberMostRecentOpenProject();
   });
