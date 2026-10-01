@@ -75,7 +75,7 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
       state.assistantContext.stage === stage
     ) {
       state.assistantContext = { ...state.assistantContext, provider };
-      state.codexView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, state.assistantContext);
+      state.assistantView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, state.assistantContext);
     }
     layoutProjectWindow(state);
     return provider;
@@ -191,7 +191,7 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
 
   handleIpc(IPC.ASSISTANT_SET_VISIBLE, (event, visible: unknown) => {
     const state = projectWindowForSender(event.sender);
-    state.grokVisible = visible === true;
+    state.assistantVisible = visible === true;
     layoutProjectWindow(state);
     return paneState(state);
   });
