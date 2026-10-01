@@ -7,6 +7,10 @@ const repo = path.resolve(__dirname, '..');
 const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
 const app = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
+const projectIpc = fs.readFileSync(
+  path.join(repo, 'src', 'main', 'ipc-registration', 'project.ts'),
+  'utf8',
+);
 
 matchCode(main, /const projectWindows=new Map<number,ProjectWindowState>\(\)/);
 matchCode(main, /function projectWindowForSender\(contents:WebContents\)/);
