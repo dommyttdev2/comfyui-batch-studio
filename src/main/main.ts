@@ -2883,7 +2883,7 @@ async function codexSendTask(
   forceCli = false,
 ): Promise<CodexSendResult> {
   const context = codexContextFor(state);
-  const useCli = forceCli || useCli;
+  const useCli = forceCli || codexCliTransportEnabled();
   if (!codexTaskContexts[context.stage].includes(stage))
     throw new Error('選択した工程に対応しない依頼です。');
   if (stage === 'prompt-plan-patch') {

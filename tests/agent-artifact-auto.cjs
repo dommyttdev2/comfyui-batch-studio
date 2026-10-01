@@ -66,7 +66,8 @@ assert.match(
   source('src/main/grok-auto-artifact-watcher.ts'),
   /MutationObserver|observeGrokArtifact/,
 );
-assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
+assert.match(source('src/renderer/GrokStages.tsx'), /assistant\.startTask/);
+assert.doesNotMatch(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
 
 (async () => {
   const { importAutoArtifact, latestAutoArtifact, expectedArtifact, artifactFileContent } =

@@ -22,7 +22,7 @@ const domains = [
   ],
   ['image.ts', 'registerImageIpc', 'FINAL_ARTIFACT_STATUS', 'MARKETPLACE_PICKER_COMMIT_RESULT', 50],
   ['storage.ts', 'registerStorageIpc', 'R2_SETTINGS', 'CLIPBOARD_WRITE_TEXT', 25],
-  ['assistant.ts', 'registerAssistantIpc', 'ASSISTANT_GET_PROVIDER', 'GROK_OPEN_EXTERNAL', 26],
+  ['assistant.ts', 'registerAssistantIpc', 'ASSISTANT_GET_PROVIDER', 'GROK_OPEN_EXTERNAL', 28],
 ];
 
 assert.deepEqual(
@@ -54,7 +54,7 @@ for (const [file, registerName, firstChannel, lastChannel, expectedCount] of dom
   allHandlers.push(...handlers);
 }
 
-assert.equal(allHandlers.length, 172, 'all invoke handlers must remain registered');
+assert.equal(allHandlers.length, 174, 'all invoke handlers must remain registered');
 assert.equal(
   new Set(allHandlers).size,
   allHandlers.length,

@@ -115,27 +115,73 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
   handleIpc(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider);
   handleIpc(IPC.CODEX_SET_PROVIDER, setAssistantProvider);
 
-  const validateAgentTaskRequest = (event: IpcMainInvokeEvent, root: unknown, stage: unknown, extra?: unknown) => {
+  const validateAgentTaskRequest = (
+    event: IpcMainInvokeEvent,
+    root: unknown,
+    stage: unknown,
+    extra?: unknown,
+  ) => {
     const state = projectWindowForSender(event.sender);
-    if (event.sender.id !== state.localView.webContents.id) throw new Error('Only the project window may control AI tasks.');
+    if (event.sender.id !== state.localView.webContents.id)
+      throw new Error('Only the project window may control AI tasks.');
     validRoot(root);
     const validStages = Object.values(codexTaskContexts).flat();
     if (!validStages.includes(stage as GrokTask['stage'])) throw new Error('Invalid task stage.');
-    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot)) throw new Error('This project is not active in the current window.');
-    if (extra != null && (typeof extra !== 'string' || extra.length > 30_000)) throw new Error('Invalid additional instructions.');
-    return { state, root: path.resolve(root), stage: stage as GrokTask['stage'], contextStage: contextStageForTask(stage as GrokTask['stage']), extra: typeof extra === 'string' ? extra : '' };
+    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
+      throw new Error('This project is not active in the current window.');
+    if (extra != null && (typeof extra !== 'string' || extra.length > 30_000))
+      throw new Error('Invalid additional instructions.');
+    return {
+      state,
+      root: path.resolve(root),
+      stage: stage as GrokTask['stage'],
+      contextStage: contextStageForTask(stage as GrokTask['stage']),
+      extra: typeof extra === 'string' ? extra : '',
+    };
   };
-  handleIpc(IPC.AGENT_TASK_START, async (event, root: unknown, stage: unknown, extra: unknown) => {
-    const request = validateAgentTaskRequest(event, root, stage, extra);
-    if (request.state.paneProvider === 'grok') { if (!grokCliTaskRunner) throw new Error('Grok CLIが初期化されていません。'); await grokCliTaskRunner.run(request.root, request.contextStage, request.stage, request.extra); return; }
-    const previousContext = request.state.codexContext;
-    if (!previousContext || projectRootKey(previousContext.root) !== projectRootKey(request.root) || previousContext.stage !== request.contextStage) { request.state.codexContext = { root: request.root, stage: request.contextStage }; stateCodexActiveThread.set(request.state.window.id, null); request.state.codexView.webContents.send(IPC.CODEX_CONTEXT_CHANGED, request.state.codexContext); }
-    await codexSendTask(request.state, request.stage, request.extra, true);
-  });
+  handleIpc(
+    IPC.AGENT_TASK_START,
+    async (event, root: unknown, stage: unknown, extra: unknown) => {
+      const request = validateAgentTaskRequest(event, root, stage, extra);
+      if (request.state.paneProvider === 'grok') {
+        if (!grokCliTaskRunner) throw new Error('Grok CLIが初期化されていません。');
+        await grokCliTaskRunner.run(
+          request.root,
+          request.contextStage,
+          request.stage,
+          request.extra,
+        );
+        return;
+      }
+      const previousContext = request.state.codexContext;
+      if (
+        !previousContext ||
+        projectRootKey(previousContext.root) !== projectRootKey(request.root) ||
+        previousContext.stage !== request.contextStage
+      ) {
+        request.state.codexContext = { root: request.root, stage: request.contextStage };
+        stateCodexActiveThread.set(request.state.window.id, null);
+        request.state.codexView.webContents.send(
+          IPC.CODEX_CONTEXT_CHANGED,
+          request.state.codexContext,
+        );
+      }
+      await codexSendTask(request.state, request.stage, request.extra, true);
+    },
+  );
   handleIpc(IPC.AGENT_TASK_STOP, async (event, root: unknown, stage: unknown) => {
     const request = validateAgentTaskRequest(event, root, stage);
-    if (request.state.paneProvider === 'grok') { if (!grokCliTaskRunner) throw new Error('Grok CLIが初期化されていません。'); await grokCliTaskRunner.stop(request.root, request.contextStage); return; }
-    if (!request.state.codexContext || projectRootKey(request.state.codexContext.root) !== projectRootKey(request.root) || request.state.codexContext.stage !== request.contextStage) request.state.codexContext = { root: request.root, stage: request.contextStage };
+    if (request.state.paneProvider === 'grok') {
+      if (!grokCliTaskRunner) throw new Error('Grok CLIが初期化されていません。');
+      await grokCliTaskRunner.stop(request.root, request.contextStage);
+      return;
+    }
+    if (
+      !request.state.codexContext ||
+      projectRootKey(request.state.codexContext.root) !== projectRootKey(request.root) ||
+      request.state.codexContext.stage !== request.contextStage
+    )
+      request.state.codexContext = { root: request.root, stage: request.contextStage };
     await codexStopTurn(request.state, true);
   });
 
