@@ -67,7 +67,7 @@ matchCode(
   '起動時に履歴メニューを表示',
 );
 matchCode(
-  main,
+  fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-registration', 'project.ts'), 'utf8'),
   /IPC\.PROJECT_REMOVE_RECENT.*?refreshRecentProjectMenu\(\)/s,
   'ホームの履歴削除をメニューへ反映',
 );
