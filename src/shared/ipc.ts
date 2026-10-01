@@ -170,5 +170,4 @@ export const IPC = {
   AGENT_TASK_STOP: 'agent:task-stop',
   AGENT_EVENT: 'agent:event',
   AUTO_ARTIFACT_EVENT: 'auto-artifact:event',
-  CODEX_EVENT: 'codex:event',
 } as const;
