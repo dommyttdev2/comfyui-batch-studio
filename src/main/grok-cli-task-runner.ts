@@ -32,7 +32,10 @@ export interface GrokCliTaskRunnerOptions {
   userDataPath: string;
   adapter: AgentCliAdapter;
   sessions: AgentSessionStateStore;
-  onEvent: (context: { root: string; stage: GrokContextStage }, event: AgentEvent) => void;
+  onEvent: (
+    context: { root: string; stage: GrokContextStage; taskStage: GrokTask['stage'] },
+    event: AgentEvent,
+  ) => void;
   onArtifact: (event: AutoArtifactEvent) => void;
   buildTask?: TaskBuilder;
   importArtifact?: ArtifactImporter;
