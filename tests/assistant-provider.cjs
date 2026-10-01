@@ -259,8 +259,7 @@ for (const expected of [
     fs.readFileSync(path.join(legacyDirectory, 'assistant-provider-state.json'), 'utf8'),
   );
   assert.equal(migratedOnDisk.schemaVersion, 2);
-  const migratedKey =
-    process.platform === 'win32' ? path.resolve(legacyRoot).toLowerCase() : path.resolve(legacyRoot);
+  const migratedKey = path.resolve(legacyRoot);
   assert.equal(migratedOnDisk.projects[migratedKey].stages.story, 'codex');
   assert.equal(migratedOnDisk.projects[migratedKey].stages.caption, 'grok');
 
