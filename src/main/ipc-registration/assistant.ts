@@ -149,7 +149,10 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
       throw new Error('This project is not active in the current window.');
     setAssistantContext(state, root, stage);
   });
-  handleIpc(IPC.ASSISTANT_CONTEXT, (event) => projectWindowForSender(event.sender).assistantContext);
+  handleIpc(
+    IPC.ASSISTANT_CONTEXT,
+    (event) => projectWindowForSender(event.sender).assistantContext,
+  );
   handleIpc(IPC.ASSISTANT_SNAPSHOT, (event) =>
     assistantSnapshot(projectWindowForSender(event.sender)),
   );
@@ -161,7 +164,12 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
       throw new Error('共通AI conversation runtimeが初期化されていません。');
     if (await assistantTaskBusy(context))
       throw new Error('工程用AIタスクの実行中は通常メッセージを送信できません。');
-    const turn = await agentConversationRunner.send(context.root, context.stage, context.provider, message);
+    const turn = await agentConversationRunner.send(
+      context.root,
+      context.stage,
+      context.provider,
+      message,
+    );
     if (context.provider === 'codex' && codexChatState) {
       await codexChatState.remember(context.root, context.stage, turn.sessionId);
       stateCodexActiveThread.set(state.window.id, turn.sessionId);
@@ -178,7 +186,10 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
     const context = assistantContextFor(state);
     if (!agentSessionState || !agentConversationRunner)
       throw new Error('共通AI session runtimeが初期化されていません。');
-    if (agentConversationRunner.isBusy(context.root, context.stage, context.provider) || (await assistantTaskBusy(context)))
+    if (
+      agentConversationRunner.isBusy(context.root, context.stage, context.provider) ||
+      (await assistantTaskBusy(context))
+    )
       throw new Error('回答生成中は新しい会話へ切り替えられません。');
     await agentSessionState.clearActive(context.root, context.stage, context.provider);
     if (context.provider === 'codex' && codexChatState) {
