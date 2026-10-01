@@ -174,6 +174,9 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
 
   const { R2Manager } = await load('main/r2-manager.js');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'r2-batch-templates-'));
+  const previousLocalAppData = process.env.LOCALAPPDATA;
+  process.env.LOCALAPPDATA = path.join(root, 'isolated-local-app-data');
+  fs.mkdirSync(process.env.LOCALAPPDATA, { recursive: true });
   try {
     const first = new R2Manager({}, root);
     const second = new R2Manager({}, root);
@@ -211,6 +214,8 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
         .templates,
     );
   } finally {
+    if (previousLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+    else process.env.LOCALAPPDATA = previousLocalAppData;
     fs.rmSync(root, { recursive: true, force: true });
   }
 
