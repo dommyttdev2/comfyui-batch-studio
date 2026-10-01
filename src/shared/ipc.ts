@@ -170,7 +170,4 @@ export const IPC = {
   AGENT_TASK_STOP: 'agent:task-stop',
   AGENT_EVENT: 'agent:event',
   AUTO_ARTIFACT_EVENT: 'auto-artifact:event',
-  // Transitional internal channels retained until the modular main-process cleanup is complete.
-  CODEX_CONTEXT_CHANGED: 'codex:context-changed',
-  CODEX_EVENT: 'codex:event',
 } as const;
