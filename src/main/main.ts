@@ -3245,10 +3245,10 @@ export function createIpcRegistrationDependencies() {
     vastClient,
     vastStore,
     writeFile,
-      codexTaskContexts,
+    codexTaskContexts,
     codexReturnFile,
     maybeQuitAfterExecution,
-};
+  };
 }
 
 export type IpcRegistrationDependencies = ReturnType<typeof createIpcRegistrationDependencies>;
