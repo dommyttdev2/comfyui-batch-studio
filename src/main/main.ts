@@ -149,6 +149,7 @@ import {
 import { GrokAutoArtifactWatcher } from './grok-auto-artifact-watcher.js';
 import { GrokCliAdapter } from './grok-cli-adapter.js';
 import { GrokCliTaskRunner } from './grok-cli-task-runner.js';
+import { CodexCliTaskRunner } from './codex-cli-task-runner.js';
 import { CodexModelSelectionStore } from './codex-model-selection.js';
 import { R2ConfigStore } from './r2-config.js';
 import { R2Manager } from './r2-manager.js';
@@ -353,6 +354,7 @@ let lastFocusedProjectWindowId: number | null = null,
   codexCliAdapter: CodexCliAdapter | null = null,
   grokCliAdapter: GrokCliAdapter | null = null,
   grokCliTaskRunner: GrokCliTaskRunner | null = null,
+  codexCliTaskRunner: CodexCliTaskRunner | null = null,
   agentSessionState: AgentSessionStateStore | null = null,
   agentConversationStore: AgentConversationStore | null = null,
   agentConversationRunner: AgentConversationRunner | null = null,
@@ -3470,6 +3472,7 @@ export function createIpcRegistrationDependencies() {
     codexTaskContexts,
     contextStageForTask,
     grokCliTaskRunner,
+    codexCliTaskRunner,
     codexReturnFile,
     maybeQuitAfterExecution,
   };
@@ -3586,6 +3589,15 @@ async function initializeApplication() {
     resolveModel: async (root, stage) =>
       (await assistantModelSettings(root, stage, 'grok')).selection,
   });
+  codexCliTaskRunner = new CodexCliTaskRunner({
+    userDataPath: userData,
+    adapter: codexCliAdapter,
+    sessions: agentSessionState,
+    onEvent: (context, event) => notifyAgentEvent('codex', context, context.taskStage, event),
+    onArtifact: notifyAutoArtifact,
+    resolveModel: async (root, stage) =>
+      (await assistantModelSettings(root, stage, 'codex')).selection,
+  });
   agentConversationRunner = new AgentConversationRunner({
     userDataPath: userData,
     sessions: agentSessionState,
@@ -3632,6 +3644,7 @@ if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
 app.on('will-quit', () => {
   void codexCliAdapter?.shutdown().catch(() => {});
   void grokCliTaskRunner?.shutdown().catch(() => {});
+  void codexCliTaskRunner?.shutdown().catch(() => {});
   void agentConversationRunner?.shutdown().catch(() => {});
   codexAppServer?.stop();
 });
