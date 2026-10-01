@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -12,7 +13,7 @@ const appUi = fs.readFileSync(path.join(repo, 'src/renderer/App.tsx'), 'utf8');
 const grokUi = fs.readFileSync(path.join(repo, 'src/renderer/GrokStages.tsx'), 'utf8');
 const menuUi = fs.readFileSync(path.join(repo, 'src/renderer/StageResetMenu.tsx'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src/preload/index.cjs'), 'utf8');
-const mainSource = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+const mainSource = readMainProcessSource(repo);
 matchCode(
   appUi,
   /stageResetScope\(stage:Stage\)/,
@@ -267,7 +268,6 @@ function archiveEntries(root) {
     false,
     'fallback reason alone must not reset downstream',
   );
-
   const directRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-reset-direct-'));
   downstream(directRoot);
   await resetModelDownstream(directRoot, { clearModelFixHistory: false });

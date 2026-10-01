@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const ui = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8');
@@ -8,6 +9,10 @@ const app = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8
 const stage = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ThumbnailStage.tsx'), 'utf8');
 const picker = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'ThumbnailPickerWindow.tsx'),
+  'utf8',
+);
+const sharedPicker = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'ImagePickerGrid.tsx'),
   'utf8',
 );
 const standalone = fs.readFileSync(
@@ -32,7 +37,7 @@ const finalArtifactImageService = fs.readFileSync(
   path.join(repo, 'src', 'main', 'final-artifact-image-service.ts'),
   'utf8',
 );
-const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
+const main = readMainProcessSource(repo);
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
 const runtimeCopy = fs.readFileSync(path.join(repo, 'scripts', 'copy-runtime.cjs'), 'utf8');
 const pickerPerf = fs.readFileSync(
@@ -73,7 +78,7 @@ matchCode(thumbnailCache, /timing\.hit = true/, 'cache hits must be distinguishe
 matchCode(picker, /'list_painted'/, 'initial React list rendering must be measured');
 matchCode(picker, /'first_image_painted'/, 'first image paint must be measured');
 matchCode(picker, /'grid_painted'/, 'search and size changes must be measured');
-matchCode(picker, /onLoad=/, 'image decode completion must be measured');
+matchCode(sharedPicker, /onLoad=/, 'image decode completion must be measured');
 matchCode(thumbnailTypes, /logPickerPerf:/, 'typed preload must expose renderer metrics');
 matchCode(thumbnailIpc, /THUMBNAIL_PICKER_PERF/, 'IPC contract must expose renderer metrics');
 matchCode(preload, /logPickerPerf:/, 'preload must forward renderer metrics');
@@ -157,6 +162,21 @@ matchCode(
   'cache keys must invalidate replaced source files',
 );
 matchCode(cache, /MAX_CONCURRENT = 2/, 'cache generation must bound concurrent image decodes');
+matchCode(
+  cache,
+  /ThumbnailCachePruner\(LIMIT_BYTES\)[\s\S]*scheduleCachePrune/,
+  'cache capacity cleanup must be delegated to the single-flight idle pruner',
+);
+matchCode(
+  cache,
+  /pending\.has\(file\) \|\| protectedCacheFiles\.has\(file\)/,
+  'pending and actively accessed cache files must be protected from prune',
+);
+matchCode(
+  main,
+  /pruneRequests[\s\S]*pruneRuns[\s\S]*pruneDeleted[\s\S]*pruneLastMs/,
+  'picker performance logs must include path-free prune counters and duration',
+);
 matchCode(cache, /LIMIT_BYTES = 512/, 'disk cache must have a size limit');
 matchCode(memoryCache, /const LIMIT = 128/, 'decoded image cache must have a memory limit');
 matchCode(stage, /readEditorImage\(imagePath\)/, 'editor must load persistent image cache');
@@ -178,7 +198,6 @@ matchCode(
   /THUMBNAIL_SELECT_IMAGE[\s\S]*getFinalArtifactStatus\(root\)[\s\S]*defaultPath:\s*finalArtifact\.exists/,
   'thumbnail image picker must default to the final artifact directory',
 );
-matchCode(service, /InstalledFontCollection/, 'Windows installed font families must be enumerated');
 matchCode(
   stage,
   /thumbnail[\s\S]*\.fonts\(\)[\s\S]*FontFamilyComboBox/,
@@ -228,9 +247,14 @@ matchCode(
   'picker window must list final artifact images',
 );
 matchCode(
-  picker,
-  /IntersectionObserver[\s\S]*readPreview\(item\.path\)/,
-  'image picker previews must load lazily',
+  main,
+  /validateThumbnailPickerImage[\s\S]*assertFinalArtifactImage\(state\.root,\s*imagePath\)/,
+  'picker cache reads must reuse final-artifact realpath authorization',
+);
+matchCode(
+  sharedPicker,
+  /IntersectionObserver[\s\S]*readPreview\(item\)/,
+  'image picker previews must load lazily through the shared provider adapter',
 );
 matchCode(
   main,
@@ -258,14 +282,19 @@ matchCode(
   'preload IPC constants must define gallery and picker channels',
 );
 matchCode(
-  picker,
+  sharedPicker,
   /\['large', '大'\][\s\S]*\['medium', '中'\][\s\S]*\['small', '小'\]/,
-  'image picker must expose large medium small display sizes',
+  'shared image picker must expose large medium small display sizes',
+);
+matchCode(
+  sharedPicker,
+  /<VirtualPickerGrid[\s\S]*size=\{session\.size\}/,
+  'shared image picker grid must reflect the selected display size',
 );
 matchCode(
   picker,
-  /<VirtualPickerGrid[\s\S]*size=\{size\}/,
-  'image picker grid must reflect the selected display size',
+  /<ImagePickerGrid[\s\S]*provider=\{provider\}/,
+  'thumbnail picker must delegate rendering and selection state to the shared picker',
 );
 matchCode(
   thumbnailCss,
@@ -293,9 +322,14 @@ matchCode(
   'thumbnail picker window must not show the application menu bar',
 );
 matchCode(
+  sharedPicker,
+  /tentativeRef\.current === item\.path[\s\S]*\.commit\(item\.path\)[\s\S]*\.preview\(item\.path\)/,
+  'shared picker must preview on first click and commit the same image on the second click',
+);
+matchCode(
   picker,
-  /tentativeRef\.current === item\.path[\s\S]*commitPicker\(item\.path\)[\s\S]*previewPicker\(item\.path\)/,
-  'first click must preview while selecting the same image again commits it',
+  /preview: \(path\) => window\.batchStudio\.thumbnail\.previewPicker\(path\)[\s\S]*commit: \(path\) => window\.batchStudio\.thumbnail\.commitPicker\(path\)/,
+  'thumbnail picker provider must bind the shared state machine to thumbnail IPC',
 );
 matchCode(
   main,

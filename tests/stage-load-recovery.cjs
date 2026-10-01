@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const root = path.resolve(__dirname, '..');
 const source = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -36,8 +37,8 @@ assert.match(app, /<StageErrorBoundary/);
 assert.match(app, /<StageView[\s\S]+?<\/StageErrorBoundary>/);
 assert.match(app, /setStageReloadRevision\(\(revision\) => revision \+ 1\)/);
 assert.match(
-  source('src/main/main.ts'),
-  /ipcMain\.handle\(IPC\.CODEX_GET_PROVIDER/,
+  readMainProcessSource(root),
+  /handleIpc\(IPC\.CODEX_GET_PROVIDER/,
   'The main process must register the provider lookup channel',
 );
 assert.match(

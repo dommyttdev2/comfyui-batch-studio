@@ -5,16 +5,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-r2-parity-'));
 // Compiled test modules live outside the repository. Make dependencies available
 // from that location so the imported R2Manager can resolve the AWS SDK.
-fs.symlinkSync(
-  path.join(repo, 'node_modules'),
-  path.join(runtime, 'node_modules'),
-  process.platform === 'win32' ? 'junction' : 'dir',
-);
+fs.symlinkSync(path.join(repo, 'node_modules'), path.join(runtime, 'node_modules'), 'dir');
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(
   process.execPath,
@@ -88,7 +85,7 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
 
   const managerSource = fs.readFileSync(path.join(repo, 'src/main/r2-manager.ts'), 'utf8');
   const indexSource = fs.readFileSync(path.join(repo, 'src/main/r2-object-index.ts'), 'utf8');
-  const mainSource = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+  const mainSource = readMainProcessSource(repo);
   const preloadSource = fs.readFileSync(path.join(repo, 'src/preload/index.cjs'), 'utf8');
   const rendererSource = fs.readFileSync(
     path.join(repo, 'src/renderer/R2ManagerStage.tsx'),

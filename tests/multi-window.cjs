@@ -2,14 +2,32 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
-const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
+const main = readMainProcessSource(repo);
 const app = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
+const ipcAccess = fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-access.ts'), 'utf8');
 
 matchCode(main, /const projectWindows=new Map<number,ProjectWindowState>\(\)/);
 matchCode(main, /function projectWindowForSender\(contents:WebContents\)/);
+matchCode(main, /function ipcSenderContext\(contents:WebContents\):IpcSenderContext/);
+matchCode(
+  main,
+  /function handleIpc<[\s\S]*authorizeIpcAccess\(channel,sender,args\)[\s\S]*ensureProjectWritable/,
+  'all invoke handlers must pass the shared sender/root/write authorization layer',
+);
+matchCode(
+  ipcAccess,
+  /!definition\.senders\.includes\(sender\.kind\)[\s\S]*この操作は現在のWindowから実行できません/,
+  'unregistered WebContents must be denied by the shared access policy',
+);
+matchCode(
+  ipcAccess,
+  /tool-r2[\s\S]*tool-civit[\s\S]*tool-vastai/,
+  'standalone service windows must have distinct sender classes',
+);
 matchCode(main, /projectWindowForSender\(event\.sender\)/);
 matchCode(main, /function projectWindowForRoot\(/);
 matchCode(main, /createProjectWindow\(\{restoreLastProject:true\}\)/);

@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const uiSource = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8');
@@ -30,7 +31,7 @@ const progressSource = fs.readFileSync(
   path.join(repo, 'src', 'shared', 'execution-progress.ts'),
   'utf8',
 );
-const mainSource = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
+const mainSource = readMainProcessSource(repo);
 matchCode(
   uiSource,
   /実行前チェック','実行'/,
@@ -48,6 +49,36 @@ matchCode(
   'stage reset retry must remain single-flight and explicit',
 );
 matchCode(
+  resetMenuSource,
+  /cancelRef[\s\S]*if\(!confirming\)return[\s\S]*cancelRef\.current\?\.focus/,
+  'reset dialog must move initial focus to the safe cancel action',
+);
+matchCode(
+  resetMenuSource,
+  /event\.key!=='Tab'[\s\S]*event\.shiftKey[\s\S]*last\.focus\(\)[\s\S]*first\.focus\(\)/,
+  'reset dialog must trap forward and reverse Tab navigation',
+);
+matchCode(
+  resetMenuSource,
+  /event\.key==='Escape'[\s\S]*event\.stopPropagation\(\)[\s\S]*if\(!busy\)cancelReset\(\)/,
+  'Escape must cancel only when reset is not busy',
+);
+matchCode(
+  resetMenuSource,
+  /restoreTriggerFocus[\s\S]*triggerRef\.current\?\.focus[\s\S]*await onReset\(scope\)[\s\S]*restoreTriggerFocus\(\)/,
+  'success and cancellation must restore focus to the reset menu trigger',
+);
+matchCode(
+  resetMenuSource,
+  /aria-haspopup="menu"[\s\S]*aria-controls[\s\S]*role="menu"[\s\S]*role="menuitem"/,
+  'reset popover must expose menu semantics and its controlled relationship',
+);
+matchCode(
+  resetMenuSource,
+  /ArrowDown[\s\S]*setMenu\(true\)[\s\S]*stage-reset-popover[\s\S]*Escape[\s\S]*closeMenu/,
+  'reset popover must support keyboard opening and Escape close',
+);
+matchCode(
   appSource,
   /await window\.batchStudio\.artifact\.resetFrom\(project\.rootPath,scope\)[\s\S]*setProject\(next\)[\s\S]*setResetRevision/,
   'reset revision and project view may advance only after the reset succeeds',
@@ -61,6 +92,31 @@ matchCode(
   executionSource,
   /execution\.status\(project\.rootPath\)/,
   'ExecutionStage must restore and poll the persistent current Run',
+);
+matchCode(
+  executionSource,
+  /preflightError[\s\S]*runStatusError[\s\S]*runStorageError/,
+  'Preflight, Run monitor and Run storage failures must use independent state',
+);
+matchCode(
+  executionSource,
+  /setPreflight\(value\)[\s\S]*setPreflightError\(''\)/,
+  'only a successful Preflight refresh may clear the Preflight error',
+);
+matchCode(
+  executionSource,
+  /setCurrent\(value\)[\s\S]*setRunStatusError\(''\)/,
+  'only a successful Run status refresh may clear the Run monitor error',
+);
+matchCode(
+  executionSource,
+  /preflightGeneration[\s\S]*runStatusGeneration[\s\S]*generation !== preflightGeneration\.current[\s\S]*generation !== runStatusGeneration\.current/,
+  'stale Preflight and Run status responses must be ignored independently',
+);
+matchCode(
+  executionSource,
+  /Preflightを再試行[\s\S]*Run監視を再試行/,
+  'Preflight and Run monitor failures must expose separate retry actions',
 );
 matchCode(
   executionSource,

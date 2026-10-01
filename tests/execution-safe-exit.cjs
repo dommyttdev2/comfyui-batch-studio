@@ -1,15 +1,17 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const read = (name) => fs.readFileSync(path.join(repo, name), 'utf8');
-const main = read('src/main/main.ts');
+const main = readMainProcessSource(repo);
 const app = read('src/renderer/App.tsx');
 const execution = read('src/renderer/ExecutionStages.tsx');
 const run = read('src/main/execution-run.ts');
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
+const ipcAccess = read('src/main/ipc-access.ts');
 
 assert.match(main, /window\.on\('close', \(event\) => \{/);
 assert.match(main, /event\.preventDefault\(\);/);
@@ -41,8 +43,8 @@ assert.match(main, /confirmOfflineLocalRunDiscard\(root, run, comfy, error, owne
 
 assert.match(app, /await window\.batchStudio\.execution\.leave\(project\.rootPath\)/);
 const leaveHandler = main.slice(
-  main.indexOf('ipcMain.handle(IPC.EXECUTION_LEAVE'),
-  main.indexOf('ipcMain.handle(IPC.EXECUTION_STOP_FOR_EDIT'),
+  main.indexOf('handleIpc(IPC.EXECUTION_LEAVE'),
+  main.indexOf('handleIpc(IPC.EXECUTION_STOP_FOR_EDIT'),
 );
 assert.ok(leaveHandler.includes('return true;'), 'stage browsing must always be allowed');
 assert.ok(
@@ -55,6 +57,20 @@ assert.ok(app.includes('window.batchStudio.execution.status(project.rootPath)'))
 assert.ok(app.includes('window.setInterval(() => void inspect(), 3000)'));
 assert.ok(app.includes('resetScope && !viewOnly'), 'reset actions must be hidden while running');
 assert.ok(main.includes('async function ensureProjectWritable(root: string)'));
+assert.match(
+  main,
+  /authorizeIpcAccess\(channel, sender, args\)[\s\S]*decision\.writeRoot[\s\S]*ensureProjectWritable\(decision\.writeRoot\)/,
+  'the common IPC wrapper must apply the project write guard',
+);
+const writePolicyStart = ipcAccess.indexOf(
+  'policy(\n  { senders: PROJECT_LOCAL, rootArg: 0, write: true },',
+);
+const writePolicyEnd = ipcAccess.indexOf('\n);', writePolicyStart);
+assert.ok(
+  writePolicyStart >= 0 && writePolicyEnd > writePolicyStart,
+  'project write policy is missing',
+);
+const writePolicy = ipcAccess.slice(writePolicyStart, writePolicyEnd);
 for (const channel of [
   'PROJECT_SAVE_SETTINGS',
   'PROJECT_SAVE_BRIEF',
@@ -71,14 +87,7 @@ for (const channel of [
   'MARKETPLACE_GENERATE_ZIP',
   'MARKETPLACE_EXPORT_CUSTOM',
 ]) {
-  const start = main.indexOf('IPC.' + channel + ',');
-  assert.ok(start >= 0, channel + ' handler is missing');
-  const end = main.indexOf('ipcMain.handle(', start + channel.length);
-  const handler = main.slice(start, end < 0 ? undefined : end);
-  assert.ok(
-    handler.includes('await ensureProjectWritable(root);'),
-    channel + ' must reject writes',
-  );
+  assert.ok(writePolicy.includes('IPC.' + channel), channel + ' must reject writes');
 }
 assert.doesNotMatch(app, /onDiscarded=\{\(\) => \{/);
 assert.match(execution, /現在のRunを破棄/);

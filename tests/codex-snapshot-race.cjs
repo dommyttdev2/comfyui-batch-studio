@@ -1,9 +1,10 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
-const main = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+const main = readMainProcessSource(repo);
 const pane = fs.readFileSync(path.join(repo, 'src/renderer/CodexPane.tsx'), 'utf8');
 
 const snapshot = main.slice(

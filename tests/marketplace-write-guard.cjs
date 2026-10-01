@@ -1,21 +1,22 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
-const main = fs.readFileSync(path.join(__dirname, '../src/main/main.ts'), 'utf8');
+const repo = path.resolve(__dirname, '..');
+const main = readMainProcessSource(repo);
 const start = main.indexOf('IPC.MARKETPLACE_GENERATE_ZIP,');
 const end = main.indexOf('IPC.MARKETPLACE_RENDER_PNG,', start);
 assert.ok(start >= 0 && end > start);
-const begin = main.lastIndexOf('ipcMain.handle(', start);
-const fragment = main.slice(begin, main.lastIndexOf('ipcMain.handle(', end));
+const begin = main.lastIndexOf('handleIpc(', start);
+const fragment = main.slice(begin, main.lastIndexOf('handleIpc(', end));
 const javascript = fragment.replace(/: unknown/g, '');
 const handlers = new Map();
 let status = 'STOPPED';
 const writes = [];
 vm.runInNewContext(javascript, {
   IPC: { MARKETPLACE_GENERATE_ZIP: 'zip', MARKETPLACE_EXPORT_CUSTOM: 'custom' },
-  ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+  handleIpc: (name, handler) => handlers.set(name, handler),
   validRoot: (root) => assert.equal(root, 'project-root'),
   ensureProjectWritable: async () => {
     if (status !== 'STOPPED') throw new Error('Project is read-only');
@@ -49,7 +50,7 @@ vm.runInNewContext(javascript, {
   ]) {
     const at = main.indexOf(`IPC.${read},`);
     assert.ok(at >= 0);
-    const following = main.indexOf('ipcMain.handle(', at + read.length);
+    const following = main.indexOf('handleIpc(', at + read.length);
     assert.doesNotMatch(
       main.slice(at, following < 0 ? undefined : following),
       /ensureProjectWritable/,

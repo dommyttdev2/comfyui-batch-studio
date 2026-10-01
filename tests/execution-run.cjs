@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-execution-run-runtime-'));
@@ -447,7 +448,7 @@ const writeJson = (file, value) => {
   assert.equal(unsafe.current.promptId, 'accepted-unknown');
   assert.equal(unsafe.lifecycle, 'FAILED');
 
-  const mainSource = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+  const mainSource = readMainProcessSource(repo);
   const uiSource = fs.readFileSync(path.join(repo, 'src/renderer/ExecutionStages.tsx'), 'utf8');
   const restartHandlerStart = mainSource.indexOf('IPC.EXECUTION_RESTART_FROM_SCRATCH');
   const restartHandlerEnd = mainSource.indexOf('IPC.CAPTION_STATUS', restartHandlerStart);
@@ -464,6 +465,16 @@ const writeJson = (file, value) => {
     restartHandler.indexOf('await compileWorkflow(root);') <
       restartHandler.indexOf('await startExecutionRun(root, async () => preflight);'),
     'latest prompt_plan workflow compilation must happen before the replacement Run starts',
+  );
+  assert.match(
+    uiSource,
+    /!preflightError[\s\S]*!runStatusError[\s\S]*!runStorageError/,
+    'unknown Preflight or Run status must keep Start/Resume disabled',
+  );
+  assert.match(
+    uiSource,
+    /generation !== preflightGeneration\.current[\s\S]*generation !== runStatusGeneration\.current/,
+    'out-of-order monitor responses must not replace newer UI state',
   );
   assert.equal(uiSource.includes('const readyForNewRun'), true);
   assert.equal(uiSource.includes('canRestartFromScratch'), false);

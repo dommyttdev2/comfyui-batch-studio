@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const repo = path.resolve(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(repo, p), 'utf8');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const appSettings = read('src/main/app-settings.ts');
 const workflowCustomNodes = JSON.parse(read('src/shared/workflow-custom-nodes.json'));
@@ -11,7 +12,7 @@ const artifactService = read('src/main/artifact-service.ts');
 const environmentSettings = read('src/renderer/EnvironmentSettings.tsx');
 const app = read('src/renderer/App.tsx');
 const projectStages = read('src/renderer/ProjectStages.tsx');
-const main = read('src/main/main.ts');
+const main = readMainProcessSource(repo);
 
 matchCode(appSettings, /interface StoredAppSettingsV7/, '環境設定schema v7を持つ');
 matchCode(

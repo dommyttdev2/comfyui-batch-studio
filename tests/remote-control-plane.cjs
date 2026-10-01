@@ -97,7 +97,11 @@ const { pathToFileURL } = require('node:url');
   assert.equal(result.status, 0);
   let lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
   assert.equal(lines.at(-1).result.version, worker.REMOTE_WORKER_VERSION);
-  result = call({ requestId: 'state-1', op: 'write_state', state: { runId: 'abc', completed: 7 } });
+  result = call({
+    requestId: 'state-1',
+    op: 'write_state',
+    state: { runId: 'abc', completed: 7 },
+  });
   lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
   assert.equal(lines[0].type, 'progress');
   assert.equal(lines.at(-1).result.ok, true);
@@ -110,15 +114,11 @@ const { pathToFileURL } = require('node:url');
   assert.match(lines.at(-1).error.code, /PATH_OUTSIDE_ALLOWED_ROOT/);
   const outside = path.join(runtime, 'outside');
   fs.mkdirSync(outside);
-  try {
-    fs.symlinkSync(outside, path.join(runDir, 'link'), 'junction');
-    result = call({ requestId: 'link-1', op: 'resolve_path', path: 'link/file.txt' });
-    assert.notEqual(result.status, 0);
-    lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
-    assert.match(lines.at(-1).error.code, /PATH_OUTSIDE_ALLOWED_ROOT|SYMLINK_ESCAPE_REJECTED/);
-  } catch (e) {
-    if (process.platform !== 'win32') throw e;
-  }
+  fs.symlinkSync(outside, path.join(runDir, 'link'), 'dir');
+  result = call({ requestId: 'link-1', op: 'resolve_path', path: 'link/file.txt' });
+  assert.notEqual(result.status, 0);
+  lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
+  assert.match(lines.at(-1).error.code, /PATH_OUTSIDE_ALLOWED_ROOT|SYMLINK_ESCAPE_REJECTED/);
   const persisted = fs.readFileSync(path.join(runtime, 'ssh', 'known-hosts.json'), 'utf8');
   assert.ok(!persisted.includes('PRIVATE KEY'));
   console.log('remote control plane tests passed');

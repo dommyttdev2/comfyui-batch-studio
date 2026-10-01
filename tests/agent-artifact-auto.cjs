@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-auto-artifact-'));
@@ -19,7 +20,7 @@ execFileSync(
   { cwd: repo, stdio: 'inherit' },
 );
 const source = (name) => fs.readFileSync(path.join(repo, name), 'utf8');
-const main = source('src/main/main.ts');
+const main = readMainProcessSource(repo);
 const pane = source('src/renderer/CodexPane.tsx');
 assert.match(
   main,

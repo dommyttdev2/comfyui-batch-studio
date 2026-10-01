@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-turn-status-'));
@@ -19,7 +20,7 @@ execFileSync(
   { cwd: repo, stdio: 'inherit' },
 );
 const source = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
-const main = source('src/main/main.ts');
+const main = readMainProcessSource(repo);
 const pane = source('src/renderer/CodexPane.tsx');
 const ipc = source('src/shared/ipc.ts');
 const preload = source('src/preload/index.cjs');
@@ -27,7 +28,7 @@ const types = source('src/shared/types.ts');
 assert.match(ipc, /CODEX_STOP_TURN: 'codex:stop-turn'/);
 assert.match(preload, /stopTurn: \(\) => ipcRenderer\.invoke\(I\.CODEX_STOP_TURN\)/);
 assert.match(types, /stopTurn: \(\) => Promise<CodexSnapshot>/);
-assert.match(main, /ipcMain\.handle\(IPC\.CODEX_STOP_TURN/);
+assert.match(main, /handleIpc\(IPC\.CODEX_STOP_TURN/);
 assert.match(main, /server\.request\('turn\/interrupt', \{ threadId, turnId \}\)/);
 assert.match(main, /codexTurnStartRequests\.set\(threadId, turnIdRequest\)/);
 assert.match(main, /codexActiveTurnIds\.get\(threadId\)/);

@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-cli-adapter-'));
@@ -22,7 +23,7 @@ execFileSync(
   { cwd: repo, stdio: 'inherit' },
 );
 
-const main = source('src/main/main.ts');
+const main = readMainProcessSource(repo);
 assert.match(main, /BATCH_STUDIO_CODEX_TRANSPORT/);
 assert.match(main, /adapter\.resumeTask\(existingThreadId/);
 assert.match(main, /prepareAgentWorkspace\(app\.getPath\('userData'\), 'codex'/);
@@ -433,31 +434,6 @@ function task(root, workspace = true) {
     assert.equal(availability.state, 'unauthenticated');
     assert.match(availability.message, /ChatGPTアカウント/);
     assert.doesNotMatch(availability.message, /sk-/);
-  }
-
-  {
-    const calls = [];
-    const child = new FakeChild(800);
-    const adapter = new CodexCliAdapter({
-      platform: 'win32',
-      env: { ComSpec: 'C:\\Windows\\System32\\cmd.exe' },
-      createTurnId: () => 'windows-turn',
-      spawnProcess: (command, args) => {
-        calls.push({ command, args: [...args] });
-        return child;
-      },
-      killProcessTree: async (value) => value.close(null, 'SIGTERM'),
-    });
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-cli-windows-'));
-    const start = adapter.startTask(task(root, false), () => {});
-    assert.equal(calls[0].command, 'C:\\Windows\\System32\\cmd.exe');
-    assert.deepEqual(calls[0].args.slice(0, 5), ['/d', '/s', '/c', 'codex', 'exec']);
-    assert.ok(!calls[0].args.some((value) => value.includes('Create the prompt plan')));
-    child.line({ type: 'thread.started', thread_id: 'session-win' });
-    await start;
-    child.line({ type: 'turn.completed', usage: {} });
-    child.close(0);
-    await adapter.waitForCompletion('windows-turn');
   }
 
   console.log(

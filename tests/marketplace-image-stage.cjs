@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const ui = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8');
@@ -17,6 +18,10 @@ assert.equal(
 );
 const picker = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'MarketplaceImagePickerWindow.tsx'),
+  'utf8',
+);
+const sharedPicker = fs.readFileSync(
+  path.join(repo, 'src', 'renderer', 'ImagePickerGrid.tsx'),
   'utf8',
 );
 const service = fs.readFileSync(
@@ -37,7 +42,7 @@ const imageService = fs.readFileSync(
   path.join(repo, 'src', 'main', 'final-artifact-image-service.ts'),
   'utf8',
 );
-const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
+const main = readMainProcessSource(repo);
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
 const runtimeCopy = fs.readFileSync(path.join(repo, 'scripts', 'copy-runtime.cjs'), 'utf8');
 const targets = JSON.parse(
@@ -162,8 +167,8 @@ matchCode(
 );
 matchCode(
   picker,
-  /marketplace\.readSourcePreview\(root, item\.path, sourceType\)/,
-  'preview must validate its source type',
+  /marketplace\.readSourcePreview\(context\.root, item\.path, context\.sourceType\)/,
+  'marketplace provider must validate the selected source type',
 );
 matchCode(picker, /marketplace\.previewPicker/, 'first picker click must preview the image');
 matchCode(picker, /marketplace[\s\S]*commitPicker/, 'second picker click must commit the image');
@@ -256,9 +261,14 @@ matchCode(
   'gallery cache key must invalidate replacement images',
 );
 matchCode(
+  sharedPicker,
+  /data:image\/webp;[\s\S]*persistWebpPreview\?\.\(item\.path, dataUrl\)/,
+  'shared picker must convert WebP fallback previews lazily',
+);
+matchCode(
   picker,
-  /data:image\/webp;base64,[\s\S]*storeWebpPreview\(item\.path, dataUrl\)/,
-  'WebP fallback must persist a resized preview for subsequent pickers',
+  /persistWebpPreview:[\s\S]*storeWebpPreview\(path, dataUrl\)/,
+  'marketplace provider must persist resized WebP previews for subsequent pickers',
 );
 matchCode(
   main,
@@ -267,9 +277,14 @@ matchCode(
 );
 
 matchCode(
+  sharedPicker,
+  /<VirtualPickerGrid[\s\S]*items=\{session\.filteredItems\}[\s\S]*renderItem=/,
+  'both pickers must render virtual rows through the shared grid',
+);
+matchCode(
   picker,
-  /<VirtualPickerGrid[\s\S]*items=\{filteredItems\}[\s\S]*renderItem=/,
-  'marketplace picker must render only virtual rows while preserving selection callbacks',
+  /<ImagePickerGrid[\s\S]*provider=\{provider\}/,
+  'marketplace picker must delegate rendering and selection state to the shared picker',
 );
 
 matchCode(

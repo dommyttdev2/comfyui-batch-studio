@@ -3,11 +3,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const shared = fs.readFileSync(path.join(repo, 'src/shared/ipc.ts'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src/preload/index.cjs'), 'utf8');
-const main = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+const main = readMainProcessSource(repo);
 function constants(source, marker) {
   const start = source.indexOf(marker);
   assert.notEqual(start, -1, `Missing ${marker}`);
@@ -17,6 +18,11 @@ function constants(source, marker) {
 }
 const expected = constants(shared, 'export const IPC =');
 const actual = constants(preload, 'const I =');
+assert.match(
+  preload,
+  /BEGIN GENERATED IPC CHANNELS - edit src\/shared\/ipc\.ts instead/,
+  'Preload IPC constants must be generated from the shared contract',
+);
 assert.deepEqual(
   Object.keys(actual).sort(),
   Object.keys(expected).sort(),
@@ -24,6 +30,33 @@ assert.deepEqual(
 );
 for (const key of Object.keys(expected))
   assert.equal(actual[key], expected[key], `IPC channel mismatch: ${key}`);
+
+const keySet = (source, pattern) => new Set([...source.matchAll(pattern)].map((match) => match[1]));
+const invokes = keySet(preload, /ipcRenderer\.invoke\(I\.([A-Z0-9_]+)/g);
+const listens = keySet(preload, /ipcRenderer\.on\(I\.([A-Z0-9_]+)/g);
+const handles = keySet(main, /handleIpc\(\s*IPC\.([A-Z0-9_]+)/g);
+const sends = keySet(main, /\.send\(\s*IPC\.([A-Z0-9_]+)/g);
+
+for (const key of invokes) {
+  assert.ok(expected[key], `Unknown invoked IPC key: ${key}`);
+  assert.ok(handles.has(key), `Renderer invoke lacks Main handler: ${key}`);
+  assert.equal(listens.has(key), false, `IPC direction is ambiguous (invoke + event): ${key}`);
+}
+for (const key of listens) {
+  assert.ok(expected[key], `Unknown listened IPC key: ${key}`);
+  assert.ok(sends.has(key), `Renderer event listener lacks Main sender: ${key}`);
+  assert.equal(
+    handles.has(key),
+    false,
+    `Event-only IPC must not be registered as an invoke handler: ${key}`,
+  );
+}
+for (const key of handles) assert.ok(expected[key], `Main handler uses unknown IPC key: ${key}`);
+for (const key of sends) assert.ok(expected[key], `Main sender uses unknown IPC key: ${key}`);
+
+const used = new Set([...invokes, ...listens, ...handles, ...sends]);
+for (const key of Object.keys(expected))
+  assert.ok(used.has(key), `IPC contract key is not used by Main or Preload: ${key}`);
 
 const events = new EventEmitter();
 const calls = [];
@@ -57,15 +90,17 @@ vm.runInNewContext(preload, {
   events.emit(expected.CODEX_STAGE_TASK_SELECTED, {}, 'caption');
   assert.deepEqual(selected, ['execution']);
   const handler = main.slice(
-    main.indexOf('ipcMain.handle(IPC.CODEX_SELECT_STAGE_TASK'),
-    main.indexOf('ipcMain.handle(IPC.CODEX_STATUS'),
+    main.indexOf('handleIpc(IPC.CODEX_SELECT_STAGE_TASK'),
+    main.indexOf('handleIpc(IPC.CODEX_STATUS'),
   );
   assert.match(handler, /event\.sender\.id !== state\.localView\.webContents\.id/);
   assert.match(
     handler,
     /state\.codexView\.webContents\.send\(IPC\.CODEX_STAGE_TASK_SELECTED, stage\)/,
   );
-  console.log('IPC contract and Codex stage task routing tests passed.');
+  console.log(
+    `IPC contract passed: ${invokes.size} invoke channels, ${listens.size} event channels; Codex routing passed.`,
+  );
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;
