@@ -1,8 +1,5 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import type {
-  GrokContextStage,
-  GrokTask,
-} from '../../shared/types.js';
+import type { GrokContextStage, GrokTask } from '../../shared/types.js';
 import type { IpcRegistrationDependencies } from '../ipc-registration.js';
 
 export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) {
@@ -144,7 +141,7 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
       throw new Error('選択した依頼は現在の工程に対応していません。');
     state.codexView.webContents.send(IPC.CODEX_STAGE_TASK_SELECTED, stage);
   });
-  
+
   handleIpc(IPC.CODEX_STATUS, () => codexAccount());
   handleIpc(IPC.CODEX_SIGN_IN, async () => {
     const { server } = codexService();
