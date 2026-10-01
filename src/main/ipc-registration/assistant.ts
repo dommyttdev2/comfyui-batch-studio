@@ -24,6 +24,7 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
     codexContextFor,
     codexModelSettings,
     codexReturnFile,
+    codexCliTaskRunner,
     codexSend,
     codexSendTask,
     codexService,
@@ -297,20 +298,13 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
       await grokCliTaskRunner.run(request.root, request.contextStage, request.stage, request.extra);
       return;
     }
-    const previousContext = request.state.codexContext;
-    if (
-      !previousContext ||
-      projectRootKey(previousContext.root) !== projectRootKey(request.root) ||
-      previousContext.stage !== request.contextStage
-    ) {
-      request.state.codexContext = { root: request.root, stage: request.contextStage };
-      stateCodexActiveThread.set(request.state.window.id, null);
-      request.state.codexView.webContents.send(
-        IPC.CODEX_CONTEXT_CHANGED,
-        request.state.codexContext,
-      );
-    }
-    await codexSendTask(request.state, request.stage, request.extra, true);
+    if (!codexCliTaskRunner) throw new Error('Codex CLIが初期化されていません。');
+    await codexCliTaskRunner.run(
+      request.root,
+      request.contextStage,
+      request.stage,
+      request.extra,
+    );
   });
   handleIpc(IPC.AGENT_TASK_STOP, async (event, root: unknown, stage: unknown) => {
     const request = validateAgentTaskRequest(event, root, stage);
@@ -319,12 +313,7 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
       await grokCliTaskRunner.stop(request.root, request.contextStage);
       return;
     }
-    if (
-      !request.state.codexContext ||
-      projectRootKey(request.state.codexContext.root) !== projectRootKey(request.root) ||
-      request.state.codexContext.stage !== request.contextStage
-    )
-      request.state.codexContext = { root: request.root, stage: request.contextStage };
-    await codexStopTurn(request.state, true);
+    if (!codexCliTaskRunner) throw new Error('Codex CLIが初期化されていません。');
+    await codexCliTaskRunner.stop(request.root, request.contextStage);
   });
 }
