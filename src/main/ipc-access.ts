@@ -38,6 +38,7 @@ const policy = (definition: IpcAccessPolicy, ...channels: IpcChannel[]) => {
 };
 
 const PROJECT_LOCAL = ['project-local'] as const;
+const PROJECT_AND_CODEX = ['project-local', 'project-codex'] as const;
 const R2_TOOL = ['project-local', 'tool-r2'] as const;
 const CIVIT_TOOL = ['project-local', 'tool-civit'] as const;
 const VAST_TOOL = ['project-local', 'tool-vastai'] as const;
