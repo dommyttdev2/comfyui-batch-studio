@@ -3644,9 +3644,7 @@ if (hasSingleInstanceLock) void app.whenReady().then(initializeApplication);
 app.on('will-quit', () => {
   void codexCliAdapter?.shutdown().catch(() => {});
   void grokCliTaskRunner?.shutdown().catch(() => {});
-  void codexCliTaskRunner?.shutdown().catch(() => {});
   void agentConversationRunner?.shutdown().catch(() => {});
-  codexAppServer?.stop();
 });
 app.on('window-all-closed', () => {
   if (!executionCoordinator.hasActiveRuns() && process.platform !== 'darwin') app.quit();
