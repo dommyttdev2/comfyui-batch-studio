@@ -22,7 +22,7 @@ const domains = [
   ],
   ['image.ts', 'registerImageIpc', 'FINAL_ARTIFACT_STATUS', 'MARKETPLACE_PICKER_COMMIT_RESULT', 50],
   ['storage.ts', 'registerStorageIpc', 'R2_SETTINGS', 'CLIPBOARD_WRITE_TEXT', 25],
-  ['assistant.ts', 'registerAssistantIpc', 'ASSISTANT_GET_PROVIDER', 'GROK_OPEN_EXTERNAL', 28],
+  ['assistant.ts', 'registerAssistantIpc', 'ASSISTANT_GET_PROVIDER', 'GROK_OPEN_EXTERNAL', 37],
 ];
 
 assert.deepEqual(
