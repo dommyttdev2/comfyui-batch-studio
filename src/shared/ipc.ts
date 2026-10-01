@@ -25,7 +25,6 @@ export const IPC = {
   ARTIFACT_GROK_LORA_HISTORY: 'artifact:grok-lora-history',
   ARTIFACT_RESET_FROM: 'artifact:reset-from',
   PROMPT_PLAN_SAVE: 'prompt-plan:save',
-  GROK_TASK_BUILD: 'grok-task:build',
   FILE_SHOW_IN_FOLDER: 'file:show-in-folder',
   CATALOG_STATUS: 'catalog:status',
   CATALOG_INTEGRATED_STATUS: 'catalog:integrated-status',
@@ -170,9 +169,5 @@ export const IPC = {
   AGENT_TASK_START: 'agent:task-start',
   AGENT_TASK_STOP: 'agent:task-stop',
   AGENT_EVENT: 'agent:event',
-  CODEX_CONTEXT: 'codex:context',
-  CODEX_CONTEXT_CHANGED: 'codex:context-changed',
-  CODEX_EVENT: 'codex:event',
-  AUTO_ARTIFACT_GROK_ARM: 'auto-artifact:grok-arm',
   AUTO_ARTIFACT_EVENT: 'auto-artifact:event',
 } as const;
