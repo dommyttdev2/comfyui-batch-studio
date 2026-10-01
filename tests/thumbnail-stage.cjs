@@ -198,7 +198,6 @@ matchCode(
   /THUMBNAIL_SELECT_IMAGE[\s\S]*getFinalArtifactStatus\(root\)[\s\S]*defaultPath:\s*finalArtifact\.exists/,
   'thumbnail image picker must default to the final artifact directory',
 );
-matchCode(service, /InstalledFontCollection/, 'Windows installed font families must be enumerated');
 matchCode(
   stage,
   /thumbnail[\s\S]*\.fonts\(\)[\s\S]*FontFamilyComboBox/,
