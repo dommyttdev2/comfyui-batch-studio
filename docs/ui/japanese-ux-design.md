@@ -4,7 +4,7 @@ Status: Draft
 
 ## 1. 目的
 
-ComfyUI Batch Studio を日本語 UI として実装する際に、ユーザーが各工程で達成できなければならないこと、表示すべき情報、操作上の制約、Grok Web との手動連携要件を定義する。
+ComfyUI Batch Studio を日本語 UI として実装する際に、ユーザーが各工程で達成できなければならないこと、表示すべき情報、操作上の制約、AI agentとの共通CLI連携要件を定義する。
 
 本書は **画面レイアウトやコンポーネント構成を固定する設計書ではない**。
 
@@ -44,8 +44,8 @@ docs/contracts/prompt-plan.md
 
 ただし、次は変更してはならない。
 
-- Grok と Batch Studio の責務境界。
-- Grok Web の手動操作原則。
+- AI agent と Batch Studio の責務境界。
+- Grok CLI / Codex CLIを共通Agent Runtimeから利用する原則。
 - Artifact の Draft / Validate / Confirm lifecycle。
 - `models.json` / `prompt_plan.json` 等の正式 schema。
 - Workflow Compiler の責務。
@@ -76,36 +76,36 @@ UI 都合だけで domain schema や責務境界を変更しない。
 結果を確認・修正・確定できるか
 ```
 
-### 3.2 Grok 連携は工程ごとに最適化する
+### 3.2 AI agent連携は左右の責務を統一する
 
-Story / Models / Prompt Plan はすべてユーザーが Grok Web へ手動で入力し、回答を手動で Batch Studio へ戻す。
-
-ただし目的が異なるため、同じ UI をそのまま使い回すことを要件としない。
+Story / Models / Prompt Plan / Captionでは、右側の共通AssistantPaneからGrok CLI / Codex CLIの通常会話を利用する。
 
 必要な共通 capability:
 
-- Grok へ渡す依頼内容を Batch Studio が生成できる。
-- 必要な添付ファイルをユーザーが把握できる。
-- 依頼内容を Clipboard へコピーできる。
-- 添付対象の場所を開ける。
-- Grok の回答全体を Batch Studio へ貼り付けられる。
-- 必要な Markdown / JSON code block 等を回答から抽出できる。
-- 工程固有 validation を行える。
-- valid / invalid にかかわらず貼り付けた原文を失わない。
-- 取り込み結果を Draft として扱える。
-- ユーザーが確認した後だけ Confirm できる。
+- Project × stage単位でproviderを選択・復元できる。
+- provider capabilityに応じてmodel / reasoning strengthを選択できる。
+- 通常会話のsession履歴、新しい会話、resume、streaming、stopを同じUIで扱える。
+- provider固有eventを共通activity / tool / file statusとして表示できる。
+- raw reasoning本文を表示しない。
+- 工程成果物の生成・修正・再実行は左側工程UIから開始できる。
+- CLI workspaceへ渡す参照入力と、返却された成果物Draftをユーザーが確認できる。
+- 工程固有validationを行える。
+- invalidな成果物でもraw responseを失わない。
+- ユーザーが確認した後だけConfirmできる。
 
-### 3.3 Grok Web はユーザー操作
+### 3.3 CLI transportはBatch Studioが仲介する
 
-Batch Studio は次を行わない。
+Batch StudioはMain Processから各provider CLIを起動し、session / streaming / stop / workspaceを管理する。
 
-- Grok への自動送信。
-- Grok DOM 操作。
-- 自動ファイル添付。
-- Grok 回答 scraping。
-- ログイン自動化。
+Batch Studioは次を現行フローで使用しない。
 
-Batch Studio は「渡すものを準備する」「返ってきたものを取り込む」部分を支援する。
+- Grok Webの埋め込みやDOM操作。
+- Clipboardを前提とする手動prompt transport。
+- Grok回答scraping。
+- provider CookieのProject保存。
+- Codex App Server。
+
+provider認証そのものは各CLI側で行う。
 
 ### 3.4 Prompt Plan は ComfyUI に近い擬似 Workflow Tree で理解できること
 
@@ -258,20 +258,19 @@ Navigation の具体的な表示方法は実装エージェントに任せる。
 
 ---
 
-## 6. Grok Web 表示要件
+## 6. AssistantPane 表示要件
 
-Story / Models / Prompt Plan は Grok Web と往復する工程であるため、ユーザーが Batch Studio と Grok Web を効率よく行き来できること。
+Story / Models / Prompt Plan / CaptionはAI agentとの会話を伴うため、Local UIとAssistantPaneを同時に確認できること。
 
-Workflow / Model Availability / Preflight は Grok を必要としない。
+Workflow / Model Availability / Preflight / Execution等、AI agentを必要としない工程ではLocal UIを全幅で使用する。
 
-Grok pane の初期表示、サイズ、配置、show/hide の具体的な UX は実装エージェントに任せる。
+AssistantPaneの初期表示、サイズ、配置、show/hideの具体的なUXは実装エージェントに任せる。ただし次を満たすこと。
 
-ただし次を満たすこと。
-
-- Grok Web を必要なときに表示できる。
-- Local UI の作業領域を十分確保できる。
-- Grok Web を非表示にしても session を不必要に破棄しない。
-- 表示切替が Grok DOM の自動操作にならない。
+- 必要な工程でAssistantPaneを表示できる。
+- Local UIの作業領域を十分確保できる。
+- Paneを非表示にしても保存済みsession/historyを不必要に破棄しない。
+- Grok / Codexを切り替えても通常会話の操作体系を変えない。
+- 工程成果物task controlを右Paneへ重複配置しない。
 
 ---
 
@@ -281,8 +280,8 @@ Grok pane の初期表示、サイズ、配置、show/hide の具体的な UX �
 
 表示内容の例:
 
-- Grok でストーリーを検討する必要がある。
-- 基盤モデルをユーザーが選択し、Grok のLoRA選定結果を取り込む必要がある。
+- 選択中のAI agentでストーリーを検討する必要がある。
+- 基盤モデルをユーザーが選択し、AI agentのLoRA選定結果を取り込む必要がある。
 - モデルが不足しているため catalog 更新が必要。
 - Prompt Plan の下書き確認が必要。
 - Workflow の再生成が必要。

@@ -2,7 +2,7 @@
 
 ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェクトについて、**企画・モデル選定・Workflow 生成から Local / Remote 実行、成果物回収、最終成果物の指定、キャプション・サムネイル・販売サイト用画像の作成まで**を一つの Electron デスクトップアプリで管理するためのツールです。
 
-意味的・創作的な判断は Grok、状態管理・検証・機械変換・保存は Batch Studio、最終決定はユーザー、という責務分担を採用しています。
+意味的・創作的な判断は選択中の AI agent（Grok CLI / Codex CLI）、状態管理・検証・機械変換・保存は Batch Studio、最終決定はユーザー、という責務分担を採用しています。
 
 > [!IMPORTANT]
 > Local / Remote Execution、進捗監視・停止・再開、Remote Worker、R2 経由の成果物回収、後工程はコード上実装されています。`実行前チェック` の `READY` は入力・配置など開始前条件の判定で、ComfyUI / SSH / Vast.ai / R2 の稼働状況や全工程の成功を保証しません。公開環境での一連の実機 E2E 成功を、この README は保証しません。実行と復旧の既知の課題は [Open Issues](https://github.com/dommyttdev2/comfyui-batch-studio/issues) を確認してください。
@@ -10,9 +10,9 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 ## 主な機能
 
 - Project Brief からのプロジェクト作成
-- Grok Web をアプリ内に表示した Story 作成支援
+- 共通 AssistantPane から Grok CLI / Codex CLI を利用する Story 作成支援
 - Civitai Model Collection の同期と統合 `model_catalog.json` 管理
-- ユーザーによる Model Family / 基盤モデル選択と、Grok による LoRA / Version / File 選定支援
+- ユーザーによる Model Family / 基盤モデル選択と、選択中の AI agent による LoRA / Version / File 選定支援
 - `models.json` / `prompt_plan.json` の検証・Draft・確定・履歴管理
 - Prompt Plan のツリー形式レビュー・編集
 - Template + Manifest からの決定論的 ComfyUI Workflow 生成
@@ -35,7 +35,7 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 
 ### 利用する工程に応じて必要
 
-- **Grok Web アカウント**: Story / モデル選定 / Prompt Plan の作成時
+- **Grok CLI または Codex CLI**: Story / モデル選定 / Prompt Plan / Caption で AI agent を利用するとき。利用する provider の CLI をインストールし、CLI 側で認証を完了してください
 - **Civitai API Key**: 統合モデルカタログを新規同期するとき
 - **Cloudflare R2 credentials**: R2 機能を利用するとき
 - **Local ComfyUI installation + Workflow依存custom_nodes**: Localモデル配置・Local生成を利用するとき。Local実行には起動中のComfyUI APIが必要です
@@ -106,7 +106,7 @@ export CIVIT_API_KEY="your-civitai-api-key"
 npm run dev
 ```
 
-Civitai API Key は Electron Main Process 内でのみ利用され、Project artifact や Grok Web へ渡しません。
+Civitai API Key は Electron Main Process 内でのみ利用され、Project artifact や AI agent workspace へ渡しません。
 
 保存済み `model_catalog.json` が存在する場合、API Key が未設定でも既存カタログの閲覧は可能ですが、新規 SYNC はできません。
 
@@ -232,21 +232,21 @@ Project ID は filesystem 上の安定した識別子として利用されます
    └─ ._batch_studio/
 ```
 
-### 2. Story を Grok と作成する
+### 2. Story を AI agent と作成する
 
-「ストーリー」工程では Grok pane を利用します。
+「ストーリー」工程では、右側の共通 AssistantPane で Grok CLI / Codex CLI のどちらかを選んで会話します。工程成果物の生成・修正・再実行は右Paneではなく左側の工程UIから開始します。
 
-Batch Studio は Grok を自動操作しません。基本操作は次の流れです。
+基本操作は次の流れです。
 
-1. Batch Studio で Grok 用の依頼文と添付候補を準備する
-2. ユーザーが Grok Web へログインする
-3. 依頼文をコピーし、必要なファイルを手動添付して送信する
-4. Grok と会話しながら Story を調整する
-5. 完成した `story.md` を Batch Studio へ貼り付ける
-6. Draft を検証する
-7. 内容を確認して明示的に確定する
+1. 工程上部で使用する AI provider（Grok / Codex）を選択する
+2. 必要に応じて AssistantPane で model / reasoning strength を選択する
+3. 左側の「ストーリー」工程から初回検討taskを開始する
+4. AssistantPane で会話しながら Story 方針を調整する
+5. 左側の工程から `story.md` 生成taskを開始する
+6. CLIの隔離workspaceへ生成された `story.md` を Batch Studio が Draft として取り込む
+7. validation結果と内容を確認し、ユーザーが明示的に確定する
 
-Batch Studio は Grok のログイン、入力欄 DOM 操作、自動送信、回答 scraping を行いません。
+Batch Studio は外部AIのWebページを埋め込まず、Clipboard経由の手動prompt transportや回答scrapingも使用しません。CLI session / streaming / stop / history は共通Agent Runtimeで管理します。
 
 ### 3. Civitai Catalog を同期・確認する
 
@@ -524,14 +524,14 @@ Template と Manifest が対応していません。Manifest が参照する Tem
 
 ## Security / Responsibility Boundary
 
-- Grok は Story / LoRA選定 / Prompt Plan の意味設計を担当します。Model Familyと基盤モデルはユーザーが選択します。
-- Batch Studio は Project 状態、validation、Workflow compile、Local / Remote Execution、Civitai / R2 integrationと後工程を担当します。
-- Grok Web のログイン・送信・添付・会話継続はユーザーが操作します。
-- Civitai API Key は Project artifact や Grok へ渡しません。
+- 選択中の AI agent（Grok CLI / Codex CLI）は Story / LoRA選定 / Prompt Plan / Caption の意味設計を担当します。Model Familyと基盤モデルはユーザーが選択します。
+- Batch Studio は Project 状態、CLI session、validation、Workflow compile、Local / Remote Execution、Civitai / R2 integrationと後工程を担当します。
+- Grok / Codex の認証は各CLI側で行い、Batch StudioはproviderのWeb login sessionやCookieを所有しません。
+- Civitai API Key は Project artifact や AI agent workspaceへ渡しません。
 - R2 Secret / Cloudflare API Token は Electron Main Process でのみ利用します。
 - 保存済み R2 Secret は `safeStorage` で暗号化します。
 - 確定済み Artifact を暗黙上書きせず、編集は Draft から開始し履歴を残します。
-- Grok に ComfyUI Workflow JSON を生成させません。
+- AI agent に ComfyUI Workflow JSON を生成させません。
 - ComfyUI Queue投入、生成進捗・停止・再開、R2経由のRemote成果物回収は実装されています。成功を保証するものではなく、実行時のエラーとRun履歴を確認してください。
 
 ## Documentation

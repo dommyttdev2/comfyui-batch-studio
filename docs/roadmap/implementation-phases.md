@@ -31,21 +31,22 @@ Exit criteria:
 
 ## Phase 1: Electron Read-only Shell
 
-Goal: 既存 Project を壊さずに閲覧し、Grok Web と並べて利用できる。
+Goal: 既存 Project を壊さずに閲覧し、AI支援Paneと並べて利用できる。
 
 - Electron main / renderer / preload。
-- Local UI + Grok `WebContentsView`。
-- Grok persistent session isolation。
+- Local UI + provider-neutral `AssistantPane`。
 - Project root scan。
 - 既存 Artifact status 表示。
 - Legacy `prompt_tree.md` が存在する場合は Legacy として識別。
-- `Open Folder` / `Copy Prompt`。
-- Grok DOM 自動操作なし。
+- `Open Folder`。
+- AI providerのWeb DOM自動操作なし。
 
 Exit criteria:
 
 - 既存 Project を変更せず一覧化できる。
-- Grok に手動ログインし、Local UI と同時利用できる。
+- 必要な工程でLocal UIとAssistantPaneを同時利用できる。
+
+> Transport note: 初期実装のGrok Web埋め込み方式は `DEC-027` でSuperseded。現行はGrok CLI / Codex CLIをMain Processの共通Agent Runtimeから利用する。
 
 ## Phase 2: Project / Story Lifecycle
 
@@ -57,7 +58,7 @@ Goal: 新規 Project と Story の Draft -> Confirm lifecycle を実装する。
 - `project_brief.json`。
 - `project_meta.json`。
 - Draft / history。
-- Story Grok Work Card。
+- Story AI agent task / AssistantPane。
 - `story.md` import / editor / validation / confirm。
 - Artifact status model。
 
@@ -68,9 +69,9 @@ Exit criteria:
 - display name変更だけで既存 `project.id` を自動変更しない。
 - final overwrite 前に history が残る。
 
-## Phase 3: Integrated Model Catalog / Grok Model Selection
+## Phase 3: Integrated Model Catalog / AI Model Selection
 
-Goal: Batch Studio内蔵のCivitai Catalogを使った Grok 選定と検証を実装する。
+Goal: Batch Studio内蔵のCivitai Catalogを使ったAI agentによるLoRA選定と検証を実装する。
 
 Batch Studio Main Process:
 

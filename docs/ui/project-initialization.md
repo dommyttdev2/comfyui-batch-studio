@@ -216,12 +216,10 @@ Project root          -> BATCH_STUDIO_PROJECT_ROOT
 
 ## 12. Story への引き渡し
 
-初回Grok依頼では完成Storyを一度で要求せず、まず調査・Story案・不足確認を行う。
+初回AI依頼では完成Storyを一度で要求せず、まず調査・Story案・不足確認を行う。
 
-その後、ユーザーがGrok上で案を調整し、完成版作成工程で `story.md` をMarkdown code blockとして受け取る。
+ユーザーがAssistantPane上で案を調整した後、左側のStory工程から完成版生成taskを開始する。Batch Studioは選択中providerのCLIを起動し、隔離workspaceの `output/story.md` を検証してDraftへ取り込む。
 
-Batch StudioはGrokを自動操作せず、依頼文生成・Clipboard・添付候補表示・回答貼り付け・Draft検証を支援する。
+`generation.target_image_count` はStory / Prompt Planningが最終的にその規模へ展開できる目標値としてAI用文脈へ渡す。ComfyUI内部の生成回数設定をAI agentへ要求しない。
 
-`generation.target_image_count` はStory / Prompt Planningが最終的にその規模へ展開できる目標値としてGrok用文脈へ渡す。ComfyUI内部の生成回数設定をGrokへ要求しない。
-
-具体的なGrok契約は `../contracts/grok-contract.md` を正本とする。
+具体的なAI契約は `../contracts/agent-contract.md` を正本とする。

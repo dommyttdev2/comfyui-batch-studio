@@ -22,7 +22,7 @@ docs/
 │  └─ remote-execution.md
 ├─ contracts/
 │  ├─ project-artifacts.md
-│  ├─ grok-contract.md
+│  ├─ agent-contract.md
 │  └─ prompt-plan.md
 ├─ ui/
 │  ├─ application-shell.md
@@ -50,14 +50,14 @@ docs/
 | `architecture/workflow-compiler.md` | 1枝 Template から最終 ComfyUI Workflow を機械生成する方式 |
 | `architecture/remote-execution.md` | Local / Remote Execution、SSH + Remote Worker、Scene Prompt連続生成、R2経由のモデル配置・成果物回収、Run State / Resume |
 | `contracts/project-artifacts.md` | プロジェクト内ファイル、正本関係、依存関係、互換性 |
-| `contracts/grok-contract.md` | Grok Web への入力、Grok の責務、Grok から受け取る成果物 |
+| `contracts/agent-contract.md` | Grok/Codex CLI の共通意味契約、session/workspace、AI成果物契約 |
 | `contracts/prompt-plan.md` | `prompt_plan.json` の意味構造と Draft schema |
-| `ui/application-shell.md` | 主画面、工程 navigation、Grok pane、Artifact editor、Model Catalog、Model Availability/R2 等の上位 Shell / 共通 interaction |
-| `ui/japanese-ux-design.md` | 日本語 UI の工程別 UX 要件、Grok 手動連携 capability、表示用語、状態・操作要件、受入基準。個別画面レイアウトや Component 構成は固定しない |
+| `ui/application-shell.md` | 主画面、工程 navigation、AssistantPane、Artifact editor、Model Catalog、Model Availability/R2 等の上位 Shell / 共通 interaction |
+| `ui/japanese-ux-design.md` | 日本語 UI の工程別 UX 要件、AI agent連携 capability、表示用語、状態・操作要件、受入基準。個別画面レイアウトや Component 構成は固定しない |
 | `ui/project-initialization.md` | 新規プロジェクト画面と `project_brief.json` |
 | `integrations/external-tools.md` | Batch Studio内蔵Civitai Catalog、Cloudflare R2、ComfyUI、Project filesystemとの境界。旧Standalone reposの位置づけ |
 | `integrations/service-integrations.md` | Homeのサービス連携、外部credential UI、Cloud Instance Provider abstraction、Vast.ai API/Instance管理、Remote Executionへのprovider handoff |
-| `quality/validation-and-security.md` | 検証、Preflight、秘密情報、Grok Web 隔離、failure policy |
+| `quality/validation-and-security.md` | 検証、Preflight、秘密情報、AI CLI workspace隔離、failure policy |
 | `roadmap/implementation-phases.md` | 依存関係に沿った実装順序。要件の正本ではない |
 | `decisions/decision-log.md` | 合意済み設計判断、置換された判断、未決判断の履歴 |
 
@@ -74,7 +74,7 @@ docs/
 - Project Window / Project / Execution Run / app-wide Execution Runtime の ownership、Multi Window lifecycle、Window close / app quit、execution resource lock は `architecture/project-window-execution-runtime.md` が所有する。
 - Execution / Remote Execution の SSH、Remote Worker、Scene Prompt continuous run、R2 transfer、Run State詳細は `architecture/remote-execution.md` が所有する。
 - Home のサービス連携、Vast.ai API Key / Instance lifecycle / provider handoff は `integrations/service-integrations.md` が所有する。
-- Grok が Workflow JSON を生成しないという責務境界は `product/scope-and-flow.md` と Decision Log で宣言し、具体的な Grok 返却形式は `contracts/grok-contract.md` が所有する。
+- AI agent が Workflow JSON を生成しないという責務境界は `product/scope-and-flow.md` と Decision Log で宣言し、具体的なAI成果物・session/workspace契約は `contracts/agent-contract.md` が所有する。
 - 主画面の UI 共通構造は `ui/application-shell.md` が所有する。
 - Civitai / R2の実体サービス責務・secret境界は`integrations/external-tools.md`、それらをユーザーが設定するService Integration UXは`integrations/service-integrations.md`が所有する。
 - 日本語 UI で各工程が満たすべき UX capability と受入基準は `ui/japanese-ux-design.md` が Draft として所有し、具体的な画面レイアウト・Component hierarchy は実装エージェントへ委ねる。
@@ -109,11 +109,11 @@ docs/
 
 最上位の責務分担は次の通り。
 
-> **Grok は「何を作るか・何を使うか」を考える。Batch Studio は「その決定を管理・検証・機械変換・保存する」。ユーザーが最終的に確定する。**
+> **AI agent は「何を作るか・何を使うか」を考える。Batch Studio は「その決定を管理・検証・機械変換・保存する」。ユーザーが最終的に確定する。**
 
-特に Workflow については、Grok に ComfyUI Workflow JSON を生成させない。Grok から受け取るのは共通プロンプト、使用 LoRA、枝と葉のプロンプトを表す構造化 JSON であり、最終 Workflow は Batch Studio の Workflow Compiler が生成する。
+特に Workflow については、Grok に ComfyUI Workflow JSON を生成させない。AI agent から受け取るのは共通プロンプト、使用 LoRA、枝と葉のプロンプトを表す構造化 JSON であり、最終 Workflow は Batch Studio の Workflow Compiler が生成する。
 
-Model Familyと基盤モデルはユーザーがBatch Studio UIで選択し、GrokはBatch Studio内蔵 `model_catalog.json` を根拠にLoRAだけを選定する。Batch StudioはCivitai同期・Catalog生成・基盤モデル選択UI・LoRA選定結果の検証/merge・保存を担当する。
+Model Familyと基盤モデルはユーザーがBatch Studio UIで選択し、AI agentはBatch Studio内蔵 `model_catalog.json` を根拠にLoRAだけを選定する。Batch StudioはCivitai同期・Catalog生成・基盤モデル選択UI・LoRA選定結果の検証/merge・保存を担当する。
 
 Cloudflare R2もBatch Studio Main Processが直接管理する。旧 `civit-model-viewer` / `r2-file-manager` はStandalone/Legacyであり、新規Batch Studioフローの外部依存にはしない。
 
