@@ -88,36 +88,41 @@ const { pathToFileURL } = require('node:url');
   assert.equal(streamClosed, true);
   assert.equal(streamingResult.response.ok, true);
   assert.equal(streamed.length, 1);
-  const call = (req) =>
-    spawnSync('python', [workerPath, '--root', runDir], {
-      input: JSON.stringify(req) + '\n',
-      encoding: 'utf8',
+  // The generated Remote Worker runs on Vast.ai Linux hosts and imports POSIX-only modules
+  // such as fcntl. Exercise the worker process on POSIX CI; Windows still covers the
+  // TypeScript control plane, host-key store, payload rewriting, and streaming client above.
+  if (process.platform !== 'win32') {
+    const call = (req) =>
+      spawnSync('python', [workerPath, '--root', runDir], {
+        input: JSON.stringify(req) + '\n',
+        encoding: 'utf8',
+      });
+    let result = call({ requestId: 'health-1', op: 'health' });
+    assert.equal(result.status, 0);
+    let lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
+    assert.equal(lines.at(-1).result.version, worker.REMOTE_WORKER_VERSION);
+    result = call({
+      requestId: 'state-1',
+      op: 'write_state',
+      state: { runId: 'abc', completed: 7 },
     });
-  let result = call({ requestId: 'health-1', op: 'health' });
-  assert.equal(result.status, 0);
-  let lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
-  assert.equal(lines.at(-1).result.version, worker.REMOTE_WORKER_VERSION);
-  result = call({ requestId: 'state-1', op: 'write_state', state: { runId: 'abc', completed: 7 } });
-  lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
-  assert.equal(lines[0].type, 'progress');
-  assert.equal(lines.at(-1).result.ok, true);
-  result = call({ requestId: 'status-1', op: 'status' });
-  lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
-  assert.deepEqual(lines.at(-1).result.state, { runId: 'abc', completed: 7 });
-  result = call({ requestId: 'escape-1', op: 'resolve_path', path: '../escape.txt' });
-  assert.notEqual(result.status, 0);
-  lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
-  assert.match(lines.at(-1).error.code, /PATH_OUTSIDE_ALLOWED_ROOT/);
-  const outside = path.join(runtime, 'outside');
-  fs.mkdirSync(outside);
-  try {
+    lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
+    assert.equal(lines[0].type, 'progress');
+    assert.equal(lines.at(-1).result.ok, true);
+    result = call({ requestId: 'status-1', op: 'status' });
+    lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
+    assert.deepEqual(lines.at(-1).result.state, { runId: 'abc', completed: 7 });
+    result = call({ requestId: 'escape-1', op: 'resolve_path', path: '../escape.txt' });
+    assert.notEqual(result.status, 0);
+    lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
+    assert.match(lines.at(-1).error.code, /PATH_OUTSIDE_ALLOWED_ROOT/);
+    const outside = path.join(runtime, 'outside');
+    fs.mkdirSync(outside);
     fs.symlinkSync(outside, path.join(runDir, 'link'), 'junction');
     result = call({ requestId: 'link-1', op: 'resolve_path', path: 'link/file.txt' });
     assert.notEqual(result.status, 0);
     lines = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
     assert.match(lines.at(-1).error.code, /PATH_OUTSIDE_ALLOWED_ROOT|SYMLINK_ESCAPE_REJECTED/);
-  } catch (e) {
-    if (process.platform !== 'win32') throw e;
   }
   const persisted = fs.readFileSync(path.join(runtime, 'ssh', 'known-hosts.json'), 'utf8');
   assert.ok(!persisted.includes('PRIVATE KEY'));
