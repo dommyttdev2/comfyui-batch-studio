@@ -299,12 +299,7 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
       return;
     }
     if (!codexCliTaskRunner) throw new Error('Codex CLIが初期化されていません。');
-    await codexCliTaskRunner.run(
-      request.root,
-      request.contextStage,
-      request.stage,
-      request.extra,
-    );
+    await codexCliTaskRunner.run(request.root, request.contextStage, request.stage, request.extra);
   });
   handleIpc(IPC.AGENT_TASK_STOP, async (event, root: unknown, stage: unknown) => {
     const request = validateAgentTaskRequest(event, root, stage);
