@@ -518,12 +518,6 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
     assert.ok(parallelRun.progress.models.every((model) => model.state === 'ready'));
     assert.equal(parallelRun.evidence.filter((e) => e.kind === 'MODEL_VERIFIED').length, 6);
 
-    if (process.platform === 'win32') {
-      console.log('Remote model worker aria2 integration skipped on Windows; covered by Linux CI.');
-      console.log('Remote model staging tests passed.');
-      return;
-    }
-
     const workerPath = path.join(runtime, 'worker.py'),
       modelsRoot = path.join(runtime, 'remote-comfy', 'models'),
       runRoot = path.join(runtime, 'worker-run');
