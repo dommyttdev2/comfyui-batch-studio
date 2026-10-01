@@ -4,9 +4,7 @@ import type { IpcRegistrationDependencies } from '../ipc-registration.js';
 
 export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) {
   const {
-    GROK_URL,
     IPC,
-    app,
     assistantProviderState,
     agentConversationRunner,
     agentSessionState,
@@ -14,46 +12,18 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
     assistantContextFor,
     assistantModelSettings,
     assistantSnapshot,
-    codexAccount,
-    codexArtifactFor,
-    codexBusy,
     codexTaskContexts,
     contextStageForTask,
-    codexChatState,
-    codexChooseModel,
-    codexContextFor,
-    codexModelSettings,
-    codexReturnFile,
     codexCliTaskRunner,
-    codexSend,
-    codexSendTask,
-    codexService,
-    codexSnapshot,
-    codexStopTurn,
-    codexTaskFileForTurn,
-    dialog,
-    expectedArtifact,
-    findCodexWorkspace,
-    grokChatState,
     grokCliTaskRunner,
     handleIpc,
-    importAutoArtifact,
-    latestCompletedArtifactTurn,
     layoutProjectWindow,
-    messageText,
-    notifyAutoArtifact,
     paneState,
     path,
     projectRootKey,
     projectWindowForSender,
-    readCodexHistory,
-    readCodexOutput,
     setAssistantContext,
-    setGrokContext,
     settingsStore,
-    shell,
-    stateCodexActiveThread,
-    writeFile,
   } = dependencies;
   const validRoot: IpcRegistrationDependencies['validRoot'] = dependencies.validRoot;
   const validGrokContextStage: IpcRegistrationDependencies['validGrokContextStage'] =
@@ -136,9 +106,7 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
   const assistantTaskBusy = async (context: AssistantPaneContext) => {
     if (context.provider === 'grok')
       return grokCliTaskRunner?.isBusy(context.root, context.stage) ?? false;
-    if (!agentSessionState) return false;
-    const sessions = await agentSessionState.get(context.root, context.stage, 'codex');
-    return Boolean(sessions.activeSessionId && codexBusy.has(sessions.activeSessionId));
+    return codexCliTaskRunner?.isBusy(context.root, context.stage) ?? false;
   };
 
   handleIpc(IPC.ASSISTANT_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
@@ -172,10 +140,6 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
       context.provider,
       message,
     );
-    if (context.provider === 'codex' && codexChatState) {
-      await codexChatState.remember(context.root, context.stage, turn.sessionId);
-      stateCodexActiveThread.set(state.window.id, turn.sessionId);
-    }
     return turn;
   });
   handleIpc(IPC.ASSISTANT_STOP_TURN, async (event) => {
@@ -194,10 +158,6 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
     )
       throw new Error('回答生成中は新しい会話へ切り替えられません。');
     await agentSessionState.clearActive(context.root, context.stage, context.provider);
-    if (context.provider === 'codex' && codexChatState) {
-      await codexChatState.clearActive(context.root, context.stage);
-      stateCodexActiveThread.set(state.window.id, null);
-    }
     return assistantSnapshot(state);
   });
   handleIpc(IPC.ASSISTANT_RESTORE_CONVERSATION, async (event, sessionId: unknown) => {
@@ -212,10 +172,6 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
     )
       throw new Error('回答生成中は会話履歴を切り替えられません。');
     await agentSessionState.activate(context.root, context.stage, context.provider, sessionId);
-    if (context.provider === 'codex' && codexChatState) {
-      await codexChatState.remember(context.root, context.stage, sessionId);
-      stateCodexActiveThread.set(state.window.id, sessionId);
-    }
     return assistantSnapshot(state);
   });
   handleIpc(IPC.ASSISTANT_MODELS, async (event) => {
