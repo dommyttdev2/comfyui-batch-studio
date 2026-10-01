@@ -301,5 +301,4 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
       request.state.codexContext = { root: request.root, stage: request.contextStage };
     await codexStopTurn(request.state, true);
   });
-
 }
