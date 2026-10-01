@@ -175,16 +175,18 @@ export function registerIpc(dependencies: IpcRegistrationDependencies) {
     thumbnailPickerForSender,
     thumbnailPickerWindows,
     validCivitaiUrl,
-    validGrokContextStage,
     validInstanceId,
-    validManualResetScope,
-    validRoot,
     validateMarketplacePickerImage,
     validateThumbnailPickerImage,
     vastClient,
     vastStore,
     writeFile,
   } = dependencies;
+  const validRoot: IpcRegistrationDependencies['validRoot'] = dependencies.validRoot;
+  const validGrokContextStage: IpcRegistrationDependencies['validGrokContextStage'] =
+    dependencies.validGrokContextStage;
+  const validManualResetScope: IpcRegistrationDependencies['validManualResetScope'] =
+    dependencies.validManualResetScope;
 
   handleIpc(IPC.EDITOR_FLUSH_RESULT, (event, id: unknown, ok: unknown, message: unknown) => {
     if (typeof id !== 'string') return;
