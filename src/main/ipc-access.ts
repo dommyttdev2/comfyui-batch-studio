@@ -41,12 +41,7 @@ const PROJECT_LOCAL = ['project-local'] as const;
 const R2_TOOL = ['project-local', 'tool-r2'] as const;
 const CIVIT_TOOL = ['project-local', 'tool-civit'] as const;
 const VAST_TOOL = ['project-local', 'tool-vastai'] as const;
-const TRUSTED_LOCAL_UI = [
-  'project-local',
-  'tool-r2',
-  'tool-civit',
-  'tool-vastai',
-] as const;
+const TRUSTED_LOCAL_UI = ['project-local', 'tool-r2', 'tool-civit', 'tool-vastai'] as const;
 const THUMBNAIL_READERS = ['project-local', 'thumbnail-picker'] as const;
 const MARKETPLACE_READERS = ['project-local', 'marketplace-picker'] as const;
 const PICKER_CACHE_WRITERS = ['thumbnail-picker', 'marketplace-picker'] as const;
@@ -89,10 +84,7 @@ policy(
   IPC.AGENT_TASK_STOP,
 );
 
-policy(
-  { senders: PROJECT_AND_CODEX },
-  IPC.FILE_SHOW_IN_FOLDER,
-);
+policy({ senders: PROJECT_AND_CODEX }, IPC.FILE_SHOW_IN_FOLDER);
 
 policy({ senders: TRUSTED_LOCAL_UI }, IPC.CLIPBOARD_WRITE_TEXT);
 
