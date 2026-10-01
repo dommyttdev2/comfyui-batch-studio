@@ -7,7 +7,9 @@ const { spawn, execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
 if (process.platform === 'win32') {
-  console.log('Remote scene worker integration: POSIX Remote Worker integration skipped on Windows; covered by Linux CI.');
+  console.log(
+    'Remote scene worker integration: POSIX Remote Worker integration skipped on Windows; covered by Linux CI.',
+  );
   process.exit(0);
 }
 
