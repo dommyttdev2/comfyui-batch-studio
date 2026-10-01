@@ -204,7 +204,10 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
     if (typeof sessionId !== 'string' || !sessionId) throw new Error('Invalid AI session ID.');
     if (!agentSessionState || !agentConversationRunner)
       throw new Error('共通AI session runtimeが初期化されていません。');
-    if (agentConversationRunner.isBusy(context.root, context.stage, context.provider) || (await assistantTaskBusy(context)))
+    if (
+      agentConversationRunner.isBusy(context.root, context.stage, context.provider) ||
+      (await assistantTaskBusy(context))
+    )
       throw new Error('回答生成中は会話履歴を切り替えられません。');
     await agentSessionState.activate(context.root, context.stage, context.provider, sessionId);
     if (context.provider === 'codex' && codexChatState) {
@@ -220,7 +223,10 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
   handleIpc(IPC.ASSISTANT_SELECT_MODEL, async (event, selection: unknown) => {
     const context = assistantContextFor(projectWindowForSender(event.sender));
     if (!agentConversationRunner) throw new Error('共通AI runtimeが初期化されていません。');
-    if (agentConversationRunner.isBusy(context.root, context.stage, context.provider) || (await assistantTaskBusy(context)))
+    if (
+      agentConversationRunner.isBusy(context.root, context.stage, context.provider) ||
+      (await assistantTaskBusy(context))
+    )
       throw new Error('回答生成中はモデルを変更できません。');
     return assistantChooseModel(context.root, context.stage, context.provider, selection);
   });
@@ -251,7 +257,13 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
   };
   handleIpc(IPC.AGENT_TASK_START, async (event, root: unknown, stage: unknown, extra: unknown) => {
     const request = validateAgentTaskRequest(event, root, stage, extra);
-    if (agentConversationRunner?.isBusy(request.root, request.contextStage, request.state.paneProvider))
+    if (
+      agentConversationRunner?.isBusy(
+        request.root,
+        request.contextStage,
+        request.state.paneProvider,
+      )
+    )
       throw new Error('通常会話の回答生成中は工程用AIタスクを開始できません。');
     if (request.state.paneProvider === 'grok') {
       if (!grokCliTaskRunner) throw new Error('Grok CLIが初期化されていません。');
