@@ -2,7 +2,7 @@ import type { R2ConnectionInput } from '../../shared/types.js';
 import type { IpcRegistrationDependencies } from '../ipc-registration.js';
 
 export function registerStorageIpc(dependencies: IpcRegistrationDependencies) {
-  const { IPC, clipboard, dialog, handleIpc, path, r2, r2Index } = dependencies;
+  const { IPC, clipboard, dialog, handleIpc, r2, r2Index } = dependencies;
 
   handleIpc(IPC.R2_SETTINGS, () => r2().settings());
   handleIpc(IPC.R2_ENVIRONMENT, () => r2().environment());
