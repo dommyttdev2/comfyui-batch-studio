@@ -15,10 +15,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { IPC } from '../shared/ipc.js';
 import { PickerSelectionGate } from './picker-selection-gate.js';
-import {
-  authorizeIpcAccess,
-  type IpcSenderContext,
-} from './ipc-access.js';
+import { authorizeIpcAccess, type IpcSenderContext } from './ipc-access.js';
 import type {
   AppSettingsSaveInput,
   CatalogSelectionTemplateInput,
@@ -3241,15 +3238,12 @@ function register() {
     const err = await shell.openPath(root);
     if (err) throw new Error(err);
   });
-  handleIpc(
-    IPC.PROJECT_SAVE_SETTINGS,
-    async (_e, root: unknown, settings: ProjectSettings) => {
-      validRoot(root);
-      await ensureProjectWritable(root);
-      await saveProjectSettings(root, settings);
-      return scanProject(root);
-    },
-  );
+  handleIpc(IPC.PROJECT_SAVE_SETTINGS, async (_e, root: unknown, settings: ProjectSettings) => {
+    validRoot(root);
+    await ensureProjectWritable(root);
+    await saveProjectSettings(root, settings);
+    return scanProject(root);
+  });
   handleIpc(IPC.PROJECT_SAVE_BRIEF, async (_e, root: unknown, brief: ProjectBriefInput) => {
     validRoot(root);
     await ensureProjectWritable(root);
@@ -3318,13 +3312,10 @@ function register() {
     if (!state.grokArtifactWatcher) throw new Error('Grokの監視が初期化されていません。');
     return state.grokArtifactWatcher.arm(state.projectRoot, stage as GrokTask['stage']);
   });
-  handleIpc(
-    IPC.GROK_TASK_BUILD,
-    (_e, root: unknown, stage: GrokTask['stage'], extra: unknown) => {
-      validRoot(root);
-      return buildGrokTask(root, stage, typeof extra === 'string' ? extra : '');
-    },
-  );
+  handleIpc(IPC.GROK_TASK_BUILD, (_e, root: unknown, stage: GrokTask['stage'], extra: unknown) => {
+    validRoot(root);
+    return buildGrokTask(root, stage, typeof extra === 'string' ? extra : '');
+  });
   handleIpc(IPC.FILE_SHOW_IN_FOLDER, (_e, filePath: unknown) => {
     if (typeof filePath !== 'string' || !path.isAbsolute(filePath))
       throw new Error('Invalid file path');
@@ -3474,21 +3465,13 @@ function register() {
     const settings = await settingsStore().status();
     return checkAvailability(root, await r2LookupFor(root), settings.modelsPath);
   });
-  handleIpc(
-    IPC.AVAILABILITY_CHECK_LORA_FILES,
-    async (_e, root: unknown, fileNames: unknown) => {
-      validRoot(root);
-      if (!Array.isArray(fileNames) || fileNames.some((x) => typeof x !== 'string'))
-        throw new Error('Invalid LoRA file names');
-      const settings = await settingsStore().status();
-      return checkLoraFileAvailability(
-        root,
-        fileNames,
-        await r2LookupFor(root),
-        settings.modelsPath,
-      );
-    },
-  );
+  handleIpc(IPC.AVAILABILITY_CHECK_LORA_FILES, async (_e, root: unknown, fileNames: unknown) => {
+    validRoot(root);
+    if (!Array.isArray(fileNames) || fileNames.some((x) => typeof x !== 'string'))
+      throw new Error('Invalid LoRA file names');
+    const settings = await settingsStore().status();
+    return checkLoraFileAvailability(root, fileNames, await r2LookupFor(root), settings.modelsPath);
+  });
   handleIpc(IPC.AVAILABILITY_OPEN_R2, async () => {});
   handleIpc(IPC.PREFLIGHT_RUN, async (_e, root: unknown) => {
     validRoot(root);
@@ -4766,9 +4749,7 @@ function register() {
       throw new Error('Codexが予期しないサインインURLを返しました。');
     await shell.openExternal(url.toString());
   });
-  handleIpc(IPC.CODEX_SNAPSHOT, (event) =>
-    codexSnapshot(projectWindowForSender(event.sender)),
-  );
+  handleIpc(IPC.CODEX_SNAPSHOT, (event) => codexSnapshot(projectWindowForSender(event.sender)));
   handleIpc(IPC.CODEX_MODELS, (event) =>
     codexModelSettings(codexContextFor(projectWindowForSender(event.sender))),
   );
@@ -4794,9 +4775,7 @@ function register() {
     stateCodexActiveThread.set(state.window.id, id);
     return codexSnapshot(state);
   });
-  handleIpc(IPC.CODEX_STOP_TURN, (event) =>
-    codexStopTurn(projectWindowForSender(event.sender)),
-  );
+  handleIpc(IPC.CODEX_STOP_TURN, (event) => codexStopTurn(projectWindowForSender(event.sender)));
   handleIpc(IPC.CODEX_SEND, (event, input: unknown) => {
     if (typeof input !== 'string') throw new Error('Invalid Codex prompt.');
     return codexSend(projectWindowForSender(event.sender), input);
