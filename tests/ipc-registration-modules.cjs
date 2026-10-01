@@ -13,7 +13,13 @@ const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
 const domains = [
   ['project.ts', 'registerProjectIpc', 'EDITOR_FLUSH_RESULT', 'FILE_SHOW_IN_FOLDER', 27],
   ['integration.ts', 'registerIntegrationIpc', 'CATALOG_STATUS', 'VASTAI_RESOLVE_SSH', 25],
-  ['execution.ts', 'registerExecutionIpc', 'WORKFLOW_COMPILE', 'EXECUTION_RESTART_FROM_SCRATCH', 19],
+  [
+    'execution.ts',
+    'registerExecutionIpc',
+    'WORKFLOW_COMPILE',
+    'EXECUTION_RESTART_FROM_SCRATCH',
+    19,
+  ],
   ['image.ts', 'registerImageIpc', 'FINAL_ARTIFACT_STATUS', 'MARKETPLACE_PICKER_COMMIT_RESULT', 50],
   ['storage.ts', 'registerStorageIpc', 'R2_SETTINGS', 'CLIPBOARD_WRITE_TEXT', 25],
   ['assistant.ts', 'registerAssistantIpc', 'ASSISTANT_GET_PROVIDER', 'GROK_OPEN_EXTERNAL', 26],
@@ -27,10 +33,7 @@ assert.deepEqual(
 
 const allHandlers = [];
 for (const [file, registerName, firstChannel, lastChannel, expectedCount] of domains) {
-  const source = fs.readFileSync(
-    path.join(repo, 'src', 'main', 'ipc-registration', file),
-    'utf8',
-  );
+  const source = fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-registration', file), 'utf8');
   assert.match(source, new RegExp(`export function ${registerName}\\(`));
   assert.doesNotMatch(
     source,
