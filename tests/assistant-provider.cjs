@@ -52,7 +52,7 @@ matchCode(
   'Switching agents must persist the selected provider',
 );
 matchCode(
-  read('src/main/main.ts'),
+  assistantIpc,
   /assistantProviderState\.resolve\(/,
   'Existing project agent selection must be restored',
 );
@@ -68,30 +68,26 @@ matchCode(
   "Do not render a stage with another stage's agent before restoration",
 );
 matchCode(
-  read('src/main/main.ts'),
+  assistantIpc,
   /assistantProviderState\.resolve\(root, defaultProvider, async \(\) => \{[\s\S]*?\}, stage\)/,
   'The project-level fallback must resolve into a stage-specific provider',
 );
 matchCode(
-  read('src/main/main.ts'),
+  assistantIpc,
   /assistantProviderState\.remember\(root, provider, stage\)/,
   'The explicit agent switch must be persisted for only the active stage',
 );
 matchCode(
-  read('src/main/main.ts'),
+  assistantIpc,
   /assistantSelectionGeneration !== generation/,
   "Out-of-order restores must not select the previous stage's provider",
 );
 assert.ok(
-  read('src/main/main.ts').includes(
-    'ipcMain.handle(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider)',
-  ),
+  assistantIpc.includes('handleIpc(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider)'),
   'Provider selection must work independently of the Codex IPC namespace',
 );
 assert.ok(
-  read('src/main/main.ts').includes(
-    'ipcMain.handle(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider)',
-  ),
+  assistantIpc.includes('handleIpc(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider)'),
   'Switching between Grok and Codex must use the shared assistant IPC',
 );
 assert.ok(
@@ -106,13 +102,14 @@ doesNotMatchCode(
   'App must use only the provider-neutral assistant preload API',
 );
 doesNotMatchCode(
-  read('src/main/main.ts'),
+  `${main}\n${assistantIpc}`,
   /IPC\.CODEX_|IPC\.GROK_SET_/,
   'Main process must not retain provider-specific pane IPC aliases',
 );
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
 const main = read('src/main/main.ts');
+const assistantIpc = read('src/main/ipc-registration/assistant.ts');
 const stages = read('src/renderer/GrokStages.tsx');
 const pane = read('src/renderer/AssistantPane.tsx');
 matchCode(
@@ -146,7 +143,7 @@ doesNotMatchCode(
   'Stage UI must not require Codex right-pane selection before execution',
 );
 matchCode(
-  main,
+  assistantIpc,
   /contextStageForTask\(stage as GrokTask\['stage'\]\)/,
   'A shared AI task must resolve to its exact project context stage',
 );
@@ -165,7 +162,7 @@ for (const expected of [
   "'prompt-plan-fix'",
   "'caption'",
 ]) {
-  matchCode(main, new RegExp(expected), `Codex stage mapping must include ${expected}`);
+  matchCode(assistantIpc, new RegExp(expected), `Codex stage mapping must include ${expected}`);
 }
 
 (async () => {
