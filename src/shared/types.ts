@@ -1240,11 +1240,73 @@ export interface AutoArtifactEvent {
   issues?: ValidationIssue[];
   summary?: ImportResult['summary'];
 }
-export interface AssistantPaneState {
+export interface CodexMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+}
+export interface CodexContext {
+  root: string;
+  stage: GrokContextStage;
+}
+export type CodexTurnPhase =
+  | 'idle'
+  | 'sending'
+  | 'processing'
+  | 'streaming'
+  | 'completed'
+  | 'failed'
+  | 'interrupted'
+  | 'unknown';
+export interface CodexTurnStatus {
+  phase: CodexTurnPhase;
+  startedAt: number | null;
+  updatedAt: number | null;
+  finishedAt: number | null;
+  error: string | null;
+}
+export interface CodexModelSelection {
+  model: string;
+  effort: string;
+}
+export interface CodexModelOption {
+  id: string;
+  displayName: string;
+  isDefault: boolean;
+  defaultReasoningEffort: string;
+  supportedReasoningEfforts: Array<{ reasoningEffort: string; description: string }>;
+}
+export interface CodexModelSettings {
+  models: CodexModelOption[];
+  selection: CodexModelSelection;
+}
+export interface CodexThreadState {
+  activeThreadId: string | null;
+  threadIds: string[];
+}
+export interface CodexSendResult extends CodexThreadState {
+  status: CodexTurnStatus;
+  artifact?: AutoArtifactEvent | null;
+}
+export interface CodexSnapshot extends CodexContext, CodexSendResult {
+  messages: CodexMessage[];
+  activity: import('./codex-activity.js').CodexActivityState;
+  busy: boolean;
+  historyUnavailable?: boolean;
+}
+export interface CodexEvent {
+  method: string;
+  params: Record<string, unknown>;
+}
+export interface CodexAccountStatus {
+  authenticated: boolean;
+  authMode: string | null;
+  planType: string | null;
+}
+export interface GrokPaneState {
   visible: boolean;
   ratio: number;
 }
-
 export interface BatchStudioApi {
   editorSaves: {
     onFlushRequest: (listener: (id: string, root: string) => void) => () => void;
@@ -1297,7 +1359,11 @@ export interface BatchStudioApi {
     savePromptPlan: (root: string, plan: PromptPlanArtifact) => Promise<ArtifactReadResult>;
     grokLoraHistory: (root: string) => Promise<GrokLoraSelectionHistoryEntry[]>;
   };
+  grokTask: {
+    build: (root: string, stage: GrokTask['stage'], extra?: string) => Promise<GrokTask>;
+  };
   autoArtifact: {
+    armGrok: (root: string, stage: GrokTask['stage']) => Promise<AutoArtifactEvent | null>;
     onEvent: (listener: (event: AutoArtifactEvent) => void) => () => void;
   };
   file: { showInFolder: (filePath: string) => Promise<void> };
@@ -1559,7 +1625,7 @@ export interface BatchStudioApi {
     setProvider: (
       provider: AssistantPaneProvider,
       stage: GrokContextStage,
-    ) => Promise<AssistantPaneState>;
+    ) => Promise<GrokPaneState>;
     setContext: (root: string, stage: GrokContextStage) => Promise<void>;
     context: () => Promise<AssistantPaneContext | null>;
     snapshot: () => Promise<AssistantPaneSnapshot>;
@@ -1569,12 +1635,43 @@ export interface BatchStudioApi {
     restoreConversation: (sessionId: string) => Promise<AssistantPaneSnapshot>;
     models: () => Promise<AgentModelSettings>;
     selectModel: (selection: AgentModelSelection) => Promise<AgentModelSelection>;
-    setVisible: (visible: boolean) => Promise<AssistantPaneState>;
-    setRatio: (ratio: number) => Promise<AssistantPaneState>;
-    setDividerScreenX: (screenX: number) => Promise<AssistantPaneState>;
     startTask: (root: string, stage: GrokTask['stage'], extra?: string) => Promise<void>;
     stopTask: (root: string, stage: GrokTask['stage']) => Promise<void>;
     onContext: (listener: (context: AssistantPaneContext | null) => void) => () => void;
     onEvent: (listener: (event: AgentEventEnvelope) => void) => () => void;
+  };
+  codex: {
+    getProvider: (stage: GrokContextStage) => Promise<AssistantPaneProvider>;
+    setProvider: (
+      provider: AssistantPaneProvider,
+      stage: GrokContextStage,
+    ) => Promise<GrokPaneState>;
+    setContext: (root: string, stage: GrokContextStage) => Promise<void>;
+    selectStageTask: (root: string, stage: GrokTask['stage']) => Promise<void>;
+    onStageTaskSelected: (listener: (stage: GrokTask['stage']) => void) => () => void;
+    context: () => Promise<CodexContext | null>;
+    onContext: (listener: (context: CodexContext | null) => void) => () => void;
+    status: () => Promise<CodexAccountStatus>;
+    signIn: () => Promise<void>;
+    snapshot: () => Promise<CodexSnapshot>;
+    models: () => Promise<CodexModelSettings>;
+    selectModel: (selection: CodexModelSelection) => Promise<CodexModelSelection>;
+    newChat: () => Promise<CodexSnapshot>;
+    restoreChat: (threadId: string) => Promise<CodexSnapshot>;
+    stopTurn: () => Promise<CodexSnapshot>;
+    send: (text: string) => Promise<CodexSendResult>;
+    sendTask: (stage: GrokTask['stage'], extra?: string) => Promise<CodexSendResult>;
+    onEvent: (listener: (event: CodexEvent) => void) => () => void;
+    saveResponse: (text: string) => Promise<string | null>;
+    retryArtifact: () => Promise<AutoArtifactEvent | null>;
+    latestArtifact: () => Promise<AutoArtifactEvent | null>;
+  };
+  grok: {
+    setVisible: (visible: boolean) => Promise<GrokPaneState>;
+    setContext: (root: string, stage: GrokContextStage) => Promise<GrokPaneState>;
+    setRatio: (ratio: number) => Promise<GrokPaneState>;
+    setDividerScreenX: (screenX: number) => Promise<GrokPaneState>;
+    reload: () => Promise<void>;
+    openExternal: () => Promise<void>;
   };
 }
