@@ -452,12 +452,18 @@ async function testExportedThumbnailAuthorization() {
     const invalidId = path.join(output, 'thumbnail-02.jpg');
     await promises.writeFile(invalidId, 'image');
     await assert.rejects(authorize(temp, invalidId));
-    const outside = path.join(temp, 'thumbnail-01.jpg');
+    const outsideDirectory = path.join(temp, 'outside');
+    await promises.mkdir(outsideDirectory);
+    const outside = path.join(outsideDirectory, 'thumbnail-1.png');
     await promises.writeFile(outside, 'image');
     await assert.rejects(authorize(temp, outside));
-    const link = path.join(output, 'thumbnail-1.png');
-    await promises.symlink(outside, link);
-    await assert.rejects(authorize(temp, link));
+    const linkDirectory = path.join(output, 'linked-outside');
+    await promises.symlink(
+      outsideDirectory,
+      linkDirectory,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    await assert.rejects(authorize(temp, path.join(linkDirectory, 'thumbnail-1.png')));
   } finally {
     await promises.rm(temp, { recursive: true, force: true });
   }
