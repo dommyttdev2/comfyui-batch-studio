@@ -163,7 +163,7 @@ for (const expected of [
   "'prompt-plan-fix'",
   "'caption'",
 ]) {
-  matchCode(assistantIpc, new RegExp(expected), `Codex stage mapping must include ${expected}`);
+  matchCode(main, new RegExp(expected), `Codex stage mapping must include ${expected}`);
 }
 
 (async () => {
