@@ -1,5 +1,4 @@
 const { contextBridge, ipcRenderer } = require('electron');
-// BEGIN GENERATED IPC CHANNELS - edit src/shared/ipc.ts instead
 const I = {
   APP_SETTINGS_GET: 'app-settings:get',
   APP_SETTINGS_SELECT_COMFYUI: 'app-settings:select-comfyui',
@@ -27,7 +26,6 @@ const I = {
   ARTIFACT_GROK_LORA_HISTORY: 'artifact:grok-lora-history',
   ARTIFACT_RESET_FROM: 'artifact:reset-from',
   PROMPT_PLAN_SAVE: 'prompt-plan:save',
-  GROK_TASK_BUILD: 'grok-task:build',
   FILE_SHOW_IN_FOLDER: 'file:show-in-folder',
   CATALOG_STATUS: 'catalog:status',
   CATALOG_INTEGRATED_STATUS: 'catalog:integrated-status',
@@ -172,37 +170,8 @@ const I = {
   AGENT_TASK_START: 'agent:task-start',
   AGENT_TASK_STOP: 'agent:task-stop',
   AGENT_EVENT: 'agent:event',
-  CODEX_GET_PROVIDER: 'codex:get-provider',
-  CODEX_SET_PROVIDER: 'codex:set-provider',
-  CODEX_SET_CONTEXT: 'codex:set-context',
-  CODEX_SELECT_STAGE_TASK: 'codex:select-stage-task',
-  CODEX_STAGE_TASK_SELECTED: 'codex:stage-task-selected',
-  CODEX_CONTEXT: 'codex:context',
-  CODEX_CONTEXT_CHANGED: 'codex:context-changed',
-  CODEX_STATUS: 'codex:status',
-  CODEX_SIGN_IN: 'codex:sign-in',
-  CODEX_SNAPSHOT: 'codex:snapshot',
-  CODEX_MODELS: 'codex:models',
-  CODEX_SELECT_MODEL: 'codex:select-model',
-  CODEX_NEW_CHAT: 'codex:new-chat',
-  CODEX_RESTORE_CHAT: 'codex:restore-chat',
-  CODEX_STOP_TURN: 'codex:stop-turn',
-  CODEX_SEND: 'codex:send',
-  CODEX_SEND_TASK: 'codex:send-task',
-  CODEX_EVENT: 'codex:event',
-  CODEX_SAVE_RESPONSE: 'codex:save-response',
-  CODEX_RETRY_ARTIFACT: 'codex:retry-artifact',
-  CODEX_LATEST_ARTIFACT: 'codex:latest-artifact',
-  AUTO_ARTIFACT_GROK_ARM: 'auto-artifact:grok-arm',
   AUTO_ARTIFACT_EVENT: 'auto-artifact:event',
-  GROK_SET_VISIBLE: 'grok:set-visible',
-  GROK_SET_CONTEXT: 'grok:set-context',
-  GROK_SET_RATIO: 'grok:set-ratio',
-  GROK_SET_DIVIDER_X: 'grok:set-divider-x',
-  GROK_RELOAD: 'grok:reload',
-  GROK_OPEN_EXTERNAL: 'grok:open-external',
 };
-// END GENERATED IPC CHANNELS
 contextBridge.exposeInMainWorld('batchStudio', {
   appSettings: {
     get: () => ipcRenderer.invoke(I.APP_SETTINGS_GET),
