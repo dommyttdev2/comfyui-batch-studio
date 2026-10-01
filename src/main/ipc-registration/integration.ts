@@ -27,6 +27,7 @@ export function registerIntegrationIpc(dependencies: IpcRegistrationDependencies
     vastClient,
     vastStore,
   } = dependencies;
+  const validRoot: IpcRegistrationDependencies['validRoot'] = dependencies.validRoot;
 
   handleIpc(IPC.CATALOG_STATUS, (_e, root: unknown) => {
     validRoot(root);
