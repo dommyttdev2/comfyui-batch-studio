@@ -233,7 +233,7 @@ matchCode(
 );
 matchCode(
   main,
-  /validateThumbnailPickerImage[\s\S]*assertFinalArtifactImage\(state\.root,imagePath\)/,
+  /validateThumbnailPickerImage[\s\S]*assertFinalArtifactImage\(state\.root,\s*imagePath\)/,
   'picker cache reads must reuse final-artifact realpath authorization',
 );
 matchCode(
