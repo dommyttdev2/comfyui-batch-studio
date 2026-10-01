@@ -65,7 +65,10 @@ const writePolicyStart = ipcAccess.indexOf(
   'policy(\n  { senders: PROJECT_LOCAL, rootArg: 0, write: true },',
 );
 const writePolicyEnd = ipcAccess.indexOf('\n);', writePolicyStart);
-assert.ok(writePolicyStart >= 0 && writePolicyEnd > writePolicyStart, 'project write policy is missing');
+assert.ok(
+  writePolicyStart >= 0 && writePolicyEnd > writePolicyStart,
+  'project write policy is missing',
+);
 const writePolicy = ipcAccess.slice(writePolicyStart, writePolicyEnd);
 for (const channel of [
   'PROJECT_SAVE_SETTINGS',
