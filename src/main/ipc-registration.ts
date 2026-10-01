@@ -2022,5 +2022,4 @@ export function registerIpc(dependencies: IpcRegistrationDependencies) {
     projectWindowForSender(event.sender).grokView.webContents.reload(),
   );
   handleIpc(IPC.GROK_OPEN_EXTERNAL, () => shell.openExternal(GROK_URL));
-
 }
