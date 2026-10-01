@@ -259,8 +259,10 @@ for (const expected of [
     fs.readFileSync(path.join(legacyDirectory, 'assistant-provider-state.json'), 'utf8'),
   );
   assert.equal(migratedOnDisk.schemaVersion, 2);
-  assert.equal(migratedOnDisk.projects[legacyRoot].stages.story, 'codex');
-  assert.equal(migratedOnDisk.projects[legacyRoot].stages.caption, 'grok');
+  const migratedKey =
+    process.platform === 'win32' ? path.resolve(legacyRoot).toLowerCase() : path.resolve(legacyRoot);
+  assert.equal(migratedOnDisk.projects[migratedKey].stages.story, 'codex');
+  assert.equal(migratedOnDisk.projects[migratedKey].stages.caption, 'grok');
 
   const firstOpenRoot = path.join(userData, 'project-first-open');
   const firstProvider = await store.resolve(firstOpenRoot, 'grok', async () => null, 'models');
