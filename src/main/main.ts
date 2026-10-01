@@ -11,24 +11,35 @@ import {
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions, WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { IPC } from '../shared/ipc.js';
+import { registerIpc } from './ipc-registration.js';
 import { PickerSelectionGate } from './picker-selection-gate.js';
+import { authorizeIpcAccess, type IpcSenderContext } from './ipc-access.js';
 import type {
   AppSettingsSaveInput,
   CatalogSelectionTemplateInput,
   CivitaiCatalogStatus,
   CivitaiConnectionInput,
   GrokContextStage,
-  AssistantPaneState,
+  GrokPaneState,
   ExecutionRun,
   ProjectBriefInput,
   ProjectSettings,
   PromptPlanArtifact,
   GrokTask,
   AssistantPaneProvider,
+  CodexContext,
+  CodexMessage,
+  CodexSnapshot,
+  CodexAccountStatus,
   AutoArtifactEvent,
+  CodexSendResult,
+  CodexTurnStatus,
+  CodexModelOption,
+  CodexModelSelection,
+  CodexModelSettings,
   ThumbnailSlotKey,
   MarketplaceSourceType,
   R2ConnectionInput,
@@ -58,6 +69,7 @@ import { readGrokLoraSelectionHistory } from './grok-lora-history.js';
 import { manualResetFrom, type ManualResetScope } from './model-downstream-reset.js';
 import { scanProject } from './project-scan.js';
 import { readProjectMeta, saveProjectSettings } from './project-meta.js';
+import { artifactFileOutputRules, buildGrokTask } from './grok-context.js';
 import { catalogStatus } from './model-catalog.js';
 import { compileWorkflow } from './compiler.js';
 import { checkAvailability, checkLoraFileAvailability } from './availability.js';
@@ -82,21 +94,62 @@ import {
 import { LocalExecutionService, verifyLocalOutputs } from './local-execution.js';
 import { ComfyUiClient } from './comfyui-client.js';
 import { ExecutionCoordinator } from './execution-coordinator.js';
+import {
+  canonicalGrokConversationUrl,
+  GROK_PARTITION,
+  isGrokNavigationUrl,
+  isOAuthPopupUrl,
+  isSafeExternalUrl,
+  isSecureWebUrl,
+} from './grok-navigation.js';
+import { GrokNavigationQueue, LatestGrokContextQueue } from './grok-navigation-queue.js';
 import { CivitaiCatalogService } from './civitai-catalog.js';
 import { CivitaiRequestPolicy } from './civitai-request-policy.js';
 import { CivitaiConfigStore } from './civitai-config.js';
 import { UiStateStore } from './ui-state.js';
+import { GrokChatStateStore } from './grok-chat-state.js';
+import { CodexChatStateStore } from './codex-chat-state.js';
+import { codexTaskFileForTurn, latestCompletedArtifactTurn } from './codex-artifact-turn.js';
+import { readCodexHistory } from './codex-thread-history.js';
+import {
+  prepareCodexFileWorkspace,
+  workspaceOutputInstruction,
+  readCodexOutput,
+  rememberCodexWorkspace,
+  findCodexWorkspace,
+  type FileArtifactWorkspace,
+} from './codex-file-artifact.js';
+import { promptPlanPatchBase } from './prompt-plan-patch.js';
+import {
+  codexActivityFromHistory,
+  emptyCodexActivity,
+  safeCodexActivityEvent,
+} from '../shared/codex-activity.js';
 import { AssistantProviderStore } from './assistant-provider-state.js';
-import { CodexCliAdapter } from './codex-cli-adapter.js';
+import { CodexAppServer, type CodexNotification } from './codex-app-server.js';
+import { CodexCliAdapter, AgentTurnCancelledError } from './codex-cli-adapter.js';
 import { AgentSessionStateStore } from './agent-session-state.js';
 import type { AgentCliAdapter } from './agent-cli-adapter.js';
 import { AgentConversationStore } from './agent-conversation-store.js';
 import { AgentConversationRunner } from './agent-conversation-runner.js';
 import { AgentModelSelectionStore } from './agent-model-selection.js';
-import { importAutoArtifact } from './agent-artifact-import.js';
+import {
+  prepareAgentWorkspace,
+  agentWorkspaceOutputInstruction,
+  readAgentWorkspaceOutput,
+  rememberAgentWorkspace,
+  type AgentWorkspace,
+} from './agent-workspace.js';
+import { CodexTurnMonitor } from './codex-turn-monitor.js';
+import {
+  expectedArtifact,
+  importAutoArtifact,
+  latestAutoArtifact,
+} from './agent-artifact-import.js';
+import { GrokAutoArtifactWatcher } from './grok-auto-artifact-watcher.js';
 import { GrokCliAdapter } from './grok-cli-adapter.js';
 import { GrokCliTaskRunner } from './grok-cli-task-runner.js';
-import { CodexCliTaskRunner } from './codex-cli-task-runner.js';
+import { CodexModelSelectionStore } from './codex-model-selection.js';
 import { R2ConfigStore } from './r2-config.js';
 import { R2Manager } from './r2-manager.js';
 import { R2ObjectIndex } from './r2-object-index.js';
@@ -156,6 +209,7 @@ import {
 import {
   readCachedThumbnailImage,
   storeWebpThumbnailPreview,
+  thumbnailCachePruneMetrics,
   type ThumbnailCacheTiming,
 } from './thumbnail-image-cache.js';
 import {
@@ -166,12 +220,37 @@ import {
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
+const GROK_URL = 'https://grok.com/';
+const GROK_LOADING_HTML = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="color-scheme" content="dark" />
+<style>
+html,body{width:100%;height:100%;margin:0;background:#101318;color:#e8ebef;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+body{display:grid;place-items:center}
+.loading{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.spinner{width:30px;height:30px;border:3px solid #39414d;border-top-color:#3474ef;border-radius:50%;animation:spin .8s linear infinite}
+.title{font-size:15px;font-weight:600}
+.note{font-size:12px;color:#8993a2}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="loading" role="status" aria-live="polite">
+<div class="spinner" aria-hidden="true"></div>
+<div class="title">Grokを読み込み中…</div>
+<div class="note">読み込みが完了すると、このPaneにGrokが表示されます。</div>
+</div>
+</body>
+</html>`;
 type StandaloneWindowTool = 'r2' | 'civit' | 'vastai';
 type RendererWindowTool =
   | StandaloneWindowTool
   | 'thumbnail-picker'
   | 'marketplace-picker'
-  | 'assistant-pane';
+  | 'assistant-pane'
+  | 'codex-pane';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
   selection: PickerSelectionGate;
@@ -238,14 +317,24 @@ const pendingWindowCloses = new Set<number>();
 type ProjectWindowState = {
   window: BaseWindow;
   localView: WebContentsView;
-  assistantView: WebContentsView;
+  grokView: WebContentsView;
+  codexView: WebContentsView;
   paneProvider: AssistantPaneProvider;
   assistantSelectionGeneration: number;
+  codexContext: CodexContext | null;
   assistantContext: AssistantPaneContext | null;
+  grokLoadingView: WebContentsView;
   projectRoot: string | null;
   restoreLastProject: boolean;
-  assistantVisible: boolean;
+  grokVisible: boolean;
+  grokLoading: boolean;
+  grokLoadingGeneration: number;
   localRatio: number;
+  activeGrokContext: { root: string; stage: GrokContextStage } | null;
+  restoringGrokContext: boolean;
+  grokArtifactWatcher: GrokAutoArtifactWatcher | null;
+  grokNavigationQueue: GrokNavigationQueue;
+  grokContextQueue: LatestGrokContextQueue<GrokPaneState>;
   lastFocusedAt: number;
 };
 const projectWindows = new Map<number, ProjectWindowState>();
@@ -257,15 +346,33 @@ let lastFocusedProjectWindowId: number | null = null,
   civitaiPolicy: CivitaiRequestPolicy | null = null,
   civitaiConfig: CivitaiConfigStore | null = null,
   uiState: UiStateStore | null = null,
+  grokChatState: GrokChatStateStore | null = null,
+  codexChatState: CodexChatStateStore | null = null,
   assistantProviderState: AssistantProviderStore | null = null,
+  codexAppServer: CodexAppServer | null = null,
   codexCliAdapter: CodexCliAdapter | null = null,
   grokCliAdapter: GrokCliAdapter | null = null,
   grokCliTaskRunner: GrokCliTaskRunner | null = null,
-  codexCliTaskRunner: CodexCliTaskRunner | null = null,
   agentSessionState: AgentSessionStateStore | null = null,
   agentConversationStore: AgentConversationStore | null = null,
   agentConversationRunner: AgentConversationRunner | null = null,
   agentModelSelections: AgentModelSelectionStore | null = null,
+  codexCliActiveTurnIds = new Map<string, string>(),
+  codexBusy = new Set<string>(),
+  codexTurnStartRequests = new Map<string, Promise<string>>(),
+  codexActiveTurnIds = new Map<string, string>(),
+  codexInterruptRequests = new Map<string, Promise<void>>(),
+  codexPendingArtifacts = new Map<
+    string,
+    {
+      root: string;
+      stage: GrokTask['stage'];
+      fileName: string;
+      workspace?: FileArtifactWorkspace | AgentWorkspace;
+    }
+  >(),
+  codexTurnMonitor = new CodexTurnMonitor(),
+  codexModelSelections: CodexModelSelectionStore | null = null,
   r2Manager: R2Manager | null = null,
   r2ObjectIndex: R2ObjectIndex | null = null,
   appSettingsStore: AppSettingsStore | null = null,
@@ -282,25 +389,88 @@ function projectRootKey(root: string) {
   const resolved = path.resolve(root);
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
-function paneState(state: ProjectWindowState): AssistantPaneState {
-  return { visible: state.assistantVisible, ratio: state.localRatio };
+function paneState(state: ProjectWindowState): GrokPaneState {
+  return { visible: state.grokVisible, ratio: state.localRatio };
 }
 function layoutProjectWindow(state: ProjectWindowState) {
   const { width, height } = state.window.getContentBounds();
-  if (!state.assistantVisible || width < 840) {
+  if (!state.grokVisible || width < 840) {
     state.localView.setBounds({ x: 0, y: 0, width, height });
-    state.assistantView.setBounds({ x: width, y: 0, width: 0, height });
+    state.grokView.setBounds({ x: width, y: 0, width: 0, height });
+    state.grokLoadingView.setBounds({ x: width, y: 0, width: 0, height });
+    state.codexView.setBounds({ x: width, y: 0, width: 0, height });
     return;
   }
-  const localWidth = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio)));
-  state.localView.setBounds({ x: 0, y: 0, width: localWidth, height });
-  state.assistantView.setBounds({ x: localWidth, y: 0, width: width - localWidth, height });
+  const lw = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio))),
+    grokBounds = { x: lw, y: 0, width: width - lw, height };
+  state.localView.setBounds({ x: 0, y: 0, width: lw, height });
+  const hidden = { x: width, y: 0, width: 0, height };
+  state.grokView.setBounds(hidden);
+  state.grokLoadingView.setBounds(hidden);
+  state.codexView.setBounds(grokBounds);
 }
+function ipcSenderContext(contents: WebContents): IpcSenderContext {
+  for (const state of projectWindows.values()) {
+    if (state.localView.webContents.id === contents.id)
+      return { kind: 'project-local', projectRoot: state.projectRoot };
+    if (state.codexView.webContents.id === contents.id)
+      return { kind: 'project-codex', projectRoot: state.projectRoot };
+  }
+  const thumbnail = thumbnailPickerWindows.get(contents.id);
+  if (thumbnail) return { kind: 'thumbnail-picker', projectRoot: thumbnail.root };
+  const marketplace = marketplacePickerWindows.get(contents.id);
+  if (marketplace) return { kind: 'marketplace-picker', projectRoot: marketplace.root };
+  for (const [tool, state] of standaloneToolWindows) {
+    if (state.view.webContents.id !== contents.id) continue;
+    if (tool === 'r2') return { kind: 'tool-r2' };
+    if (tool === 'civit') return { kind: 'tool-civit' };
+    return { kind: 'tool-vastai' };
+  }
+  return { kind: 'unknown' };
+}
+
+async function authorizeIpcImageAccess(
+  channel: string,
+  contents: WebContents,
+  args: readonly unknown[],
+) {
+  if (channel === IPC.THUMBNAIL_READ_PREVIEW) {
+    await validateThumbnailPickerImage(thumbnailPickerForSender(contents), args[0]);
+    return;
+  }
+  if (channel !== IPC.THUMBNAIL_STORE_WEBP_PREVIEW) return;
+  const thumbnail = thumbnailPickerWindows.get(contents.id);
+  if (thumbnail) {
+    await validateThumbnailPickerImage(thumbnail, args[0]);
+    return;
+  }
+  const marketplace = marketplacePickerWindows.get(contents.id);
+  if (marketplace) {
+    await validateMarketplacePickerImage(marketplace, args[0]);
+    return;
+  }
+  throw new Error('この画像キャッシュ操作は現在のWindowから実行できません。');
+}
+
+function handleIpc<TArgs extends unknown[], TResult>(
+  channel: string,
+  listener: (event: IpcMainInvokeEvent, ...args: TArgs) => TResult,
+) {
+  ipcMain.handle(channel, async (event, ...args) => {
+    const sender = ipcSenderContext(event.sender);
+    const decision = authorizeIpcAccess(channel, sender, args);
+    if (decision.writeRoot) await ensureProjectWritable(decision.writeRoot);
+    await authorizeIpcImageAccess(channel, event.sender, args);
+    return listener(event, ...(args as TArgs));
+  });
+}
+
 function projectWindowForSender(contents: WebContents) {
   for (const state of projectWindows.values())
     if (
       state.localView.webContents.id === contents.id ||
-      state.assistantView.webContents.id === contents.id
+      state.grokView.webContents.id === contents.id ||
+      state.codexView.webContents.id === contents.id
     )
       return state;
   throw new Error('Project Window was not found for IPC sender.');
@@ -350,6 +520,7 @@ async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
   if (dev) {
     const url = new URL(dev);
     if (tool === 'assistant-pane') url.searchParams.set('assistant-pane', '1');
+    else if (tool === 'codex-pane') url.searchParams.set('codex-pane', '1');
     else if (tool) url.searchParams.set('tool', tool);
     await v.webContents.loadURL(url.toString());
   } else
@@ -357,10 +528,67 @@ async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
       path.resolve(__dirname, '../../dist-renderer/index.html'),
       tool === 'assistant-pane'
         ? { query: { 'assistant-pane': '1' } }
-        : tool
-          ? { query: { tool } }
-          : undefined,
+        : tool === 'codex-pane'
+          ? { query: { 'codex-pane': '1' } }
+          : tool
+            ? { query: { tool } }
+            : undefined,
     );
+}
+function configureGrokContents(contents: WebContents, oauthFlow = false) {
+  contents.setWindowOpenHandler(({ url }) => {
+    const startsOAuth = isOAuthPopupUrl(url);
+    if (startsOAuth || isGrokNavigationUrl(url) || (oauthFlow && isSecureWebUrl(url))) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 560,
+          height: 760,
+          autoHideMenuBar: true,
+          webPreferences: {
+            partition: GROK_PARTITION,
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+          },
+        },
+      };
+    }
+    if (isSafeExternalUrl(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  contents.on('will-navigate', (e, url) => {
+    const allow = oauthFlow ? isSecureWebUrl(url) : isGrokNavigationUrl(url);
+    if (!allow) {
+      e.preventDefault();
+      if (isSafeExternalUrl(url)) void shell.openExternal(url);
+    }
+  });
+  contents.on('did-create-window', (window, details) =>
+    configureGrokContents(window.webContents, oauthFlow || isOAuthPopupUrl(details.url)),
+  );
+}
+function chatStore() {
+  if (!grokChatState) throw new Error('Grok chat state storeが初期化されていません。');
+  return grokChatState;
+}
+async function rememberGrokConversation(state: ProjectWindowState, url: string) {
+  if (state.restoringGrokContext || !state.activeGrokContext) return;
+  const canonical = canonicalGrokConversationUrl(url);
+  if (!canonical) return;
+  await chatStore().remember(
+    state.activeGrokContext.root,
+    state.activeGrokContext.stage,
+    canonical,
+  );
+}
+function attachGrokHistoryTracking(state: ProjectWindowState) {
+  state.grokView.webContents.on('did-navigate', (_e, url) => {
+    void rememberGrokConversation(state, url);
+  });
+  state.grokView.webContents.on('did-navigate-in-page', (_e, url) => {
+    void rememberGrokConversation(state, url);
+  });
 }
 async function rememberMostRecentOpenProject(clearIfNone = true) {
   const candidate = [...projectWindows.values()]
@@ -394,9 +622,24 @@ function createProjectWindow(
         sandbox: true,
       },
     }),
-    assistantView = new WebContentsView({
+    codexView = new WebContentsView({
       webPreferences: {
         preload: path.resolve(__dirname, '../preload/index.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
+    grokView = new WebContentsView({
+      webPreferences: {
+        partition: GROK_PARTITION,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    }),
+    grokLoadingView = new WebContentsView({
+      webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
@@ -405,21 +648,39 @@ function createProjectWindow(
     state: ProjectWindowState = {
       window,
       localView,
-      assistantView,
+      grokView,
+      codexView,
       paneProvider: 'grok',
       assistantSelectionGeneration: 0,
+      codexContext: null,
       assistantContext: null,
+      grokLoadingView,
       projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
       restoreLastProject: Boolean(options.restoreLastProject),
-      assistantVisible: false,
+      grokVisible: false,
+      grokLoading: false,
+      grokLoadingGeneration: 0,
       localRatio: 0.45,
+      activeGrokContext: null,
+      restoringGrokContext: false,
+      grokArtifactWatcher: null,
+      grokNavigationQueue: new GrokNavigationQueue(),
+      grokContextQueue: new LatestGrokContextQueue<GrokPaneState>(),
       lastFocusedAt: ++projectWindowFocusSequence,
     };
   const windowId = window.id;
   projectWindows.set(windowId, state);
   lastFocusedProjectWindowId = windowId;
   window.contentView.addChildView(localView);
-  window.contentView.addChildView(assistantView);
+  window.contentView.addChildView(grokView);
+  window.contentView.addChildView(grokLoadingView);
+  window.contentView.addChildView(codexView);
+  void grokLoadingView.webContents
+    .loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(GROK_LOADING_HTML)}`)
+    .catch((error) => console.warn('Grok loading placeholder failed:', error));
+  configureGrokContents(grokView.webContents);
+  attachGrokHistoryTracking(state);
+  state.grokArtifactWatcher = new GrokAutoArtifactWatcher(grokView.webContents, notifyAutoArtifact);
   window.on('focus', () => {
     state.lastFocusedAt = ++projectWindowFocusSequence;
     lastFocusedProjectWindowId = windowId;
@@ -462,8 +723,11 @@ function createProjectWindow(
     for (const picker of marketplacePickerWindows.values()) {
       if (picker.opener.id === localView.webContents.id) picker.window.close();
     }
+    state.grokArtifactWatcher?.dispose();
     localView.webContents.close();
-    assistantView.webContents.close();
+    grokView.webContents.close();
+    grokLoadingView.webContents.close();
+    codexView.webContents.close();
     projectWindows.delete(windowId);
     if (lastFocusedProjectWindowId === windowId) lastFocusedProjectWindowId = null;
     void rememberMostRecentOpenProject(false);
@@ -474,7 +738,10 @@ function createProjectWindow(
       localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
     });
   void loadRenderer(localView);
-  void loadRenderer(assistantView, 'assistant-pane');
+  void loadRenderer(codexView, 'assistant-pane');
+  void state.grokNavigationQueue
+    .navigate(grokView.webContents, GROK_URL)
+    .catch((error) => console.warn('Initial Grok navigation failed:', error));
   return state;
 }
 function openStandaloneToolWindow(tool: StandaloneWindowTool) {
@@ -525,15 +792,7 @@ function thumbnailPickerForSender(contents: WebContents) {
 
 async function validateThumbnailPickerImage(state: ThumbnailPickerWindowState, imagePath: unknown) {
   if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
-  const finalArtifact = await getFinalArtifactStatus(state.root);
-  if (!finalArtifact.exists || !finalArtifact.directory)
-    throw new Error('最終成果物ディレクトリが設定されていません。');
-  const resolved = path.resolve(imagePath);
-  const allowed = (await listThumbnailImages(finalArtifact.directory)).some(
-    (item) => projectRootKey(item.path) === projectRootKey(resolved),
-  );
-  if (!allowed) throw new Error('最終成果物ディレクトリ外の画像は選択できません。');
-  return resolved;
+  return assertFinalArtifactImage(state.root, imagePath);
 }
 
 function openThumbnailPickerWindow(
@@ -1731,6 +1990,51 @@ function integratedCatalogStatus(): CivitaiCatalogStatus {
 async function scanWithCatalog(root: string) {
   return scanProject(root);
 }
+async function setGrokContext(state: ProjectWindowState, root: string, stage: GrokContextStage) {
+  validRoot(root);
+  validGrokContextStage(stage);
+  const resolvedRoot = path.resolve(root),
+    key = `${resolvedRoot}\0${stage}`,
+    loadingGeneration = ++state.grokLoadingGeneration;
+  state.grokLoading = true;
+  layoutProjectWindow(state);
+  try {
+    return await state.grokContextQueue.run(key, async (isLatest) => {
+      if (!isLatest()) return paneState(state);
+      if (state.activeGrokContext) {
+        const current = canonicalGrokConversationUrl(state.grokView.webContents.getURL());
+        if (current)
+          await chatStore().remember(
+            state.activeGrokContext.root,
+            state.activeGrokContext.stage,
+            current,
+          );
+      }
+      if (!isLatest()) return paneState(state);
+      state.activeGrokContext = { root: resolvedRoot, stage };
+      const saved = await chatStore().get(resolvedRoot, stage);
+      if (!isLatest()) return paneState(state);
+      const target = saved ?? GROK_URL,
+        current = state.grokView.webContents.getURL(),
+        currentCanonical = canonicalGrokConversationUrl(current);
+      const alreadyThere = saved ? currentCanonical === saved : current === GROK_URL;
+      if (!alreadyThere) {
+        state.restoringGrokContext = true;
+        try {
+          await state.grokNavigationQueue.navigate(state.grokView.webContents, target);
+        } finally {
+          state.restoringGrokContext = false;
+        }
+      }
+      return paneState(state);
+    });
+  } finally {
+    if (loadingGeneration === state.grokLoadingGeneration) {
+      state.grokLoading = false;
+      layoutProjectWindow(state);
+    }
+  }
+}
 function assistantContextFor(state: ProjectWindowState): AssistantPaneContext {
   if (!state.assistantContext) throw new Error('AI工程が選択されていません。');
   return state.assistantContext;
@@ -1747,7 +2051,7 @@ function setAssistantContext(
     provider: state.paneProvider,
   };
   state.assistantContext = context;
-  state.assistantView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, context);
+  state.codexView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, context);
   return context;
 }
 
@@ -1798,6 +2102,30 @@ async function assistantSnapshot(state: ProjectWindowState): Promise<AssistantPa
   };
 }
 
+function codexService() {
+  if (!codexAppServer || !codexChatState) throw new Error('Codexが初期化されていません。');
+  return { server: codexAppServer, store: codexChatState };
+}
+function codexCliTransportEnabled() {
+  return (process.env.BATCH_STUDIO_CODEX_TRANSPORT ?? '').trim().toLowerCase() === 'cli';
+}
+function isAgentWorkspace(
+  workspace: FileArtifactWorkspace | AgentWorkspace,
+): workspace is AgentWorkspace {
+  return (
+    'provider' in workspace &&
+    workspace.provider === 'codex' &&
+    'inputDirectory' in workspace &&
+    typeof workspace.inputDirectory === 'string' &&
+    'outputDirectory' in workspace &&
+    typeof workspace.outputDirectory === 'string'
+  );
+}
+function codexCliService() {
+  if (!codexCliAdapter || !agentSessionState || !codexChatState)
+    throw new Error('Codex CLIが初期化されていません。');
+  return { adapter: codexCliAdapter, sessions: agentSessionState, legacyStore: codexChatState };
+}
 function notifyAgentEvent(
   provider: AgentProvider,
   context: { root: string; stage: GrokContextStage },
@@ -1815,8 +2143,387 @@ function notifyAgentEvent(
       projectRootKey(state.assistantContext.root) === projectRootKey(context.root) &&
       state.assistantContext.stage === context.stage
     )
-      state.assistantView.webContents.send(IPC.AGENT_EVENT, envelope);
+      state.codexView.webContents.send(IPC.AGENT_EVENT, envelope);
   }
+}
+function forwardCodexCliEvent(
+  context: CodexContext,
+  taskStage: GrokTask['stage'],
+  threadId: string,
+  turnId: string,
+  event: AgentEvent,
+) {
+  notifyAgentEvent('codex', context, taskStage, event);
+  if (event.type === 'turn.started') {
+    forwardCodexNotification({
+      method: 'turn/started',
+      params: { threadId, turn: { id: turnId, status: 'inProgress' } },
+    });
+    return;
+  }
+  if (event.type === 'message.delta') {
+    forwardCodexNotification({
+      method: 'item/agentMessage/delta',
+      params: { threadId, delta: event.text },
+    });
+    return;
+  }
+  if (event.type === 'turn.completed') {
+    codexCliActiveTurnIds.delete(threadId);
+    forwardCodexNotification({
+      method: 'turn/completed',
+      params: { threadId, turn: { id: turnId, status: 'completed' } },
+    });
+    return;
+  }
+  if (event.type === 'turn.failed') {
+    codexCliActiveTurnIds.delete(threadId);
+    forwardCodexNotification({
+      method: 'turn/completed',
+      params: {
+        threadId,
+        turn: { id: turnId, status: 'failed', error: { message: event.error } },
+      },
+    });
+    return;
+  }
+  if (event.type === 'turn.cancelled') {
+    codexCliActiveTurnIds.delete(threadId);
+    forwardCodexNotification({
+      method: 'turn/completed',
+      params: { threadId, turn: { id: turnId, status: 'interrupted' } },
+    });
+  }
+}
+function codexContextFor(state: ProjectWindowState): CodexContext {
+  const context = state.codexContext;
+  if (
+    !context ||
+    !state.projectRoot ||
+    projectRootKey(context.root) !== projectRootKey(state.projectRoot)
+  )
+    throw new Error('Codexを利用するプロジェクトと工程を選択してください。');
+  return context;
+}
+function forwardCodexNotification(notification: CodexNotification) {
+  const threadId = notification.params.threadId;
+  const status =
+    typeof threadId === 'string' ? codexTurnMonitor.notification(threadId, notification) : null;
+  if (notification.method === 'turn/started' && typeof threadId === 'string') {
+    const turn = notification.params.turn as Record<string, unknown> | undefined;
+    const turnId = typeof turn?.id === 'string' ? turn.id : notification.params.turnId;
+    if (typeof turnId === 'string' && codexBusy.has(threadId))
+      codexActiveTurnIds.set(threadId, turnId);
+  }
+  if (notification.method === 'turn/completed' && typeof threadId === 'string') {
+    codexBusy.delete(threadId);
+    codexActiveTurnIds.delete(threadId);
+  }
+  for (const state of projectWindows.values()) {
+    const context = state.codexContext;
+    if (!context) continue;
+    // Account notifications are global; turn notifications belong only to the active stage thread.
+    if (!notification.method.startsWith('account/')) {
+      if (typeof threadId !== 'string' || threadId !== stateCodexActiveThread.get(state.window.id))
+        continue;
+    }
+    // Never forward raw item objects, raw reasoning or artifact answer deltas.
+    // Only an allowlisted, length-bounded progress projection reaches the renderer.
+    const isSafeMessageDelta =
+      notification.method === 'item/agentMessage/delta' &&
+      !codexPendingArtifacts.has(threadId as string);
+    // Forward only the fields consumed by the UI, never full Turn/Item objects.
+    if (notification.method.startsWith('account/'))
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: notification.method,
+        params: {},
+      });
+    if (notification.method === 'turn/started' || notification.method === 'turn/completed') {
+      const turn = notification.params.turn as Record<string, unknown> | undefined;
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: notification.method,
+        params: {
+          threadId,
+          turn: { id: turn?.id, status: turn?.status },
+        },
+      });
+    }
+    if (isSafeMessageDelta)
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: notification.method,
+        params: {
+          threadId,
+          delta: notification.params.delta,
+        },
+      });
+    const activity = safeCodexActivityEvent(notification.method, notification.params);
+    if (activity)
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: 'batch-studio/activity',
+        params: { threadId, activity },
+      });
+    if (status)
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: 'batch-studio/turn-status',
+        params: { threadId, status },
+      });
+  }
+  if (notification.method === 'turn/completed' && typeof threadId === 'string') {
+    const pending = codexPendingArtifacts.get(threadId);
+    if (pending) {
+      codexPendingArtifacts.delete(threadId);
+      void collectCodexArtifact(threadId, pending, notification.params);
+    }
+  }
+}
+const stateCodexActiveThread = new Map<number, string | null>();
+function messageText(item: Record<string, unknown>): string {
+  if (typeof item.text === 'string') return item.text;
+  if (!Array.isArray(item.content)) return '';
+  return item.content
+    .filter(
+      (content): content is { text: string } =>
+        typeof content === 'object' &&
+        content !== null &&
+        typeof (content as { text?: unknown }).text === 'string',
+    )
+    .map((content) => content.text)
+    .join('\n');
+}
+function codexMessages(result: unknown): CodexMessage[] {
+  const thread = (result as { thread?: { turns?: unknown[] } } | null)?.thread;
+  if (!Array.isArray(thread?.turns)) return [];
+  const messages: CodexMessage[] = [];
+  for (const turn of thread.turns) {
+    const artifactFile = codexTaskFileForTurn(turn);
+    const items = (turn as { items?: unknown[] } | null)?.items;
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      const record = item as Record<string, unknown>;
+      const role =
+        record.type === 'userMessage'
+          ? 'user'
+          : record.type === 'agentMessage'
+            ? 'assistant'
+            : null;
+      const text = messageText(record);
+      if (role && text)
+        messages.push({
+          id: String(record.id ?? messages.length),
+          role,
+          text: artifactFile
+            ? role === 'user'
+              ? `工程用の依頼を送信（${artifactFile}）`
+              : `${artifactFile} の取り込み結果は下に表示します。JSON本文は表示しません。`
+            : text,
+        });
+    }
+  }
+  return messages;
+}
+function codexTurnStatus(threadId: string | null): CodexTurnStatus {
+  return threadId
+    ? (codexTurnMonitor.get(threadId) ?? {
+        phase: 'unknown',
+        startedAt: null,
+        updatedAt: null,
+        finishedAt: null,
+        error: null,
+      })
+    : { phase: 'idle', startedAt: null, updatedAt: null, finishedAt: null, error: null };
+}
+async function codexArtifactFor(
+  context: CodexContext,
+  threadId: string | null,
+  lastTurnId?: string,
+): Promise<AutoArtifactEvent | null> {
+  if (!threadId) return null;
+  const pending = codexPendingArtifacts.get(threadId);
+  if (pending && projectRootKey(pending.root) === projectRootKey(context.root))
+    return {
+      provider: 'codex',
+      root: pending.root,
+      stage: pending.stage,
+      fileName: pending.fileName,
+      sourceId: threadId,
+      phase: 'waiting',
+    };
+  if (!lastTurnId) return null;
+  return (
+    (await latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/' + lastTurnId)) ??
+    latestAutoArtifact(context.root, 'codex', context.stage, threadId + '/')
+  );
+}
+async function codexSnapshot(state: ProjectWindowState): Promise<CodexSnapshot> {
+  const context = codexContextFor(state);
+  const { server, store } = codexService();
+  const saved = await store.get(context.root, context.stage);
+  const artifact = await codexArtifactFor(context, saved.activeThreadId);
+  stateCodexActiveThread.set(state.window.id, saved.activeThreadId);
+  if (!saved.activeThreadId)
+    return {
+      ...context,
+      ...saved,
+      messages: [],
+      activity: emptyCodexActivity(),
+      busy: false,
+      status: codexTurnStatus(null),
+      artifact,
+    };
+
+  // A thread/start ID exists before its first rollout is persisted. Reading or
+  // resuming it while the first turn is running fails with "no rollout found".
+  const busy = codexBusy.has(saved.activeThreadId);
+  if (busy)
+    return {
+      ...context,
+      ...saved,
+      messages: [],
+      activity: emptyCodexActivity(),
+      busy: true,
+      status: codexTurnStatus(saved.activeThreadId),
+      artifact,
+    };
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      // Reading history must never resume a thread; resume belongs to send only.
+      const read = await readCodexHistory(
+        (method, params) => server.request(method, params),
+        saved.activeThreadId,
+      );
+      const turns = (read as { thread?: { turns?: Array<{ id?: unknown }> } } | null)?.thread
+        ?.turns;
+      const lastTurn = turns?.at(-1);
+      const lastTurnId = typeof lastTurn?.id === 'string' ? lastTurn.id : null;
+      return {
+        ...context,
+        ...saved,
+        messages: codexMessages(read),
+        activity: codexActivityFromHistory(read),
+        busy: false,
+        status: codexTurnMonitor.fromRead(saved.activeThreadId, read),
+        artifact:
+          lastTurnId && codexTaskFileForTurn(lastTurn)
+            ? await codexArtifactFor(context, saved.activeThreadId, lastTurnId)
+            : null,
+      };
+    } catch (error) {
+      if (!(error instanceof Error) || !/no rollout found for thread id/i.test(error.message))
+        throw error;
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+      // Do not delete a possibly recoverable conversation ID. The user can
+      // retry restoration or explicitly start a new chat.
+      return {
+        ...context,
+        ...saved,
+        messages: [],
+        activity: emptyCodexActivity(),
+        busy: false,
+        historyUnavailable: true,
+        status: codexTurnStatus(saved.activeThreadId),
+        artifact,
+      };
+    }
+  }
+  throw new Error('Unexpected Codex snapshot state.');
+}
+
+async function codexAccount(): Promise<CodexAccountStatus> {
+  const { server } = codexService();
+  const result = await server.request<{
+    account?: { type?: string; planType?: string } | null;
+  }>('account/read', {});
+  return {
+    authenticated: result.account?.type === 'chatgpt',
+    authMode: result.account?.type ?? null,
+    planType: result.account?.planType ?? null,
+  };
+}
+async function codexAvailableModels(): Promise<CodexModelOption[]> {
+  const { server } = codexService();
+  const models: CodexModelOption[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 10; page++) {
+    const response: {
+      data?: Array<{
+        id?: unknown;
+        model?: unknown;
+        displayName?: unknown;
+        hidden?: unknown;
+        isDefault?: unknown;
+        defaultReasoningEffort?: unknown;
+        supportedReasoningEfforts?: Array<{
+          reasoningEffort?: unknown;
+          description?: unknown;
+        }>;
+      }>;
+      nextCursor?: string | null;
+    } = await server.request('model/list', { limit: 100, includeHidden: false, cursor });
+    if (!Array.isArray(response.data)) throw new Error('Codexからモデル一覧を取得できません。');
+    for (const item of response.data) {
+      const id =
+        typeof item.model === 'string' && item.model
+          ? item.model
+          : typeof item.id === 'string'
+            ? item.id
+            : '';
+      const efforts = Array.isArray(item.supportedReasoningEfforts)
+        ? item.supportedReasoningEfforts
+            .filter(
+              (effort) => typeof effort.reasoningEffort === 'string' && effort.reasoningEffort,
+            )
+            .map((effort) => ({
+              reasoningEffort: effort.reasoningEffort as string,
+              description: typeof effort.description === 'string' ? effort.description : '',
+            }))
+        : [];
+      if (
+        !id ||
+        item.hidden === true ||
+        efforts.length === 0 ||
+        models.some((model) => model.id === id)
+      )
+        continue;
+      const defaultEffort =
+        typeof item.defaultReasoningEffort === 'string' &&
+        efforts.some((effort) => effort.reasoningEffort === item.defaultReasoningEffort)
+          ? item.defaultReasoningEffort
+          : efforts[0].reasoningEffort;
+      models.push({
+        id,
+        displayName: typeof item.displayName === 'string' ? item.displayName : id,
+        isDefault: item.isDefault === true,
+        defaultReasoningEffort: defaultEffort,
+        supportedReasoningEfforts: efforts,
+      });
+    }
+    if (!response.nextCursor) break;
+    if (response.nextCursor === cursor)
+      throw new Error('Codexのモデル一覧のページ送りに失敗しました。');
+    cursor = response.nextCursor;
+    if (page === 9) throw new Error('Codexのモデル一覧が多すぎます。');
+  }
+  if (!models.length) throw new Error('Codexで使用できるモデルが見つかりません。');
+  return models;
+}
+async function codexModelSettings(context: CodexContext): Promise<CodexModelSettings> {
+  if (!codexModelSelections) throw new Error('Codexモデル設定が初期化されていません。');
+  const [models, saved] = await Promise.all([
+    codexAvailableModels(),
+    codexModelSelections.get(context.root, context.stage),
+  ]);
+  const requested = models.find((model) => model.id === saved?.model);
+  const model = requested ?? models.find((entry) => entry.isDefault) ?? models[0];
+  const effort =
+    requested &&
+    model.supportedReasoningEfforts.some((item) => item.reasoningEffort === saved?.effort)
+      ? saved!.effort
+      : model.defaultReasoningEffort;
+  return { models, selection: { model: model.id, effort } };
 }
 function assistantAdapter(provider: AgentProvider): AgentCliAdapter {
   const adapter = provider === 'codex' ? codexCliAdapter : grokCliAdapter;
@@ -1830,6 +2537,23 @@ async function assistantModelSettings(
   provider: AgentProvider,
 ): Promise<AgentModelSettings> {
   if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
+  if (provider === 'codex') {
+    const settings = await codexModelSettings({ root, stage });
+    return {
+      models: settings.models.map((model) => ({
+        id: model.id,
+        displayName: model.displayName,
+        supportedReasoningEfforts: model.supportedReasoningEfforts.map(
+          (effort) => effort.reasoningEffort,
+        ),
+      })),
+      selection: {
+        model: settings.selection.model,
+        reasoningEffort: settings.selection.effort,
+      },
+    };
+  }
+
   const adapter = assistantAdapter(provider);
   if (!adapter.getModels) return { models: [], selection: { model: null } };
   const available = await adapter.getModels();
@@ -1840,14 +2564,10 @@ async function assistantModelSettings(
   const model = requested ?? fallback;
   const requestedEffort = saved?.reasoningEffort;
   const supported = model?.supportedReasoningEfforts;
-  const defaultEffort =
-    model?.id === available.selection.model
-      ? available.selection.reasoningEffort
-      : (supported?.[0] ?? available.selection.reasoningEffort);
   const reasoningEffort =
     requestedEffort && (!supported?.length || supported.includes(requestedEffort))
       ? requestedEffort
-      : defaultEffort;
+      : available.selection.reasoningEffort;
   return {
     models: available.models,
     selection: {
@@ -1886,18 +2606,443 @@ async function assistantChooseModel(
     model: requested.model,
     ...(requested.reasoningEffort != null ? { reasoningEffort: requested.reasoningEffort } : {}),
   };
+  if (provider === 'codex' && normalized.model) {
+    const codexSettings = await codexModelSettings({ root, stage });
+    const codexModel = codexSettings.models.find((item) => item.id === normalized.model);
+    const effort =
+      normalized.reasoningEffort ??
+      codexModel?.defaultReasoningEffort ??
+      codexSettings.selection.effort;
+    if (!codexModel?.supportedReasoningEfforts.some((item) => item.reasoningEffort === effort))
+      throw new Error('選択したCodexモデルと推論強度を利用できません。');
+    if (!codexModelSelections || !agentModelSelections)
+      throw new Error('AIモデル設定が初期化されていません。');
+    const selected = { model: normalized.model, reasoningEffort: effort };
+    await Promise.all([
+      codexModelSelections.remember(root, stage, { model: normalized.model, effort }),
+      agentModelSelections.remember(root, stage, provider, selected),
+    ]);
+    return selected;
+  }
   if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
   await agentModelSelections.remember(root, stage, provider, normalized);
   return normalized;
 }
 
+async function codexChooseModel(
+  state: ProjectWindowState,
+  selection: unknown,
+): Promise<CodexModelSelection> {
+  const context = codexContextFor(state);
+  if (
+    !selection ||
+    typeof selection !== 'object' ||
+    typeof (selection as CodexModelSelection).model !== 'string' ||
+    typeof (selection as CodexModelSelection).effort !== 'string'
+  )
+    throw new Error('Codexモデルと推論強度を選択してください。');
+  const requested = selection as CodexModelSelection;
+  const saved = await codexService().store.get(context.root, context.stage);
+  if (saved.activeThreadId && codexBusy.has(saved.activeThreadId))
+    throw new Error('回答生成中はモデルと推論強度を変更できません。');
+  const models = await codexAvailableModels();
+  const model = models.find((item) => item.id === requested.model);
+  if (
+    !model ||
+    !model.supportedReasoningEfforts.some((item) => item.reasoningEffort === requested.effort)
+  )
+    throw new Error('このモデルと推論強度の組み合わせはCodexで利用できません。');
+  if (!codexModelSelections) throw new Error('Codexモデル設定が初期化されていません。');
+  await codexModelSelections.remember(context.root, context.stage, requested);
+  return requested;
+}
+function defaultTaskStage(context: GrokContextStage): GrokTask['stage'] {
+  if (context === 'story') return 'story-initial';
+  if (context === 'models') return 'models';
+  if (context === 'prompt-plan') return 'prompt-plan';
+  return 'caption';
+}
+
+async function codexSendViaCli(
+  state: ProjectWindowState,
+  message: string,
+  artifactStage?: GrokTask['stage'],
+  workspace?: AgentWorkspace,
+): Promise<CodexSendResult> {
+  const context = codexContextFor(state);
+  const input = message.trim();
+  if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
+  const { adapter, sessions, legacyStore } = codexCliService();
+  const availability = await adapter.checkAvailability();
+  if (availability.state !== 'available')
+    throw new Error(availability.message ?? 'Codex CLIを利用できません。');
+
+  const taskStage = artifactStage ?? defaultTaskStage(context.stage);
+  const settings = await codexModelSettings(context);
+  const saved = await legacyStore.get(context.root, context.stage);
+  const existingThreadId = saved.activeThreadId;
+  if (existingThreadId && codexBusy.has(existingThreadId))
+    throw new Error('このチャットは回答生成中です。');
+
+  let observedThreadId: string | null = existingThreadId;
+  let ready = false;
+  const queued: AgentEvent[] = [];
+  const dispatch = (event: AgentEvent) => {
+    if (event.type === 'session.started') {
+      observedThreadId = event.sessionId;
+      notifyAgentEvent('codex', context, taskStage, event);
+      return;
+    }
+    if (!ready) {
+      queued.push(event);
+      return;
+    }
+    if (!observedThreadId) return;
+    const activeTurnId = codexCliActiveTurnIds.get(observedThreadId);
+    if (activeTurnId)
+      forwardCodexCliEvent(context, taskStage, observedThreadId, activeTurnId, event);
+    else notifyAgentEvent('codex', context, taskStage, event);
+  };
+  const request = {
+    context,
+    taskStage,
+    prompt: input,
+    extra: '',
+    ...(workspace ? { workspace } : {}),
+    model: {
+      model: settings.selection.model,
+      reasoningEffort: settings.selection.effort,
+    },
+  };
+  const turn = existingThreadId
+    ? await adapter.resumeTask(existingThreadId, request, dispatch)
+    : await adapter.startTask(request, dispatch);
+  const threadId = turn.sessionId;
+  observedThreadId = threadId;
+
+  await Promise.all([
+    legacyStore.remember(context.root, context.stage, threadId),
+    sessions.remember(context.root, context.stage, 'codex', threadId),
+  ]);
+  stateCodexActiveThread.set(state.window.id, threadId);
+  codexBusy.add(threadId);
+  codexCliActiveTurnIds.set(threadId, turn.turnId);
+  codexTurnMonitor.sending(threadId);
+
+  const artifactFile = artifactStage ? expectedArtifact(artifactStage) : null;
+  if (artifactFile && artifactStage)
+    codexPendingArtifacts.set(threadId, {
+      root: context.root,
+      stage: artifactStage,
+      fileName: artifactFile,
+      workspace,
+    });
+  if (workspace) await rememberAgentWorkspace(context.root, workspace, threadId, turn.turnId);
+
+  ready = true;
+  for (const event of queued.splice(0))
+    forwardCodexCliEvent(context, taskStage, threadId, turn.turnId, event);
+
+  void adapter.waitForCompletion(turn.turnId).catch((error) => {
+    if (error instanceof AgentTurnCancelledError) return;
+    // Post-start failures are already projected as AgentEvent turn.failed by the adapter.
+    // This catch prevents an unhandled rejection while the event path remains authoritative.
+  });
+
+  return {
+    ...(await legacyStore.get(context.root, context.stage)),
+    status: codexTurnStatus(threadId),
+    artifact:
+      artifactFile && artifactStage
+        ? {
+            provider: 'codex',
+            root: context.root,
+            stage: artifactStage,
+            fileName: artifactFile,
+            sourceId: threadId,
+            phase: 'waiting',
+          }
+        : null,
+  };
+}
+
+async function codexSend(
+  state: ProjectWindowState,
+  message: string,
+  artifactStage?: GrokTask['stage'],
+  workspace?: FileArtifactWorkspace | AgentWorkspace,
+  forceCli = false,
+): Promise<CodexSendResult> {
+  const context = codexContextFor(state);
+  const input = message.trim();
+  if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
+  if (forceCli || codexCliTransportEnabled()) {
+    const cliWorkspace: AgentWorkspace | undefined = workspace
+      ? isAgentWorkspace(workspace)
+        ? workspace
+        : {
+            ...workspace,
+            provider: 'codex',
+            inputDirectory: path.join(workspace.directory, 'input'),
+            outputDirectory: path.join(workspace.directory, 'output'),
+          }
+      : undefined;
+    return codexSendViaCli(state, input, artifactStage, cliWorkspace);
+  }
+  if (workspace && isAgentWorkspace(workspace))
+    throw new Error('共通Agent WorkspaceをCodex App Server経路では使用できません。');
+  const account = await codexAccount();
+  if (!account.authenticated)
+    throw new Error(
+      'ChatGPTアカウントでCodexにサインインしてください。APIキー認証では送信しません。',
+    );
+  const { server, store } = codexService();
+  const settings = await codexModelSettings(context);
+  const saved = await store.get(context.root, context.stage);
+  let threadId = saved.activeThreadId;
+  if (threadId && codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
+  // All file-producing turns run in a disposable workspace, not the project.
+  // Normal conversations remain read-only, including after a writable turn.
+  const cwd = workspace?.directory ?? context.root;
+  const sandbox = workspace ? 'workspace-write' : 'read-only';
+  if (!threadId) {
+    const started = await server.request<{ thread: { id: string } }>('thread/start', {
+      cwd,
+      approvalPolicy: 'never',
+      sandbox,
+      serviceName: 'comfyui_batch_studio',
+      ephemeral: false,
+    });
+    threadId = started.thread.id;
+    await store.remember(context.root, context.stage, threadId);
+  } else {
+    await server.request('thread/resume', {
+      threadId,
+      cwd,
+      approvalPolicy: 'never',
+      sandbox,
+    });
+  }
+  if (codexBusy.has(threadId)) throw new Error('このチャットは回答生成中です。');
+  stateCodexActiveThread.set(state.window.id, threadId);
+  codexBusy.add(threadId);
+  const artifactFile = artifactStage ? expectedArtifact(artifactStage) : null;
+  if (artifactFile && artifactStage)
+    codexPendingArtifacts.set(threadId, {
+      root: context.root,
+      stage: artifactStage,
+      fileName: artifactFile,
+      workspace,
+    });
+  codexTurnMonitor.sending(threadId);
+  try {
+    const turnStart = server.request<{ turn: { id: string } }>('turn/start', {
+      threadId,
+      input: [{ type: 'text', text: input, text_elements: [] }],
+      ...(workspace
+        ? {
+            cwd,
+            approvalPolicy: 'never',
+            sandboxPolicy: {
+              type: 'workspaceWrite',
+              writableRoots: [cwd],
+              networkAccess: false,
+            },
+          }
+        : { cwd, sandboxPolicy: { type: 'readOnly', networkAccess: false } }),
+      model: settings.selection.model,
+      effort: settings.selection.effort,
+      summary: 'auto',
+    });
+    const turnIdRequest = turnStart.then((result) => {
+      if (typeof result?.turn?.id !== 'string') throw new Error('CodexターンIDを取得できません。');
+      return result.turn.id;
+    });
+    codexTurnStartRequests.set(threadId, turnIdRequest);
+    const turnId = await turnIdRequest;
+    if (codexBusy.has(threadId)) codexActiveTurnIds.set(threadId, turnId);
+    if (workspace && codexBusy.has(threadId))
+      await rememberCodexWorkspace(context.root, workspace, threadId, turnId);
+  } catch (error) {
+    // A completed turn can race with turn/start returning. Do not replace its
+    // terminal state with a send failure or discard an artifact after completion.
+    if (codexBusy.has(threadId)) {
+      codexBusy.delete(threadId);
+      codexPendingArtifacts.delete(threadId);
+      codexActiveTurnIds.delete(threadId);
+      codexTurnMonitor.failedToSend(
+        threadId,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    throw error;
+  } finally {
+    codexTurnStartRequests.delete(threadId);
+  }
+  // Return metadata without reading a rollout that may not yet be persisted.
+  return {
+    ...(await store.get(context.root, context.stage)),
+    status: codexTurnStatus(threadId),
+    artifact:
+      artifactFile && artifactStage
+        ? {
+            provider: 'codex',
+            root: context.root,
+            stage: artifactStage,
+            fileName: artifactFile,
+            sourceId: threadId,
+            phase: 'waiting',
+          }
+        : null,
+  };
+}
+async function codexStopTurn(state: ProjectWindowState, forceCli = false): Promise<CodexSnapshot> {
+  const context = codexContextFor(state);
+  if (forceCli || codexCliTransportEnabled()) {
+    const { adapter, legacyStore } = codexCliService();
+    const saved = await legacyStore.get(context.root, context.stage);
+    const threadId = saved.activeThreadId;
+    if (!threadId || !codexBusy.has(threadId)) return codexSnapshot(state);
+    const turnId = codexCliActiveTurnIds.get(threadId);
+    if (!turnId) throw new Error('中止対象のCodex CLI turnを特定できません。');
+    await adapter.stop(turnId);
+    return codexSnapshot(state);
+  }
+  const { server, store } = codexService();
+  const saved = await store.get(context.root, context.stage);
+  const threadId = saved.activeThreadId;
+  if (!threadId || !codexBusy.has(threadId)) return codexSnapshot(state);
+  let interrupt = codexInterruptRequests.get(threadId);
+  if (!interrupt) {
+    interrupt = (async () => {
+      // The stop button can be pressed before turn/start returns its turn ID.
+      const turnId =
+        codexActiveTurnIds.get(threadId) ?? (await codexTurnStartRequests.get(threadId));
+      if (!turnId) throw new Error('中止対象のCodexターンを特定できません。');
+      if (!codexBusy.has(threadId)) return;
+      await server.request('turn/interrupt', { threadId, turnId });
+    })();
+    codexInterruptRequests.set(threadId, interrupt);
+  }
+  try {
+    await interrupt;
+  } finally {
+    if (codexInterruptRequests.get(threadId) === interrupt) codexInterruptRequests.delete(threadId);
+  }
+  // Do not mark the turn interrupted locally. turn/completed provides the
+  // authoritative terminal status and releases the busy lock.
+  return codexSnapshot(state);
+}
 function notifyAutoArtifact(event: AutoArtifactEvent) {
   for (const state of projectWindows.values()) {
     if (state.projectRoot && projectRootKey(state.projectRoot) === projectRootKey(event.root)) {
       state.localView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);
-      state.assistantView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);
+      state.codexView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);
     }
   }
+}
+async function collectCodexArtifact(
+  threadId: string,
+  pending: {
+    root: string;
+    stage: GrokTask['stage'];
+    fileName: string;
+    workspace?: FileArtifactWorkspace | AgentWorkspace;
+  },
+  params: Record<string, unknown>,
+): Promise<AutoArtifactEvent | null> {
+  const turn = params.turn as { status?: unknown; id?: unknown } | undefined;
+  if (turn?.status !== 'completed') {
+    const failed: AutoArtifactEvent = {
+      provider: 'codex',
+      root: pending.root,
+      stage: pending.stage,
+      fileName: pending.fileName,
+      sourceId: threadId,
+      phase: 'failed',
+      message: 'Codexが正常終了していないため、成果物は取り込みません。',
+    };
+    notifyAutoArtifact(failed);
+    return failed;
+  }
+  if (pending.workspace) {
+    try {
+      const raw = isAgentWorkspace(pending.workspace)
+        ? await readAgentWorkspaceOutput(pending.workspace)
+        : await readCodexOutput(pending.workspace);
+      const turnId = typeof turn.id === 'string' ? turn.id : 'last';
+      return await importAutoArtifact(
+        pending.root,
+        'codex',
+        pending.stage,
+        threadId + '/' + turnId,
+        raw,
+        notifyAutoArtifact,
+      );
+    } catch (error) {
+      const failed: AutoArtifactEvent = {
+        provider: 'codex',
+        root: pending.root,
+        stage: pending.stage,
+        fileName: pending.fileName,
+        sourceId: threadId,
+        phase: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      };
+      notifyAutoArtifact(failed);
+      return failed;
+    }
+  }
+  // Backward compatibility for artifact turns created before file-based output.
+  const server = codexService().server;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const read = await readCodexHistory(
+        (method, params) => server.request(method, params),
+        threadId,
+      );
+      const turns = read.thread?.turns ?? [];
+      const current =
+        typeof turn.id === 'string'
+          ? turns.find((candidate) => candidate.id === turn.id)
+          : turns.at(-1);
+      if (!current || codexTaskFileForTurn(current) !== pending.fileName)
+        throw new Error('Codexの完了した依頼と成果物を対応付けられません。');
+      const items = current.items ?? [];
+      const reply = [...items]
+        .reverse()
+        .find((item) => (item as { type?: string } | null)?.type === 'agentMessage');
+      const raw =
+        reply && typeof reply === 'object' ? messageText(reply as Record<string, unknown>) : '';
+      if (!raw.trim()) throw new Error('Codexの完成した成果物本文がありません。');
+      const sourceId = threadId + '/' + String(current.id ?? 'last');
+      return importAutoArtifact(
+        pending.root,
+        'codex',
+        pending.stage,
+        sourceId,
+        raw,
+        notifyAutoArtifact,
+      );
+    } catch (error) {
+      if (attempt < 5) {
+        await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+        continue;
+      }
+      const failed: AutoArtifactEvent = {
+        provider: 'codex',
+        root: pending.root,
+        stage: pending.stage,
+        fileName: pending.fileName,
+        sourceId: threadId,
+        phase: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      };
+      notifyAutoArtifact(failed);
+      return failed;
+    }
+  }
+  return null;
 }
 const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
   story: ['story-initial', 'story-finalize', 'story-fix'],
@@ -1905,7 +3050,6 @@ const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
   'prompt-plan': ['prompt-plan', 'prompt-plan-fix', 'prompt-plan-patch'],
   caption: ['caption'],
 };
-
 function contextStageForTask(stage: GrokTask['stage']): GrokContextStage {
   for (const [contextStage, stages] of Object.entries(codexTaskContexts) as Array<
     [GrokContextStage, GrokTask['stage'][]]
@@ -1914,6 +3058,118 @@ function contextStageForTask(stage: GrokTask['stage']): GrokContextStage {
   }
   throw new Error('Invalid task stage.');
 }
+const codexReturnFile: Record<GrokContextStage, string> = {
+  story: 'story.md',
+  models: 'model_loras.json',
+  'prompt-plan': 'prompt_plan.json',
+  caption: 'caption_content.json',
+};
+async function codexSendTask(
+  state: ProjectWindowState,
+  stage: GrokTask['stage'],
+  extra: string,
+  forceCli = false,
+): Promise<CodexSendResult> {
+  const context = codexContextFor(state);
+  const useCli = forceCli || codexCliTransportEnabled();
+  if (!codexTaskContexts[context.stage].includes(stage))
+    throw new Error('選択した工程に対応しない依頼です。');
+  if (stage === 'prompt-plan-patch') {
+    const baseline = await promptPlanPatchBase(context.root);
+    const workspace = useCli
+      ? await prepareAgentWorkspace(app.getPath('userData'), 'codex', stage, [
+          { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
+        ])
+      : await prepareCodexFileWorkspace(app.getPath('userData'), stage, [
+          { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
+        ]);
+    const patchPrompt = `## Task
+あなたはComfyUI Batch StudioのPrompt Plan Schema v2を修正します。
+これは相談や全文再生成ではなく、この会話で合意した変更を、現在の既存計画へ部分適用するための差分生成依頼です。
+作業ディレクトリの input/1-prompt_plan.json を読み込み、該当Branch/Leafを実際に確認してください。入力ファイルは変更しません。
+現在のファイル本文のSHA-256（UTF-8のバイト列）: ${baseline.baseSha256}
+現在の計画: ${baseline.branches} Branch / ${baseline.leaves} Leaf。
+この会話の修正対象以外のBranch/Leaf、ID、枚数、モデル設定、タグを絶対に変更しないでください。
+
+## 差分JSON形式（厳守）
+{
+  "schemaVersion": 1,
+  "baseSha256": "${baseline.baseSha256}",
+  "operations": [
+    {
+      "scope": "branch",
+      "branchId": "既存Branch ID（例: b19）",
+      "path": "prompt.triggerWords",
+      "before": [{"modelRef": "実際の既存ref", "words": ["修正前の値"]}],
+      "after": [{"modelRef": "実際の既存ref", "words": ["修正後の値"]}]
+    }
+  ]
+}
+- 上記のbefore/afterは構造例であり、実際の元ファイルから対象配列の全要素を正確に転記してください。推測で記載しないでください。
+- 操作対象は、commonならscope=commonでpath=triggerWords、positive.category、positive.camera.pov/angle/framing/gaze/focus、negative.category、Branch/Leafならscope=branch/leafでpathの先頭にprompt.を付けた同じ形式です。
+- BranchにはbranchId、LeafにはbranchIdとleafIdを指定します。共通Scopeにはどちらも指定しません。
+- beforeとafterはどちらも対象の配列全体を入れ、beforeは現在のファイル内容と完全一致させてください。変更対象外の要素は維持してください。
+- この差分はBatch Studioが基準ハッシュとbeforeを照合して原子的に下書きへ適用し、計画全件を検証します。
+- JSONは上記3つのroot fieldのみ、operationはscope/branchId/leafId/path/before/afterのみを使用してください。
+- 同じscope・Branch・Leaf・pathへの変更は1操作に統合してください。操作数は100件以下です。
+- 修正する既存配列が見つからない、または配列の全値を正確に読めない場合、差分を作成したと主張せず理由を示してください。
+- 原本全体や修正案だけの会話は出力しません。次の出力契約に従い、差分JSONをファイルに書き込んでください。
+${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
+    return codexSend(
+      state,
+      patchPrompt +
+        '\n\n' +
+        (isAgentWorkspace(workspace)
+          ? agentWorkspaceOutputInstruction(workspace)
+          : workspaceOutputInstruction(workspace)),
+      stage,
+      workspace,
+    );
+  }
+  const task = await buildGrokTask(context.root, stage, extra);
+  // Only replace provider-specific file instructions. The shared Schema v2
+  // JSON example and all validation rules must reach both Grok and Codex.
+  const prompt = task.prompt
+    .replace(artifactFileOutputRules(codexReturnFile[context.stage]), '')
+    .replaceAll('Grok', 'Codex');
+  if (stage === 'story-initial')
+    return codexSend(
+      state,
+      prompt +
+        '\n\n## Codex向け出力契約\nこれは対話用の検討依頼です。成果物ファイルはまだ作成しません。',
+      stage,
+      undefined,
+      forceCli,
+    );
+  const references: Array<{ name: string; content: string }> = [];
+  const referenceGuide: string[] = [];
+  for (const attachment of task.attachments) {
+    if (!attachment.exists) continue;
+    const content = await readFile(attachment.path, 'utf8');
+    const filename = (attachment.name.split(/[\\/]/).at(-1) ?? 'reference.txt').replace(
+      /[^a-zA-Z0-9_.-]/g,
+      '_',
+    );
+    references.push({ name: filename, content });
+    referenceGuide.push('input/' + references.length + '-' + filename + ' — ' + attachment.purpose);
+  }
+  const workspace = useCli
+    ? await prepareAgentWorkspace(app.getPath('userData'), 'codex', stage, references)
+    : await prepareCodexFileWorkspace(app.getPath('userData'), stage, references);
+  return codexSend(
+    state,
+    prompt +
+      (referenceGuide.length ? '\n\n## 参照ファイル\n' + referenceGuide.join('\n') : '') +
+      '\n\n' +
+      (isAgentWorkspace(workspace)
+        ? agentWorkspaceOutputInstruction(workspace)
+        : workspaceOutputInstruction(workspace)),
+    stage,
+    workspace,
+    forceCli,
+  );
+}
+
 function validCivitaiUrl(value: unknown) {
   if (typeof value !== 'string') return false;
   try {
@@ -2043,1806 +3299,186 @@ async function executionPreflight(root: string) {
   );
 }
 
+export function createIpcRegistrationDependencies() {
+  return {
+    GROK_URL,
+    IPC,
+    VastAiClient,
+    VastAiInstanceNotFoundError,
+    abandonExecutionRunForRemoteReplacement,
+    app,
+    assistantProviderState,
+    agentConversationRunner,
+    agentSessionState,
+    assistantChooseModel,
+    assistantContextFor,
+    assistantModelSettings,
+    assistantSnapshot,
+    beginEditArtifact,
+    buildGrokTask,
+    catalogService,
+    catalogStatus,
+    checkAvailability,
+    checkLoraFileAvailability,
+    civitaiStore,
+    clipboard,
+    codexAccount,
+    codexArtifactFor,
+    codexBusy,
+    codexChatState,
+    codexChooseModel,
+    codexContextFor,
+    codexModelSettings,
+    codexSend,
+    codexSendTask,
+    codexService,
+    codexSnapshot,
+    codexStopTurn,
+    codexTaskFileForTurn,
+    compileWorkflow,
+    confirmArtifact,
+    confirmRunStopBeforeLeave,
+    createProject,
+    deleteThumbnailOutputs,
+    dialog,
+    discardCurrentExecutionRun,
+    discardExecutionRun,
+    editorFlushReplies,
+    ensureCatalogRuntimePath,
+    ensureExecutionStatusReconciled,
+    ensureProjectWritable,
+    executionCoordinator,
+    executionPreflight,
+    expectedArtifact,
+    exportCustomMarketplaceImage,
+    exportThumbnail,
+    finalizeRemoteInstance,
+    findCodexWorkspace,
+    focusProjectWindow,
+    generateCaption,
+    generateMarketplaceImages,
+    generateMarketplaceZip,
+    getCaptionStatus,
+    getCurrentExecutionRunFast,
+    getExecutionRun,
+    getFinalArtifactStatus,
+    getMarketplaceImageTargets,
+    grokChatState,
+    handleIpc,
+    importAutoArtifact,
+    importCaptionGrok,
+    importGrok,
+    initializeCorruptMarketplaceImageState,
+    initializeCorruptThumbnailState,
+    inspectExecutionRunStorage,
+    integratedCatalogStatus,
+    isRemotePreGenerationPhase,
+    latestCompletedArtifactTurn,
+    layoutProjectWindow,
+    listExecutionRuns,
+    listExportedThumbnails,
+    listFinalArtifactImages,
+    listThumbnailFonts,
+    listThumbnailImages,
+    loadMarketplaceImageState,
+    loadThumbnailState,
+    localExecutor,
+    logThumbnailPickerPerformance,
+    manualResetFrom,
+    marketplacePickerForSender,
+    marketplacePickerWindows,
+    messageText,
+    mkdir,
+    mutateExecutionRun,
+    notifyAutoArtifact,
+    openMarketplacePickerWindow,
+    openThumbnailPickerWindow,
+    paneState,
+    path,
+    pickerPerformanceLogPath,
+    projectRootKey,
+    projectWindowForRoot,
+    projectWindowForSender,
+    r2,
+    r2Index,
+    r2LookupFor,
+    readArtifact,
+    readCachedThumbnailImage,
+    readCodexHistory,
+    readCodexOutput,
+    readFinalArtifactImage,
+    readFinalArtifactPreview,
+    readGrokLoraSelectionHistory,
+    readMarketplaceSource,
+    readMarketplaceSourcePreview,
+    readProjectMeta,
+    readThumbnailImage,
+    readThumbnailPreview,
+    readThumbnailTemplate,
+    reconcilePersistedExecutionRuns,
+    refreshRecentProjectMenu,
+    reloadCivitaiCatalog,
+    rememberMostRecentOpenProject,
+    rememberProjectAndRefreshMenu,
+    remoteExecutor,
+    remoteLifecycle,
+    remoteSceneExecutor,
+    renderMarketplacePng,
+    requestForceInterrupt,
+    requestStopScheduling,
+    resolveVastSshEndpoint,
+    restoreExecutionRunBackup,
+    restoreMarketplaceImageState,
+    restoreThumbnailState,
+    resumeExecutionRun,
+    resumeExecutionRunFinalization,
+    safeExecutionError,
+    saveDraft,
+    saveMarketplaceImageState,
+    savePixivTitle,
+    saveProjectBrief,
+    saveProjectSettings,
+    setAssistantContext,
+    savePromptPlan,
+    saveThumbnailState,
+    scanProject,
+    scanWithCatalog,
+    setGrokContext,
+    setWindowProject,
+    settingsStore,
+    shell,
+    startExecutionRun,
+    startExecutionRuntime,
+    stateCodexActiveThread,
+    stateStore,
+    statusSnapshots,
+    stopRunForExit,
+    storeWebpThumbnailPreview,
+    thumbnailCachePruneMetrics,
+    thumbnailPickerForSender,
+    thumbnailPickerWindows,
+    validCivitaiUrl,
+    validGrokContextStage,
+    validInstanceId,
+    validManualResetScope,
+    validRoot,
+    validateMarketplacePickerImage,
+    validateThumbnailPickerImage,
+    vastClient,
+    vastStore,
+    writeFile,
+    codexTaskContexts,
+    contextStageForTask,
+    grokCliTaskRunner,
+    codexReturnFile,
+    maybeQuitAfterExecution,
+  };
+}
+
+export type IpcRegistrationDependencies = ReturnType<typeof createIpcRegistrationDependencies>;
+
 function register() {
-  ipcMain.handle(IPC.EDITOR_FLUSH_RESULT, (event, id: unknown, ok: unknown, message: unknown) => {
-    if (typeof id !== 'string') return;
-    const pending = editorFlushReplies.get(id);
-    if (!pending || pending.senderId !== event.sender.id) return;
-    editorFlushReplies.delete(id);
-    pending.resolve({
-      ok: ok === true,
-      message: typeof message === 'string' ? message : undefined,
-    });
-  });
-  ipcMain.handle(IPC.APP_SETTINGS_GET, () => settingsStore().status());
-  ipcMain.handle(IPC.APP_SETTINGS_SELECT_COMFYUI, async () => {
-    const r = await dialog.showOpenDialog({
-      title: 'ComfyUIのインストール先ディレクトリを選択',
-      properties: ['openDirectory'],
-    });
-    return r.canceled ? null : r.filePaths[0];
-  });
-  ipcMain.handle(IPC.APP_SETTINGS_SAVE, async (_e, input: AppSettingsSaveInput) => {
-    const result = await settingsStore().save(input);
-    ensureCatalogRuntimePath();
-    return result;
-  });
-  ipcMain.handle(IPC.PROJECT_SELECT, async (event) => {
-    const state = projectWindowForSender(event.sender),
-      defaultPath = await stateStore().lastProjectDirectoryPath();
-    const r = await dialog.showOpenDialog({
-      title: 'プロジェクトフォルダーを選択',
-      defaultPath: defaultPath ?? undefined,
-      properties: ['openDirectory'],
-    });
-    if (r.canceled || !r.filePaths[0]) return null;
-    const root = path.resolve(r.filePaths[0]),
-      existing = projectWindowForRoot(root, state);
-    if (existing) {
-      focusProjectWindow(existing);
-      return null;
-    }
-    const project = await scanWithCatalog(root);
-    if (
-      state.projectRoot &&
-      state.projectRoot !== root &&
-      !(await confirmRunStopBeforeLeave(
-        state.projectRoot,
-        state.window,
-        'プロジェクトを切り替える',
-      ))
-    )
-      return null;
-    await setWindowProject(state, root);
-    return project;
-  });
-  ipcMain.handle(IPC.PROJECT_LAST, async (event) => {
-    const state = projectWindowForSender(event.sender);
-    let root = state.projectRoot;
-    if (!root && state.restoreLastProject) {
-      state.restoreLastProject = false;
-      root = await stateStore().lastProjectPath();
-    }
-    if (!root) return null;
-    const existing = projectWindowForRoot(root, state);
-    if (existing) {
-      focusProjectWindow(existing);
-      state.projectRoot = null;
-      return null;
-    }
-    try {
-      const project = await scanWithCatalog(root);
-      state.projectRoot = path.resolve(root);
-      statusSnapshots.delete(state.projectRoot);
-      await rememberProjectAndRefreshMenu(state.projectRoot);
-      return project;
-    } catch {
-      state.projectRoot = null;
-      return null;
-    }
-  });
-  ipcMain.handle(IPC.PROJECT_RECENT, async () => {
-    const projects = [];
-    for (const root of await stateStore().recentProjectPaths()) {
-      try {
-        projects.push(await scanWithCatalog(root));
-      } catch {}
-    }
-    return projects;
-  });
-  ipcMain.handle(IPC.PROJECT_REMOVE_RECENT, async (_e, root: unknown) => {
-    validRoot(root);
-    await stateStore().removeRecentProject(root);
-    await refreshRecentProjectMenu();
-  });
-  ipcMain.handle(IPC.PROJECT_OPEN, async (event, root: unknown) => {
-    validRoot(root);
-    const state = projectWindowForSender(event.sender),
-      existing = projectWindowForRoot(root, state);
-    if (existing) {
-      focusProjectWindow(existing);
-      return null;
-    }
-    const project = await scanWithCatalog(root);
-    await setWindowProject(state, root);
-    return project;
-  });
-  ipcMain.handle(IPC.PROJECT_CLOSE, async (event) => {
-    const state = projectWindowForSender(event.sender);
-    if (
-      state.projectRoot &&
-      !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, 'プロジェクトを閉じる'))
-    )
-      throw new Error('Runの停止がキャンセルされました。');
-    state.projectRoot = null;
-    state.assistantContext = null;
-    state.assistantView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, null);
-    state.assistantVisible = false;
-    layoutProjectWindow(state);
-    await rememberMostRecentOpenProject();
-  });
-  ipcMain.handle(IPC.PROJECT_SELECT_PARENT, async (_event, defaultPath: unknown) => {
-    const initialDirectory =
-      typeof defaultPath === 'string' && defaultPath.trim() ? defaultPath.trim() : undefined;
-    const r = await dialog.showOpenDialog({
-      title: '作成先フォルダーを選択',
-      defaultPath: initialDirectory,
-      properties: ['openDirectory', 'createDirectory'],
-    });
-    return r.canceled ? null : r.filePaths[0];
-  });
-  ipcMain.handle(IPC.PROJECT_CREATE, async (event, parent: unknown, brief: ProjectBriefInput) => {
-    if (typeof parent !== 'string') throw new Error('Invalid parent path');
-    const state = projectWindowForSender(event.sender);
-    if (
-      state.projectRoot &&
-      !(await confirmRunStopBeforeLeave(state.projectRoot, state.window, '新規プロジェクトの作成'))
-    )
-      throw new Error('Runの停止がキャンセルされました。');
-    const root = await createProject(parent, brief),
-      existing = projectWindowForRoot(root, state);
-    if (existing) {
-      focusProjectWindow(existing);
-      return scanWithCatalog(root);
-    }
-    const project = await scanWithCatalog(root);
-    await setWindowProject(state, root);
-    return project;
-  });
-  ipcMain.handle(IPC.PROJECT_SCAN, (_e, root: unknown) => {
-    validRoot(root);
-    return scanProject(root);
-  });
-  ipcMain.handle(IPC.PROJECT_OPEN_FOLDER, async (_e, root: unknown) => {
-    validRoot(root);
-    const err = await shell.openPath(root);
-    if (err) throw new Error(err);
-  });
-  ipcMain.handle(
-    IPC.PROJECT_SAVE_SETTINGS,
-    async (_e, root: unknown, settings: ProjectSettings) => {
-      validRoot(root);
-      await ensureProjectWritable(root);
-      await saveProjectSettings(root, settings);
-      return scanProject(root);
-    },
-  );
-  ipcMain.handle(IPC.PROJECT_SAVE_BRIEF, async (_e, root: unknown, brief: ProjectBriefInput) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    await saveProjectBrief(root, brief);
-    return scanProject(root);
-  });
-  ipcMain.handle(IPC.ARTIFACT_READ, (_e, root: unknown, key: any, source: any) => {
-    validRoot(root);
-    return readArtifact(root, key, source);
-  });
-  ipcMain.handle(IPC.ARTIFACT_BEGIN_EDIT, async (_e, root: unknown, key: any) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    return beginEditArtifact(root, key);
-  });
-  ipcMain.handle(IPC.ARTIFACT_SAVE_DRAFT, async (_e, root: unknown, key: any, content: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    if (typeof content !== 'string') throw new Error('Invalid content');
-    return saveDraft(root, key, content);
-  });
-  ipcMain.handle(
-    IPC.ARTIFACT_IMPORT_GROK,
-    async (_e, root: unknown, key: any, raw: unknown, stage: unknown) => {
-      validRoot(root);
-      await ensureProjectWritable(root);
-      if (typeof raw !== 'string') throw new Error('Invalid Grok response');
-      if (stage !== undefined && stage !== 'models' && stage !== 'models-fix')
-        throw new Error('Invalid Grok response stage');
-      return importGrok(root, key, raw, stage);
-    },
-  );
-  ipcMain.handle(IPC.ARTIFACT_CONFIRM, async (_e, root: unknown, key: any) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    await confirmArtifact(root, key);
-    return scanProject(root);
-  });
-  ipcMain.handle(IPC.ARTIFACT_GROK_LORA_HISTORY, (_e, root: unknown) => {
-    validRoot(root);
-    return readGrokLoraSelectionHistory(root);
-  });
-  ipcMain.handle(IPC.ARTIFACT_RESET_FROM, async (_e, root: unknown, scope: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    validManualResetScope(scope);
-    await manualResetFrom(root, scope);
-    return scanProject(root);
-  });
-  ipcMain.handle(IPC.PROMPT_PLAN_SAVE, async (_e, root: unknown, plan: PromptPlanArtifact) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    return savePromptPlan(root, plan);
-  });
-  ipcMain.handle(IPC.FILE_SHOW_IN_FOLDER, (_e, filePath: unknown) => {
-    if (typeof filePath !== 'string' || !path.isAbsolute(filePath))
-      throw new Error('Invalid file path');
-    shell.showItemInFolder(filePath);
-  });
-  ipcMain.handle(IPC.CATALOG_STATUS, (_e, root: unknown) => {
-    validRoot(root);
-    return catalogStatus(root);
-  });
-  ipcMain.handle(IPC.CATALOG_INTEGRATED_STATUS, () => integratedCatalogStatus());
-  ipcMain.handle(IPC.CATALOG_INTEGRATED_SNAPSHOT, () => catalogService().catalog());
-  ipcMain.handle(IPC.CATALOG_INTEGRATED_SYNC, async () => {
-    await catalogService().startSync();
-    return integratedCatalogStatus();
-  });
-  ipcMain.handle(IPC.CATALOG_LINK_PROJECT, async (_e, root: unknown) => {
-    validRoot(root);
-    return scanProject(root);
-  });
-  ipcMain.handle(IPC.CATALOG_TEMPLATES, () => catalogService().templates());
-  ipcMain.handle(IPC.CATALOG_SAVE_TEMPLATE, (_e, input: CatalogSelectionTemplateInput) =>
-    catalogService().saveTemplate(input),
-  );
-  ipcMain.handle(IPC.CATALOG_DELETE_TEMPLATE, (_e, id: unknown) => {
-    if (typeof id !== 'string' || !id) throw new Error('Invalid template id');
-    return catalogService().deleteTemplate(id);
-  });
-  ipcMain.handle(IPC.CATALOG_OPEN_MODEL, async (_e, url: unknown) => {
-    if (!validCivitaiUrl(url)) throw new Error('Civitai URLが不正です。');
-    await shell.openExternal(url as string);
-  });
-  ipcMain.handle(IPC.CIVITAI_SETTINGS, () => civitaiStore().status());
-  ipcMain.handle(IPC.CIVITAI_SAVE_SETTINGS, async (_e, input: CivitaiConnectionInput) => {
-    const result = await civitaiStore().save(input);
-    const service = await reloadCivitaiCatalog();
-    const initial = service.status();
-    if (initial.state === 'idle' && initial.apiKeyConfigured) void service.startSync();
-    return result;
-  });
-  ipcMain.handle(IPC.VASTAI_SETTINGS, () => vastStore().status());
-  ipcMain.handle(IPC.VASTAI_SAVE_SETTINGS, (_e, input: VastAiConnectionInput) =>
-    vastStore().save(input),
-  );
-  ipcMain.handle(IPC.VASTAI_TEST, async (_e, input: VastAiConnectionInput | undefined) => {
-    const override = typeof input?.apiKey === 'string' ? input.apiKey.trim() : '';
-    if (override) {
-      const client = new VastAiClient(async () => override);
-      await client.testConnection();
-      return;
-    }
-    await vastClient().testConnection();
-  });
-  ipcMain.handle(IPC.VASTAI_SELECT_PRIVATE_KEY, async () => {
-    const r = await dialog.showOpenDialog({
-      title: 'Vast.ai SSH秘密鍵を選択',
-      properties: ['openFile'],
-    });
-    return r.canceled ? null : r.filePaths[0];
-  });
-  ipcMain.handle(IPC.VASTAI_SELECT_PUBLIC_KEY, async () => {
-    const r = await dialog.showOpenDialog({
-      title: 'Vast.ai SSH公開鍵を選択',
-      properties: ['openFile'],
-      filters: [
-        { name: 'SSH Public Key', extensions: ['pub'] },
-        { name: 'All Files', extensions: ['*'] },
-      ],
-    });
-    return r.canceled ? null : r.filePaths[0];
-  });
-  ipcMain.handle(IPC.VASTAI_INSTANCES, () => vastClient().listInstances());
-  ipcMain.handle(IPC.VASTAI_COMFYUI_TEMPLATE, () => vastClient().comfyUiTemplate());
-  ipcMain.handle(IPC.VASTAI_SEARCH_OFFERS, (_e, input: VastAiOfferSearchInput) =>
-    vastClient().searchOffers(input),
-  );
-  ipcMain.handle(IPC.VASTAI_RENT_OFFER, async (_e, input: VastAiRentRequest) => {
-    if (!input || typeof input !== 'object') throw new Error('Invalid Vast.ai RENT request');
-    const offerId = Number(input.offerId),
-      storageGb = Number(input.storageGb),
-      templateHashId = typeof input.templateHashId === 'string' ? input.templateHashId.trim() : '';
-    if (
-      !Number.isInteger(offerId) ||
-      offerId < 1 ||
-      !Number.isFinite(storageGb) ||
-      storageGb <= 0 ||
-      !templateHashId
-    )
-      throw new Error('Invalid Vast.ai RENT request');
-    const [offer, template] = await Promise.all([
-      vastClient().getOffer(offerId, storageGb),
-      vastClient().comfyUiTemplateByHash(templateHashId),
-    ]);
-    const gpu = `${offer.gpuCount ?? '-'}x ${offer.gpuName ?? 'GPU'}`;
-    const cost = offer.hourlyCost == null ? '不明' : '$' + offer.hourlyCost.toFixed(3) + '/h';
-    const reliability =
-      offer.reliability == null ? '不明' : (offer.reliability * 100).toFixed(2) + '%';
-    const result = await dialog.showMessageBox({
-      type: 'question',
-      title: 'Vast.aiでRENT',
-      message: `${gpu} をRENTしますか？`,
-      detail: `On-demand · ${offer.geolocation ?? 'Location不明'}\n料金: ${cost}\nStorage: ${storageGb} GB\nReliability: ${reliability}\nTemplate: ${template.name}\n\nRENTするとVast.aiで課金が開始されます。`,
-      buttons: ['キャンセル', 'RENT'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    if (result.response !== 1) return null;
-    return vastClient().rentOffer({ offerId, storageGb, templateHashId }, offer);
-  });
-  ipcMain.handle(IPC.VASTAI_START_INSTANCE, async (_e, id: unknown) => {
-    await vastClient().requestStartInstance(validInstanceId(id));
-  });
-  ipcMain.handle(IPC.VASTAI_STOP_INSTANCE, async (_e, id: unknown) => {
-    await vastClient().requestStopInstance(validInstanceId(id));
-  });
-  ipcMain.handle(IPC.VASTAI_DESTROY_INSTANCE, async (_e, id: unknown) => {
-    const instanceId = validInstanceId(id);
-    const result = await dialog.showMessageBox({
-      type: 'warning',
-      title: 'Vast.ai Instanceを削除',
-      message: `Instance #${instanceId} を削除しますか？`,
-      detail: 'この操作は取り消せません。Instance上のデータも削除されます。',
-      buttons: ['キャンセル', '削除'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    if (result.response !== 1) return false;
-    await vastClient().destroyInstance(instanceId);
-    return true;
-  });
-  ipcMain.handle(IPC.VASTAI_REBOOT_INSTANCE, async (_e, id: unknown) => {
-    await vastClient().requestRebootInstance(validInstanceId(id));
-  });
-  ipcMain.handle(
-    IPC.VASTAI_RESOLVE_SSH,
-    async (_e, id: unknown): Promise<VastAiSshEndpoint> =>
-      resolveVastSshEndpoint(validInstanceId(id)),
-  );
-  ipcMain.handle(IPC.WORKFLOW_COMPILE, async (_e, root: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    return compileWorkflow(root);
-  });
-  ipcMain.handle(IPC.AVAILABILITY_CHECK, async (_e, root: unknown) => {
-    validRoot(root);
-    const settings = await settingsStore().status();
-    return checkAvailability(root, await r2LookupFor(root), settings.modelsPath);
-  });
-  ipcMain.handle(
-    IPC.AVAILABILITY_CHECK_LORA_FILES,
-    async (_e, root: unknown, fileNames: unknown) => {
-      validRoot(root);
-      if (!Array.isArray(fileNames) || fileNames.some((x) => typeof x !== 'string'))
-        throw new Error('Invalid LoRA file names');
-      const settings = await settingsStore().status();
-      return checkLoraFileAvailability(
-        root,
-        fileNames,
-        await r2LookupFor(root),
-        settings.modelsPath,
-      );
-    },
-  );
-  ipcMain.handle(IPC.AVAILABILITY_OPEN_R2, async () => {});
-  ipcMain.handle(IPC.PREFLIGHT_RUN, async (_e, root: unknown) => {
-    validRoot(root);
-    return executionPreflight(root);
-  });
-  ipcMain.handle(IPC.EXECUTION_START, async (_e, root: unknown) => {
-    validRoot(root);
-    await reconcilePersistedExecutionRuns(root);
-    const run = await startExecutionRun(root, () => executionPreflight(root));
-    await startExecutionRuntime(root, run);
-    return run;
-  });
-  ipcMain.handle(IPC.EXECUTION_STATUS, async (_e, root: unknown) => {
-    validRoot(root);
-    const fallbackRunId = await ensureExecutionStatusReconciled(root);
-    return getCurrentExecutionRunFast(root, fallbackRunId);
-  });
-  ipcMain.handle(IPC.EXECUTION_STORAGE_DIAGNOSTICS, async (event, root: unknown) => {
-    validRoot(root);
-    if (projectWindowForSender(event.sender).projectRoot !== path.resolve(root))
-      throw new Error('Project mismatch.');
-    return inspectExecutionRunStorage(root);
-  });
-  ipcMain.handle(IPC.EXECUTION_RESTORE_BACKUP, async (event, root: unknown, runId: unknown) => {
-    validRoot(root);
-    const state = projectWindowForSender(event.sender);
-    if (state.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
-    if (runId !== null && typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    const decision = await dialog.showMessageBox(state.window, {
-      type: 'warning',
-      title: 'Runバックアップを復元',
-      message: '検証済みのバックアップからRunを復元しますか？',
-      detail:
-        '現在の破損ファイルは別名で保全します。バックアップ以降の状態は戻りません。復元後に実行資源の状態を確認してください。',
-      buttons: ['キャンセル', '復元する'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    if (decision.response !== 1) return null;
-    const restored = await restoreExecutionRunBackup(root, runId);
-    statusSnapshots.delete(path.resolve(root));
-    return restored;
-  });
-  ipcMain.handle(IPC.EXECUTION_LEAVE, async (event, root: unknown) => {
-    validRoot(root);
-    const state = projectWindowForSender(event.sender);
-    if (state.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
-    // Stage browsing does not leave the project and must not stop a Run.
-    // Window close, project switch and app exit retain their stop confirmation.
-    return true;
-  });
-  ipcMain.handle(
-    IPC.EXECUTION_STOP_FOR_EDIT,
-    async (_e, root: unknown, runId: unknown, interrupt: unknown) => {
-      validRoot(root);
-      if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-      return stopRunForExit(root, runId, interrupt === true ? 'interrupt' : 'graceful');
-    },
-  );
-  ipcMain.handle(IPC.EXECUTION_DISCARD_FOR_EDIT, async (event, root: unknown, runId: unknown) => {
-    validRoot(root);
-    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    const owner = projectWindowForSender(event.sender).window;
-    const decision = await dialog.showMessageBox(owner, {
-      type: 'warning',
-      title: '現在のRunを破棄',
-      message: '現在のRunを破棄しますか？',
-      detail:
-        '現在のRunは再開できなくなります。生成済みのローカル画像は削除しません。Remoteの未回収画像は失われる可能性があります。破棄後は任意の工程を変更して、実行工程のStartから新しいRunを開始できます。',
-      buttons: ['キャンセル', 'Runを破棄する'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    if (decision.response !== 1) return null;
-    return discardCurrentExecutionRun(root, runId, owner);
-  });
-  ipcMain.handle(IPC.EXECUTION_RECONCILE, async (_e, root: unknown, runId: unknown) => {
-    validRoot(root);
-    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    await reconcilePersistedExecutionRuns(root);
-    const previous = await getExecutionRun(root, runId);
-    if (
-      !previous ||
-      !['EXECUTION_RECOVERY_UNCERTAIN', 'LOCAL_OUTPUT_COLLECTION_FAILED'].includes(
-        previous.error?.code ?? '',
-      )
-    )
-      throw new Error(
-        'Only a previously uncertain or output-collection-failed Run can be rechecked.',
-      );
-    const ref = { projectRoot: path.resolve(root), runId };
-    if (executionCoordinator.hasActive(ref)) return previous;
-    await mutateExecutionRun(root, runId, (current) => {
-      if (
-        !['EXECUTION_RECOVERY_UNCERTAIN', 'LOCAL_OUTPUT_COLLECTION_FAILED'].includes(
-          current.error?.code ?? '',
-        )
-      )
-        return;
-      current.lifecycle = 'RUNNING';
-      current.error = null;
-      current.controls.scheduling = 'ACTIVE';
-    });
-    await reconcilePersistedExecutionRuns(root);
-    const latest = await getExecutionRun(root, runId);
-    if (!latest) throw new Error('Execution Run disappeared while reconciling.');
-    return latest;
-  });
-  ipcMain.handle(IPC.EXECUTION_GET, async (_e, root: unknown, runId: unknown) => {
-    validRoot(root);
-    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    return getExecutionRun(root, runId);
-  });
-  ipcMain.handle(IPC.EXECUTION_STOP_SCHEDULING, async (_e, root: unknown, runId: unknown) => {
-    validRoot(root);
-    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    const run = await requestStopScheduling(root, runId);
-    if (run.executionTarget === 'remote' && isRemotePreGenerationPhase(run.phase)) {
-      const paused = await mutateExecutionRun(root, runId, (r) => {
-        if (r.lifecycle === 'RUNNING') {
-          r.lifecycle = 'PAUSED';
-          r.controls.scheduling = 'STOPPED';
-          r.controls.interrupt = 'IDLE';
-          r.controls.forceInterruptRequestedAt = null;
-          r.current.promptId = null;
-          r.error = null;
-        }
-      });
-      remoteExecutor().disconnect(root, runId);
-      return paused;
-    }
-    if (run.executionTarget === 'remote' && run.phase !== 'EXECUTING') {
-      return mutateExecutionRun(root, runId, (r) => {
-        r.controls.scheduling = 'STOPPED';
-      });
-    }
-    try {
-      if (run.executionTarget === 'remote') await remoteSceneExecutor().stopScheduling(root, runId);
-    } catch (error) {
-      await mutateExecutionRun(root, runId, (r) => {
-        if (r.lifecycle === 'RUNNING') {
-          r.controls.scheduling = 'ACTIVE';
-          r.controls.stopSchedulingRequestedAt = null;
-        }
-        const e = {
-          code: 'STOP_SCHEDULING_FAILED',
-          message: safeExecutionError(error),
-          phase: r.phase,
-          at: new Date().toISOString(),
-          retryable: true,
-        };
-        r.error = e;
-        r.errorHistory.push(e);
-      });
-      throw error;
-    }
-    return (await getExecutionRun(root, runId)) ?? run;
-  });
-  ipcMain.handle(IPC.EXECUTION_FORCE_INTERRUPT, async (_e, root: unknown, runId: unknown) => {
-    validRoot(root);
-    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    const before = await getExecutionRun(root, runId);
-    if (before?.executionTarget === 'remote' && before.phase !== 'EXECUTING')
-      throw new Error('Force interrupt is only available while Remote Execution is EXECUTING.');
-    const run = await requestForceInterrupt(root, runId);
-    try {
-      if (run.executionTarget === 'local') await localExecutor().forceInterrupt(root, runId);
-      else await remoteSceneExecutor().forceInterrupt(root, runId);
-    } catch (error) {
-      if (run.executionTarget === 'remote' && error instanceof VastAiInstanceNotFoundError) {
-        return mutateExecutionRun(root, runId, (r) => {
-          const e = {
-            code: 'REMOTE_INSTANCE_MISSING',
-            message: safeExecutionError(error),
-            phase: r.phase,
-            at: new Date().toISOString(),
-            retryable: false,
-          };
-          r.error = e;
-          r.errorHistory.push(e);
-          r.lifecycle = 'FAILED';
-          r.controls.scheduling = 'STOPPED';
-          r.controls.interrupt = 'INTERRUPTED';
-        });
-      }
-      await mutateExecutionRun(root, runId, (r) => {
-        if (r.lifecycle === 'RUNNING') {
-          r.controls.interrupt = 'IDLE';
-          r.controls.forceInterruptRequestedAt = null;
-        }
-        const e = {
-          code: 'FORCE_INTERRUPT_FAILED',
-          message: safeExecutionError(error),
-          phase: r.phase,
-          at: new Date().toISOString(),
-          retryable: true,
-        };
-        r.error = e;
-        r.errorHistory.push(e);
-      });
-      throw error;
-    }
-    return (await getExecutionRun(root, runId)) ?? run;
-  });
-  ipcMain.handle(IPC.EXECUTION_RESUME, async (_e, root: unknown, runId: unknown) => {
-    validRoot(root);
-    await reconcilePersistedExecutionRuns(root);
-    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    const previous = await getExecutionRun(root, runId);
-    if (!previous) throw new Error(`Execution Run ${runId} was not found.`);
-    const retryingStop =
-      previous.executionTarget === 'remote' &&
-      previous.lifecycle === 'FAILED' &&
-      previous.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED';
-    // A finalize-only retry needs neither a changed Workflow nor a live SSH /
-    // ComfyUI connection. It must never regenerate or redownload the Run.
-    const run = retryingStop
-      ? await resumeExecutionRunFinalization(root, runId)
-      : await resumeExecutionRun(root, runId, () => executionPreflight(root));
-    if (run.lifecycle === 'RUNNING' && run.phase === 'CLOUD_INSTANCE_FINALIZING') {
-      const instanceId = Number(run.remote?.instanceId);
-      if (run.remote?.provider !== 'vastai' || !Number.isInteger(instanceId) || instanceId < 1)
-        throw new Error('Finalization retry has no valid Vast.ai Instance.');
-      const conflicting = (await listExecutionRuns(root)).find(
-        (other) =>
-          other.runId !== runId &&
-          other.executionTarget === 'remote' &&
-          other.remote?.provider === 'vastai' &&
-          Number(other.remote.instanceId) === instanceId &&
-          ['RUNNING', 'PAUSED', 'INTERRUPTED'].includes(other.lifecycle),
-      );
-      const restoreRetryableFailure = async (reason: unknown) => {
-        await mutateExecutionRun(root, runId, (current) => {
-          current.lifecycle = 'FAILED';
-          current.phase = 'CLOUD_INSTANCE_FINALIZING';
-          current.error = previous.error ?? {
-            code: 'REMOTE_INSTANCE_FINALIZE_FAILED',
-            message: safeExecutionError(reason),
-            phase: 'CLOUD_INSTANCE_FINALIZING',
-            at: new Date().toISOString(),
-            retryable: true,
-          };
-          current.controls.scheduling = 'STOPPED';
-        });
-      };
-      if (conflicting) {
-        const error = new Error(
-          `Cannot stop Vast.ai Instance ${instanceId}: Run ${conflicting.runId} is still active.`,
-        );
-        await restoreRetryableFailure(error);
-        throw error;
-      }
-      const ref = { projectRoot: path.resolve(root), runId };
-      let task: Promise<void>;
-      try {
-        task = executionCoordinator.startRemote(ref, 'vastai', instanceId, async () => {
-          await finalizeRemoteInstance(root, runId);
-          const finalized = await getExecutionRun(root, runId);
-          if (
-            finalized?.lifecycle === 'RUNNING' &&
-            finalized.remoteLifecycle?.finalizedAt &&
-            finalized.remoteLifecycle.latest?.status === 'stopped'
-          )
-            await mutateExecutionRun(root, runId, (current) => {
-              current.lifecycle = 'COMPLETED';
-              current.phase = 'COMPLETED';
-              current.error = null;
-              current.completedAt = new Date().toISOString();
-              current.controls.scheduling = 'STOPPED';
-            });
-        });
-      } catch (error) {
-        await restoreRetryableFailure(error);
-        throw error;
-      }
-      void task.finally(maybeQuitAfterExecution).catch(() => {});
-      return run;
-    }
-    if (run.lifecycle === 'RUNNING') await startExecutionRuntime(root, run);
-    return run;
-  });
-  ipcMain.handle(IPC.EXECUTION_RESTART_REMOTE, async (_e, root: unknown, runId: unknown) => {
-    validRoot(root);
-    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    const current = await getExecutionRun(root, runId);
-    if (!current) throw new Error(`Execution Run ${runId} was not found.`);
-    if (current.executionTarget !== 'remote' || current.remote?.provider !== 'vastai')
-      throw new Error('Only Vast.ai Remote Runs can be restarted on another Instance.');
-    if (!isRemotePreGenerationPhase(current.phase))
-      throw new Error('Instance replacement is only available before generation starts.');
-    const meta = await readProjectMeta(root),
-      replacementId =
-        meta?.settings.remoteProvider === 'vastai' ? Number(meta.settings.remoteInstanceId) : NaN;
-    if (!Number.isInteger(replacementId) || replacementId < 1)
-      throw new Error('Select a replacement Vast.ai Instance first.');
-    if (replacementId === Number(current.remote.instanceId))
-      throw new Error('Select a different Vast.ai Instance before starting a replacement Run.');
-    const preflight = await executionPreflight(root);
-    if (preflight.state !== 'READY')
-      throw new Error(
-        `Execution cannot restart: Preflight is BLOCKED: ${preflight.blocking.map((item) => item.message).join(' / ')}`,
-      );
-    await abandonExecutionRunForRemoteReplacement(root, runId, replacementId);
-    remoteExecutor().disconnect(root, runId);
-    void finalizeRemoteInstance(root, runId);
-    const next = await startExecutionRun(root, async () => preflight);
-    if (
-      next.executionTarget !== 'remote' ||
-      next.remote?.provider !== 'vastai' ||
-      Number(next.remote.instanceId) !== replacementId
-    )
-      throw new Error('Replacement Run did not capture the selected Vast.ai Instance.');
-    await startExecutionRuntime(root, next);
-    return next;
-  });
-  ipcMain.handle(IPC.EXECUTION_RESTART_FROM_SCRATCH, async (_e, root: unknown, runId: unknown) => {
-    validRoot(root);
-    if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
-    const current = await getExecutionRun(root, runId);
-    if (!current) throw new Error(`Execution Run ${runId} was not found.`);
-
-    const runs = await listExecutionRuns(root);
-    const restartable = runs.filter(
-      (candidate) =>
-        ['RUNNING', 'PAUSED', 'INTERRUPTED'].includes(candidate.lifecycle) ||
-        (candidate.runId === runId && candidate.lifecycle === 'FAILED'),
-    );
-    if (
-      restartable.some((candidate) =>
-        ['EXECUTION_RECOVERY_UNCERTAIN', 'LOCAL_OUTPUT_COLLECTION_FAILED'].includes(
-          candidate.error?.code ?? '',
-        ),
-      )
-    )
-      throw new Error(
-        '復旧不確定なRunを自動で再実行できません。「現在のRunを破棄」でQueue/HistoryまたはRemote停止の確認を行ってください。',
-      );
-    const unsafeRemote = restartable.find(
-      (candidate) =>
-        candidate.executionTarget === 'remote' &&
-        candidate.lifecycle === 'RUNNING' &&
-        !isRemotePreGenerationPhase(candidate.phase) &&
-        candidate.phase !== 'EXECUTING',
-    );
-    if (unsafeRemote)
-      throw new Error(
-        `Run ${unsafeRemote.runId} は生成完了後のArtifact処理中です。処理完了または失敗後に最新Prompt Planで再実行してください。`,
-      );
-
-    const confirm = await dialog.showMessageBox({
-      type: 'warning',
-      title: '最新のPrompt Planで最初から実行',
-      message: '未完了のRunを停止して、最新のprompt_plan.jsonで最初から実行しますか？',
-      detail: `${restartable.length}件の未完了Runを破棄し、最新prompt_plan.jsonからWorkflow/API graphを再生成して、新しいRun IDで0から実行します。旧RunのRemote/R2一時成果物は削除しますが、Localへ回収済みの成果物は削除しません。`,
-      buttons: ['キャンセル', '最新のPrompt Planで実行'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    if (confirm.response !== 1) return current;
-
-    for (const candidate of restartable) {
-      if (candidate.executionTarget === 'remote') {
-        const executor = remoteSceneExecutor();
-        executor.beginDiscard(candidate.runId);
-        try {
-          if (candidate.lifecycle === 'RUNNING' && candidate.phase === 'EXECUTING') {
-            await executor.stopScheduling(root, candidate.runId).catch(() => false);
-            await executor.forceInterrupt(root, candidate.runId).catch(() => false);
-          }
-          await executor.discardArtifacts(root, candidate.runId);
-          await discardExecutionRun(root, candidate.runId);
-          remoteExecutor().disconnect(root, candidate.runId);
-          await executor.waitForSettled(candidate.runId);
-          await finalizeRemoteInstance(root, candidate.runId);
-          await executionCoordinator.waitForSettled({
-            projectRoot: path.resolve(root),
-            runId: candidate.runId,
-          });
-          await discardExecutionRun(root, candidate.runId);
-        } finally {
-          executor.endDiscard(candidate.runId);
-        }
-        continue;
-      }
-
-      if (candidate.lifecycle === 'RUNNING') {
-        await requestStopScheduling(root, candidate.runId).catch(() => candidate);
-        await localExecutor()
-          .forceInterrupt(root, candidate.runId)
-          .catch(() => false);
-        for (let poll = 0; poll < 120; poll++) {
-          const latest = await getExecutionRun(root, candidate.runId);
-          if (!latest || latest.lifecycle !== 'RUNNING') break;
-          await new Promise((resolve) => setTimeout(resolve, 250));
-        }
-        const latest = await getExecutionRun(root, candidate.runId);
-        if (latest?.lifecycle === 'RUNNING')
-          throw new Error(
-            `Local Run ${candidate.runId} の停止完了を確認できませんでした。Runの状態を確認して再実行してください。`,
-          );
-      }
-      await localExecutor().waitForSettled(candidate.runId);
-      await executionCoordinator.waitForSettled({
-        projectRoot: path.resolve(root),
-        runId: candidate.runId,
-      });
-      await discardExecutionRun(root, candidate.runId);
-    }
-
-    await compileWorkflow(root);
-    const preflight = await executionPreflight(root);
-    if (preflight.state !== 'READY')
-      throw new Error(
-        `Execution cannot restart with latest Prompt Plan: Preflight is BLOCKED: ${preflight.blocking.map((item) => item.message).join(' / ')}`,
-      );
-    const next = await startExecutionRun(root, async () => preflight);
-    await startExecutionRuntime(root, next);
-    return next;
-  });
-  const selectFinalArtifactDirectory = async (root: string) => {
-    const currentStatus = await getFinalArtifactStatus(root);
-    const meta = await readProjectMeta(root);
-    const fallback = meta?.settings.artifactOutputPath?.trim();
-    const result = await dialog.showOpenDialog({
-      title: '最終成果物ディレクトリを選択',
-      defaultPath: currentStatus.directory || fallback || root,
-      properties: ['openDirectory'],
-    });
-    if (result.canceled || !result.filePaths[0]) return currentStatus;
-    await saveProjectSettings(root, { finalArtifactDirectory: result.filePaths[0] });
-    return getFinalArtifactStatus(root);
-  };
-  ipcMain.handle(IPC.FINAL_ARTIFACT_STATUS, (_e, root: unknown) => {
-    validRoot(root);
-    return getFinalArtifactStatus(root);
-  });
-  ipcMain.handle(IPC.FINAL_ARTIFACT_SELECT_DIRECTORY, async (_e, root: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    return selectFinalArtifactDirectory(root);
-  });
-  ipcMain.handle(IPC.FINAL_ARTIFACT_LIST_IMAGES, (_e, root: unknown) => {
-    validRoot(root);
-    return listFinalArtifactImages(root);
-  });
-  ipcMain.handle(IPC.FINAL_ARTIFACT_READ_IMAGE, (_e, root: unknown, imagePath: unknown) => {
-    validRoot(root);
-    if (typeof imagePath !== 'string') throw new Error('Invalid final artifact image path');
-    return readFinalArtifactImage(root, imagePath);
-  });
-  ipcMain.handle(IPC.FINAL_ARTIFACT_READ_PREVIEW, (_e, root: unknown, imagePath: unknown) => {
-    validRoot(root);
-    if (typeof imagePath !== 'string') throw new Error('Invalid final artifact image path');
-    return readFinalArtifactPreview(root, imagePath);
-  });
-  ipcMain.handle(IPC.CAPTION_STATUS, (_e, root: unknown) => {
-    validRoot(root);
-    return getCaptionStatus(root);
-  });
-  ipcMain.handle(IPC.CAPTION_SELECT_SOURCE_DIRECTORY, async (_e, root: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    await selectFinalArtifactDirectory(root);
-    return getCaptionStatus(root);
-  });
-  ipcMain.handle(IPC.CAPTION_IMPORT_GROK, async (_e, root: unknown, raw: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    if (typeof raw !== 'string') throw new Error('Invalid Grok caption response');
-    return importCaptionGrok(root, raw);
-  });
-  ipcMain.handle(IPC.CAPTION_GENERATE, async (_e, root: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    return generateCaption(root);
-  });
-  ipcMain.handle(IPC.CAPTION_SAVE_PIXIV_TITLE, async (_e, root: unknown, title: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    return savePixivTitle(root, title);
-  });
-  ipcMain.handle(IPC.THUMBNAIL_FONTS, () => listThumbnailFonts());
-  ipcMain.handle(IPC.THUMBNAIL_LOAD, (_e, root: unknown) => {
-    validRoot(root);
-    return loadThumbnailState(root);
-  });
-  ipcMain.handle(IPC.THUMBNAIL_RESTORE_BACKUP, async (event, root: unknown) => {
-    validRoot(root);
-    const owner = projectWindowForSender(event.sender);
-    if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
-    await ensureProjectWritable(root);
-    const choice = await dialog.showMessageBox(owner.window, {
-      type: 'warning',
-      title: 'サムネイル編集データを復元',
-      message: '検証済みバックアップから編集状態を復元しますか？',
-      detail: '破損した元ファイルは別名で保全します。バックアップ以降の編集は戻りません。',
-      buttons: ['キャンセル', '復元する'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    return choice.response === 1 ? restoreThumbnailState(root) : null;
-  });
-  ipcMain.handle(IPC.THUMBNAIL_INITIALIZE_CORRUPT, async (event, root: unknown) => {
-    validRoot(root);
-    const owner = projectWindowForSender(event.sender);
-    if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
-    await ensureProjectWritable(root);
-    const choice = await dialog.showMessageBox(owner.window, {
-      type: 'warning',
-      title: 'サムネイル編集データを初期化',
-      message: '破損したファイルを別名で保全して初期化しますか？',
-      detail: '編集内容は新しい空の状態になります。元ファイルは削除されません。',
-      buttons: ['キャンセル', '保全して初期化'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    return choice.response === 1 ? initializeCorruptThumbnailState(root) : null;
-  });
-  ipcMain.handle(IPC.THUMBNAIL_SAVE, async (_e, root: unknown, state: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    return saveThumbnailState(root, state);
-  });
-  ipcMain.handle(IPC.THUMBNAIL_SELECT_IMAGE, async (_e, root: unknown) => {
-    validRoot(root);
-    const finalArtifact = await getFinalArtifactStatus(root);
-    const result = await dialog.showOpenDialog({
-      title: 'サムネイルへ挿入する画像を選択',
-      defaultPath: finalArtifact.exists && finalArtifact.directory ? finalArtifact.directory : root,
-      properties: ['openFile'],
-      filters: [{ name: '画像', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
-    });
-    if (result.canceled || !result.filePaths[0]) return null;
-    return readThumbnailImage(result.filePaths[0]);
-  });
-  ipcMain.handle(IPC.THUMBNAIL_LIST_IMAGES, async (event, root: unknown) => {
-    validRoot(root);
-    const started = performance.now();
-    const finalArtifact = await getFinalArtifactStatus(root);
-    const statusMs = performance.now() - started;
-    const images =
-      finalArtifact.exists && finalArtifact.directory
-        ? await listThumbnailImages(finalArtifact.directory)
-        : [];
-    const state = thumbnailPickerWindows.get(event.sender.id);
-    if (state)
-      logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'list_images', {
-        count: images.length,
-        statusMs,
-        listMs: performance.now() - started - statusMs,
-        totalMs: performance.now() - started,
-        sinceOpenMs: performance.now() - state.openedAt,
-      });
-    return images;
-  });
-  ipcMain.handle(IPC.THUMBNAIL_READ_IMAGE, (_e, imagePath: unknown) => {
-    if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
-    return readThumbnailImage(imagePath);
-  });
-  ipcMain.handle(IPC.THUMBNAIL_READ_PREVIEW, async (event, imagePath: unknown) => {
-    if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
-    const started = performance.now();
-    const timing: ThumbnailCacheTiming = {};
-    const state = thumbnailPickerWindows.get(event.sender.id);
-    const requestNumber = state ? ++state.previewCount : 0;
-    try {
-      const cached = await readCachedThumbnailImage(
-        app.getPath('userData'),
-        imagePath,
-        'gallery',
-        timing,
-      );
-      const fallbackStarted = performance.now();
-      const source = cached ?? (await readThumbnailPreview(imagePath));
-      const elapsed = performance.now() - started;
-      if (
-        state &&
-        (requestNumber <= 40 || requestNumber % 25 === 0 || elapsed > 100 || !timing.hit)
-      ) {
-        const details: PickerMetrics = {
-          requestNumber,
-          totalMs: elapsed,
-          sinceOpenMs: performance.now() - state.openedAt,
-          cacheHit: timing.hit === true,
-          usedFallback: !cached,
-          fallbackMs: cached ? 0 : performance.now() - fallbackStarted,
-          transferKB: source ? (source.dataUrl.length * 0.75) / 1024 : 0,
-          sourceWidth: source?.width ?? 0,
-          sourceHeight: source?.height ?? 0,
-        };
-        for (const [key, value] of Object.entries(timing)) {
-          if (typeof value === 'number' || typeof value === 'boolean') details[key] = value;
-        }
-        logThumbnailPickerPerformance(
-          app.getPath('userData'),
-          state.sessionId,
-          'preview_read',
-          details,
-        );
-      }
-      return source;
-    } catch (error) {
-      if (state)
-        logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'preview_error', {
-          totalMs: performance.now() - started,
-        });
-      throw error;
-    }
-  });
-  ipcMain.handle(IPC.THUMBNAIL_READ_EDITOR_IMAGE, async (_e, imagePath: unknown) => {
-    if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
-    return (
-      (await readCachedThumbnailImage(app.getPath('userData'), imagePath, 'editor')) ??
-      readThumbnailImage(imagePath)
-    );
-  });
-  ipcMain.handle(IPC.THUMBNAIL_STORE_WEBP_PREVIEW, (_e, imagePath: unknown, dataUrl: unknown) => {
-    if (typeof imagePath !== 'string' || typeof dataUrl !== 'string')
-      throw new Error('Invalid thumbnail preview data');
-    return storeWebpThumbnailPreview(app.getPath('userData'), imagePath, dataUrl);
-  });
-  ipcMain.handle(IPC.THUMBNAIL_READ_TEMPLATE, (_e, pattern: unknown) =>
-    readThumbnailTemplate(
-      path.join(app.getAppPath(), 'dist-electron', 'thumbnail-templates'),
-      pattern,
-    ),
-  );
-  ipcMain.handle(
-    IPC.THUMBNAIL_PICKER_OPEN,
-    (event, root: unknown, slot: unknown, currentImagePath: unknown) => {
-      validRoot(root);
-      const validSlots = new Set<ThumbnailSlotKey>([
-        'LEFT',
-        'LEFT_TOP',
-        'LEFT_BOTTOM',
-        'CENTER_MAIN',
-        'RIGHT',
-        'RIGHT_TOP',
-        'RIGHT_BOTTOM',
-      ]);
-      if (typeof slot !== 'string' || !validSlots.has(slot as ThumbnailSlotKey))
-        throw new Error('Invalid thumbnail slot');
-      if (typeof currentImagePath !== 'string') throw new Error('Invalid thumbnail image path');
-      return openThumbnailPickerWindow(
-        event.sender,
-        root,
-        slot as ThumbnailSlotKey,
-        currentImagePath,
-      );
-    },
-  );
-  ipcMain.handle(IPC.THUMBNAIL_PICKER_CONTEXT, (event) => {
-    const state = thumbnailPickerForSender(event.sender);
-    logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'context_requested', {
-      sinceOpenMs: performance.now() - state.openedAt,
-    });
-    return {
-      sessionId: state.sessionId,
-      root: state.root,
-      slot: state.slot,
-      currentImagePath: state.currentImagePath,
-    };
-  });
-  ipcMain.handle(IPC.THUMBNAIL_PICKER_PERF_OPEN, async (event) => {
-    thumbnailPickerForSender(event.sender);
-    const directory = path.dirname(pickerPerformanceLogPath(app.getPath('userData')));
-    await mkdir(directory, { recursive: true });
-    const error = await shell.openPath(directory);
-    if (error) throw new Error(error);
-  });
-  ipcMain.handle(IPC.THUMBNAIL_PICKER_PERF, (event, name: unknown, metrics: unknown) => {
-    const state = thumbnailPickerForSender(event.sender);
-    if (typeof name !== 'string' || !/^[a-z_]{1,40}$/.test(name)) return;
-    if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) return;
-    const safe: PickerMetrics = {};
-    for (const [key, value] of Object.entries(metrics).slice(0, 20)) {
-      if (!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key)) continue;
-      if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)))
-        safe[key] = value;
-      else if (
-        key === 'displaySize' &&
-        (value === 'large' || value === 'medium' || value === 'small')
-      )
-        safe[key] = value;
-    }
-    logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, name, {
-      ...safe,
-      sinceOpenMs: performance.now() - state.openedAt,
-    });
-  });
-  ipcMain.handle(IPC.THUMBNAIL_PICKER_PREVIEW, async (event, imagePath: unknown) => {
-    const state = thumbnailPickerForSender(event.sender);
-    const requestId = ++state.previewRequestId;
-    const resolved = await validateThumbnailPickerImage(state, imagePath);
-    if (requestId !== state.previewRequestId) throw new Error('新しい画像が選択されました。');
-    if (state.opener.isDestroyed()) throw new Error('親Windowが閉じられました。');
-    const ready = state.selection.beginPreview(resolved);
-    state.opener.send(IPC.THUMBNAIL_PICKER_PREVIEWED, {
-      sessionId: state.sessionId,
-      slot: state.slot,
-      imagePath: resolved,
-      previewGeneration: requestId,
-    });
-    return ready;
-  });
-  ipcMain.handle(
-    IPC.THUMBNAIL_PICKER_PREVIEW_RESULT,
-    (
-      event,
-      sessionId: unknown,
-      imagePath: unknown,
-      generation: unknown,
-      ok: unknown,
-      message: unknown,
-    ) => {
-      const state = [...thumbnailPickerWindows.values()].find(
-        (item) => item.sessionId === sessionId && item.opener.id === event.sender.id,
-      );
-      if (
-        !state ||
-        generation !== state.previewRequestId ||
-        typeof imagePath !== 'string' ||
-        typeof ok !== 'boolean'
-      )
-        return false;
-      return state.selection.previewResult(
-        imagePath,
-        ok,
-        typeof message === 'string' ? message : undefined,
-      );
-    },
-  );
-  ipcMain.handle(IPC.THUMBNAIL_PICKER_COMMIT, async (event, imagePath: unknown) => {
-    const state = thumbnailPickerForSender(event.sender);
-    await ensureProjectWritable(state.root);
-    const resolved = await validateThumbnailPickerImage(state, imagePath);
-    if (state.opener.isDestroyed()) throw new Error('親Windowが閉じられました。');
-    const committed = state.selection.beginCommit(resolved);
-    state.opener.send(IPC.THUMBNAIL_PICKER_COMMITTED, {
-      sessionId: state.sessionId,
-      slot: state.slot,
-      imagePath: resolved,
-    });
-    await committed;
-    state.committed = true;
-    state.window.close();
-  });
-  ipcMain.handle(
-    IPC.THUMBNAIL_PICKER_COMMIT_RESULT,
-    (event, sessionId: unknown, imagePath: unknown, ok: unknown, message: unknown) => {
-      const state = [...thumbnailPickerWindows.values()].find(
-        (item) => item.sessionId === sessionId && item.opener.id === event.sender.id,
-      );
-      if (!state || typeof imagePath !== 'string' || typeof ok !== 'boolean') return false;
-      const accepted = state.selection.commitResult(
-        imagePath,
-        ok,
-        typeof message === 'string' ? message : undefined,
-      );
-      if (accepted && ok) state.committed = true;
-      return accepted;
-    },
-  );
-  ipcMain.handle(
-    IPC.THUMBNAIL_EXPORT,
-    async (_e, root: unknown, documentId: unknown, format: unknown, dataUrl: unknown) => {
-      validRoot(root);
-      await ensureProjectWritable(root);
-      if (typeof documentId !== 'number' || !Number.isSafeInteger(documentId) || documentId < 1)
-        throw new Error('Invalid thumbnail document');
-      if (format !== 'png' && format !== 'jpeg') throw new Error('Invalid thumbnail format');
-      if (typeof dataUrl !== 'string') throw new Error('Invalid thumbnail image data');
-      return exportThumbnail(root, documentId, format, dataUrl);
-    },
-  );
-  ipcMain.handle(IPC.THUMBNAIL_DELETE_OUTPUTS, async (_e, root: unknown, documentId: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    if (typeof documentId !== 'number' || !Number.isSafeInteger(documentId) || documentId < 1)
-      throw new Error('Invalid thumbnail document');
-    return deleteThumbnailOutputs(root, documentId);
-  });
-  ipcMain.handle(IPC.MARKETPLACE_LIST_THUMBNAILS, (_e, root: unknown) => {
-    validRoot(root);
-    return listExportedThumbnails(root);
-  });
-  ipcMain.handle(
-    IPC.MARKETPLACE_READ_SOURCE,
-    (_e, root: unknown, imagePath: unknown, sourceType: unknown) => {
-      validRoot(root);
-      if (
-        typeof imagePath !== 'string' ||
-        (sourceType !== 'thumbnail' && sourceType !== 'final-artifact')
-      )
-        throw new Error('Invalid marketplace source');
-      return readMarketplaceSource(root, imagePath, sourceType);
-    },
-  );
-  ipcMain.handle(
-    IPC.MARKETPLACE_READ_SOURCE_PREVIEW,
-    async (event, root: unknown, imagePath: unknown, sourceType: unknown) => {
-      validRoot(root);
-      if (
-        typeof imagePath !== 'string' ||
-        (sourceType !== 'thumbnail' && sourceType !== 'final-artifact')
-      )
-        throw new Error('Invalid marketplace source');
-      const started = performance.now();
-      const timing: ThumbnailCacheTiming = {};
-      const source = await readMarketplaceSourcePreview(
-        root,
-        imagePath,
-        sourceType,
-        app.getPath('userData'),
-        timing,
-      );
-      const picker = marketplacePickerWindows.get(event.sender.id);
-      if (picker) {
-        const metrics: PickerMetrics = {
-          totalMs: performance.now() - started,
-          cacheHit: timing.hit === true,
-          transferKB: source ? (source.dataUrl.length * 0.75) / 1024 : 0,
-          usedFallback: source?.dataUrl.startsWith('data:image/webp;base64,') === true,
-        };
-        for (const [key, value] of Object.entries(timing)) {
-          if (typeof value === 'number' || typeof value === 'boolean') metrics[key] = value;
-        }
-        logThumbnailPickerPerformance(
-          app.getPath('userData'),
-          picker.sessionId,
-          'marketplace_preview_read',
-          metrics,
-        );
-      }
-      return source;
-    },
-  );
-  ipcMain.handle(IPC.MARKETPLACE_TARGETS, () => getMarketplaceImageTargets());
-  ipcMain.handle(IPC.MARKETPLACE_LOAD, (_e, root: unknown) => {
-    validRoot(root);
-    return loadMarketplaceImageState(root);
-  });
-  ipcMain.handle(IPC.MARKETPLACE_RESTORE_BACKUP, async (event, root: unknown) => {
-    validRoot(root);
-    const owner = projectWindowForSender(event.sender);
-    if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
-    await ensureProjectWritable(root);
-    const choice = await dialog.showMessageBox(owner.window, {
-      type: 'warning',
-      title: '販売サイト用画像の編集データを復元',
-      message: '検証済みバックアップから編集状態を復元しますか？',
-      detail: '破損した元ファイルは別名で保全します。バックアップ以降の編集は戻りません。',
-      buttons: ['キャンセル', '復元する'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    return choice.response === 1 ? restoreMarketplaceImageState(root) : null;
-  });
-  ipcMain.handle(IPC.MARKETPLACE_INITIALIZE_CORRUPT, async (event, root: unknown) => {
-    validRoot(root);
-    const owner = projectWindowForSender(event.sender);
-    if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
-    await ensureProjectWritable(root);
-    const choice = await dialog.showMessageBox(owner.window, {
-      type: 'warning',
-      title: '販売サイト用画像の編集データを初期化',
-      message: '破損したファイルを別名で保全して初期化しますか？',
-      detail: '編集内容は新しい空の状態になります。元ファイルは削除されません。',
-      buttons: ['キャンセル', '保全して初期化'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    return choice.response === 1 ? initializeCorruptMarketplaceImageState(root) : null;
-  });
-  ipcMain.handle(IPC.MARKETPLACE_SAVE, async (_e, root: unknown, state: unknown) => {
-    validRoot(root);
-    await ensureProjectWritable(root);
-    return saveMarketplaceImageState(root, state);
-  });
-  ipcMain.handle(
-    IPC.MARKETPLACE_GENERATE,
-    async (_e, root: unknown, state: unknown, webpDataUrls: unknown, sourcePngDataUrl: unknown) => {
-      validRoot(root);
-      await ensureProjectWritable(root);
-      const data =
-        webpDataUrls && typeof webpDataUrls === 'object'
-          ? (webpDataUrls as Record<string, string>)
-          : undefined;
-      return generateMarketplaceImages(
-        root,
-        state,
-        data,
-        typeof sourcePngDataUrl === 'string' ? sourcePngDataUrl : undefined,
-      );
-    },
-  );
-  ipcMain.handle(
-    IPC.MARKETPLACE_GENERATE_ZIP,
-    async (_e, root: unknown, format: unknown, state: unknown) => {
-      validRoot(root);
-      await ensureProjectWritable(root);
-      return generateMarketplaceZip(root, format, state);
-    },
-  );
-  ipcMain.handle(
-    IPC.MARKETPLACE_EXPORT_CUSTOM,
-    async (_e, root: unknown, state: unknown, webpDataUrl: unknown, sourcePngDataUrl: unknown) => {
-      validRoot(root);
-      await ensureProjectWritable(root);
-      return exportCustomMarketplaceImage(
-        root,
-        state,
-        typeof webpDataUrl === 'string' ? webpDataUrl : undefined,
-        typeof sourcePngDataUrl === 'string' ? sourcePngDataUrl : undefined,
-      );
-    },
-  );
-  ipcMain.handle(
-    IPC.MARKETPLACE_RENDER_PNG,
-    (
-      _e,
-      root: unknown,
-      sourceImagePath: unknown,
-      crop: unknown,
-      width: unknown,
-      height: unknown,
-      sourcePngDataUrl: unknown,
-      sourceType: unknown,
-    ) => {
-      validRoot(root);
-      if (
-        typeof sourceType !== 'undefined' &&
-        sourceType !== 'thumbnail' &&
-        sourceType !== 'final-artifact'
-      )
-        throw new Error('Invalid marketplace source type');
-      if (typeof sourceImagePath !== 'string') throw new Error('Invalid marketplace image path');
-      if (!crop || typeof crop !== 'object') throw new Error('Invalid marketplace crop');
-      if (typeof width !== 'number' || typeof height !== 'number')
-        throw new Error('Invalid marketplace output size');
-      return renderMarketplacePng(
-        root,
-        sourceImagePath,
-        crop as import('../shared/types.js').MarketplaceCropRect,
-        width,
-        height,
-        typeof sourcePngDataUrl === 'string' ? sourcePngDataUrl : undefined,
-        sourceType as MarketplaceSourceType | undefined,
-      );
-    },
-  );
-  ipcMain.handle(
-    IPC.MARKETPLACE_PICKER_OPEN,
-    (event, root: unknown, currentImagePath: unknown, sourceType: unknown) => {
-      validRoot(root);
-      if (typeof currentImagePath !== 'string') throw new Error('Invalid marketplace image path');
-      if (sourceType !== 'thumbnail' && sourceType !== 'final-artifact')
-        throw new Error('Invalid marketplace source');
-      return openMarketplacePickerWindow(event.sender, root, currentImagePath, sourceType);
-    },
-  );
-  ipcMain.handle(IPC.MARKETPLACE_PICKER_CONTEXT, (event) => {
-    const state = marketplacePickerForSender(event.sender);
-    return {
-      sessionId: state.sessionId,
-      root: state.root,
-      currentImagePath: state.currentImagePath,
-      sourceType: state.sourceType,
-    };
-  });
-  ipcMain.handle(IPC.MARKETPLACE_PICKER_PREVIEW, async (event, imagePath: unknown) => {
-    const state = marketplacePickerForSender(event.sender);
-    const requestId = ++state.previewRequestId;
-    const resolved = await validateMarketplacePickerImage(state, imagePath);
-    if (requestId !== state.previewRequestId) throw new Error('新しい画像が選択されました。');
-    if (state.opener.isDestroyed()) throw new Error('親Windowが閉じられました。');
-    const ready = state.selection.beginPreview(resolved);
-    state.opener.send(IPC.MARKETPLACE_PICKER_PREVIEWED, {
-      sessionId: state.sessionId,
-      imagePath: resolved,
-      previewGeneration: requestId,
-    });
-    return ready;
-  });
-  ipcMain.handle(
-    IPC.MARKETPLACE_PICKER_PREVIEW_RESULT,
-    (
-      event,
-      sessionId: unknown,
-      imagePath: unknown,
-      generation: unknown,
-      ok: unknown,
-      message: unknown,
-    ) => {
-      const state = [...marketplacePickerWindows.values()].find(
-        (item) => item.sessionId === sessionId && item.opener.id === event.sender.id,
-      );
-      if (
-        !state ||
-        generation !== state.previewRequestId ||
-        typeof imagePath !== 'string' ||
-        typeof ok !== 'boolean'
-      )
-        return false;
-      return state.selection.previewResult(
-        imagePath,
-        ok,
-        typeof message === 'string' ? message : undefined,
-      );
-    },
-  );
-  ipcMain.handle(IPC.MARKETPLACE_PICKER_COMMIT, async (event, imagePath: unknown) => {
-    const state = marketplacePickerForSender(event.sender);
-    await ensureProjectWritable(state.root);
-    const resolved = await validateMarketplacePickerImage(state, imagePath);
-    if (state.opener.isDestroyed()) throw new Error('親Windowが閉じられました。');
-    const committed = state.selection.beginCommit(resolved);
-    state.opener.send(IPC.MARKETPLACE_PICKER_COMMITTED, {
-      sessionId: state.sessionId,
-      imagePath: resolved,
-    });
-    await committed;
-    state.committed = true;
-    state.window.close();
-  });
-  ipcMain.handle(
-    IPC.MARKETPLACE_PICKER_COMMIT_RESULT,
-    (event, sessionId: unknown, imagePath: unknown, ok: unknown, message: unknown) => {
-      const state = [...marketplacePickerWindows.values()].find(
-        (item) => item.sessionId === sessionId && item.opener.id === event.sender.id,
-      );
-      if (!state || typeof imagePath !== 'string' || typeof ok !== 'boolean') return false;
-      const accepted = state.selection.commitResult(
-        imagePath,
-        ok,
-        typeof message === 'string' ? message : undefined,
-      );
-      if (accepted && ok) state.committed = true;
-      return accepted;
-    },
-  );
-  ipcMain.handle(IPC.R2_SETTINGS, () => r2().settings());
-  ipcMain.handle(IPC.R2_ENVIRONMENT, () => r2().environment());
-  ipcMain.handle(IPC.R2_TEST, (_e, input: R2ConnectionInput) => r2().test(input));
-  ipcMain.handle(IPC.R2_SAVE_SETTINGS, async (_e, input: R2ConnectionInput) => {
-    const result = await r2().saveSettings(input);
-    void r2Index()
-      .sync()
-      .catch((error) => console.warn('R2 index sync failed:', error));
-    return result;
-  });
-  ipcMain.handle(IPC.R2_BUCKETS, () => r2().buckets());
-  ipcMain.handle(IPC.R2_CREATE_BUCKET, async (_e, name: unknown) => {
-    if (typeof name !== 'string') throw new Error('Invalid bucket');
-    await r2().createBucket(name);
-    void r2Index()
-      .sync()
-      .catch(() => {});
-  });
-  ipcMain.handle(IPC.R2_DELETE_BUCKET, async (_e, name: unknown) => {
-    if (typeof name !== 'string') throw new Error('Invalid bucket');
-    await r2().deleteBucket(name);
-    void r2Index()
-      .sync()
-      .catch(() => {});
-  });
-  ipcMain.handle(IPC.R2_LIST, (_e, b: unknown, p: unknown, t: unknown) => {
-    if (typeof b !== 'string' || typeof p !== 'string') throw new Error('Invalid R2 path');
-    return r2().list(b, p, typeof t === 'string' ? t : null);
-  });
-  ipcMain.handle(IPC.R2_SEARCH, (_e, b: unknown, q: unknown, t: unknown) => {
-    if (typeof b !== 'string' || typeof q !== 'string') throw new Error('Invalid search');
-    return r2Index().search(b, q, typeof t === 'string' ? t : null);
-  });
-  ipcMain.handle(IPC.R2_DOWNLOAD_INFO, (_e, b: unknown, k: unknown, ex: unknown) => {
-    if (typeof b !== 'string' || typeof k !== 'string') throw new Error('Invalid object');
-    return r2().downloadInfo(b, k, typeof ex === 'number' ? ex : 3600);
-  });
-  ipcMain.handle(IPC.R2_BATCH_DOWNLOAD_INFO, (_e, b: unknown, keys: unknown, ex: unknown) => {
-    if (typeof b !== 'string' || !Array.isArray(keys)) throw new Error('Invalid batch objects');
-    return r2().batchDownloadInfo(
-      b,
-      keys.filter((x) => typeof x === 'string'),
-      typeof ex === 'number' ? ex : 3600,
-    );
-  });
-  ipcMain.handle(IPC.R2_PUT_URL_INFO, (_e, b: unknown, k: unknown, ex: unknown, ct: unknown) => {
-    if (
-      typeof b !== 'string' ||
-      typeof k !== 'string' ||
-      (ct !== undefined && typeof ct !== 'string')
-    )
-      throw new Error('Invalid PUT URL request');
-    return r2().putUrlInfo(
-      b,
-      k,
-      typeof ex === 'number' ? ex : 3600,
-      typeof ct === 'string' ? ct : '',
-    );
-  });
-  ipcMain.handle(IPC.R2_DELETE_OBJECTS, async (_e, b: unknown, keys: unknown) => {
-    if (typeof b !== 'string' || !Array.isArray(keys)) throw new Error('Invalid delete');
-    const result = await r2().deleteObjects(
-      b,
-      keys.filter((x) => typeof x === 'string'),
-    );
-    void r2Index()
-      .sync()
-      .catch(() => {});
-    return result;
-  });
-  ipcMain.handle(IPC.R2_MOVE, async (_e, b: unknown, s: unknown, d: unknown, o: unknown) => {
-    if (typeof b !== 'string' || typeof s !== 'string' || typeof d !== 'string')
-      throw new Error('Invalid move');
-    await r2().move(b, s, d, o === true);
-    void r2Index()
-      .sync()
-      .catch(() => {});
-  });
-  ipcMain.handle(IPC.R2_SELECT_UPLOAD_FILES, async () => {
-    const result = await dialog.showOpenDialog({
-      title: 'R2へアップロードするファイルを選択',
-      properties: ['openFile', 'multiSelections'],
-    });
-    return result.canceled ? [] : result.filePaths;
-  });
-  ipcMain.handle(IPC.R2_BEGIN_UPLOAD, (_e, b: unknown, p: unknown, f: unknown, o: unknown) => {
-    if (typeof b !== 'string' || typeof p !== 'string' || typeof f !== 'string')
-      throw new Error('Invalid upload');
-    return r2().beginUpload(b, p, f, o === true);
-  });
-  ipcMain.handle(IPC.R2_UPLOADS, () => r2().uploads());
-  ipcMain.handle(IPC.R2_RESUME_UPLOAD, (_e, id: unknown) => {
-    if (typeof id !== 'string') throw new Error('Invalid upload id');
-    return r2().resumeUpload(id);
-  });
-  ipcMain.handle(IPC.R2_PAUSE_UPLOAD, (_e, id: unknown) => {
-    if (typeof id !== 'string') throw new Error('Invalid upload id');
-    return r2().pauseUpload(id);
-  });
-  ipcMain.handle(IPC.R2_CANCEL_UPLOAD, (_e, id: unknown) => {
-    if (typeof id !== 'string') throw new Error('Invalid upload id');
-    return r2().cancelUpload(id);
-  });
-  ipcMain.handle(IPC.R2_TEMPLATES, (_e, b: unknown) =>
-    r2().templates(typeof b === 'string' ? b : undefined),
-  );
-  ipcMain.handle(IPC.R2_SAVE_TEMPLATE, (_e, input: any) => r2().saveTemplate(input));
-  ipcMain.handle(IPC.R2_DELETE_TEMPLATE, (_e, id: unknown) => {
-    if (typeof id !== 'string') throw new Error('Invalid template id');
-    return r2().deleteTemplate(id);
-  });
-  ipcMain.handle(IPC.R2_METRICS, () => r2().metrics());
-  ipcMain.handle(IPC.CLIPBOARD_WRITE_TEXT, (_e, text: unknown) => {
-    if (typeof text !== 'string') throw new Error('Clipboard text must be string');
-    clipboard.writeText(text);
-  });
-  const getAssistantProvider = async (event: IpcMainInvokeEvent, stage: unknown) => {
-    const state = projectWindowForSender(event.sender);
-    validGrokContextStage(stage);
-    const generation = ++state.assistantSelectionGeneration;
-    if (event.sender.id !== state.localView.webContents.id)
-      throw new Error('Only the project window may select the assistant.');
-    if (!state.projectRoot || !assistantProviderState) throw new Error('No active project.');
-    const root = state.projectRoot;
-    const defaultProvider = (await settingsStore().values()).assistantProvider;
-    const provider = await assistantProviderState.resolve(
-      root,
-      defaultProvider,
-      async () => {
-        if (!agentSessionState) return null;
-        const stages: GrokContextStage[] = ['story', 'models', 'prompt-plan', 'caption'];
-        const [grokHistory, codexHistory] = await Promise.all([
-          Promise.all(stages.map((value) => agentSessionState!.get(root, value, 'grok'))).then(
-            (states) => states.some((value) => value.sessionIds.length > 0),
-          ),
-          Promise.all(stages.map((value) => agentSessionState!.get(root, value, 'codex'))).then(
-            (states) => states.some((value) => value.sessionIds.length > 0),
-          ),
-        ]);
-        if (grokHistory && !codexHistory) return 'grok';
-        if (codexHistory && !grokHistory) return 'codex';
-        return null;
-      },
-      stage,
-    );
-    if (state.projectRoot !== root || state.assistantSelectionGeneration !== generation)
-      throw new Error('Project or stage changed during agent restore.');
-    state.paneProvider = provider;
-    layoutProjectWindow(state);
-    return provider;
-  };
-  ipcMain.handle(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider);
-  const setAssistantProvider = async (
-    event: IpcMainInvokeEvent,
-    provider: unknown,
-    stage: unknown,
-  ) => {
-    const state = projectWindowForSender(event.sender);
-    validGrokContextStage(stage);
-    const generation = ++state.assistantSelectionGeneration;
-    if (event.sender.id !== state.localView.webContents.id)
-      throw new Error('Only the project window may select the assistant.');
-    if (provider !== 'grok' && provider !== 'codex') throw new Error('Invalid AI provider.');
-    if (!state.projectRoot || !assistantProviderState) throw new Error('No active project.');
-    const root = state.projectRoot;
-    await assistantProviderState.remember(root, provider, stage);
-    if (state.projectRoot !== root || state.assistantSelectionGeneration !== generation)
-      throw new Error('Project or stage changed during agent switch.');
-    state.paneProvider = provider;
-    if (
-      state.assistantContext &&
-      state.projectRoot &&
-      projectRootKey(state.assistantContext.root) === projectRootKey(state.projectRoot) &&
-      state.assistantContext.stage === stage
-    ) {
-      state.assistantContext = { ...state.assistantContext, provider };
-      state.assistantView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, state.assistantContext);
-    }
-    layoutProjectWindow(state);
-    return paneState(state);
-  };
-  ipcMain.handle(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider);
-
-  const assistantTaskBusy = async (context: AssistantPaneContext) => {
-    if (context.provider === 'grok')
-      return grokCliTaskRunner?.isBusy(context.root, context.stage) ?? false;
-    return codexCliTaskRunner?.isBusy(context.root, context.stage) ?? false;
-  };
-
-  ipcMain.handle(IPC.ASSISTANT_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
-    const state = projectWindowForSender(event.sender);
-    if (event.sender.id !== state.localView.webContents.id)
-      throw new Error('Only the project window can select an AI context.');
-    validRoot(root);
-    validGrokContextStage(stage);
-    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
-      throw new Error('This project is not active in the current window.');
-    setAssistantContext(state, root, stage);
-  });
-
-  ipcMain.handle(IPC.ASSISTANT_CONTEXT, (event) => {
-    const state = projectWindowForSender(event.sender);
-    return state.assistantContext;
-  });
-
-  ipcMain.handle(IPC.ASSISTANT_SNAPSHOT, (event) =>
-    assistantSnapshot(projectWindowForSender(event.sender)),
-  );
-
-  ipcMain.handle(IPC.ASSISTANT_SEND, async (event, message: unknown) => {
-    const state = projectWindowForSender(event.sender);
-    const context = assistantContextFor(state);
-    if (typeof message !== 'string') throw new Error('AI message must be text.');
-    if (!agentConversationRunner || !agentSessionState)
-      throw new Error('共通AI conversation runtimeが初期化されていません。');
-    if (await assistantTaskBusy(context))
-      throw new Error('工程用AIタスクの実行中は通常メッセージを送信できません。');
-    return agentConversationRunner.send(context.root, context.stage, context.provider, message);
-  });
-
-  ipcMain.handle(IPC.ASSISTANT_STOP_TURN, async (event) => {
-    const state = projectWindowForSender(event.sender);
-    const context = assistantContextFor(state);
-    if (!agentConversationRunner) throw new Error('共通AI runtimeが初期化されていません。');
-    await agentConversationRunner.stop(context.root, context.stage, context.provider);
-  });
-
-  ipcMain.handle(IPC.ASSISTANT_NEW_CONVERSATION, async (event) => {
-    const state = projectWindowForSender(event.sender);
-    const context = assistantContextFor(state);
-    if (!agentSessionState || !agentConversationRunner)
-      throw new Error('共通AI session runtimeが初期化されていません。');
-    if (
-      agentConversationRunner.isBusy(context.root, context.stage, context.provider) ||
-      (await assistantTaskBusy(context))
-    )
-      throw new Error('回答生成中は新しい会話へ切り替えられません。');
-    await agentSessionState.clearActive(context.root, context.stage, context.provider);
-    return assistantSnapshot(state);
-  });
-
-  ipcMain.handle(IPC.ASSISTANT_RESTORE_CONVERSATION, async (event, sessionId: unknown) => {
-    const state = projectWindowForSender(event.sender);
-    const context = assistantContextFor(state);
-    if (typeof sessionId !== 'string' || !sessionId) throw new Error('Invalid AI session ID.');
-    if (!agentSessionState || !agentConversationRunner)
-      throw new Error('共通AI session runtimeが初期化されていません。');
-    if (
-      agentConversationRunner.isBusy(context.root, context.stage, context.provider) ||
-      (await assistantTaskBusy(context))
-    )
-      throw new Error('回答生成中は会話履歴を切り替えられません。');
-    await agentSessionState.activate(context.root, context.stage, context.provider, sessionId);
-    return assistantSnapshot(state);
-  });
-
-  ipcMain.handle(IPC.ASSISTANT_MODELS, async (event) => {
-    const context = assistantContextFor(projectWindowForSender(event.sender));
-    return assistantModelSettings(context.root, context.stage, context.provider);
-  });
-
-  ipcMain.handle(IPC.ASSISTANT_SELECT_MODEL, async (event, selection: unknown) => {
-    const state = projectWindowForSender(event.sender);
-    const context = assistantContextFor(state);
-    if (!agentConversationRunner) throw new Error('共通AI runtimeが初期化されていません。');
-    if (
-      agentConversationRunner.isBusy(context.root, context.stage, context.provider) ||
-      (await assistantTaskBusy(context))
-    )
-      throw new Error('回答生成中はモデルを変更できません。');
-    return assistantChooseModel(context.root, context.stage, context.provider, selection);
-  });
-
-  const validateAgentTaskRequest = (
-    event: IpcMainInvokeEvent,
-    root: unknown,
-    stage: unknown,
-    extra?: unknown,
-  ) => {
-    const state = projectWindowForSender(event.sender);
-    if (event.sender.id !== state.localView.webContents.id)
-      throw new Error('Only the project window may control AI tasks.');
-    validRoot(root);
-    const validStages = Object.values(codexTaskContexts).flat();
-    if (!validStages.includes(stage as GrokTask['stage'])) throw new Error('Invalid task stage.');
-    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
-      throw new Error('This project is not active in the current window.');
-    if (extra != null && (typeof extra !== 'string' || extra.length > 30_000))
-      throw new Error('Invalid additional instructions.');
-    return {
-      state,
-      root: path.resolve(root),
-      stage: stage as GrokTask['stage'],
-      contextStage: contextStageForTask(stage as GrokTask['stage']),
-      extra: typeof extra === 'string' ? extra : '',
-    };
-  };
-
-  ipcMain.handle(
-    IPC.AGENT_TASK_START,
-    async (event, root: unknown, stage: unknown, extra: unknown) => {
-      const request = validateAgentTaskRequest(event, root, stage, extra);
-      const assistantContext: AssistantPaneContext = {
-        root: request.root,
-        stage: request.contextStage,
-        provider: request.state.paneProvider,
-      };
-      if (
-        agentConversationRunner?.isBusy(
-          assistantContext.root,
-          assistantContext.stage,
-          assistantContext.provider,
-        )
-      )
-        throw new Error('通常会話の回答生成中は工程用AIタスクを開始できません。');
-      if (request.state.paneProvider === 'grok') {
-        if (!grokCliTaskRunner) throw new Error('Grok CLIが初期化されていません。');
-        await grokCliTaskRunner.run(
-          request.root,
-          request.contextStage,
-          request.stage,
-          request.extra,
-        );
-        return;
-      }
-      if (!codexCliTaskRunner) throw new Error('Codex CLIが初期化されていません。');
-      await codexCliTaskRunner.run(
-        request.root,
-        request.contextStage,
-        request.stage,
-        request.extra,
-      );
-    },
-  );
-
-  ipcMain.handle(IPC.AGENT_TASK_STOP, async (event, root: unknown, stage: unknown) => {
-    const request = validateAgentTaskRequest(event, root, stage);
-    if (request.state.paneProvider === 'grok') {
-      if (!grokCliTaskRunner) throw new Error('Grok CLIが初期化されていません。');
-      await grokCliTaskRunner.stop(request.root, request.contextStage);
-      return;
-    }
-    if (!codexCliTaskRunner) throw new Error('Codex CLIが初期化されていません。');
-    await codexCliTaskRunner.stop(request.root, request.contextStage);
-  });
-  ipcMain.handle(IPC.ASSISTANT_SET_VISIBLE, (event, visible: unknown) => {
-    const state = projectWindowForSender(event.sender);
-    state.assistantVisible = visible === true;
-    layoutProjectWindow(state);
-    return paneState(state);
-  });
-  ipcMain.handle(IPC.ASSISTANT_SET_RATIO, (event, ratio: unknown) => {
-    if (typeof ratio !== 'number' || !Number.isFinite(ratio)) throw new Error('Invalid ratio');
-    const state = projectWindowForSender(event.sender);
-    state.localRatio = Math.max(0.3, Math.min(0.7, ratio));
-    layoutProjectWindow(state);
-    return paneState(state);
-  });
-  ipcMain.handle(IPC.ASSISTANT_SET_DIVIDER_X, (event, screenX: unknown) => {
-    if (typeof screenX !== 'number' || !Number.isFinite(screenX))
-      throw new Error('Invalid divider position');
-    const state = projectWindowForSender(event.sender);
-    const bounds = state.window.getContentBounds();
-    state.localRatio = Math.max(
-      0.3,
-      Math.min(0.7, (screenX - bounds.x) / Math.max(bounds.width, 1)),
-    );
-    layoutProjectWindow(state);
-    return paneState(state);
-  });
+  registerIpc(createIpcRegistrationDependencies());
 }
 
 function maybeQuitAfterExecution() {
@@ -3932,6 +3568,9 @@ async function initializeApplication() {
   );
   civitaiCatalog = new CivitaiCatalogService(path.join(userData, 'civitai'));
   ensureCatalogRuntimePath();
+  grokChatState = new GrokChatStateStore(userData);
+  codexChatState = new CodexChatStateStore(userData);
+  codexModelSelections = new CodexModelSelectionStore(userData);
   assistantProviderState = new AssistantProviderStore(userData);
   agentSessionState = new AgentSessionStateStore(userData);
   agentConversationStore = new AgentConversationStore(userData);
@@ -3947,15 +3586,6 @@ async function initializeApplication() {
     resolveModel: async (root, stage) =>
       (await assistantModelSettings(root, stage, 'grok')).selection,
   });
-  codexCliTaskRunner = new CodexCliTaskRunner({
-    userDataPath: userData,
-    adapter: codexCliAdapter,
-    sessions: agentSessionState,
-    onEvent: (context, event) => notifyAgentEvent('codex', context, context.taskStage, event),
-    onArtifact: notifyAutoArtifact,
-    resolveModel: async (root, stage) =>
-      (await assistantModelSettings(root, stage, 'codex')).selection,
-  });
   agentConversationRunner = new AgentConversationRunner({
     userDataPath: userData,
     sessions: agentSessionState,
@@ -3964,6 +3594,21 @@ async function initializeApplication() {
     model: async (root, stage, provider) =>
       (await assistantModelSettings(root, stage, provider)).selection,
     onEvent: notifyAgentEvent,
+  });
+  codexAppServer = new CodexAppServer();
+  codexAppServer.on('notification', forwardCodexNotification);
+  codexAppServer.on('disconnected', (message: string) => {
+    codexTurnMonitor.disconnected();
+    codexBusy.clear();
+    codexTurnStartRequests.clear();
+    codexActiveTurnIds.clear();
+    codexInterruptRequests.clear();
+    codexPendingArtifacts.clear();
+    for (const state of projectWindows.values())
+      state.codexView.webContents.send(IPC.CODEX_EVENT, {
+        method: 'disconnected',
+        params: { message },
+      });
   });
   const r2Config = new R2ConfigStore(userData);
   r2Manager = new R2Manager(r2Config, userData);
@@ -3988,6 +3633,7 @@ app.on('will-quit', () => {
   void codexCliAdapter?.shutdown().catch(() => {});
   void grokCliTaskRunner?.shutdown().catch(() => {});
   void agentConversationRunner?.shutdown().catch(() => {});
+  codexAppServer?.stop();
 });
 app.on('window-all-closed', () => {
   if (!executionCoordinator.hasActiveRuns() && process.platform !== 'darwin') app.quit();
