@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -267,8 +268,6 @@ function archiveEntries(root) {
     false,
     'fallback reason alone must not reset downstream',
   );
-const { readMainProcessSource } = require('./main-process-source.cjs');
-
   const directRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-reset-direct-'));
   downstream(directRoot);
   await resetModelDownstream(directRoot, { clearModelFixHistory: false });
