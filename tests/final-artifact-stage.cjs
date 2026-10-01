@@ -72,7 +72,6 @@ matchCode(
 console.log('Final artifact stage contract tests passed.');
 
 async function testPreviewAuthorizationWithoutDirectoryScans() {
-  const os = require('node:os');
   const promises = require('node:fs/promises');
   const source = fs.readFileSync(
     path.join(repo, 'src', 'main', 'final-artifact-image-service.ts'),
@@ -151,9 +150,15 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
     await require('node:assert/strict').rejects(
       authorize(temp, path.join(directory, 'image-0.txt')),
     );
-    const link = path.join(directory, 'link.png');
-    await promises.symlink(external, link);
-    await require('node:assert/strict').rejects(authorize(temp, link));
+    const linkDirectory = path.join(directory, 'linked-outside');
+    await promises.symlink(
+      outside,
+      linkDirectory,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    await require('node:assert/strict').rejects(
+      authorize(temp, path.join(linkDirectory, 'outside.png')),
+    );
     require('node:assert/strict').equal(scans, 0);
   } finally {
     await promises.rm(temp, { recursive: true, force: true });
