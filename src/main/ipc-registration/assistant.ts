@@ -46,7 +46,8 @@ export function registerAssistantIpc(dependencies: IpcRegistrationDependencies) 
     writeFile,
   } = dependencies;
   const validRoot: IpcRegistrationDependencies['validRoot'] = dependencies.validRoot;
-  const validGrokContextStage: IpcRegistrationDependencies['validGrokContextStage'] = dependencies.validGrokContextStage;
+  const validGrokContextStage: IpcRegistrationDependencies['validGrokContextStage'] =
+    dependencies.validGrokContextStage;
 
   const getAssistantProvider = async (event: IpcMainInvokeEvent, stage: unknown) => {
     const state = projectWindowForSender(event.sender);
