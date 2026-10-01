@@ -447,7 +447,10 @@ const writeJson = (file, value) => {
   assert.equal(unsafe.current.promptId, 'accepted-unknown');
   assert.equal(unsafe.lifecycle, 'FAILED');
 
-  const mainSource = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+  const mainSource = [
+    fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8'),
+    fs.readFileSync(path.join(repo, 'src/main/ipc-registration.ts'), 'utf8'),
+  ].join('\n');
   const uiSource = fs.readFileSync(path.join(repo, 'src/renderer/ExecutionStages.tsx'), 'utf8');
   const restartHandlerStart = mainSource.indexOf('IPC.EXECUTION_RESTART_FROM_SCRATCH');
   const restartHandlerEnd = mainSource.indexOf('IPC.CAPTION_STATUS', restartHandlerStart);
