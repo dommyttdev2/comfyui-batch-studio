@@ -3084,8 +3084,8 @@ async function executionPreflight(root: string) {
   );
 }
 
-function register() {
-  registerIpc({
+export function createIpcRegistrationDependencies() {
+  return {
     GROK_URL,
     IPC,
     VastAiClient,
@@ -3245,7 +3245,16 @@ function register() {
     vastClient,
     vastStore,
     writeFile,
-  });
+      codexTaskContexts,
+    codexReturnFile,
+    maybeQuitAfterExecution,
+};
+}
+
+export type IpcRegistrationDependencies = ReturnType<typeof createIpcRegistrationDependencies>;
+
+function register() {
+  registerIpc(createIpcRegistrationDependencies());
 }
 
 function maybeQuitAfterExecution() {
