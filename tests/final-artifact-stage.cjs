@@ -11,7 +11,10 @@ const service = fs.readFileSync(
   'utf8',
 );
 const caption = fs.readFileSync(path.join(repo, 'src', 'main', 'caption-service.ts'), 'utf8');
-const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
+const main = [
+  fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8'),
+  fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-registration.ts'), 'utf8'),
+].join('\n');
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
 const types = fs.readFileSync(path.join(repo, 'src', 'shared', 'types.ts'), 'utf8');
 

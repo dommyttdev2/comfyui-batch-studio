@@ -12,7 +12,10 @@ const appUi = fs.readFileSync(path.join(repo, 'src/renderer/App.tsx'), 'utf8');
 const grokUi = fs.readFileSync(path.join(repo, 'src/renderer/GrokStages.tsx'), 'utf8');
 const menuUi = fs.readFileSync(path.join(repo, 'src/renderer/StageResetMenu.tsx'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src/preload/index.cjs'), 'utf8');
-const mainSource = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+const mainSource = [
+  fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8'),
+  fs.readFileSync(path.join(repo, 'src/main/ipc-registration.ts'), 'utf8'),
+].join('\n');
 matchCode(
   appUi,
   /stageResetScope\(stage:Stage\)/,

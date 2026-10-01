@@ -19,7 +19,7 @@ execFileSync(
   { cwd: repo, stdio: 'inherit' },
 );
 const source = (name) => fs.readFileSync(path.join(repo, name), 'utf8');
-const main = source('src/main/main.ts');
+const main = source('src/main/main.ts') + source('src/main/ipc-registration.ts');
 const pane = source('src/renderer/CodexPane.tsx');
 assert.match(
   main,

@@ -3,7 +3,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const repo = path.resolve(__dirname, '..');
-const main = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+const main = [
+  fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8'),
+  fs.readFileSync(path.join(repo, 'src/main/ipc-registration.ts'), 'utf8'),
+].join('\n');
 const pane = fs.readFileSync(path.join(repo, 'src/renderer/CodexPane.tsx'), 'utf8');
 
 const snapshot = main.slice(

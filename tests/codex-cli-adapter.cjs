@@ -22,7 +22,7 @@ execFileSync(
   { cwd: repo, stdio: 'inherit' },
 );
 
-const main = source('src/main/main.ts');
+const main = source('src/main/main.ts') + source('src/main/ipc-registration.ts');
 assert.match(main, /BATCH_STUDIO_CODEX_TRANSPORT/);
 assert.match(main, /adapter\.resumeTask\(existingThreadId/);
 assert.match(main, /prepareAgentWorkspace\(app\.getPath\('userData'\), 'codex'/);

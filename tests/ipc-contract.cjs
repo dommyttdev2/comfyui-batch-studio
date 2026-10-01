@@ -7,7 +7,10 @@ const { EventEmitter } = require('node:events');
 const repo = path.resolve(__dirname, '..');
 const shared = fs.readFileSync(path.join(repo, 'src/shared/ipc.ts'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src/preload/index.cjs'), 'utf8');
-const main = fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8');
+const main = [
+  fs.readFileSync(path.join(repo, 'src/main/main.ts'), 'utf8'),
+  fs.readFileSync(path.join(repo, 'src/main/ipc-registration.ts'), 'utf8'),
+].join('\n');
 function constants(source, marker) {
   const start = source.indexOf(marker);
   assert.notEqual(start, -1, `Missing ${marker}`);

@@ -3,7 +3,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const main = fs.readFileSync(path.join(__dirname, '../src/main/main.ts'), 'utf8');
+const main = [
+  fs.readFileSync(path.join(__dirname, '../src/main/main.ts'), 'utf8'),
+  fs.readFileSync(path.join(__dirname, '../src/main/ipc-registration.ts'), 'utf8'),
+].join('\n');
 const start = main.indexOf('IPC.MARKETPLACE_GENERATE_ZIP,');
 const end = main.indexOf('IPC.MARKETPLACE_RENDER_PNG,', start);
 assert.ok(start >= 0 && end > start);

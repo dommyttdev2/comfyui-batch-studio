@@ -11,7 +11,7 @@ const artifactService = read('src/main/artifact-service.ts');
 const environmentSettings = read('src/renderer/EnvironmentSettings.tsx');
 const app = read('src/renderer/App.tsx');
 const projectStages = read('src/renderer/ProjectStages.tsx');
-const main = read('src/main/main.ts');
+const main = read('src/main/main.ts') + read('src/main/ipc-registration.ts');
 
 matchCode(appSettings, /interface StoredAppSettingsV7/, '環境設定schema v7を持つ');
 matchCode(
