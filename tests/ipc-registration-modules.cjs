@@ -54,7 +54,7 @@ for (const [file, registerName, firstChannel, lastChannel, expectedCount] of dom
   allHandlers.push(...handlers);
 }
 
-assert.equal(allHandlers.length, 174, 'all invoke handlers must remain registered');
+assert.equal(allHandlers.length, 183, 'all invoke handlers must remain registered');
 assert.equal(
   new Set(allHandlers).size,
   allHandlers.length,
