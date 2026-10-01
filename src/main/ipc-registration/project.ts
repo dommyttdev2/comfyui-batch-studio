@@ -46,6 +46,8 @@ export function registerProjectIpc(dependencies: IpcRegistrationDependencies) {
     stateStore,
     statusSnapshots,
   } = dependencies;
+  const validRoot: IpcRegistrationDependencies['validRoot'] = dependencies.validRoot;
+  const validManualResetScope: IpcRegistrationDependencies['validManualResetScope'] = dependencies.validManualResetScope;
 
   handleIpc(IPC.EDITOR_FLUSH_RESULT, (event, id: unknown, ok: unknown, message: unknown) => {
     if (typeof id !== 'string') return;
