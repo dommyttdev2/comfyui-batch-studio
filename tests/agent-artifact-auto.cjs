@@ -117,9 +117,14 @@ assert.match(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
     null,
   );
   fs.unlinkSync(prepared.outputPath);
-  fs.symlinkSync(path.join(prepared.directory, 'input', '2-models.json'), prepared.outputPath);
+  if (process.platform === 'win32') {
+    fs.symlinkSync(path.join(prepared.directory, 'input'), prepared.outputPath, 'junction');
+  } else {
+    fs.symlinkSync(path.join(prepared.directory, 'input', '2-models.json'), prepared.outputPath);
+  }
   await assert.rejects(readCodexOutput(prepared), /通常のファイルではない/);
-  fs.unlinkSync(prepared.outputPath);
+  if (process.platform === 'win32') fs.rmdirSync(prepared.outputPath);
+  else fs.unlinkSync(prepared.outputPath);
   console.log('Codex isolated file workspace, safe output read and persisted retry passed.');
 
   const taskTurn = (fileName) => ({
