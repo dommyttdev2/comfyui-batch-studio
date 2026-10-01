@@ -104,13 +104,13 @@ matchCode(
 );
 assert.ok(
   read('src/main/main.ts').includes(
-    'ipcMain.handle(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider)',
+    'handleIpc(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider)',
   ),
   'Provider selection must work independently of the Codex IPC namespace',
 );
 assert.ok(
   read('src/main/main.ts').includes(
-    'ipcMain.handle(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider)',
+    'handleIpc(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider)',
   ),
   'Switching between Grok and Codex must use the shared assistant IPC',
 );
