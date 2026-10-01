@@ -221,37 +221,12 @@ import {
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
-const GROK_URL = 'https://grok.com/';
-const GROK_LOADING_HTML = `<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8" />
-<meta name="color-scheme" content="dark" />
-<style>
-html,body{width:100%;height:100%;margin:0;background:#101318;color:#e8ebef;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
-body{display:grid;place-items:center}
-.loading{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
-.spinner{width:30px;height:30px;border:3px solid #39414d;border-top-color:#3474ef;border-radius:50%;animation:spin .8s linear infinite}
-.title{font-size:15px;font-weight:600}
-.note{font-size:12px;color:#8993a2}
-@keyframes spin{to{transform:rotate(360deg)}}
-</style>
-</head>
-<body>
-<div class="loading" role="status" aria-live="polite">
-<div class="spinner" aria-hidden="true"></div>
-<div class="title">Grokを読み込み中…</div>
-<div class="note">読み込みが完了すると、このPaneにGrokが表示されます。</div>
-</div>
-</body>
-</html>`;
 type StandaloneWindowTool = 'r2' | 'civit' | 'vastai';
 type RendererWindowTool =
   | StandaloneWindowTool
   | 'thumbnail-picker'
   | 'marketplace-picker'
-  | 'assistant-pane'
-  | 'codex-pane';
+  | 'assistant-pane';
 type StandaloneToolWindowState = { window: BaseWindow; view: WebContentsView };
 type ThumbnailPickerWindowState = {
   selection: PickerSelectionGate;
@@ -318,24 +293,14 @@ const pendingWindowCloses = new Set<number>();
 type ProjectWindowState = {
   window: BaseWindow;
   localView: WebContentsView;
-  grokView: WebContentsView;
-  codexView: WebContentsView;
+  assistantView: WebContentsView;
   paneProvider: AssistantPaneProvider;
   assistantSelectionGeneration: number;
-  codexContext: CodexContext | null;
   assistantContext: AssistantPaneContext | null;
-  grokLoadingView: WebContentsView;
   projectRoot: string | null;
   restoreLastProject: boolean;
-  grokVisible: boolean;
-  grokLoading: boolean;
-  grokLoadingGeneration: number;
+  assistantVisible: boolean;
   localRatio: number;
-  activeGrokContext: { root: string; stage: GrokContextStage } | null;
-  restoringGrokContext: boolean;
-  grokArtifactWatcher: GrokAutoArtifactWatcher | null;
-  grokNavigationQueue: GrokNavigationQueue;
-  grokContextQueue: LatestGrokContextQueue<GrokPaneState>;
   lastFocusedAt: number;
 };
 const projectWindows = new Map<number, ProjectWindowState>();
@@ -347,10 +312,7 @@ let lastFocusedProjectWindowId: number | null = null,
   civitaiPolicy: CivitaiRequestPolicy | null = null,
   civitaiConfig: CivitaiConfigStore | null = null,
   uiState: UiStateStore | null = null,
-  grokChatState: GrokChatStateStore | null = null,
-  codexChatState: CodexChatStateStore | null = null,
   assistantProviderState: AssistantProviderStore | null = null,
-  codexAppServer: CodexAppServer | null = null,
   codexCliAdapter: CodexCliAdapter | null = null,
   grokCliAdapter: GrokCliAdapter | null = null,
   grokCliTaskRunner: GrokCliTaskRunner | null = null,
@@ -359,22 +321,6 @@ let lastFocusedProjectWindowId: number | null = null,
   agentConversationStore: AgentConversationStore | null = null,
   agentConversationRunner: AgentConversationRunner | null = null,
   agentModelSelections: AgentModelSelectionStore | null = null,
-  codexCliActiveTurnIds = new Map<string, string>(),
-  codexBusy = new Set<string>(),
-  codexTurnStartRequests = new Map<string, Promise<string>>(),
-  codexActiveTurnIds = new Map<string, string>(),
-  codexInterruptRequests = new Map<string, Promise<void>>(),
-  codexPendingArtifacts = new Map<
-    string,
-    {
-      root: string;
-      stage: GrokTask['stage'];
-      fileName: string;
-      workspace?: FileArtifactWorkspace | AgentWorkspace;
-    }
-  >(),
-  codexTurnMonitor = new CodexTurnMonitor(),
-  codexModelSelections: CodexModelSelectionStore | null = null,
   r2Manager: R2Manager | null = null,
   r2ObjectIndex: R2ObjectIndex | null = null,
   appSettingsStore: AppSettingsStore | null = null,
@@ -391,31 +337,25 @@ function projectRootKey(root: string) {
   const resolved = path.resolve(root);
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
-function paneState(state: ProjectWindowState): GrokPaneState {
-  return { visible: state.grokVisible, ratio: state.localRatio };
+function paneState(state: ProjectWindowState): AssistantPaneState {
+  return { visible: state.assistantVisible, ratio: state.localRatio };
 }
 function layoutProjectWindow(state: ProjectWindowState) {
   const { width, height } = state.window.getContentBounds();
-  if (!state.grokVisible || width < 840) {
+  if (!state.assistantVisible || width < 840) {
     state.localView.setBounds({ x: 0, y: 0, width, height });
-    state.grokView.setBounds({ x: width, y: 0, width: 0, height });
-    state.grokLoadingView.setBounds({ x: width, y: 0, width: 0, height });
-    state.codexView.setBounds({ x: width, y: 0, width: 0, height });
+    state.assistantView.setBounds({ x: width, y: 0, width: 0, height });
     return;
   }
-  const lw = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio))),
-    grokBounds = { x: lw, y: 0, width: width - lw, height };
-  state.localView.setBounds({ x: 0, y: 0, width: lw, height });
-  const hidden = { x: width, y: 0, width: 0, height };
-  state.grokView.setBounds(hidden);
-  state.grokLoadingView.setBounds(hidden);
-  state.codexView.setBounds(grokBounds);
+  const localWidth = Math.max(420, Math.min(width - 420, Math.round(width * state.localRatio)));
+  state.localView.setBounds({ x: 0, y: 0, width: localWidth, height });
+  state.assistantView.setBounds({ x: localWidth, y: 0, width: width - localWidth, height });
 }
 function ipcSenderContext(contents: WebContents): IpcSenderContext {
   for (const state of projectWindows.values()) {
     if (state.localView.webContents.id === contents.id)
       return { kind: 'project-local', projectRoot: state.projectRoot };
-    if (state.codexView.webContents.id === contents.id)
+    if (state.assistantView.webContents.id === contents.id)
       return { kind: 'project-codex', projectRoot: state.projectRoot };
   }
   const thumbnail = thumbnailPickerWindows.get(contents.id);
@@ -471,8 +411,7 @@ function projectWindowForSender(contents: WebContents) {
   for (const state of projectWindows.values())
     if (
       state.localView.webContents.id === contents.id ||
-      state.grokView.webContents.id === contents.id ||
-      state.codexView.webContents.id === contents.id
+      state.assistantView.webContents.id === contents.id
     )
       return state;
   throw new Error('Project Window was not found for IPC sender.');
@@ -522,7 +461,6 @@ async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
   if (dev) {
     const url = new URL(dev);
     if (tool === 'assistant-pane') url.searchParams.set('assistant-pane', '1');
-    else if (tool === 'codex-pane') url.searchParams.set('codex-pane', '1');
     else if (tool) url.searchParams.set('tool', tool);
     await v.webContents.loadURL(url.toString());
   } else
@@ -530,67 +468,10 @@ async function loadRenderer(v: WebContentsView, tool?: RendererWindowTool) {
       path.resolve(__dirname, '../../dist-renderer/index.html'),
       tool === 'assistant-pane'
         ? { query: { 'assistant-pane': '1' } }
-        : tool === 'codex-pane'
-          ? { query: { 'codex-pane': '1' } }
-          : tool
-            ? { query: { tool } }
-            : undefined,
+        : tool
+          ? { query: { tool } }
+          : undefined,
     );
-}
-function configureGrokContents(contents: WebContents, oauthFlow = false) {
-  contents.setWindowOpenHandler(({ url }) => {
-    const startsOAuth = isOAuthPopupUrl(url);
-    if (startsOAuth || isGrokNavigationUrl(url) || (oauthFlow && isSecureWebUrl(url))) {
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          width: 560,
-          height: 760,
-          autoHideMenuBar: true,
-          webPreferences: {
-            partition: GROK_PARTITION,
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: true,
-          },
-        },
-      };
-    }
-    if (isSafeExternalUrl(url)) void shell.openExternal(url);
-    return { action: 'deny' };
-  });
-  contents.on('will-navigate', (e, url) => {
-    const allow = oauthFlow ? isSecureWebUrl(url) : isGrokNavigationUrl(url);
-    if (!allow) {
-      e.preventDefault();
-      if (isSafeExternalUrl(url)) void shell.openExternal(url);
-    }
-  });
-  contents.on('did-create-window', (window, details) =>
-    configureGrokContents(window.webContents, oauthFlow || isOAuthPopupUrl(details.url)),
-  );
-}
-function chatStore() {
-  if (!grokChatState) throw new Error('Grok chat state storeが初期化されていません。');
-  return grokChatState;
-}
-async function rememberGrokConversation(state: ProjectWindowState, url: string) {
-  if (state.restoringGrokContext || !state.activeGrokContext) return;
-  const canonical = canonicalGrokConversationUrl(url);
-  if (!canonical) return;
-  await chatStore().remember(
-    state.activeGrokContext.root,
-    state.activeGrokContext.stage,
-    canonical,
-  );
-}
-function attachGrokHistoryTracking(state: ProjectWindowState) {
-  state.grokView.webContents.on('did-navigate', (_e, url) => {
-    void rememberGrokConversation(state, url);
-  });
-  state.grokView.webContents.on('did-navigate-in-page', (_e, url) => {
-    void rememberGrokConversation(state, url);
-  });
 }
 async function rememberMostRecentOpenProject(clearIfNone = true) {
   const candidate = [...projectWindows.values()]
@@ -624,24 +505,9 @@ function createProjectWindow(
         sandbox: true,
       },
     }),
-    codexView = new WebContentsView({
+    assistantView = new WebContentsView({
       webPreferences: {
         preload: path.resolve(__dirname, '../preload/index.cjs'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-      },
-    }),
-    grokView = new WebContentsView({
-      webPreferences: {
-        partition: GROK_PARTITION,
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-      },
-    }),
-    grokLoadingView = new WebContentsView({
-      webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
@@ -650,39 +516,21 @@ function createProjectWindow(
     state: ProjectWindowState = {
       window,
       localView,
-      grokView,
-      codexView,
+      assistantView,
       paneProvider: 'grok',
       assistantSelectionGeneration: 0,
-      codexContext: null,
       assistantContext: null,
-      grokLoadingView,
       projectRoot: options.initialProjectRoot ? path.resolve(options.initialProjectRoot) : null,
       restoreLastProject: Boolean(options.restoreLastProject),
-      grokVisible: false,
-      grokLoading: false,
-      grokLoadingGeneration: 0,
+      assistantVisible: false,
       localRatio: 0.45,
-      activeGrokContext: null,
-      restoringGrokContext: false,
-      grokArtifactWatcher: null,
-      grokNavigationQueue: new GrokNavigationQueue(),
-      grokContextQueue: new LatestGrokContextQueue<GrokPaneState>(),
       lastFocusedAt: ++projectWindowFocusSequence,
     };
   const windowId = window.id;
   projectWindows.set(windowId, state);
   lastFocusedProjectWindowId = windowId;
   window.contentView.addChildView(localView);
-  window.contentView.addChildView(grokView);
-  window.contentView.addChildView(grokLoadingView);
-  window.contentView.addChildView(codexView);
-  void grokLoadingView.webContents
-    .loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(GROK_LOADING_HTML)}`)
-    .catch((error) => console.warn('Grok loading placeholder failed:', error));
-  configureGrokContents(grokView.webContents);
-  attachGrokHistoryTracking(state);
-  state.grokArtifactWatcher = new GrokAutoArtifactWatcher(grokView.webContents, notifyAutoArtifact);
+  window.contentView.addChildView(assistantView);
   window.on('focus', () => {
     state.lastFocusedAt = ++projectWindowFocusSequence;
     lastFocusedProjectWindowId = windowId;
@@ -725,11 +573,8 @@ function createProjectWindow(
     for (const picker of marketplacePickerWindows.values()) {
       if (picker.opener.id === localView.webContents.id) picker.window.close();
     }
-    state.grokArtifactWatcher?.dispose();
     localView.webContents.close();
-    grokView.webContents.close();
-    grokLoadingView.webContents.close();
-    codexView.webContents.close();
+    assistantView.webContents.close();
     projectWindows.delete(windowId);
     if (lastFocusedProjectWindowId === windowId) lastFocusedProjectWindowId = null;
     void rememberMostRecentOpenProject(false);
@@ -740,10 +585,7 @@ function createProjectWindow(
       localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');
     });
   void loadRenderer(localView);
-  void loadRenderer(codexView, 'assistant-pane');
-  void state.grokNavigationQueue
-    .navigate(grokView.webContents, GROK_URL)
-    .catch((error) => console.warn('Initial Grok navigation failed:', error));
+  void loadRenderer(assistantView, 'assistant-pane');
   return state;
 }
 function openStandaloneToolWindow(tool: StandaloneWindowTool) {
