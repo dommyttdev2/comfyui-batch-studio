@@ -388,7 +388,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     const current = await getExecutionRun(root, runId);
     if (!current) throw new Error(`Execution Run ${runId} was not found.`);
-  
+
     const runs = await listExecutionRuns(root);
     const restartable = runs.filter(
       (candidate) =>
@@ -416,7 +416,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
       throw new Error(
         `Run ${unsafeRemote.runId} は生成完了後のArtifact処理中です。処理完了または失敗後に最新Prompt Planで再実行してください。`,
       );
-  
+
     const confirm = await dialog.showMessageBox({
       type: 'warning',
       title: '最新のPrompt Planで最初から実行',
@@ -428,7 +428,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
       noLink: true,
     });
     if (confirm.response !== 1) return current;
-  
+
     for (const candidate of restartable) {
       if (candidate.executionTarget === 'remote') {
         const executor = remoteSceneExecutor();
@@ -453,7 +453,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
         }
         continue;
       }
-  
+
       if (candidate.lifecycle === 'RUNNING') {
         await requestStopScheduling(root, candidate.runId).catch(() => candidate);
         await localExecutor()
@@ -477,7 +477,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
       });
       await discardExecutionRun(root, candidate.runId);
     }
-  
+
     await compileWorkflow(root);
     const preflight = await executionPreflight(root);
     if (preflight.state !== 'READY')
