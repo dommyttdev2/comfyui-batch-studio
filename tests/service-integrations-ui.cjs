@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const repo = path.resolve(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(repo, p), 'utf8');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const app = read('src/renderer/App.tsx');
 const settings = read('src/renderer/EnvironmentSettings.tsx');
@@ -15,7 +16,7 @@ const vastPanel = read('src/renderer/integrations/VastAiIntegrationPanel.tsx');
 const serviceCss = read('src/renderer/service-integrations.css');
 const execution = read('src/renderer/ExecutionStages.tsx');
 const config = read('src/main/vastai-config.ts');
-const main = read('src/main/main.ts') + read('src/main/ipc-registration.ts');
+const main = readMainProcessSource(repo);
 const standalone = read('src/renderer/StandaloneToolApp.tsx');
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');

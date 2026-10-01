@@ -1,10 +1,11 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const read = (name) => fs.readFileSync(path.join(repo, name), 'utf8');
-const main = read('src/main/main.ts') + read('src/main/ipc-registration.ts');
+const main = readMainProcessSource(repo);
 const app = read('src/renderer/App.tsx');
 const execution = read('src/renderer/ExecutionStages.tsx');
 const run = read('src/main/execution-run.ts');

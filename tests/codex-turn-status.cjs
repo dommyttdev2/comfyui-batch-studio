@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-turn-status-'));
@@ -19,7 +20,7 @@ execFileSync(
   { cwd: repo, stdio: 'inherit' },
 );
 const source = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
-const main = source('src/main/main.ts') + source('src/main/ipc-registration.ts');
+const main = readMainProcessSource(repo);
 const pane = source('src/renderer/CodexPane.tsx');
 const ipc = source('src/shared/ipc.ts');
 const preload = source('src/preload/index.cjs');

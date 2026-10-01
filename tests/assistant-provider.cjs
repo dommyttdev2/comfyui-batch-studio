@@ -5,6 +5,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
 const { matchCode } = require('./source-match.cjs');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-assistant-provider-runtime-'));
@@ -21,7 +22,7 @@ execFileSync(
 );
 
 const read = (relative) => fs.readFileSync(path.join(repo, relative), 'utf8');
-const main = read('src/main/main.ts') + read('src/main/ipc-registration.ts');
+const main = readMainProcessSource(repo);
 matchCode(
   read('src/main/app-settings.ts'),
   /schemaVersion:\s*8/,
