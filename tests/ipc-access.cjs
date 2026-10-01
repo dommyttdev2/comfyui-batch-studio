@@ -100,7 +100,7 @@ execFileSync(
   );
   assert.match(
     mainSource,
-    /THUMBNAIL_READ_PREVIEW[\s\S]*validateThumbnailPickerImage\(thumbnailPickerForSender\(contents\),args\[0\]\)/,
+    /THUMBNAIL_READ_PREVIEW[\s\S]*validateThumbnailPickerImage\(thumbnailPickerForSender\(contents\),\s*args\[0\]\)/,
     'thumbnail picker preview paths must be authorized before cache reads',
   );
   assert.match(
