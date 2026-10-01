@@ -4,6 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { readMainProcessSource } = require('./main-process-source.cjs');
 
+const repo = path.resolve(__dirname, '..');
 const main = readMainProcessSource(repo);
 const start = main.indexOf('IPC.MARKETPLACE_GENERATE_ZIP,');
 const end = main.indexOf('IPC.MARKETPLACE_RENDER_PNG,', start);
