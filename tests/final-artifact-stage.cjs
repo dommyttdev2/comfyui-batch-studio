@@ -114,8 +114,7 @@ async function testPreviewAuthorizationWithoutDirectoryScans() {
     fakeFs.realpath,
     fakeFs.lstat,
     { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' },
-    (value) =>
-      process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value),
+    (value) => path.resolve(value),
     () => {
       throw new Error('full scan');
     },
