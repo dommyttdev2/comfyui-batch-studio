@@ -5,6 +5,7 @@ import type {
   AgentAvailability,
   AgentCapabilities,
   AgentEvent,
+  AgentModelSettings,
   AgentTaskRequest,
   AgentTurn,
 } from '../shared/types.js';
@@ -211,6 +212,72 @@ export class CodexCliAdapter implements AgentCliAdapter {
       };
 
     return { provider: 'codex', state: 'available', version, message: null };
+  }
+
+  async getModels(): Promise<AgentModelSettings> {
+    const probe = await this.capture(['debug', 'models']);
+    if (!probe.ok) throw new Error(probe.detail || 'Codexモデル一覧を取得できません。');
+    const start = probe.output.indexOf('{');
+    const end = probe.output.lastIndexOf('}');
+    if (start < 0 || end <= start) throw new Error('Codexモデル一覧のJSONを取得できません。');
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(probe.output.slice(start, end + 1));
+    } catch {
+      throw new Error('Codexモデル一覧のJSONが不正です。');
+    }
+    const catalog =
+      parsed && typeof parsed === 'object' && Array.isArray((parsed as { models?: unknown }).models)
+        ? (parsed as { models: unknown[] }).models
+        : [];
+    const models = catalog.flatMap((value) => {
+      if (!value || typeof value !== 'object') return [];
+      const item = value as Record<string, unknown>;
+      const id = typeof item.slug === 'string' ? item.slug : '';
+      if (!MODEL_TOKEN.test(id) || item.visibility !== 'list') return [];
+      const efforts = Array.isArray(item.supported_reasoning_levels)
+        ? item.supported_reasoning_levels
+            .map((entry) =>
+              entry &&
+              typeof entry === 'object' &&
+              typeof (entry as Record<string, unknown>).effort === 'string'
+                ? String((entry as Record<string, unknown>).effort)
+                : '',
+            )
+            .filter((effort) => EFFORT_TOKEN.test(effort))
+        : [];
+      const defaultEffort =
+        typeof item.default_reasoning_level === 'string' &&
+        EFFORT_TOKEN.test(item.default_reasoning_level) &&
+        (!efforts.length || efforts.includes(item.default_reasoning_level))
+          ? item.default_reasoning_level
+          : (efforts[0] ?? null);
+      return [
+        {
+          id,
+          displayName:
+            typeof item.display_name === 'string' && item.display_name.trim()
+              ? item.display_name
+              : id,
+          ...(efforts.length ? { supportedReasoningEfforts: [...new Set(efforts)] } : {}),
+          defaultEffort,
+          priority: typeof item.priority === 'number' ? item.priority : Number.MAX_SAFE_INTEGER,
+        },
+      ];
+    });
+    models.sort((a, b) => a.priority - b.priority || a.displayName.localeCompare(b.displayName));
+    if (!models.length) throw new Error('Codexで選択可能なモデルが見つかりません。');
+    const selected = models[0];
+    return {
+      models: models.map(
+        ({ defaultEffort: _defaultEffort, priority: _priority, ...model }) => model,
+      ),
+      selection: {
+        model: selected.id,
+        ...(selected.defaultEffort ? { reasoningEffort: selected.defaultEffort } : {}),
+      },
+    };
   }
 
   startTask(task: AgentTaskRequest, onEvent: AgentEventSink): Promise<AgentTurn> {

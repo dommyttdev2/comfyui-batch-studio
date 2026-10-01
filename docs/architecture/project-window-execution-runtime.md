@@ -177,39 +177,34 @@ Remote の active 判定を `RemoteExecutionService.workers` だけで行って�
 
 ## 6. Project Window model
 
-Project Window ごとに次を独立して保持する。
+Project Windowごとに次を独立して保持する。
 
 ```ts
 type ProjectWindowState = {
   window: BaseWindow;
   localView: WebContentsView;
-  grokView: WebContentsView;
+  assistantView: WebContentsView;
 
   projectRoot: string | null;
-
-  grokVisible: boolean;
-  localRatio: number;
-  activeGrokContext: {
+  paneProvider: 'grok' | 'codex';
+  assistantContext: {
     root: string;
-    stage: GrokContextStage;
+    stage: 'story' | 'models' | 'prompt-plan' | 'caption';
+    provider: 'grok' | 'codex';
   } | null;
 
-  restoringGrokContext: boolean;
-
-  grokNavigationQueue: GrokNavigationQueue;
-  grokContextQueue: LatestGrokContextQueue<GrokPaneState>;
+  assistantVisible: boolean;
+  localRatio: number;
 };
 ```
 
-Main Process は複数 Project Window を registry で管理する。
+Main Processは複数Project Windowをregistryで管理する。
 
 ```ts
 const projectWindows = new Map<number, ProjectWindowState>();
 ```
 
-現在の単一 `mainWindow` / `localView` / `grokView` / `activeGrokContext` を Multi Window の共有グローバル状態として残さない。
-
----
+単一global `mainWindow` / provider固有Viewを共有状態として残さない。AIのsession/history/model選択はwindow-local WebView状態ではなく、app-wide Agent RuntimeのProject × stage × provider stateとして管理する。
 
 ## 7. 同一 Project は1 Windowのみ
 
@@ -263,7 +258,7 @@ Projectをどこで開きますか？
 
 新しい Project Window を生成し、その Window 上で新規 Project 作成または選択した Project の open を行う。
 
-既存 Window の Project / Grok / Execution state を変更しない。
+既存 Window の Project / AssistantPane / Execution state を変更しない。
 
 ### 8.3 Dialog ownership
 
@@ -271,52 +266,39 @@ Open directory / message box 等の native dialog は、操作元の Project Win
 
 ---
 
-## 9. Grok state boundary
+## 9. Assistant state boundary
 
-Grok の login session と Project-specific UI state を分ける。
+Project Windowが所有するのは表示状態だけである。
 
-共有してよいもの:
+Window単位:
 
-- persistent Electron partition
-- login Cookie / browser session
-
-Window単位で分離するもの:
-
-- `grokView`
+- `assistantView`
 - visible / hidden
 - divider ratio
-- active Project / stage context
-- navigation queue
-- latest-context queue
-- restoring flag
+- active Project / stage / provider context
 
-これにより、
+app-wide Agent Runtime:
 
-```text
-Window A -> Project A / Story conversation
-Window B -> Project B / Models conversation
-```
+- provider選択: `AssistantProviderStore`
+- session ID: `AgentSessionStateStore`
+- safe conversation history: `AgentConversationStore`
+- model / reasoning selection: `AgentModelSelectionStore`
 
-を独立して扱う。
-
-Project × stage の最後の conversation URL は app-wide `GrokChatStateStore` に保存してよい。
-
----
+これによりWindow AとWindow Bで異なるProject / stageを開いても、右Paneの表示状態を互いに上書きしない。一方、同一Projectの保存済みagent stateは再open時に復元できる。
 
 ## 10. IPC sender boundary
 
-Window固有操作は Main Process の単一グローバル View を操作してはならない。
+Window固有操作はMain Processの単一global Viewを操作してはならない。
 
 対象例:
 
-- `GROK_SET_VISIBLE`
-- `GROK_SET_CONTEXT`
-- `GROK_SET_RATIO`
-- `GROK_SET_DIVIDER_X`
-- `GROK_RELOAD`
+- `ASSISTANT_SET_VISIBLE`
+- `ASSISTANT_SET_CONTEXT`
+- `ASSISTANT_SET_RATIO`
+- `ASSISTANT_SET_DIVIDER_X`
 - Project close / current-window navigation
 
-IPC は `event.sender` から操作元 `ProjectWindowState` を解決する。
+IPCは `event.sender` から操作元 `ProjectWindowState` を解決する。
 
 ```text
 ipc event.sender
@@ -328,9 +310,9 @@ webContents.id
 ProjectWindowState
 ```
 
-Execution IPC は Window ownership に結び付けず、`projectRoot + runId` を明示して persistent Run を操作する。
+通常会話・工程taskはcontextに含まれるProject root / stage / providerを共通Agent Runtimeへ渡す。
 
----
+Execution IPCはWindow ownershipに結び付けず、`projectRoot + runId` を明示してpersistent Runを操作する。
 
 ## 11. UiStateStore boundary
 
@@ -365,7 +347,7 @@ active executionは継続する。
 ### 12.2 Project Windowを閉じる
 
 - Local Renderer WebContentsをclose。
-- Grok WebContentsをclose。
+- AssistantPane WebContentsをclose。
 - Window registryから削除。
 - Project Executionをstop / pause / discardしない。
 - SSH session / workerをWindow cleanupとしてcloseしない。
@@ -545,7 +527,7 @@ Application processが明示的に終了した後もRunを継続する要件は�
 
 1. File > New Project / Open Project で current window / new window を選択できる。
 2. Project AのRun中にProject Bをnew windowで開いてもRun Aが停止・pause・discardされない。
-3. Window BのGrok操作がWindow AのGrok表示・conversation contextを変更しない。
+3. Window BのAssistantPane操作がWindow AのPane表示・conversation contextを変更しない。
 4. 同一Projectを再度開くと既存Windowへfocusする。
 5. active Runを持つProject Windowを閉じてもRunが継続する。
 6. active Run中に最後のWindowを閉じてもMain Processが終了しない。

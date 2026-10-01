@@ -5,7 +5,6 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
-const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-assistant-provider-runtime-'));
@@ -22,7 +21,13 @@ execFileSync(
 );
 
 const read = (relative) => fs.readFileSync(path.join(repo, relative), 'utf8');
-const main = readMainProcessSource(repo);
+const ipc = read('src/shared/ipc.ts');
+const preload = read('src/preload/index.cjs');
+const main = read('src/main/main.ts');
+const assistantIpc = read('src/main/ipc-registration/assistant.ts');
+const stages = read('src/renderer/GrokStages.tsx');
+const pane = read('src/renderer/AssistantPane.tsx');
+
 matchCode(
   read('src/main/app-settings.ts'),
   /schemaVersion:\s*8/,
@@ -54,29 +59,9 @@ matchCode(
   'Switching agents must persist the selected provider',
 );
 matchCode(
-  read('src/renderer/App.tsx'),
-  /missingIpcHandler\(error, 'assistant:get-provider'\)[\s\S]*?codex\.getProvider\(stage\)/,
-  'A renderer updated under an older main process must restore through the legacy provider channel',
-);
-matchCode(
-  read('src/renderer/App.tsx'),
-  /missingIpcHandler\(error, 'assistant:set-provider'\)[\s\S]*?codex\.setProvider\(provider, stage\)/,
-  'A renderer updated under an older main process must save through the legacy provider channel',
-);
-matchCode(
-  main,
+  assistantIpc,
   /assistantProviderState\.resolve\(/,
   'Existing project agent selection must be restored',
-);
-matchCode(
-  main,
-  /grokHistory\s*&&\s*!codexHistory/,
-  'Old Grok projects must retain their Grok chat when switching the global default',
-);
-matchCode(
-  main,
-  /codexHistory\s*&&\s*!grokHistory/,
-  'Old Codex projects must retain their Codex chat when switching the global default',
 );
 
 matchCode(
@@ -90,26 +75,26 @@ matchCode(
   "Do not render a stage with another stage's agent before restoration",
 );
 matchCode(
-  main,
+  assistantIpc,
   /assistantProviderState\.resolve\(root, defaultProvider, async \(\) => \{[\s\S]*?\}, stage\)/,
   'The project-level fallback must resolve into a stage-specific provider',
 );
 matchCode(
-  main,
+  assistantIpc,
   /assistantProviderState\.remember\(root, provider, stage\)/,
   'The explicit agent switch must be persisted for only the active stage',
 );
 matchCode(
-  main,
+  assistantIpc,
   /assistantSelectionGeneration !== generation/,
   "Out-of-order restores must not select the previous stage's provider",
 );
 assert.ok(
-  main.includes('handleIpc(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider)'),
+  assistantIpc.includes('handleIpc(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider)'),
   'Provider selection must work independently of the Codex IPC namespace',
 );
 assert.ok(
-  main.includes('handleIpc(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider)'),
+  assistantIpc.includes('handleIpc(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider)'),
   'Switching between Grok and Codex must use the shared assistant IPC',
 );
 assert.ok(
@@ -118,14 +103,15 @@ assert.ok(
   ),
   'Grok must not require a Codex-specific API just to load its selection',
 );
-const ipc = read('src/shared/ipc.ts');
-const preload = read('src/preload/index.cjs');
-const stages = read('src/renderer/GrokStages.tsx');
-const codex = read('src/renderer/CodexPane.tsx');
-matchCode(
-  ipc,
-  /CODEX_SELECT_STAGE_TASK:/,
-  'Stage-targeted Codex selection must have an IPC channel',
+doesNotMatchCode(
+  read('src/renderer/App.tsx'),
+  /window\.batchStudio\.codex|window\.batchStudio\.grok/,
+  'App must use only the provider-neutral assistant preload API',
+);
+doesNotMatchCode(
+  `${main}\n${assistantIpc}`,
+  /IPC\.CODEX_|IPC\.GROK_SET_/,
+  'Main process must not retain provider-specific pane IPC aliases',
 );
 matchCode(
   ipc,
@@ -139,11 +125,6 @@ matchCode(
 );
 matchCode(
   preload,
-  /selectStageTask: \(root, stage\)/,
-  'Project steps must be able to select their own Codex task',
-);
-matchCode(
-  preload,
   /startTask: \(root, stage, extra\)/,
   'Project steps must start their exact task through the shared assistant API',
 );
@@ -152,32 +133,28 @@ matchCode(
   /assistant\.startTask\(project\.rootPath, stage, extra\)/,
   'Every AI step must launch its exact stage from the left pane',
 );
+matchCode(
+  stages,
+  /assistant\.stopTask\(project\.rootPath, stage\)/,
+  'Every AI step must expose shared left-pane cancellation',
+);
 doesNotMatchCode(
   stages,
   /codex\.selectStageTask\(project\.rootPath, stage\)/,
   'Stage UI must not require Codex right-pane selection before execution',
 );
 matchCode(
-  stages,
-  /assistant\.stopTask\(project\.rootPath, stage\)/,
-  'Every AI step must expose shared left-pane cancellation',
-);
-matchCode(
-  main,
-  /codexTaskContexts\[context\.stage\]\.includes\(stage as GrokTask\['stage'\]\)/,
-  'A requested task must belong to the currently selected project stage',
-);
-matchCode(
-  main,
+  assistantIpc,
   /contextStageForTask\(stage as GrokTask\['stage'\]\)/,
   'A shared AI task must resolve to its exact project context stage',
 );
-matchCode(
-  codex,
-  /onStageTaskSelected\([\s\S]*setTask\(selected\)/,
-  'The Codex pane must accept legacy stage selection requests during the migration window',
+doesNotMatchCode(
+  pane,
+  /selectStageTask|sendTask|grokTask/,
+  'The common AssistantPane must not contain provider-specific task controls',
 );
 for (const expected of [
+  "'story-initial'",
   "'story-finalize'",
   "'story-fix'",
   "'models'",
@@ -214,19 +191,19 @@ for (const expected of [
   assert.equal(
     await store.resolve(projectLegacy, 'codex', async () => 'grok'),
     'grok',
-    'Legacy Grok history must take precedence over a changed default',
+    'A migration callback may preserve a prior Grok preference',
   );
   assert.equal(
     await store.resolve(projectCodex, 'grok', async () => 'codex'),
     'codex',
-    'Legacy Codex history must take precedence over a changed default',
+    'A migration callback may preserve a prior Codex preference',
   );
   await store.remember(projectA, 'codex');
   await store.remember(projectB, 'grok');
   assert.equal(
     await store.resolve(projectA, 'grok', async () => 'grok'),
     'codex',
-    'An explicit project choice must override the global setting and old chats',
+    'An explicit project choice must override the global setting and inferred history',
   );
   const afterRestart = new AssistantProviderStore(userData);
   assert.equal(await afterRestart.get(projectA), 'codex', 'Project choice must survive restart');
@@ -268,10 +245,9 @@ for (const expected of [
   );
 
   const legacyRoot = path.join(userData, 'project-old-version');
-  const legacyStoredRoot = legacyRoot + path.sep + '.';
   const oldState = {
     schemaVersion: 1,
-    projects: { [legacyStoredRoot]: 'codex' },
+    projects: { [legacyRoot]: 'codex' },
   };
   const legacyDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-legacy-agent-'));
   fs.writeFileSync(
@@ -287,8 +263,11 @@ for (const expected of [
   const migratedOnDisk = JSON.parse(
     fs.readFileSync(path.join(legacyDirectory, 'assistant-provider-state.json'), 'utf8'),
   );
+  const migratedKey =
+    process.platform === 'win32'
+      ? path.resolve(legacyRoot).toLowerCase()
+      : path.resolve(legacyRoot);
   assert.equal(migratedOnDisk.schemaVersion, 2);
-  const migratedKey = path.resolve(legacyRoot);
   assert.equal(migratedOnDisk.projects[migratedKey].stages.story, 'codex');
   assert.equal(migratedOnDisk.projects[migratedKey].stages.caption, 'grok');
 

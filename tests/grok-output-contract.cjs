@@ -246,19 +246,22 @@ for (const rule of [
     rule,
     'Shared Grok/Codex Prompt Plan contract must cover recurring validation errors',
   );
-const mainSrc = fs.readFileSync(path.resolve(__dirname, '../src/main/main.ts'), 'utf8');
+const codexRunnerSrc = fs.readFileSync(
+  path.resolve(__dirname, '../src/main/codex-cli-task-runner.ts'),
+  'utf8',
+);
 matchCode(
-  mainSrc,
-  /const task = await buildGrokTask\(context\.root, stage, extra\)/,
+  codexRunnerSrc,
+  /const task = await buildGrokTask\(root, stage, extra\)/,
   'Codex and Grok must use the same task builder',
 );
 matchCode(
-  mainSrc,
-  /\.replace\(artifactFileOutputRules\(codexReturnFile\[context\.stage\]\), ''\)/,
-  'Codex may remove only the exact file output instructions, not the JSON schema example',
+  codexRunnerSrc,
+  /prompt = prompt\.replace\(artifactFileOutputRules\(artifactFile\), ''\)\.trim\(\)/,
+  'Codex may remove only the exact shared file output instructions, not the JSON schema example',
 );
 doesNotMatchCode(
-  mainSrc,
+  codexRunnerSrc,
   /replace\(\/## 出力契約/,
   'Codex must not strip arbitrary content up to the next heading',
 );

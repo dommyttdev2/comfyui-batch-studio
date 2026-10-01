@@ -9,8 +9,8 @@ Status: Active
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-SCOPE-001 | Decided | Batch Studio はプロジェクト作成からPreflight、Local / Remote ComfyUIでの生成実行、成果物回収までを支援する。`READY`は実行開始可能状態、`COMPLETED`は対象Execution Runの成果物確認・回収まで完了した状態とする。 | `product/scope-and-flow.md` |
-| REQ-SCOPE-002 | Decided | Grok Web はユーザーが直接操作し、Batch Studio は Grok の入力欄・添付・送信・回答取得を自動操作しない。 | `product/scope-and-flow.md` |
-| REQ-SCOPE-003 | Decided | Grok の回答は下書きであり、ユーザー確認と Batch Studio の検証を経て明示保存されたファイルだけをプロジェクト成果物として扱う。 | `contracts/project-artifacts.md` |
+| REQ-SCOPE-002 | Implemented | Grok / Codex は共通AssistantPaneからCLI経由で利用する。Batch Studioはprovider固有WebViewやCodex App Serverへ依存せず、session / streaming / model selection / stage taskを共通Agent Runtimeで管理する。 | `product/scope-and-flow.md` / `contracts/agent-contract.md` |
+| REQ-SCOPE-003 | Decided | AI agent の成果物は下書きであり、Batch Studioの検証とユーザー確認を経て明示確定されたファイルだけをプロジェクト成果物として扱う。 | `contracts/project-artifacts.md` / `contracts/agent-contract.md` |
 
 ## 2. Project / Story
 
@@ -21,20 +21,20 @@ Status: Active
 | REQ-PROJ-003 | Implemented | app-wide の `Project root` を新規Project作成先の既定値とする。`成果物配置 root` が設定されている場合はProject作成時に `<artifactRoot>/<project.id>` を作成し、その絶対pathを `project_meta.json.settings.artifactOutputPath` に保存する。設定値は `BATCH_STUDIO_PROJECT_ROOT` / `BATCH_STUDIO_ARTIFACT_ROOT` としてruntimeへ反映する。 | `ui/project-initialization.md` / `integrations/service-integrations.md` |
 | REQ-PROJ-004 | Implemented | File menuのNew Project / Open Projectでは「現在のWindow」「新しいWindow」「キャンセル」を選択できる。複数Project Windowを同時に開けるが、同一Project rootは同時に1 Windowのみとし、既に開かれている場合は既存Windowをfocusする。 | `ui/application-shell.md` / `architecture/project-window-execution-runtime.md` |
 | REQ-PROJ-005 | Implemented | 通常起動時は前回最後にfocusされていた有効Projectを1件だけ復元し、終了時に開いていた全Project WindowやWindow layoutを自動復元しない。Standalone WindowからNew/Open Projectを実行する場合は最後にfocusされたProject Windowをcurrent targetとし、Project Windowが存在しなければcurrent-window openingを許可しない。 | `architecture/project-window-execution-runtime.md` / `ui/application-shell.md` |
-| REQ-STORY-001 | Decided | Story の調査・案出し・詳細化は Grok に担当させ、ユーザーとの会話後に `story.md` を確定する。 | `contracts/grok-contract.md` |
+| REQ-STORY-001 | Decided | Story の調査・案出し・詳細化は選択中のAI agentに担当させ、ユーザーとの会話後に `story.md` を確定する。 | `contracts/agent-contract.md` |
 
 ## 3. Model Selection
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
-| REQ-MODEL-001 | Implemented | Model Family と基盤モデルはユーザーが Batch Studio UI で選択する。Illustrious は Checkpoint、Anima は Diffusion Model / Text Encoder / VAE を選択し、Grok は基盤モデルを変更せず LoRA 選定だけを担当する。 | `decisions/model-family-and-base-model-selection.md` / `product/scope-and-flow.md` |
-| REQ-MODEL-002 | Implemented | Illustrious Checkpoint / Anima Diffusion Model は Batch Studio が同期する Civitai `model_catalog.json` からユーザーが選択する。Anima Text Encoder / VAE は Local/R2 の用途別inventoryから選択する。Grok の LoRA 選定は `model_catalog.json` を根拠に行う。 | `integrations/external-tools.md` / `decisions/model-family-and-base-model-selection.md` |
-| REQ-MODEL-003 | Decided | Batch Studio は Grok の選定結果を `model_catalog.json` と照合し、存在しない Model / Version / File を確定させない。 | `quality/validation-and-security.md` |
-| REQ-MODEL-004 | Implemented | カタログ内に必要LoRAがない場合、Grokは架空のidentityを作らず、Civitai公開情報で代替候補を調査し、複数LoRAの組合せまたはPrompt代替で解決可能かを評価する。カタログ外候補や代替不能要件だけを `missingRequirements` とし、Promptで解決できる要件は `promptFallbacks` として扱う。 | `contracts/grok-contract.md` |
+| REQ-MODEL-001 | Implemented | Model Family と基盤モデルはユーザーが Batch Studio UI で選択する。Illustrious は Checkpoint、Anima は Diffusion Model / Text Encoder / VAE を選択し、AI agentは基盤モデルを変更せずLoRA選定だけを担当する。 | `decisions/model-family-and-base-model-selection.md` / `product/scope-and-flow.md` |
+| REQ-MODEL-002 | Implemented | Illustrious Checkpoint / Anima Diffusion Model は Batch Studio が同期する Civitai `model_catalog.json` からユーザーが選択する。Anima Text Encoder / VAE は Local/R2 の用途別inventoryから選択する。AI agentのLoRA選定は `model_catalog.json` を根拠に行う。 | `integrations/external-tools.md` / `decisions/model-family-and-base-model-selection.md` |
+| REQ-MODEL-003 | Decided | Batch Studio は AI agentの選定結果を `model_catalog.json` と照合し、存在しない Model / Version / File を確定させない。 | `quality/validation-and-security.md` |
+| REQ-MODEL-004 | Implemented | カタログ内に必要LoRAがない場合、AI agentは架空のidentityを作らず、Civitai公開情報で代替候補を調査し、複数LoRAの組合せまたはPrompt代替で解決可能かを評価する。カタログ外候補や代替不能要件だけを `missingRequirements` とし、Promptで解決できる要件は `promptFallbacks` として扱う。 | `contracts/agent-contract.md` |
 | REQ-MODEL-005 | Decided | `models.json` はモデル選定時に使用した `model_catalog.json` の provenance として少なくとも `schemaVersion`、`generation`、`generatedAt` を記録する。現在の catalog の `generation` が異なる場合は選定済み Model / Version / File を現在の catalog に対して再検証し、generation の不一致だけでは `models.json` を無効化しない。 | `contracts/project-artifacts.md` |
 | REQ-MODEL-006 | Implemented | `models.json` は Batch Studio 専用schemaを使用する。新規保存は Schema v5 とし、Schema v1〜v4 は既存Projectの読み取り・必要なWorkflow生成互換のため保持する。 | `contracts/project-artifacts.md` / `schemas/models.schema.json` |
 | REQ-MODEL-007 | Decided | LoRA の推奨・基準強度を Civitai 由来の情報として取得できる場合、`models.json` にその値と provenance を保持する。Civitai に根拠となる情報がない場合は値を捏造しない。 | `contracts/project-artifacts.md` |
-| REQ-MODEL-008 | Implemented | `models.json` の現行保存形式は Schema v5。Illustrious は `checkpoint.main`、Anima は `diffusion_model.main` + `textEncoder` + `vae`、共通で `loras[]` を持つ。Civitai identity、名前、URL、`trainedWords`、Grokの`reason`、任意の`strengthBaseline`を保持する。`missingRequirements` / `promptFallbacks` はDraft処理用で、確定時に前者を許可せず、後者は `._batch_studio/model_prompt_fallbacks.json` へ分離保存する。 | `contracts/project-artifacts.md` / `schemas/models.schema.json` |
+| REQ-MODEL-008 | Implemented | `models.json` の現行保存形式は Schema v5。Illustrious は `checkpoint.main`、Anima は `diffusion_model.main` + `textEncoder` + `vae`、共通で `loras[]` を持つ。Civitai identity、名前、URL、`trainedWords`、AI agentの`reason`、任意の`strengthBaseline`を保持する。`missingRequirements` / `promptFallbacks` はDraft処理用で、確定時に前者を許可せず、後者は `._batch_studio/model_prompt_fallbacks.json` へ分離保存する。 | `contracts/project-artifacts.md` / `schemas/models.schema.json` |
 | REQ-MODEL-009 | Implemented | Civitai 投稿画像の LoRA weight から `observed-usage-derived` の `strengthBaseline` を作る場合、exact `modelVersionId` の Newest 最大200画像を metadata 付きで取得し、同一 `postId` 内の有効 weight の median を1 observation としたうえで、その post median 群の median を採用する。最低5 distinct postsを要求し、追加の範囲filter / outlier除去は行わない。provenance `method` は `median-of-post-medians:newest-200`、`sampleCount` は distinct post 数とする。根拠不足時は `strengthBaseline` を生成しない。 | `contracts/project-artifacts.md` |
 | REQ-MODEL-010 | Implemented | 基盤モデルまたは確定LoRA集合等、後段生成に影響するmodel inputsが変更された場合は Prompt Plan / Workflow 等の下流Artifactをresetし、古い生成物をそのまま有効扱いしない。 | `decisions/model-family-and-base-model-selection.md` / `contracts/project-artifacts.md` |
 
@@ -42,14 +42,14 @@ Status: Active
 
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
-| REQ-PLAN-001 | Decided | Grok から Workflow JSON を受け取らず、Common / Branch / Leaf scopeへ分類した構造化Prompt tag、Root / Branch LoRA usageをJSONで受け取る。最終Prompt文字列はBatch Studioがcompileする。 | `contracts/prompt-plan.md` |
-| REQ-PLAN-002 | Decided | Grok の JSON は ComfyUI の Node ID、Link ID、`widgets_values`、`scene_matrix_json` 等の内部形式を含まない。 | `contracts/prompt-plan.md` |
-| REQ-PLAN-003 | Decided | Grok から受け取り、Batch Studio の検証とユーザー承認を経て確定する構造化 Prompt Plan の標準ファイル名を `prompt_plan.json` とする。プロジェクトごとに確定版は1ファイルとし、Workflow Compiler はこのファイルを Prompt Plan の機械可読入力として使用する。確定前の回答や旧版は `prompt_plan.json` を上書きせず Draft / History 領域で管理する。 | `contracts/prompt-plan.md` |
+| REQ-PLAN-001 | Decided | AI agentから Workflow JSON を受け取らず、Common / Branch / Leaf scopeへ分類した構造化Prompt tag、Root / Branch LoRA usageをJSONで受け取る。最終Prompt文字列はBatch Studioがcompileする。 | `contracts/prompt-plan.md` |
+| REQ-PLAN-002 | Decided | AI agentの JSON は ComfyUI の Node ID、Link ID、`widgets_values`、`scene_matrix_json` 等の内部形式を含まない。 | `contracts/prompt-plan.md` |
+| REQ-PLAN-003 | Decided | AI agentから受け取り、Batch Studio の検証とユーザー承認を経て確定する構造化 Prompt Plan の標準ファイル名を `prompt_plan.json` とする。プロジェクトごとに確定版は1ファイルとし、Workflow Compiler はこのファイルを Prompt Plan の機械可読入力として使用する。確定前の回答や旧版は `prompt_plan.json` を上書きせず Draft / History 領域で管理する。 | `contracts/prompt-plan.md` |
 | REQ-PLAN-004 | Decided | `prompt_plan.json` を Prompt 設計の機械可読な正本とし、人間向けの確認・編集は Batch Studio の Prompt Plan Web UI で提供する。新規プロジェクトでは `prompt_tree.md` を標準 Artifact として生成・維持せず、Workflow Compiler の入力にも使用しない。既存の `prompt_tree.md` は Legacy Artifact としてのみ扱う。 | `contracts/project-artifacts.md` |
 | REQ-PLAN-005 | Decided | `prompt_plan.json` は Root / Branch で実際に適用する LoRA 強度を保持する。この値は Batch Studio の Web UI から調整可能とし、`models.json` に保存した Civitai 由来の推奨・基準値を書き換えない。 | `contracts/prompt-plan.md` |
 | REQ-PLAN-006 | Decided | `prompt_plan.json` の機械可読schemaを `schemas/prompt-plan.schema.json` とする。Schema v1は既存Projectのread/edit/compile互換として維持し、新規Prompt PlanはSchema v2を使用する。Branch ID / Leaf IDはProject全体で一意、配列順を順序の正本とし、LoRA usageとstrict unknown-field policyを維持する。 | `contracts/prompt-plan.md` |
 | REQ-PLAN-007 | Decided | `models.json` に Civitai 由来 `strengthBaseline.value = w` が存在し、そのbaselineを Prompt Plan の初期値に使用する場合は `strengthModel = w`、`strengthClip = w` と同値展開する。この展開は単一source scalarの機械的初期化であり、CivitaiがModel/CLIP別値を推奨した意味ではない。baselineが存在しない場合、Batch Studioは経験則による暗黙defaultを補完せず、Grokまたはユーザーが実適用値を明示する。 | `contracts/prompt-plan.md` |
-| REQ-PLAN-008 | Implemented | Schema v2ではPromptを意味category別tag arrayとして保存し、Model Family quality preset、Base/Root/Branch LoRA trainedWords注入、category順、exact dedupe、最終positive/negative文字列化をBatch Studio Prompt Compilerが所有する。GrokはtrainedWordsをPrompt Planへ転記しない。 | `contracts/prompt-plan.md` / `architecture/workflow-compiler.md` |
+| REQ-PLAN-008 | Implemented | Schema v2ではPromptを意味category別tag arrayとして保存し、Model Family quality preset、Base/Root/Branch LoRA trainedWords注入、category順、exact dedupe、最終positive/negative文字列化をBatch Studio Prompt Compilerが所有する。AI agentはtrainedWordsをPrompt Planへ転記しない。 | `contracts/prompt-plan.md` / `architecture/workflow-compiler.md` |
 | REQ-PLAN-009 | Implemented | Schema v2 Prompt Planをsemantic validationし、Model Family tag dialect、Positive/Negative conflict、parent/child duplicate、camera angle/framing/gaze conflict等を検出する。Prompt Plan UIではcategory編集とCompiled Prompt Previewを提供する。 | `contracts/prompt-plan.md` |
 
 ## 5. Workflow Compiler
@@ -123,6 +123,6 @@ Status: Active
 | --- | --- | --- | --- |
 | REQ-VAL-001 | Decided | `story.md`、`models.json`、`prompt_plan.json`、最終 Workflow を工程ごとに検証する。 | `quality/validation-and-security.md` |
 | REQ-VAL-002 | Decided | Preflight では成果物相互のモデル参照、Workflow/API graph構造、`executionTarget`に応じた必要モデル所在とLocal/Remote operational capabilityを確認する。Remoteでは少なくともCloud Provider / Instance選択をGate化し、provider/SSH capability実装に応じて検証を強化する。 | `quality/validation-and-security.md` / `architecture/remote-execution.md` |
-| REQ-SEC-001 | Decided | Grok 用 WebContents とローカル UI を権限・session 境界で分離する。 | `architecture/system-architecture.md` |
-| REQ-SEC-002 | Decided | `.env`、credential、R2 設定、ブラウザデータ、`.safetensors` 本体を Grok 添付候補へ出さない。 | `quality/validation-and-security.md` |
+| REQ-SEC-001 | Implemented | Project WindowはLocal Rendererとprovider-neutralなAssistantPaneを別WebContentsViewとして分離し、外部AI Webページを埋め込まない。Grok/Codex通信はMain ProcessのCLI adapterから行い、provider credential/CookieをProjectやagent workspaceへ保存しない。 | `architecture/system-architecture.md` / `contracts/agent-contract.md` |
+| REQ-SEC-002 | Decided | `.env`、credential、R2 設定、provider認証データ、`.safetensors` 本体を AI agent workspaceへ出さない。 | `quality/validation-and-security.md` / `contracts/agent-contract.md` |
 | REQ-SEC-003 | Decided | SSH private key contents、Vast.ai API Key、R2 credentialをProject/Renderer/Remoteへ配布しない。Remoteへ渡すR2 signed URLは必要object・operation・limited lifetimeに限定し、full queryを通常logへ保存しない。 | `architecture/remote-execution.md` / `integrations/service-integrations.md` |

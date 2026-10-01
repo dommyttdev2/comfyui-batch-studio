@@ -1307,6 +1307,11 @@ export interface GrokPaneState {
   visible: boolean;
   ratio: number;
 }
+export interface AssistantPaneState {
+  visible: boolean;
+  ratio: number;
+}
+
 export interface BatchStudioApi {
   editorSaves: {
     onFlushRequest: (listener: (id: string, root: string) => void) => () => void;
@@ -1635,6 +1640,9 @@ export interface BatchStudioApi {
     restoreConversation: (sessionId: string) => Promise<AssistantPaneSnapshot>;
     models: () => Promise<AgentModelSettings>;
     selectModel: (selection: AgentModelSelection) => Promise<AgentModelSelection>;
+    setVisible: (visible: boolean) => Promise<AssistantPaneState>;
+    setRatio: (ratio: number) => Promise<AssistantPaneState>;
+    setDividerScreenX: (screenX: number) => Promise<AssistantPaneState>;
     startTask: (root: string, stage: GrokTask['stage'], extra?: string) => Promise<void>;
     stopTask: (root: string, stage: GrokTask['stage']) => Promise<void>;
     onContext: (listener: (context: AssistantPaneContext | null) => void) => () => void;

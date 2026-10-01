@@ -4,7 +4,7 @@ Status: Active
 
 ## 1. 目的
 
-Electron の主画面で、Batch Studio のローカル工程とユーザー操作の Grok Web を同時に扱う UI 構造を定義する。
+Electron の主画面で、Batch Studio のローカル工程と provider-neutral な AssistantPane を同時に扱う UI 構造を定義する。
 
 詳細な工程固有 UI は各契約・UI 文書が所有し、本書はアプリ全体の shell と共通 interaction を所有する。
 
@@ -18,11 +18,11 @@ Projectを開いている場合の基本レイアウト:
 
 ```text
 ┌───────────────────────┬──────────────────────────────┐
-│ Batch Studio Local UI │ Grok Web                     │
-│                       │ user-operated               │
-│ Overview              │ grok.com                     │
-│ Project               │                              │
-│ Story                 │                              │
+│ Batch Studio Local UI │ AssistantPane                │
+│                       │ Grok CLI / Codex CLI         │
+│ Overview              │ conversation / history       │
+│ Project               │ streaming / activity         │
+│ Story                 │ model / reasoning settings   │
 │ Model Catalog         │                              │
 │ Models                │                              │
 │ Prompt Plan           │                              │
@@ -33,7 +33,7 @@ Projectを開いている場合の基本レイアウト:
 └───────────────────────┴──────────────────────────────┘
 ```
 
-Grokが必要な工程では初期比率45:55を目安とし、divider resizeを許可する。Grok不要工程ではLocal UIを全幅で使用する。
+AI agentが必要な工程では初期比率45:55を目安とし、divider resizeを許可する。AI agent不要工程ではLocal UIを全幅で使用する。
 
 Projectを閉じている場合はProject工程navigationを表示せず、HomeとService IntegrationsをLocal UI全幅で利用する。
 
@@ -381,22 +381,23 @@ Execution後のProject内後処理は次の順序とする。
 - Cropは元画像範囲外へ出さず、EXIF orientationを考慮し、最終resizeはLanczos3を使用する。
 - 出力形式はJPEG / PNG / WebP。JPEG / WebP品質は100固定でUIへ品質設定を露出しない。
 
-## 16. Project Window-local Grok state
+## 16. Project Window-local AssistantPane state
 
-Multi WindowではGrok login session用persistent partitionは共有してよいが、以下はProject Windowごとに独立させる。
+Multi Windowでは、各Project Windowが次を独立して保持する。
 
-- Grok WebContentsView。
-- visible / hidden。
+- Local Rendererの `WebContentsView`。
+- provider-neutralな `AssistantPane` の `WebContentsView`。
+- AssistantPaneのvisible / hidden。
 - divider ratio。
-- active Project / Grok stage context。
-- navigation queue / context queue。
-- restoring state。
+- active Project / stage / provider context。
 
-Grok関連IPCは操作元の `event.sender` から対象Project Windowを解決し、単一global `grokView` を操作しない。
+CLIの認証状態そのものは各provider CLIが所有する。Batch StudioはWeb browser partitionやprovider Cookieを保持しない。
 
-## 17. Grok Pane Controls
+Assistant関連IPCは操作元の `event.sender` から対象Project Windowを解決し、単一global viewを操作しない。
 
-| 工程 / Tool | Grok pane |
+## 17. AssistantPane Controls
+
+| 工程 / Tool | AssistantPane |
 | --- | --- |
 | 概要 | 非表示 |
 | 基本設定 | 非表示 |
@@ -412,26 +413,26 @@ Grok関連IPCは操作元の `event.sender` から対象Project Windowを解決�
 | サムネイル | 非表示 |
 | 販売サイト用画像 | 非表示 |
 | Home / サービス連携 / R2 File Manager / Civit Explorer / Vast.ai | 非表示 |
-| `Window` から開いたStandalone R2/Civit window | 非表示 |
+| `Window` から開いたStandalone R2/Civit/Vast.ai window | 非表示 |
 
 工程切替時はこの既定表示を再適用する。
 
-Grok paneを非表示にしてもWebContents/persistent sessionは破棄しない。
+AssistantPaneを非表示にしても保存済みsession/historyを破棄しない。右Paneは通常会話・履歴・streaming・activity・model設定を担当し、工程成果物taskの開始/修正/再実行は左側工程UIが担当する。
 
-Grokを使用しない工程ではshow/hide control自体を表示しない。
+AI agentを使用しない工程ではshow/hide control自体を表示しない。
 
 ## 16.1 Standalone tool windows
 
 Electron application menuの `Window` には `R2 File Manager` と `Civit Explorer` を提供する。選択するとMain Windowとは独立した `BaseWindow + WebContentsView` で該当toolを表示する。同一tool windowが既に存在する場合は新規作成せず、既存windowをshow/focusする。
 
-Standalone windowも同じpreload APIを利用するが、Grok paneは持たない。
+Standalone windowも同じpreload APIを利用するが、AssistantPaneは持たない。
 
 ## 17. Secret boundary in UI
 
-- `CIVIT_API_KEY` / `VASTAI_API_KEY` の値自体をGrok paneやProject artifactへ表示/保存しない。
+- `CIVIT_API_KEY` / `VASTAI_API_KEY` の値自体をAssistantPaneやProject artifactへ表示/保存しない。
 - R2 Secret Access Key / Cloudflare API Tokenの保存済み値をRendererへ再表示しない。
 - SSH private key本文をRendererへ返さない。設定画面ではpathとconfigured/readable statusのみ扱う。
-- R2 credential / SSH keyをProject artifactやGrok添付候補へ出さない。
+- R2 credential / SSH keyをProject artifactやAI agent workspaceへ出さない。
 - signed URL full query stringをExecution画面の通常logへ出さない。
 - model binaryをGrok添付候補にしない。
 - Grok Cookie / browser profileをLocal Artifactへ保存しない。

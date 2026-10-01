@@ -10,9 +10,9 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 
 ## 2. 最上位の責務原則
 
-> **Grok は「何を作るか・何を使うか」を考える。Batch Studio は「その決定を管理・検証・機械変換・保存・実行する」。ユーザーが最終的に確定する。**
+> **AI agent は「何を作るか・何を使うか」を考える。Batch Studio は「その決定を管理・検証・機械変換・保存・実行する」。ユーザーが最終的に確定する。**
 
-### 2.1 Grok の責務
+### 2.1 AI agent の責務
 
 - 版権キャラクター等の公開情報の調査・整理。
 - Story案の生成とユーザーとの会話による調整。
@@ -24,13 +24,13 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 
 - プロジェクト状態と成果物管理。
 - Brief、下書き、履歴、確定保存。
-- Grokに渡す文脈と添付対象の準備。
+- AI agentへ渡す意味文脈とworkspace参照入力の準備。
 - Civitai Model Collectionの同期。
 - app-wide `model_catalog.json` の生成・generation管理。
 - Model / Version / File / thumbnail / trained words取得。
 - Civitai observed LoRA strength baseline集計。
 - Collection / Model / Version選択テンプレート管理。
-- ユーザーが選択した基盤モデルとGrokが選定したLoRAのModel / Version / File実在確認。
+- ユーザーが選択した基盤モデルとAI agentが選定したLoRAのModel / Version / File実在確認。
 - Prompt Plan schema / semantic validation。
 - Model Family別Prompt policy、trainedWords注入、category順、exact dedupeによる最終Promptの決定論的compile。
 - Workflow TemplateとPrompt PlanからComfyUI Workflowを決定論的に生成。
@@ -51,7 +51,8 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 
 - Project Brief入力。
 - Civitai Collectionの整理・必要モデル追加。
-- Grok Webでのログイン、送信、添付、会話継続。
+- Grok CLI / Codex CLIの利用に必要な各providerの認証。
+- AssistantPaneでの会話、provider/model選択。
 - Story案、基盤モデル/LoRA選定、Prompt Planの最終確認。
 - R2の接続設定と破壊操作の明示実行。
 - Remote executionを使用する場合のSSH接続設定・秘密鍵path設定。
@@ -60,16 +61,19 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 
 ## 3. やらないこと
 
-### 3.1 Grok操作の自動化
+### 3.1 AI transport
 
-- Grok入力欄DOM操作。
-- 自動送信。
-- 自動ファイル添付。
+現行フローでは次を使用しない。
+
+- Grok Webの埋め込み / DOM操作。
+- Clipboardを前提とした手動prompt transport。
 - Grok回答scraping。
-- ログイン自動化。
-- Grok CookieのProject保存。
+- provider CookieのProject保存。
+- Codex App Server。
 
-### 3.2 Grokに任せないこと
+AI通信はMain ProcessのCLI adapterを通し、通常会話はAssistantPane、工程成果物taskは左工程UIから開始する。
+
+### 3.2 AI agentに任せないこと
 
 - ComfyUI Workflow JSON。
 - Node / Link / Group ID。

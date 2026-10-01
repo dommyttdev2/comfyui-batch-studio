@@ -33,7 +33,7 @@ function projectKey(root: string) {
 /**
  * Per-project, per-stage assistant selection. The legacy project-wide choice
  * serves as the initial fallback for stages that have never been opened.
- * Conversation histories remain in their provider-specific stores.
+ * Conversation history is managed separately by the common AgentSessionStateStore.
  */
 export class AssistantProviderStore {
   private readonly filePath: string;

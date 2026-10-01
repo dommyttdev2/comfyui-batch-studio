@@ -73,38 +73,16 @@ function stageResetScope(stage: Stage): ResetScope | null {
   return null;
 }
 
-function missingIpcHandler(error: unknown, channel: string) {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('No handler registered for') && message.includes(channel);
-}
-
 async function getAssistantProvider(stage: NonNullable<ReturnType<typeof grokContextStage>>) {
-  const shared = window.batchStudio.assistant;
-  if (!shared?.getProvider) return window.batchStudio.codex.getProvider(stage);
-  try {
-    return await shared.getProvider(stage);
-  } catch (error) {
-    // A main process that survived an on-disk update only knows the legacy
-    // Codex-named channel. It still stores both Grok and Codex selections.
-    if (!missingIpcHandler(error, 'assistant:get-provider')) throw error;
-    return window.batchStudio.codex.getProvider(stage);
-  }
+  return window.batchStudio.assistant.getProvider(stage);
 }
 
 async function setAssistantProvider(
   provider: AssistantPaneProvider,
   stage: NonNullable<ReturnType<typeof grokContextStage>>,
 ) {
-  const shared = window.batchStudio.assistant;
-  if (!shared?.setProvider) return window.batchStudio.codex.setProvider(provider, stage);
-  try {
-    return await shared.setProvider(provider, stage);
-  } catch (error) {
-    if (!missingIpcHandler(error, 'assistant:set-provider')) throw error;
-    return window.batchStudio.codex.setProvider(provider, stage);
-  }
+  return window.batchStudio.assistant.setProvider(provider, stage);
 }
-
 function protectsProjectInputs(run: ExecutionRun | null): boolean {
   return Boolean(
     run &&
@@ -164,20 +142,14 @@ function App() {
     [recent, setRecent] = useState<ProjectSummary[]>([]),
     [stage, setStage] = useState<Stage>('概要'),
     [error, setError] = useState(''),
-    [grok, setGrok] = useState(false),
+    [assistantPaneVisible, setAssistantPaneVisible] = useState(false),
     [paneProvider, setPaneProvider] = useState<AssistantPaneProvider>('grok'),
     [paneProviderRoot, setPaneProviderRoot] = useState<string | null>(null),
     [providerRestoreFailure, setProviderRestoreFailure] = useState<{
       key: string;
       message: string;
-      missingHandler: boolean;
     } | null>(null),
     [providerRestoreRevision, setProviderRestoreRevision] = useState(0),
-    [providerRestoreAttempts, setProviderRestoreAttempts] = useState<{
-      key: string;
-      count: number;
-    } | null>(null),
-    [temporaryGrokKey, setTemporaryGrokKey] = useState<string | null>(null),
     [switchingProvider, setSwitchingProvider] = useState(false),
     [ratio, setRatio] = useState(0.45),
     [createOpen, setCreateOpen] = useState(false),
@@ -352,7 +324,7 @@ function App() {
       setProject(null);
       setTool(null);
       setStage('概要');
-      setGrok(false);
+      setAssistantPaneVisible(false);
       await loadRecent();
     });
   useEffect(() => {
@@ -415,27 +387,18 @@ function App() {
     const key = root && context ? root + '\0' + context : null;
     setPaneProviderRoot(null);
     setProviderRestoreFailure(null);
-    setTemporaryGrokKey(null);
-    setProviderRestoreAttempts((previous) =>
-      previous?.key === key ? previous : key ? { key, count: 0 } : null,
-    );
     if (root && context && key) {
       void getAssistantProvider(context)
         .then((provider) => {
           if (cancelled) return;
           setPaneProvider(provider);
           setPaneProviderRoot(key);
-          setProviderRestoreAttempts(null);
         })
-        .catch((e) => {
+        .catch((cause) => {
           if (cancelled) return;
-          const message = e instanceof Error ? e.message : String(e);
           setProviderRestoreFailure({
             key,
-            message,
-            missingHandler: /No handler registered for ['"]?(?:assistant|codex):get-provider/.test(
-              message,
-            ),
+            message: cause instanceof Error ? cause.message : String(cause),
           });
         });
     }
@@ -445,34 +408,7 @@ function App() {
   }, [project?.rootPath, stage, providerRestoreRevision]);
   const retryProviderRestore = () => {
     if (!providerKey || providerRestoreFailure?.key !== providerKey) return;
-    // Repeating an IPC lookup cannot register a missing main-process handler.
-    if (providerRestoreFailure.missingHandler) return;
-    setProviderRestoreAttempts((previous) => ({
-      key: providerKey,
-      count: previous?.key === providerKey ? previous.count + 1 : 1,
-    }));
     setProviderRestoreRevision((revision) => revision + 1);
-  };
-  const recoverTemporaryProvider = async () => {
-    if (!contextStage || !providerKey || temporaryGrokKey !== providerKey || switchingProvider)
-      return;
-    const selectedKey = providerKey;
-    setSwitchingProvider(true);
-    setError('');
-    try {
-      const provider = await getAssistantProvider(contextStage);
-      if (activeProviderKey.current !== selectedKey) return;
-      setPaneProvider(provider);
-      setPaneProviderRoot(selectedKey);
-      setTemporaryGrokKey(null);
-      setProviderRestoreFailure(null);
-      setProviderRestoreAttempts(null);
-    } catch (e) {
-      if (activeProviderKey.current === selectedKey)
-        setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSwitchingProvider(false);
-    }
   };
   const changeProvider = async (provider: AssistantPaneProvider) => {
     if (!project || !contextStage || paneProviderRoot !== providerKey || switchingProvider) return;
@@ -493,33 +429,34 @@ function App() {
     let cancelled = false;
     void (async () => {
       if (viewOnly || (project && contextStage && paneProviderRoot !== providerKey)) {
-        const state = await window.batchStudio.grok.setVisible(false);
+        const state = await window.batchStudio.assistant.setVisible(false);
         if (!cancelled) {
-          setGrok(state.visible);
+          setAssistantPaneVisible(state.visible);
           setRatio(state.ratio);
         }
         return;
       }
-      const visible = Boolean(project && !tool && !viewOnly && shouldShowGrok(stage)),
-        context = grokContextStage(stage);
+      const visible = Boolean(project && !tool && !viewOnly && shouldShowGrok(stage));
+      const context = grokContextStage(stage);
       if (visible && context && project) {
-        setGrok(true);
-        const contextLoad = window.batchStudio.assistant.setContext(project.rootPath, context);
-        const visibility = window.batchStudio.grok.setVisible(true);
-        const [s] = await Promise.all([visibility, contextLoad]);
+        setAssistantPaneVisible(true);
+        const [state] = await Promise.all([
+          window.batchStudio.assistant.setVisible(true),
+          window.batchStudio.assistant.setContext(project.rootPath, context),
+        ]);
         if (!cancelled) {
-          setGrok(s.visible);
-          setRatio(s.ratio);
+          setAssistantPaneVisible(state.visible);
+          setRatio(state.ratio);
         }
         return;
       }
-      const s = await window.batchStudio.grok.setVisible(false);
+      const state = await window.batchStudio.assistant.setVisible(false);
       if (!cancelled) {
-        setGrok(s.visible);
-        setRatio(s.ratio);
+        setAssistantPaneVisible(state.visible);
+        setRatio(state.ratio);
       }
-    })().catch((e) => {
-      if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+    })().catch((cause) => {
+      if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
     });
     return () => {
       cancelled = true;
@@ -554,11 +491,7 @@ function App() {
             <select
               aria-label="AIアシスタント"
               value={paneProvider}
-              disabled={
-                paneProviderRoot !== providerKey ||
-                switchingProvider ||
-                temporaryGrokKey === providerKey
-              }
+              disabled={paneProviderRoot !== providerKey || switchingProvider}
               onChange={(event) => void changeProvider(event.target.value as AssistantPaneProvider)}
             >
               <option value="grok">Grok</option>
@@ -568,12 +501,12 @@ function App() {
           {project && !tool && !viewOnly && shouldShowGrok(stage) && (
             <button
               onClick={async () => {
-                const s = await window.batchStudio.grok.setVisible(!grok);
-                setGrok(s.visible);
-                setRatio(s.ratio);
+                const state = await window.batchStudio.assistant.setVisible(!assistantPaneVisible);
+                setAssistantPaneVisible(state.visible);
+                setRatio(state.ratio);
               }}
             >
-              {grok ? 'AI Paneを隠す' : 'AI Paneを表示'}
+              {assistantPaneVisible ? 'AI Paneを隠す' : 'AI Paneを表示'}
             </button>
           )}
         </div>
@@ -636,64 +569,19 @@ function App() {
                 providerRestoreFailure?.key === providerKey ? (
                   <section className="panel" role="alert">
                     <h3>AIエージェントの復元に失敗しました</h3>
-                    {providerRestoreFailure.missingHandler ? (
-                      <p>
-                        このエラーは再試行では解消しません。実行中のRunを確認したうえでBatch
-                        Studioを完全終了し、残っているBatch StudioのElectronプロセスがないことを
-                        確認してから、run.batで再ビルド・起動してください。
-                        他のアプリのElectronプロセスは終了しないでください。
-                      </p>
-                    ) : (
-                      <p>
-                        工程のAIエージェントを取得できませんでした。通信状態を確認し、再試行してください。
-                        {providerRestoreAttempts?.key === providerKey &&
-                          providerRestoreAttempts.count > 0 &&
-                          `（再試行${providerRestoreAttempts.count}回目も失敗しました）`}
-                      </p>
-                    )}
+                    <p>工程のAIエージェントを取得できませんでした。再試行してください。</p>
                     <div className="issue error">{providerRestoreFailure.message}</div>
-                    {!providerRestoreFailure.missingHandler && (
-                      <button type="button" onClick={retryProviderRestore}>
-                        復元を再試行
-                      </button>
-                    )}
-                    {providerRestoreFailure.missingHandler && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // This is a temporary renderer-only choice: never overwrite the
-                          // saved stage provider when the main process cannot be queried.
-                          setPaneProvider('grok');
-                          setTemporaryGrokKey(providerKey);
-                          setPaneProviderRoot(providerKey);
-                        }}
-                      >
-                        Grokで一時的に工程を開く
-                      </button>
-                    )}
+                    <button type="button" onClick={retryProviderRestore}>
+                      復元を再試行
+                    </button>
                   </section>
                 ) : (
                   <div className="panel" role="status">
-                    {providerRestoreAttempts?.key === providerKey &&
-                    providerRestoreAttempts.count > 0
-                      ? `AIエージェントを再試行中…（${providerRestoreAttempts.count}回目）`
-                      : 'この工程のAIエージェントを復元中…'}
+                    この工程のAIエージェントを復元中…
                   </div>
                 )
               ) : (
                 <>
-                  {temporaryGrokKey !== null && temporaryGrokKey === providerKey && (
-                    <div className="issue error" role="alert">
-                      AIエージェント設定を取得できないため、保存済みの選択を変更せずGrokで一時表示しています。
-                      <button
-                        type="button"
-                        disabled={switchingProvider}
-                        onClick={() => void recoverTemporaryProvider()}
-                      >
-                        {switchingProvider ? '設定を再取得中…' : '設定を再取得'}
-                      </button>
-                    </div>
-                  )}
                   <StageErrorBoundary
                     key={`${project.rootPath}:${stage}:${resetRevision}:${stageReloadRevision}`}
                     stage={stage}
@@ -748,7 +636,9 @@ function App() {
           )}
         </section>
       </div>
-      {grok && <PaneDivider ratio={ratio} onRatio={setRatio} provider={paneProvider} />}{' '}
+      {assistantPaneVisible && (
+        <PaneDivider ratio={ratio} onRatio={setRatio} provider={paneProvider} />
+      )}{' '}
       {createOpen && (
         <CreateProject
           onClose={() => setCreateOpen(false)}
@@ -783,7 +673,7 @@ function PaneDivider({
     const x = pending.current;
     if (x == null) return;
     pending.current = null;
-    void window.batchStudio.grok
+    void window.batchStudio.assistant
       .setDividerScreenX(x)
       .then((s) => onRatio(s.ratio))
       .catch(() => {});

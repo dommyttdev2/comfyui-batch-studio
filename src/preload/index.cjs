@@ -27,7 +27,6 @@ const I = {
   ARTIFACT_GROK_LORA_HISTORY: 'artifact:grok-lora-history',
   ARTIFACT_RESET_FROM: 'artifact:reset-from',
   PROMPT_PLAN_SAVE: 'prompt-plan:save',
-  GROK_TASK_BUILD: 'grok-task:build',
   FILE_SHOW_IN_FOLDER: 'file:show-in-folder',
   CATALOG_STATUS: 'catalog:status',
   CATALOG_INTEGRATED_STATUS: 'catalog:integrated-status',
@@ -166,38 +165,13 @@ const I = {
   ASSISTANT_RESTORE_CONVERSATION: 'assistant:restore-conversation',
   ASSISTANT_MODELS: 'assistant:models',
   ASSISTANT_SELECT_MODEL: 'assistant:select-model',
+  ASSISTANT_SET_VISIBLE: 'assistant:set-visible',
+  ASSISTANT_SET_RATIO: 'assistant:set-ratio',
+  ASSISTANT_SET_DIVIDER_X: 'assistant:set-divider-x',
   AGENT_TASK_START: 'agent:task-start',
   AGENT_TASK_STOP: 'agent:task-stop',
   AGENT_EVENT: 'agent:event',
-  CODEX_GET_PROVIDER: 'codex:get-provider',
-  CODEX_SET_PROVIDER: 'codex:set-provider',
-  CODEX_SET_CONTEXT: 'codex:set-context',
-  CODEX_SELECT_STAGE_TASK: 'codex:select-stage-task',
-  CODEX_STAGE_TASK_SELECTED: 'codex:stage-task-selected',
-  CODEX_CONTEXT: 'codex:context',
-  CODEX_CONTEXT_CHANGED: 'codex:context-changed',
-  CODEX_STATUS: 'codex:status',
-  CODEX_SIGN_IN: 'codex:sign-in',
-  CODEX_SNAPSHOT: 'codex:snapshot',
-  CODEX_MODELS: 'codex:models',
-  CODEX_SELECT_MODEL: 'codex:select-model',
-  CODEX_NEW_CHAT: 'codex:new-chat',
-  CODEX_RESTORE_CHAT: 'codex:restore-chat',
-  CODEX_STOP_TURN: 'codex:stop-turn',
-  CODEX_SEND: 'codex:send',
-  CODEX_SEND_TASK: 'codex:send-task',
-  CODEX_EVENT: 'codex:event',
-  CODEX_SAVE_RESPONSE: 'codex:save-response',
-  CODEX_RETRY_ARTIFACT: 'codex:retry-artifact',
-  CODEX_LATEST_ARTIFACT: 'codex:latest-artifact',
-  AUTO_ARTIFACT_GROK_ARM: 'auto-artifact:grok-arm',
   AUTO_ARTIFACT_EVENT: 'auto-artifact:event',
-  GROK_SET_VISIBLE: 'grok:set-visible',
-  GROK_SET_CONTEXT: 'grok:set-context',
-  GROK_SET_RATIO: 'grok:set-ratio',
-  GROK_SET_DIVIDER_X: 'grok:set-divider-x',
-  GROK_RELOAD: 'grok:reload',
-  GROK_OPEN_EXTERNAL: 'grok:open-external',
 };
 // END GENERATED IPC CHANNELS
 contextBridge.exposeInMainWorld('batchStudio', {
@@ -243,7 +217,6 @@ contextBridge.exposeInMainWorld('batchStudio', {
     grokLoraHistory: (r) => ipcRenderer.invoke(I.ARTIFACT_GROK_LORA_HISTORY, r),
     resetFrom: (r, s) => ipcRenderer.invoke(I.ARTIFACT_RESET_FROM, r, s),
   },
-  grokTask: { build: (r, s, e) => ipcRenderer.invoke(I.GROK_TASK_BUILD, r, s, e) },
   file: { showInFolder: (p) => ipcRenderer.invoke(I.FILE_SHOW_IN_FOLDER, p) },
   catalog: {
     status: (r) => ipcRenderer.invoke(I.CATALOG_STATUS, r),
@@ -421,7 +394,6 @@ contextBridge.exposeInMainWorld('batchStudio', {
     metrics: () => ipcRenderer.invoke(I.R2_METRICS),
   },
   autoArtifact: {
-    armGrok: (root, stage) => ipcRenderer.invoke(I.AUTO_ARTIFACT_GROK_ARM, root, stage),
     onEvent: (listener) => {
       const handler = (_event, value) => listener(value);
       ipcRenderer.on(I.AUTO_ARTIFACT_EVENT, handler);
@@ -441,6 +413,9 @@ contextBridge.exposeInMainWorld('batchStudio', {
       ipcRenderer.invoke(I.ASSISTANT_RESTORE_CONVERSATION, sessionId),
     models: () => ipcRenderer.invoke(I.ASSISTANT_MODELS),
     selectModel: (selection) => ipcRenderer.invoke(I.ASSISTANT_SELECT_MODEL, selection),
+    setVisible: (visible) => ipcRenderer.invoke(I.ASSISTANT_SET_VISIBLE, visible),
+    setRatio: (ratio) => ipcRenderer.invoke(I.ASSISTANT_SET_RATIO, ratio),
+    setDividerScreenX: (screenX) => ipcRenderer.invoke(I.ASSISTANT_SET_DIVIDER_X, screenX),
     startTask: (root, stage, extra) => ipcRenderer.invoke(I.AGENT_TASK_START, root, stage, extra),
     stopTask: (root, stage) => ipcRenderer.invoke(I.AGENT_TASK_STOP, root, stage),
     onContext: (listener) => {
@@ -453,48 +428,5 @@ contextBridge.exposeInMainWorld('batchStudio', {
       ipcRenderer.on(I.AGENT_EVENT, handler);
       return () => ipcRenderer.removeListener(I.AGENT_EVENT, handler);
     },
-  },
-  codex: {
-    getProvider: (stage) => ipcRenderer.invoke(I.CODEX_GET_PROVIDER, stage),
-    setProvider: (p, stage) => ipcRenderer.invoke(I.CODEX_SET_PROVIDER, p, stage),
-    setContext: (r, s) => ipcRenderer.invoke(I.CODEX_SET_CONTEXT, r, s),
-    selectStageTask: (root, stage) => ipcRenderer.invoke(I.CODEX_SELECT_STAGE_TASK, root, stage),
-    onStageTaskSelected: (listener) => {
-      const handler = (_event, stage) => listener(stage);
-      ipcRenderer.on(I.CODEX_STAGE_TASK_SELECTED, handler);
-      return () => ipcRenderer.removeListener(I.CODEX_STAGE_TASK_SELECTED, handler);
-    },
-    context: () => ipcRenderer.invoke(I.CODEX_CONTEXT),
-    onContext: (listener) => {
-      const handler = (_event, context) => listener(context);
-      ipcRenderer.on(I.CODEX_CONTEXT_CHANGED, handler);
-      return () => ipcRenderer.removeListener(I.CODEX_CONTEXT_CHANGED, handler);
-    },
-    status: () => ipcRenderer.invoke(I.CODEX_STATUS),
-    signIn: () => ipcRenderer.invoke(I.CODEX_SIGN_IN),
-    snapshot: () => ipcRenderer.invoke(I.CODEX_SNAPSHOT),
-    models: () => ipcRenderer.invoke(I.CODEX_MODELS),
-    selectModel: (selection) => ipcRenderer.invoke(I.CODEX_SELECT_MODEL, selection),
-    newChat: () => ipcRenderer.invoke(I.CODEX_NEW_CHAT),
-    restoreChat: (id) => ipcRenderer.invoke(I.CODEX_RESTORE_CHAT, id),
-    stopTurn: () => ipcRenderer.invoke(I.CODEX_STOP_TURN),
-    send: (text) => ipcRenderer.invoke(I.CODEX_SEND, text),
-    sendTask: (stage, extra) => ipcRenderer.invoke(I.CODEX_SEND_TASK, stage, extra),
-    onEvent: (listener) => {
-      const handler = (_event, codexEvent) => listener(codexEvent);
-      ipcRenderer.on(I.CODEX_EVENT, handler);
-      return () => ipcRenderer.removeListener(I.CODEX_EVENT, handler);
-    },
-    saveResponse: (text) => ipcRenderer.invoke(I.CODEX_SAVE_RESPONSE, text),
-    retryArtifact: () => ipcRenderer.invoke(I.CODEX_RETRY_ARTIFACT),
-    latestArtifact: () => ipcRenderer.invoke(I.CODEX_LATEST_ARTIFACT),
-  },
-  grok: {
-    setVisible: (v) => ipcRenderer.invoke(I.GROK_SET_VISIBLE, v),
-    setContext: (r, s) => ipcRenderer.invoke(I.GROK_SET_CONTEXT, r, s),
-    setRatio: (r) => ipcRenderer.invoke(I.GROK_SET_RATIO, r),
-    setDividerScreenX: (x) => ipcRenderer.invoke(I.GROK_SET_DIVIDER_X, x),
-    reload: () => ipcRenderer.invoke(I.GROK_RELOAD),
-    openExternal: () => ipcRenderer.invoke(I.GROK_OPEN_EXTERNAL),
   },
 });

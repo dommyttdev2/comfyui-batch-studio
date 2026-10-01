@@ -15,7 +15,7 @@ Status:
 ## DEC-001: Electron + user-operated Grok Web
 
 Date: 2026-09-07
-Status: Accepted
+Status: Superseded by DEC-027
 
 ### Decision
 
@@ -1225,11 +1225,13 @@ Project配下には `execution_runs/<runId>.json` 等のpersistent Run state/his
 - active Runがある場合、最後のProject Windowを閉じてもMain Processを終了しない。
 - Window closeとApplication Quitを分離し、明示的Quitではactive Runを警告する。
 
-### Grok boundary
+### AssistantPane boundary
 
-Grok login session用persistent partitionはapp-wideで共有してよいが、Grok WebContentsView、visible state、divider ratio、Project/stage context、navigation/context queueはProject Windowごとに分離する。
+各Project WindowはLocal Rendererとprovider-neutralなAssistantPaneをそれぞれWindow-localなWebContentsViewとして持つ。visible state、divider ratio、Project/stage/provider contextはProject Windowごとに分離する。
 
-Window固有IPCは `event.sender` から対象Project Windowを解決し、単一global `grokView` / `mainWindow` を操作しない。
+AI providerの認証/session transportはGrok CLI / Codex CLIが所有し、Batch StudioはGrok Web用persistent partitionやprovider Cookieを保持しない。
+
+Window固有IPCは `event.sender` から対象Project Windowを解決し、単一global AssistantPane / `mainWindow` を操作しない。
 
 ### Execution resource lock
 
@@ -1260,7 +1262,7 @@ different Vast.ai Instances
 
 ### Consequence
 
-Main ProcessにはProject Window registryとExecutionCoordinator / resource lock相当の責務が必要になる。現在の単一global `mainWindow` / `localView` / `grokView` / `activeGrokContext` はWindow-local stateへ分離する。
+Main ProcessにはProject Window registryとExecutionCoordinator / resource lock相当の責務が必要になる。Project Window固有のLocal Renderer / AssistantPane / contextはWindow-local stateとして保持する。
 
 実装詳細・acceptance criteriaは `../architecture/project-window-execution-runtime.md` を正本とする。
 
@@ -1485,3 +1487,90 @@ Status: Superseded
 `DEC-021` により解決済み。
 
 exact `modelVersionId` のNewest最大200画像から、1 post = 1 observationとしてper-post medianを作り、そのmedianを `observed-usage-derived` baselineとする。最低5 distinct posts、追加outlier処理なし、`method = median-of-post-medians:newest-200`、`sampleCount = distinct post count` とした。single baseline scalarをPrompt Plan初期値へ使う場合は `strengthModel` / `strengthClip` へ同値展開し、baseline absent時の暗黙defaultは禁止する。
+
+---
+
+## DEC-027: Common CLI Agent Runtime and AssistantPane
+
+Date: 2026-09-28
+Status: Accepted
+
+### Decision
+
+Grok / Codex のAI transportをprovider固有UIから切り離し、両者をCLI経由の共通Agent Runtimeへ統一する。
+
+Project Windowは次の2 viewのみを持つ。
+
+```text
+Local Renderer
+AssistantPane
+```
+
+AssistantPaneはprovider-neutralとし、Grok / Codexで同じUXを提供する。
+
+- normal conversation
+- conversation history / new conversation / restore
+- streaming
+- stop
+- activity / tool / file status
+- provider capabilityに基づくmodel / reasoning設定
+
+工程成果物の生成・修正・再実行は右AssistantPaneへ置かず、左側工程UIから共通task APIで開始する。
+
+Main Processはprovider adapter / task runnerを所有する。
+
+```text
+AssistantPane / Stage UI
+        |
+        v
+Common Assistant IPC
+        |
+        +--> AgentConversationRunner
+        |       +--> GrokCliAdapter
+        |       +--> CodexCliAdapter
+        |
+        +--> GrokCliTaskRunner
+        +--> CodexCliTaskRunner
+```
+
+成果物taskは隔離workspaceの `input/` と `output/` を使用し、Project本体をagentの直接write対象にしない。session / conversation / model selectionはBatch Studioのprovider-neutral storeでProject × stage × provider単位に保持する。
+
+Codex model catalogは `codex debug models` を使用する。Codex App Serverの `model/list` を含む旧App Server transportへ依存しない。
+
+### Removed transport
+
+現行実装では次を使用しない。
+
+- Grok Web `WebContentsView`
+- Grok loading view / navigation queue / URL history
+- Grok Web DOM artifact watcher
+- Clipboardを前提としたGrok prompt transport
+- Codex専用Pane
+- Codex App Server
+- provider-specific旧IPC / preload API
+
+### Rationale
+
+- GrokとCodexで作業手順が異なるUXを解消する。
+- provider切替時に「どこで会話し、どこで工程taskを実行するか」を変えない。
+- Web DOM / Cookie / browser sessionへの依存をなくす。
+- session / streaming / cancellation / model selection / artifact workspaceを共通契約で検証できる。
+- provider固有差分をadapterへ閉じ込め、工程UIとArtifact lifecycleをprovider-neutralに保つ。
+
+### Consequence
+
+- 各provider CLIのインストールとprovider側認証が必要。
+- providerのWeb login UIはBatch Studioへ埋め込まない。
+- raw reasoning本文はAssistantPaneへ表示・保存しない。
+- Linux専用Remote Worker等、AI transportと無関係なruntimeはこの決定の対象外。
+
+### Supersedes
+
+- `DEC-001` のGrok Web埋め込み・user-operated Web transport。
+- `DEC-024` のGrok WebContentsView / persistent partitionに関するWindow-local境界部分。Execution Runtime ownershipの決定は継続する。
+
+### Related requirements
+
+- `REQ-SCOPE-002`
+- `REQ-SEC-001`
+- `REQ-SEC-002`

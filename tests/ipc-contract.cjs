@@ -91,34 +91,9 @@ vm.runInNewContext(preload, {
   await bridge.assistant.stopTask('project-root', 'story-finalize');
   assert.deepEqual(calls.at(-1), [expected.AGENT_TASK_STOP, 'project-root', 'story-finalize']);
 
-  await bridge.codex.selectStageTask('project-root', 'execution');
-  assert.deepEqual(calls.at(-1), [expected.CODEX_SELECT_STAGE_TASK, 'project-root', 'execution']);
-  const selected = [];
-  const remove = bridge.codex.onStageTaskSelected((stage) => selected.push(stage));
-  events.emit(expected.CODEX_STAGE_TASK_SELECTED, {}, 'execution');
-  remove();
-  events.emit(expected.CODEX_STAGE_TASK_SELECTED, {}, 'caption');
-  assert.deepEqual(selected, ['execution']);
-  const handler = main.slice(
-    main.indexOf('handleIpc(IPC.CODEX_SELECT_STAGE_TASK'),
-    main.indexOf('handleIpc(IPC.CODEX_STATUS'),
-  );
-  assert.match(handler, /event\.sender\.id !== state\.localView\.webContents\.id/);
-  assert.match(
-    handler,
-    /state\.codexView\.webContents\.send\(IPC\.CODEX_STAGE_TASK_SELECTED, stage\)/,
-  );
-  const commonHandler = main.slice(
-    main.indexOf('const validateAgentTaskRequest'),
-    main.indexOf('handleIpc(IPC.CODEX_SET_CONTEXT'),
-  );
+  const commonHandler = main.slice(main.indexOf('export function registerAssistantIpc'));
   assert.match(commonHandler, /grokCliTaskRunner\.run/);
-  assert.match(
-    commonHandler,
-    /codexSendTask\(request\.state, request\.stage, request\.extra, true\)/,
-  );
   assert.match(commonHandler, /grokCliTaskRunner\.stop/);
-  assert.match(commonHandler, /codexStopTurn\(request\.state, true\)/);
   console.log('IPC contract and provider-neutral agent task routing tests passed.');
 })().catch((error) => {
   console.error(error);

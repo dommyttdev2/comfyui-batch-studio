@@ -258,26 +258,27 @@ Execution用API-format graphの生成・構造・hash / workflow identity検証�
 
 したがって現在の `READY` は実装済みPreflight Gate範囲の結果であり、本章で定義する「全runtime capabilityを開始前に検証済み」という意味ではない。Preflightで未検証の項目を成功扱いせず、runtime validation failureもExecution errorとして明示する。
 
-## 11. Grok Security
+## 11. AI Agent Security
 
-### 11.1 WebContents isolation
+### 11.1 Main Process boundary
 
-- Grok Web を Local Renderer と別 WebContents にする。
-- Node integration off。
-- Grok preload なし。
-- Local IPC 非公開。
-- local filesystem capability 非公開。
+- Rendererからchild process APIを直接呼ばない。
+- Grok / Codex CLIはMain Processのadapterだけが起動する。
+- promptはstdinへ渡し、ユーザー入力をshell commandへ連結しない。
+- 通常会話は原則read-only。
+- 成果物taskは隔離workspaceだけwrite可能とする。
+- raw reasoning本文はRendererへ渡さない。
 
-### 11.2 Attachment filtering
+### 11.2 Workspace filtering
 
-Grok へ添付できる候補は明示 allowlist 方式を基本とする。
+工程taskの `input/` へ渡すファイルは明示allowlistを基本とする。
 
 許可候補例:
 
 - `story.md`
 - `models.json`
 - `model_catalog.json`
-- `prompt_plan.json` のレビュー時
+- `prompt_plan.json`
 - ユーザー指定の参考資料
 
 禁止候補:
@@ -286,12 +287,12 @@ Grok へ添付できる候補は明示 allowlist 方式を基本とする。
 - credential file
 - R2 config
 - SSH private key
-- browser profile
+- browser profile / Cookie
 - secret/token
 - `.safetensors`
 - executable / arbitrary app data
 
-添付前に full path と file size をユーザーへ表示する。
+成果物は `output/` からのみ読み、path traversal / symlink escape / oversized outputを拒否する。invalidまたはcancelled outputはDraftへ反映しない。
 
 ## 12. Secret ownership
 
@@ -301,7 +302,7 @@ Secretの正本はMain Processまたは専用Web sessionに限定する。
 - R2 credential -> Batch Studio Main Process / `safeStorage`。
 - SSH private key contents -> Local filesystem。Batch Studioは認証時のみ読み、Projectへコピーしない。
 - SSH private key path -> app-wide settingsに保存可能。
-- Grok auth -> Grok Web persistent session。
+- AI provider auth -> 各CLI自身の認証store。Batch Studioはtoken本文をProjectへ複製しない。
 
 Remote hostへR2 credentialを渡さない。Remoteへ渡せるのは、対象object / operation / lifetimeを限定したsigned URLのみとする。
 
