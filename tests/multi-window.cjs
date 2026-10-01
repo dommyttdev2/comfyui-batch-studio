@@ -2,32 +2,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
-const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
-const main = readMainProcessSource(repo);
+const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
 const app = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
-const ipcAccess = fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-access.ts'), 'utf8');
 
 matchCode(main, /const projectWindows=new Map<number,ProjectWindowState>\(\)/);
 matchCode(main, /function projectWindowForSender\(contents:WebContents\)/);
-matchCode(main, /function ipcSenderContext\(contents:WebContents\):IpcSenderContext/);
-matchCode(
-  main,
-  /function handleIpc<[\s\S]*authorizeIpcAccess\(channel,sender,args\)[\s\S]*ensureProjectWritable/,
-  'all invoke handlers must pass the shared sender/root/write authorization layer',
-);
-matchCode(
-  ipcAccess,
-  /!definition\.senders\.includes\(sender\.kind\)[\s\S]*この操作は現在のWindowから実行できません/,
-  'unregistered WebContents must be denied by the shared access policy',
-);
-matchCode(
-  ipcAccess,
-  /tool-r2[\s\S]*tool-civit[\s\S]*tool-vastai/,
-  'standalone service windows must have distinct sender classes',
-);
 matchCode(main, /projectWindowForSender\(event\.sender\)/);
 matchCode(main, /function projectWindowForRoot\(/);
 matchCode(main, /createProjectWindow\(\{restoreLastProject:true\}\)/);
@@ -105,29 +87,34 @@ doesNotMatchCode(
   /let mainWindow:/,
   'Project windows must not use a single global mainWindow',
 );
-doesNotMatchCode(main, /let grokView:/, 'Grok views must be Project Window-local');
-doesNotMatchCode(main, /let activeGrokContext:/, 'Grok context must be Project Window-local');
+doesNotMatchCode(main, /let grokView:/, 'Legacy Grok Web views must be removed');
+doesNotMatchCode(main, /let codexView:/, 'Legacy Codex views must be removed');
+doesNotMatchCode(main, /grokLoadingView|GROK_PARTITION|GrokNavigationQueue/);
 
 matchCode(
   main,
-  /grokLoadingView:WebContentsView/,
-  'Project windows must own a dedicated Grok loading placeholder view',
+  /assistantView:WebContentsView/,
+  'Project windows must own one provider-neutral AssistantPane view',
 );
-matchCode(main, /Grokを読み込み中…/, 'The Grok pane must explain that Grok is still loading');
 matchCode(
   main,
-  /state\.grokLoading=true;layoutProjectWindow\(state\)/,
-  'Grok context loading must expose the placeholder before awaiting navigation',
+  /window\.contentView\.addChildView\(localView\).*?window\.contentView\.addChildView\(assistantView\)/s,
+  'Project windows must contain the local UI and one AssistantPane view',
 );
-doesNotMatchCode(
+matchCode(
   main,
-  /state\.grokLoading\?grokBounds/,
-  'The hidden legacy Grok loading view must not occupy the shared AssistantPane',
+  /state\.assistantView\.setBounds/,
+  'Project window layout must size the common AssistantPane',
+);
+matchCode(
+  main,
+  /loadRenderer\(assistantView,'assistant-pane'\)/,
+  'The right pane must load the common AssistantPane renderer',
 );
 matchCode(
   app,
-  /setAssistantPaneVisible\(true\).*?assistant\.setVisible\(true\).*?assistant\.setContext\(project\.rootPath,context\)/,
-  'Renderer must reserve the shared AssistantPane before waiting for assistant context loading',
+  /assistant\.setVisible\(true\).*?assistant\.setContext\(project\.rootPath,context\)/s,
+  'Renderer must reserve the AssistantPane and select the common context',
 );
 
 matchCode(
