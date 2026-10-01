@@ -239,9 +239,10 @@ for (const expected of [
   );
 
   const legacyRoot = path.join(userData, 'project-old-version');
+  const legacyStoredRoot = legacyRoot + path.sep + '.';
   const oldState = {
     schemaVersion: 1,
-    projects: { [legacyRoot]: 'codex' },
+    projects: { [legacyStoredRoot]: 'codex' },
   };
   const legacyDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-legacy-agent-'));
   fs.writeFileSync(
@@ -258,8 +259,9 @@ for (const expected of [
     fs.readFileSync(path.join(legacyDirectory, 'assistant-provider-state.json'), 'utf8'),
   );
   assert.equal(migratedOnDisk.schemaVersion, 2);
-  assert.equal(migratedOnDisk.projects[legacyRoot].stages.story, 'codex');
-  assert.equal(migratedOnDisk.projects[legacyRoot].stages.caption, 'grok');
+  const migratedKey = path.resolve(legacyRoot);
+  assert.equal(migratedOnDisk.projects[migratedKey].stages.story, 'codex');
+  assert.equal(migratedOnDisk.projects[migratedKey].stages.caption, 'grok');
 
   const firstOpenRoot = path.join(userData, 'project-first-open');
   const firstProvider = await store.resolve(firstOpenRoot, 'grok', async () => null, 'models');
