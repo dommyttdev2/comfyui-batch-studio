@@ -161,6 +161,21 @@ matchCode(
   'cache keys must invalidate replaced source files',
 );
 matchCode(cache, /MAX_CONCURRENT = 2/, 'cache generation must bound concurrent image decodes');
+matchCode(
+  cache,
+  /ThumbnailCachePruner\(LIMIT_BYTES\)[\s\S]*scheduleCachePrune/,
+  'cache capacity cleanup must be delegated to the single-flight idle pruner',
+);
+matchCode(
+  cache,
+  /pending\.has\(file\) \|\| protectedCacheFiles\.has\(file\)/,
+  'pending and actively accessed cache files must be protected from prune',
+);
+matchCode(
+  main,
+  /pruneRequests[\s\S]*pruneRuns[\s\S]*pruneDeleted[\s\S]*pruneLastMs/,
+  'picker performance logs must include path-free prune counters and duration',
+);
 matchCode(cache, /LIMIT_BYTES = 512/, 'disk cache must have a size limit');
 matchCode(memoryCache, /const LIMIT = 128/, 'decoded image cache must have a memory limit');
 matchCode(stage, /readEditorImage\(imagePath\)/, 'editor must load persistent image cache');
