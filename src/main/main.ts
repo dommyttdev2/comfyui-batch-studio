@@ -15,6 +15,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { IPC } from '../shared/ipc.js';
 import { PickerSelectionGate } from './picker-selection-gate.js';
+import { authorizeIpcAccess, type IpcSenderContext } from './ipc-access.js';
 import type {
   AppSettingsSaveInput,
   CatalogSelectionTemplateInput,
@@ -390,6 +391,62 @@ function layoutProjectWindow(state: ProjectWindowState) {
   );
   state.codexView.setBounds(state.paneProvider === 'codex' ? grokBounds : hidden);
 }
+function ipcSenderContext(contents: WebContents): IpcSenderContext {
+  for (const state of projectWindows.values()) {
+    if (state.localView.webContents.id === contents.id)
+      return { kind: 'project-local', projectRoot: state.projectRoot };
+    if (state.codexView.webContents.id === contents.id)
+      return { kind: 'project-codex', projectRoot: state.projectRoot };
+  }
+  const thumbnail = thumbnailPickerWindows.get(contents.id);
+  if (thumbnail) return { kind: 'thumbnail-picker', projectRoot: thumbnail.root };
+  const marketplace = marketplacePickerWindows.get(contents.id);
+  if (marketplace) return { kind: 'marketplace-picker', projectRoot: marketplace.root };
+  for (const [tool, state] of standaloneToolWindows) {
+    if (state.view.webContents.id !== contents.id) continue;
+    if (tool === 'r2') return { kind: 'tool-r2' };
+    if (tool === 'civit') return { kind: 'tool-civit' };
+    return { kind: 'tool-vastai' };
+  }
+  return { kind: 'unknown' };
+}
+
+async function authorizeIpcImageAccess(
+  channel: string,
+  contents: WebContents,
+  args: readonly unknown[],
+) {
+  if (channel === IPC.THUMBNAIL_READ_PREVIEW) {
+    await validateThumbnailPickerImage(thumbnailPickerForSender(contents), args[0]);
+    return;
+  }
+  if (channel !== IPC.THUMBNAIL_STORE_WEBP_PREVIEW) return;
+  const thumbnail = thumbnailPickerWindows.get(contents.id);
+  if (thumbnail) {
+    await validateThumbnailPickerImage(thumbnail, args[0]);
+    return;
+  }
+  const marketplace = marketplacePickerWindows.get(contents.id);
+  if (marketplace) {
+    await validateMarketplacePickerImage(marketplace, args[0]);
+    return;
+  }
+  throw new Error('この画像キャッシュ操作は現在のWindowから実行できません。');
+}
+
+function handleIpc<TArgs extends unknown[], TResult>(
+  channel: string,
+  listener: (event: IpcMainInvokeEvent, ...args: TArgs) => TResult,
+) {
+  ipcMain.handle(channel, async (event, ...args) => {
+    const sender = ipcSenderContext(event.sender);
+    const decision = authorizeIpcAccess(channel, sender, args);
+    if (decision.writeRoot) await ensureProjectWritable(decision.writeRoot);
+    await authorizeIpcImageAccess(channel, event.sender, args);
+    return listener(event, ...(args as TArgs));
+  });
+}
+
 function projectWindowForSender(contents: WebContents) {
   for (const state of projectWindows.values())
     if (
@@ -713,15 +770,7 @@ function thumbnailPickerForSender(contents: WebContents) {
 
 async function validateThumbnailPickerImage(state: ThumbnailPickerWindowState, imagePath: unknown) {
   if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
-  const finalArtifact = await getFinalArtifactStatus(state.root);
-  if (!finalArtifact.exists || !finalArtifact.directory)
-    throw new Error('最終成果物ディレクトリが設定されていません。');
-  const resolved = path.resolve(imagePath);
-  const allowed = (await listThumbnailImages(finalArtifact.directory)).some(
-    (item) => projectRootKey(item.path) === projectRootKey(resolved),
-  );
-  if (!allowed) throw new Error('最終成果物ディレクトリ外の画像は選択できません。');
-  return resolved;
+  return assertFinalArtifactImage(state.root, imagePath);
 }
 
 function openThumbnailPickerWindow(
@@ -3034,7 +3083,7 @@ async function executionPreflight(root: string) {
 }
 
 function register() {
-  ipcMain.handle(IPC.EDITOR_FLUSH_RESULT, (event, id: unknown, ok: unknown, message: unknown) => {
+  handleIpc(IPC.EDITOR_FLUSH_RESULT, (event, id: unknown, ok: unknown, message: unknown) => {
     if (typeof id !== 'string') return;
     const pending = editorFlushReplies.get(id);
     if (!pending || pending.senderId !== event.sender.id) return;
@@ -3044,20 +3093,20 @@ function register() {
       message: typeof message === 'string' ? message : undefined,
     });
   });
-  ipcMain.handle(IPC.APP_SETTINGS_GET, () => settingsStore().status());
-  ipcMain.handle(IPC.APP_SETTINGS_SELECT_COMFYUI, async () => {
+  handleIpc(IPC.APP_SETTINGS_GET, () => settingsStore().status());
+  handleIpc(IPC.APP_SETTINGS_SELECT_COMFYUI, async () => {
     const r = await dialog.showOpenDialog({
       title: 'ComfyUIのインストール先ディレクトリを選択',
       properties: ['openDirectory'],
     });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle(IPC.APP_SETTINGS_SAVE, async (_e, input: AppSettingsSaveInput) => {
+  handleIpc(IPC.APP_SETTINGS_SAVE, async (_e, input: AppSettingsSaveInput) => {
     const result = await settingsStore().save(input);
     ensureCatalogRuntimePath();
     return result;
   });
-  ipcMain.handle(IPC.PROJECT_SELECT, async (event) => {
+  handleIpc(IPC.PROJECT_SELECT, async (event) => {
     const state = projectWindowForSender(event.sender),
       defaultPath = await stateStore().lastProjectDirectoryPath();
     const r = await dialog.showOpenDialog({
@@ -3086,7 +3135,7 @@ function register() {
     await setWindowProject(state, root);
     return project;
   });
-  ipcMain.handle(IPC.PROJECT_LAST, async (event) => {
+  handleIpc(IPC.PROJECT_LAST, async (event) => {
     const state = projectWindowForSender(event.sender);
     let root = state.projectRoot;
     if (!root && state.restoreLastProject) {
@@ -3111,7 +3160,7 @@ function register() {
       return null;
     }
   });
-  ipcMain.handle(IPC.PROJECT_RECENT, async () => {
+  handleIpc(IPC.PROJECT_RECENT, async () => {
     const projects = [];
     for (const root of await stateStore().recentProjectPaths()) {
       try {
@@ -3120,12 +3169,12 @@ function register() {
     }
     return projects;
   });
-  ipcMain.handle(IPC.PROJECT_REMOVE_RECENT, async (_e, root: unknown) => {
+  handleIpc(IPC.PROJECT_REMOVE_RECENT, async (_e, root: unknown) => {
     validRoot(root);
     await stateStore().removeRecentProject(root);
     await refreshRecentProjectMenu();
   });
-  ipcMain.handle(IPC.PROJECT_OPEN, async (event, root: unknown) => {
+  handleIpc(IPC.PROJECT_OPEN, async (event, root: unknown) => {
     validRoot(root);
     const state = projectWindowForSender(event.sender),
       existing = projectWindowForRoot(root, state);
@@ -3137,7 +3186,7 @@ function register() {
     await setWindowProject(state, root);
     return project;
   });
-  ipcMain.handle(IPC.PROJECT_CLOSE, async (event) => {
+  handleIpc(IPC.PROJECT_CLOSE, async (event) => {
     const state = projectWindowForSender(event.sender);
     if (
       state.projectRoot &&
@@ -3152,7 +3201,7 @@ function register() {
     layoutProjectWindow(state);
     await rememberMostRecentOpenProject();
   });
-  ipcMain.handle(IPC.PROJECT_SELECT_PARENT, async (_event, defaultPath: unknown) => {
+  handleIpc(IPC.PROJECT_SELECT_PARENT, async (_event, defaultPath: unknown) => {
     const initialDirectory =
       typeof defaultPath === 'string' && defaultPath.trim() ? defaultPath.trim() : undefined;
     const r = await dialog.showOpenDialog({
@@ -3162,7 +3211,7 @@ function register() {
     });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle(IPC.PROJECT_CREATE, async (event, parent: unknown, brief: ProjectBriefInput) => {
+  handleIpc(IPC.PROJECT_CREATE, async (event, parent: unknown, brief: ProjectBriefInput) => {
     if (typeof parent !== 'string') throw new Error('Invalid parent path');
     const state = projectWindowForSender(event.sender);
     if (
@@ -3180,46 +3229,43 @@ function register() {
     await setWindowProject(state, root);
     return project;
   });
-  ipcMain.handle(IPC.PROJECT_SCAN, (_e, root: unknown) => {
+  handleIpc(IPC.PROJECT_SCAN, (_e, root: unknown) => {
     validRoot(root);
     return scanProject(root);
   });
-  ipcMain.handle(IPC.PROJECT_OPEN_FOLDER, async (_e, root: unknown) => {
+  handleIpc(IPC.PROJECT_OPEN_FOLDER, async (_e, root: unknown) => {
     validRoot(root);
     const err = await shell.openPath(root);
     if (err) throw new Error(err);
   });
-  ipcMain.handle(
-    IPC.PROJECT_SAVE_SETTINGS,
-    async (_e, root: unknown, settings: ProjectSettings) => {
-      validRoot(root);
-      await ensureProjectWritable(root);
-      await saveProjectSettings(root, settings);
-      return scanProject(root);
-    },
-  );
-  ipcMain.handle(IPC.PROJECT_SAVE_BRIEF, async (_e, root: unknown, brief: ProjectBriefInput) => {
+  handleIpc(IPC.PROJECT_SAVE_SETTINGS, async (_e, root: unknown, settings: ProjectSettings) => {
+    validRoot(root);
+    await ensureProjectWritable(root);
+    await saveProjectSettings(root, settings);
+    return scanProject(root);
+  });
+  handleIpc(IPC.PROJECT_SAVE_BRIEF, async (_e, root: unknown, brief: ProjectBriefInput) => {
     validRoot(root);
     await ensureProjectWritable(root);
     await saveProjectBrief(root, brief);
     return scanProject(root);
   });
-  ipcMain.handle(IPC.ARTIFACT_READ, (_e, root: unknown, key: any, source: any) => {
+  handleIpc(IPC.ARTIFACT_READ, (_e, root: unknown, key: any, source: any) => {
     validRoot(root);
     return readArtifact(root, key, source);
   });
-  ipcMain.handle(IPC.ARTIFACT_BEGIN_EDIT, async (_e, root: unknown, key: any) => {
+  handleIpc(IPC.ARTIFACT_BEGIN_EDIT, async (_e, root: unknown, key: any) => {
     validRoot(root);
     await ensureProjectWritable(root);
     return beginEditArtifact(root, key);
   });
-  ipcMain.handle(IPC.ARTIFACT_SAVE_DRAFT, async (_e, root: unknown, key: any, content: unknown) => {
+  handleIpc(IPC.ARTIFACT_SAVE_DRAFT, async (_e, root: unknown, key: any, content: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     if (typeof content !== 'string') throw new Error('Invalid content');
     return saveDraft(root, key, content);
   });
-  ipcMain.handle(
+  handleIpc(
     IPC.ARTIFACT_IMPORT_GROK,
     async (_e, root: unknown, key: any, raw: unknown, stage: unknown) => {
       validRoot(root);
@@ -3230,29 +3276,29 @@ function register() {
       return importGrok(root, key, raw, stage);
     },
   );
-  ipcMain.handle(IPC.ARTIFACT_CONFIRM, async (_e, root: unknown, key: any) => {
+  handleIpc(IPC.ARTIFACT_CONFIRM, async (_e, root: unknown, key: any) => {
     validRoot(root);
     await ensureProjectWritable(root);
     await confirmArtifact(root, key);
     return scanProject(root);
   });
-  ipcMain.handle(IPC.ARTIFACT_GROK_LORA_HISTORY, (_e, root: unknown) => {
+  handleIpc(IPC.ARTIFACT_GROK_LORA_HISTORY, (_e, root: unknown) => {
     validRoot(root);
     return readGrokLoraSelectionHistory(root);
   });
-  ipcMain.handle(IPC.ARTIFACT_RESET_FROM, async (_e, root: unknown, scope: unknown) => {
+  handleIpc(IPC.ARTIFACT_RESET_FROM, async (_e, root: unknown, scope: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     validManualResetScope(scope);
     await manualResetFrom(root, scope);
     return scanProject(root);
   });
-  ipcMain.handle(IPC.PROMPT_PLAN_SAVE, async (_e, root: unknown, plan: PromptPlanArtifact) => {
+  handleIpc(IPC.PROMPT_PLAN_SAVE, async (_e, root: unknown, plan: PromptPlanArtifact) => {
     validRoot(root);
     await ensureProjectWritable(root);
     return savePromptPlan(root, plan);
   });
-  ipcMain.handle(IPC.AUTO_ARTIFACT_GROK_ARM, (event, root: unknown, stage: unknown) => {
+  handleIpc(IPC.AUTO_ARTIFACT_GROK_ARM, (event, root: unknown, stage: unknown) => {
     validRoot(root);
     const state = projectWindowForSender(event.sender);
     if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
@@ -3266,57 +3312,54 @@ function register() {
     if (!state.grokArtifactWatcher) throw new Error('Grokの監視が初期化されていません。');
     return state.grokArtifactWatcher.arm(state.projectRoot, stage as GrokTask['stage']);
   });
-  ipcMain.handle(
-    IPC.GROK_TASK_BUILD,
-    (_e, root: unknown, stage: GrokTask['stage'], extra: unknown) => {
-      validRoot(root);
-      return buildGrokTask(root, stage, typeof extra === 'string' ? extra : '');
-    },
-  );
-  ipcMain.handle(IPC.FILE_SHOW_IN_FOLDER, (_e, filePath: unknown) => {
+  handleIpc(IPC.GROK_TASK_BUILD, (_e, root: unknown, stage: GrokTask['stage'], extra: unknown) => {
+    validRoot(root);
+    return buildGrokTask(root, stage, typeof extra === 'string' ? extra : '');
+  });
+  handleIpc(IPC.FILE_SHOW_IN_FOLDER, (_e, filePath: unknown) => {
     if (typeof filePath !== 'string' || !path.isAbsolute(filePath))
       throw new Error('Invalid file path');
     shell.showItemInFolder(filePath);
   });
-  ipcMain.handle(IPC.CATALOG_STATUS, (_e, root: unknown) => {
+  handleIpc(IPC.CATALOG_STATUS, (_e, root: unknown) => {
     validRoot(root);
     return catalogStatus(root);
   });
-  ipcMain.handle(IPC.CATALOG_INTEGRATED_STATUS, () => integratedCatalogStatus());
-  ipcMain.handle(IPC.CATALOG_INTEGRATED_SNAPSHOT, () => catalogService().catalog());
-  ipcMain.handle(IPC.CATALOG_INTEGRATED_SYNC, async () => {
+  handleIpc(IPC.CATALOG_INTEGRATED_STATUS, () => integratedCatalogStatus());
+  handleIpc(IPC.CATALOG_INTEGRATED_SNAPSHOT, () => catalogService().catalog());
+  handleIpc(IPC.CATALOG_INTEGRATED_SYNC, async () => {
     await catalogService().startSync();
     return integratedCatalogStatus();
   });
-  ipcMain.handle(IPC.CATALOG_LINK_PROJECT, async (_e, root: unknown) => {
+  handleIpc(IPC.CATALOG_LINK_PROJECT, async (_e, root: unknown) => {
     validRoot(root);
     return scanProject(root);
   });
-  ipcMain.handle(IPC.CATALOG_TEMPLATES, () => catalogService().templates());
-  ipcMain.handle(IPC.CATALOG_SAVE_TEMPLATE, (_e, input: CatalogSelectionTemplateInput) =>
+  handleIpc(IPC.CATALOG_TEMPLATES, () => catalogService().templates());
+  handleIpc(IPC.CATALOG_SAVE_TEMPLATE, (_e, input: CatalogSelectionTemplateInput) =>
     catalogService().saveTemplate(input),
   );
-  ipcMain.handle(IPC.CATALOG_DELETE_TEMPLATE, (_e, id: unknown) => {
+  handleIpc(IPC.CATALOG_DELETE_TEMPLATE, (_e, id: unknown) => {
     if (typeof id !== 'string' || !id) throw new Error('Invalid template id');
     return catalogService().deleteTemplate(id);
   });
-  ipcMain.handle(IPC.CATALOG_OPEN_MODEL, async (_e, url: unknown) => {
+  handleIpc(IPC.CATALOG_OPEN_MODEL, async (_e, url: unknown) => {
     if (!validCivitaiUrl(url)) throw new Error('Civitai URLが不正です。');
     await shell.openExternal(url as string);
   });
-  ipcMain.handle(IPC.CIVITAI_SETTINGS, () => civitaiStore().status());
-  ipcMain.handle(IPC.CIVITAI_SAVE_SETTINGS, async (_e, input: CivitaiConnectionInput) => {
+  handleIpc(IPC.CIVITAI_SETTINGS, () => civitaiStore().status());
+  handleIpc(IPC.CIVITAI_SAVE_SETTINGS, async (_e, input: CivitaiConnectionInput) => {
     const result = await civitaiStore().save(input);
     const service = await reloadCivitaiCatalog();
     const initial = service.status();
     if (initial.state === 'idle' && initial.apiKeyConfigured) void service.startSync();
     return result;
   });
-  ipcMain.handle(IPC.VASTAI_SETTINGS, () => vastStore().status());
-  ipcMain.handle(IPC.VASTAI_SAVE_SETTINGS, (_e, input: VastAiConnectionInput) =>
+  handleIpc(IPC.VASTAI_SETTINGS, () => vastStore().status());
+  handleIpc(IPC.VASTAI_SAVE_SETTINGS, (_e, input: VastAiConnectionInput) =>
     vastStore().save(input),
   );
-  ipcMain.handle(IPC.VASTAI_TEST, async (_e, input: VastAiConnectionInput | undefined) => {
+  handleIpc(IPC.VASTAI_TEST, async (_e, input: VastAiConnectionInput | undefined) => {
     const override = typeof input?.apiKey === 'string' ? input.apiKey.trim() : '';
     if (override) {
       const client = new VastAiClient(async () => override);
@@ -3325,14 +3368,14 @@ function register() {
     }
     await vastClient().testConnection();
   });
-  ipcMain.handle(IPC.VASTAI_SELECT_PRIVATE_KEY, async () => {
+  handleIpc(IPC.VASTAI_SELECT_PRIVATE_KEY, async () => {
     const r = await dialog.showOpenDialog({
       title: 'Vast.ai SSH秘密鍵を選択',
       properties: ['openFile'],
     });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle(IPC.VASTAI_SELECT_PUBLIC_KEY, async () => {
+  handleIpc(IPC.VASTAI_SELECT_PUBLIC_KEY, async () => {
     const r = await dialog.showOpenDialog({
       title: 'Vast.ai SSH公開鍵を選択',
       properties: ['openFile'],
@@ -3343,12 +3386,12 @@ function register() {
     });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle(IPC.VASTAI_INSTANCES, () => vastClient().listInstances());
-  ipcMain.handle(IPC.VASTAI_COMFYUI_TEMPLATE, () => vastClient().comfyUiTemplate());
-  ipcMain.handle(IPC.VASTAI_SEARCH_OFFERS, (_e, input: VastAiOfferSearchInput) =>
+  handleIpc(IPC.VASTAI_INSTANCES, () => vastClient().listInstances());
+  handleIpc(IPC.VASTAI_COMFYUI_TEMPLATE, () => vastClient().comfyUiTemplate());
+  handleIpc(IPC.VASTAI_SEARCH_OFFERS, (_e, input: VastAiOfferSearchInput) =>
     vastClient().searchOffers(input),
   );
-  ipcMain.handle(IPC.VASTAI_RENT_OFFER, async (_e, input: VastAiRentRequest) => {
+  handleIpc(IPC.VASTAI_RENT_OFFER, async (_e, input: VastAiRentRequest) => {
     if (!input || typeof input !== 'object') throw new Error('Invalid Vast.ai RENT request');
     const offerId = Number(input.offerId),
       storageGb = Number(input.storageGb),
@@ -3382,13 +3425,13 @@ function register() {
     if (result.response !== 1) return null;
     return vastClient().rentOffer({ offerId, storageGb, templateHashId }, offer);
   });
-  ipcMain.handle(IPC.VASTAI_START_INSTANCE, async (_e, id: unknown) => {
+  handleIpc(IPC.VASTAI_START_INSTANCE, async (_e, id: unknown) => {
     await vastClient().requestStartInstance(validInstanceId(id));
   });
-  ipcMain.handle(IPC.VASTAI_STOP_INSTANCE, async (_e, id: unknown) => {
+  handleIpc(IPC.VASTAI_STOP_INSTANCE, async (_e, id: unknown) => {
     await vastClient().requestStopInstance(validInstanceId(id));
   });
-  ipcMain.handle(IPC.VASTAI_DESTROY_INSTANCE, async (_e, id: unknown) => {
+  handleIpc(IPC.VASTAI_DESTROY_INSTANCE, async (_e, id: unknown) => {
     const instanceId = validInstanceId(id);
     const result = await dialog.showMessageBox({
       type: 'warning',
@@ -3404,63 +3447,55 @@ function register() {
     await vastClient().destroyInstance(instanceId);
     return true;
   });
-  ipcMain.handle(IPC.VASTAI_REBOOT_INSTANCE, async (_e, id: unknown) => {
+  handleIpc(IPC.VASTAI_REBOOT_INSTANCE, async (_e, id: unknown) => {
     await vastClient().requestRebootInstance(validInstanceId(id));
   });
-  ipcMain.handle(
+  handleIpc(
     IPC.VASTAI_RESOLVE_SSH,
     async (_e, id: unknown): Promise<VastAiSshEndpoint> =>
       resolveVastSshEndpoint(validInstanceId(id)),
   );
-  ipcMain.handle(IPC.WORKFLOW_COMPILE, async (_e, root: unknown) => {
+  handleIpc(IPC.WORKFLOW_COMPILE, async (_e, root: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     return compileWorkflow(root);
   });
-  ipcMain.handle(IPC.AVAILABILITY_CHECK, async (_e, root: unknown) => {
+  handleIpc(IPC.AVAILABILITY_CHECK, async (_e, root: unknown) => {
     validRoot(root);
     const settings = await settingsStore().status();
     return checkAvailability(root, await r2LookupFor(root), settings.modelsPath);
   });
-  ipcMain.handle(
-    IPC.AVAILABILITY_CHECK_LORA_FILES,
-    async (_e, root: unknown, fileNames: unknown) => {
-      validRoot(root);
-      if (!Array.isArray(fileNames) || fileNames.some((x) => typeof x !== 'string'))
-        throw new Error('Invalid LoRA file names');
-      const settings = await settingsStore().status();
-      return checkLoraFileAvailability(
-        root,
-        fileNames,
-        await r2LookupFor(root),
-        settings.modelsPath,
-      );
-    },
-  );
-  ipcMain.handle(IPC.AVAILABILITY_OPEN_R2, async () => {});
-  ipcMain.handle(IPC.PREFLIGHT_RUN, async (_e, root: unknown) => {
+  handleIpc(IPC.AVAILABILITY_CHECK_LORA_FILES, async (_e, root: unknown, fileNames: unknown) => {
+    validRoot(root);
+    if (!Array.isArray(fileNames) || fileNames.some((x) => typeof x !== 'string'))
+      throw new Error('Invalid LoRA file names');
+    const settings = await settingsStore().status();
+    return checkLoraFileAvailability(root, fileNames, await r2LookupFor(root), settings.modelsPath);
+  });
+  handleIpc(IPC.AVAILABILITY_OPEN_R2, async () => {});
+  handleIpc(IPC.PREFLIGHT_RUN, async (_e, root: unknown) => {
     validRoot(root);
     return executionPreflight(root);
   });
-  ipcMain.handle(IPC.EXECUTION_START, async (_e, root: unknown) => {
+  handleIpc(IPC.EXECUTION_START, async (_e, root: unknown) => {
     validRoot(root);
     await reconcilePersistedExecutionRuns(root);
     const run = await startExecutionRun(root, () => executionPreflight(root));
     await startExecutionRuntime(root, run);
     return run;
   });
-  ipcMain.handle(IPC.EXECUTION_STATUS, async (_e, root: unknown) => {
+  handleIpc(IPC.EXECUTION_STATUS, async (_e, root: unknown) => {
     validRoot(root);
     const fallbackRunId = await ensureExecutionStatusReconciled(root);
     return getCurrentExecutionRunFast(root, fallbackRunId);
   });
-  ipcMain.handle(IPC.EXECUTION_STORAGE_DIAGNOSTICS, async (event, root: unknown) => {
+  handleIpc(IPC.EXECUTION_STORAGE_DIAGNOSTICS, async (event, root: unknown) => {
     validRoot(root);
     if (projectWindowForSender(event.sender).projectRoot !== path.resolve(root))
       throw new Error('Project mismatch.');
     return inspectExecutionRunStorage(root);
   });
-  ipcMain.handle(IPC.EXECUTION_RESTORE_BACKUP, async (event, root: unknown, runId: unknown) => {
+  handleIpc(IPC.EXECUTION_RESTORE_BACKUP, async (event, root: unknown, runId: unknown) => {
     validRoot(root);
     const state = projectWindowForSender(event.sender);
     if (state.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
@@ -3481,7 +3516,7 @@ function register() {
     statusSnapshots.delete(path.resolve(root));
     return restored;
   });
-  ipcMain.handle(IPC.EXECUTION_LEAVE, async (event, root: unknown) => {
+  handleIpc(IPC.EXECUTION_LEAVE, async (event, root: unknown) => {
     validRoot(root);
     const state = projectWindowForSender(event.sender);
     if (state.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
@@ -3489,7 +3524,7 @@ function register() {
     // Window close, project switch and app exit retain their stop confirmation.
     return true;
   });
-  ipcMain.handle(
+  handleIpc(
     IPC.EXECUTION_STOP_FOR_EDIT,
     async (_e, root: unknown, runId: unknown, interrupt: unknown) => {
       validRoot(root);
@@ -3497,7 +3532,7 @@ function register() {
       return stopRunForExit(root, runId, interrupt === true ? 'interrupt' : 'graceful');
     },
   );
-  ipcMain.handle(IPC.EXECUTION_DISCARD_FOR_EDIT, async (event, root: unknown, runId: unknown) => {
+  handleIpc(IPC.EXECUTION_DISCARD_FOR_EDIT, async (event, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     const owner = projectWindowForSender(event.sender).window;
@@ -3515,7 +3550,7 @@ function register() {
     if (decision.response !== 1) return null;
     return discardCurrentExecutionRun(root, runId, owner);
   });
-  ipcMain.handle(IPC.EXECUTION_RECONCILE, async (_e, root: unknown, runId: unknown) => {
+  handleIpc(IPC.EXECUTION_RECONCILE, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     await reconcilePersistedExecutionRuns(root);
@@ -3547,12 +3582,12 @@ function register() {
     if (!latest) throw new Error('Execution Run disappeared while reconciling.');
     return latest;
   });
-  ipcMain.handle(IPC.EXECUTION_GET, async (_e, root: unknown, runId: unknown) => {
+  handleIpc(IPC.EXECUTION_GET, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     return getExecutionRun(root, runId);
   });
-  ipcMain.handle(IPC.EXECUTION_STOP_SCHEDULING, async (_e, root: unknown, runId: unknown) => {
+  handleIpc(IPC.EXECUTION_STOP_SCHEDULING, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     const run = await requestStopScheduling(root, runId);
@@ -3597,7 +3632,7 @@ function register() {
     }
     return (await getExecutionRun(root, runId)) ?? run;
   });
-  ipcMain.handle(IPC.EXECUTION_FORCE_INTERRUPT, async (_e, root: unknown, runId: unknown) => {
+  handleIpc(IPC.EXECUTION_FORCE_INTERRUPT, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     const before = await getExecutionRun(root, runId);
@@ -3643,7 +3678,7 @@ function register() {
     }
     return (await getExecutionRun(root, runId)) ?? run;
   });
-  ipcMain.handle(IPC.EXECUTION_RESUME, async (_e, root: unknown, runId: unknown) => {
+  handleIpc(IPC.EXECUTION_RESUME, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
     await reconcilePersistedExecutionRuns(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
@@ -3720,7 +3755,7 @@ function register() {
     if (run.lifecycle === 'RUNNING') await startExecutionRuntime(root, run);
     return run;
   });
-  ipcMain.handle(IPC.EXECUTION_RESTART_REMOTE, async (_e, root: unknown, runId: unknown) => {
+  handleIpc(IPC.EXECUTION_RESTART_REMOTE, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     const current = await getExecutionRun(root, runId);
@@ -3754,7 +3789,7 @@ function register() {
     await startExecutionRuntime(root, next);
     return next;
   });
-  ipcMain.handle(IPC.EXECUTION_RESTART_FROM_SCRATCH, async (_e, root: unknown, runId: unknown) => {
+  handleIpc(IPC.EXECUTION_RESTART_FROM_SCRATCH, async (_e, root: unknown, runId: unknown) => {
     validRoot(root);
     if (typeof runId !== 'string') throw new Error('Invalid Execution Run ID');
     const current = await getExecutionRun(root, runId);
@@ -3872,61 +3907,61 @@ function register() {
     await saveProjectSettings(root, { finalArtifactDirectory: result.filePaths[0] });
     return getFinalArtifactStatus(root);
   };
-  ipcMain.handle(IPC.FINAL_ARTIFACT_STATUS, (_e, root: unknown) => {
+  handleIpc(IPC.FINAL_ARTIFACT_STATUS, (_e, root: unknown) => {
     validRoot(root);
     return getFinalArtifactStatus(root);
   });
-  ipcMain.handle(IPC.FINAL_ARTIFACT_SELECT_DIRECTORY, async (_e, root: unknown) => {
+  handleIpc(IPC.FINAL_ARTIFACT_SELECT_DIRECTORY, async (_e, root: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     return selectFinalArtifactDirectory(root);
   });
-  ipcMain.handle(IPC.FINAL_ARTIFACT_LIST_IMAGES, (_e, root: unknown) => {
+  handleIpc(IPC.FINAL_ARTIFACT_LIST_IMAGES, (_e, root: unknown) => {
     validRoot(root);
     return listFinalArtifactImages(root);
   });
-  ipcMain.handle(IPC.FINAL_ARTIFACT_READ_IMAGE, (_e, root: unknown, imagePath: unknown) => {
+  handleIpc(IPC.FINAL_ARTIFACT_READ_IMAGE, (_e, root: unknown, imagePath: unknown) => {
     validRoot(root);
     if (typeof imagePath !== 'string') throw new Error('Invalid final artifact image path');
     return readFinalArtifactImage(root, imagePath);
   });
-  ipcMain.handle(IPC.FINAL_ARTIFACT_READ_PREVIEW, (_e, root: unknown, imagePath: unknown) => {
+  handleIpc(IPC.FINAL_ARTIFACT_READ_PREVIEW, (_e, root: unknown, imagePath: unknown) => {
     validRoot(root);
     if (typeof imagePath !== 'string') throw new Error('Invalid final artifact image path');
     return readFinalArtifactPreview(root, imagePath);
   });
-  ipcMain.handle(IPC.CAPTION_STATUS, (_e, root: unknown) => {
+  handleIpc(IPC.CAPTION_STATUS, (_e, root: unknown) => {
     validRoot(root);
     return getCaptionStatus(root);
   });
-  ipcMain.handle(IPC.CAPTION_SELECT_SOURCE_DIRECTORY, async (_e, root: unknown) => {
+  handleIpc(IPC.CAPTION_SELECT_SOURCE_DIRECTORY, async (_e, root: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     await selectFinalArtifactDirectory(root);
     return getCaptionStatus(root);
   });
-  ipcMain.handle(IPC.CAPTION_IMPORT_GROK, async (_e, root: unknown, raw: unknown) => {
+  handleIpc(IPC.CAPTION_IMPORT_GROK, async (_e, root: unknown, raw: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     if (typeof raw !== 'string') throw new Error('Invalid Grok caption response');
     return importCaptionGrok(root, raw);
   });
-  ipcMain.handle(IPC.CAPTION_GENERATE, async (_e, root: unknown) => {
+  handleIpc(IPC.CAPTION_GENERATE, async (_e, root: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     return generateCaption(root);
   });
-  ipcMain.handle(IPC.CAPTION_SAVE_PIXIV_TITLE, async (_e, root: unknown, title: unknown) => {
+  handleIpc(IPC.CAPTION_SAVE_PIXIV_TITLE, async (_e, root: unknown, title: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     return savePixivTitle(root, title);
   });
-  ipcMain.handle(IPC.THUMBNAIL_FONTS, () => listThumbnailFonts());
-  ipcMain.handle(IPC.THUMBNAIL_LOAD, (_e, root: unknown) => {
+  handleIpc(IPC.THUMBNAIL_FONTS, () => listThumbnailFonts());
+  handleIpc(IPC.THUMBNAIL_LOAD, (_e, root: unknown) => {
     validRoot(root);
     return loadThumbnailState(root);
   });
-  ipcMain.handle(IPC.THUMBNAIL_RESTORE_BACKUP, async (event, root: unknown) => {
+  handleIpc(IPC.THUMBNAIL_RESTORE_BACKUP, async (event, root: unknown) => {
     validRoot(root);
     const owner = projectWindowForSender(event.sender);
     if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
@@ -3943,7 +3978,7 @@ function register() {
     });
     return choice.response === 1 ? restoreThumbnailState(root) : null;
   });
-  ipcMain.handle(IPC.THUMBNAIL_INITIALIZE_CORRUPT, async (event, root: unknown) => {
+  handleIpc(IPC.THUMBNAIL_INITIALIZE_CORRUPT, async (event, root: unknown) => {
     validRoot(root);
     const owner = projectWindowForSender(event.sender);
     if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
@@ -3960,12 +3995,12 @@ function register() {
     });
     return choice.response === 1 ? initializeCorruptThumbnailState(root) : null;
   });
-  ipcMain.handle(IPC.THUMBNAIL_SAVE, async (_e, root: unknown, state: unknown) => {
+  handleIpc(IPC.THUMBNAIL_SAVE, async (_e, root: unknown, state: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     return saveThumbnailState(root, state);
   });
-  ipcMain.handle(IPC.THUMBNAIL_SELECT_IMAGE, async (_e, root: unknown) => {
+  handleIpc(IPC.THUMBNAIL_SELECT_IMAGE, async (_e, root: unknown) => {
     validRoot(root);
     const finalArtifact = await getFinalArtifactStatus(root);
     const result = await dialog.showOpenDialog({
@@ -3977,7 +4012,7 @@ function register() {
     if (result.canceled || !result.filePaths[0]) return null;
     return readThumbnailImage(result.filePaths[0]);
   });
-  ipcMain.handle(IPC.THUMBNAIL_LIST_IMAGES, async (event, root: unknown) => {
+  handleIpc(IPC.THUMBNAIL_LIST_IMAGES, async (event, root: unknown) => {
     validRoot(root);
     const started = performance.now();
     const finalArtifact = await getFinalArtifactStatus(root);
@@ -3997,11 +4032,11 @@ function register() {
       });
     return images;
   });
-  ipcMain.handle(IPC.THUMBNAIL_READ_IMAGE, (_e, imagePath: unknown) => {
+  handleIpc(IPC.THUMBNAIL_READ_IMAGE, (_e, imagePath: unknown) => {
     if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
     return readThumbnailImage(imagePath);
   });
-  ipcMain.handle(IPC.THUMBNAIL_READ_PREVIEW, async (event, imagePath: unknown) => {
+  handleIpc(IPC.THUMBNAIL_READ_PREVIEW, async (event, imagePath: unknown) => {
     if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
     const started = performance.now();
     const timing: ThumbnailCacheTiming = {};
@@ -4051,25 +4086,25 @@ function register() {
       throw error;
     }
   });
-  ipcMain.handle(IPC.THUMBNAIL_READ_EDITOR_IMAGE, async (_e, imagePath: unknown) => {
+  handleIpc(IPC.THUMBNAIL_READ_EDITOR_IMAGE, async (_e, imagePath: unknown) => {
     if (typeof imagePath !== 'string') throw new Error('Invalid thumbnail image path');
     return (
       (await readCachedThumbnailImage(app.getPath('userData'), imagePath, 'editor')) ??
       readThumbnailImage(imagePath)
     );
   });
-  ipcMain.handle(IPC.THUMBNAIL_STORE_WEBP_PREVIEW, (_e, imagePath: unknown, dataUrl: unknown) => {
+  handleIpc(IPC.THUMBNAIL_STORE_WEBP_PREVIEW, (_e, imagePath: unknown, dataUrl: unknown) => {
     if (typeof imagePath !== 'string' || typeof dataUrl !== 'string')
       throw new Error('Invalid thumbnail preview data');
     return storeWebpThumbnailPreview(app.getPath('userData'), imagePath, dataUrl);
   });
-  ipcMain.handle(IPC.THUMBNAIL_READ_TEMPLATE, (_e, pattern: unknown) =>
+  handleIpc(IPC.THUMBNAIL_READ_TEMPLATE, (_e, pattern: unknown) =>
     readThumbnailTemplate(
       path.join(app.getAppPath(), 'dist-electron', 'thumbnail-templates'),
       pattern,
     ),
   );
-  ipcMain.handle(
+  handleIpc(
     IPC.THUMBNAIL_PICKER_OPEN,
     (event, root: unknown, slot: unknown, currentImagePath: unknown) => {
       validRoot(root);
@@ -4093,7 +4128,7 @@ function register() {
       );
     },
   );
-  ipcMain.handle(IPC.THUMBNAIL_PICKER_CONTEXT, (event) => {
+  handleIpc(IPC.THUMBNAIL_PICKER_CONTEXT, (event) => {
     const state = thumbnailPickerForSender(event.sender);
     logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'context_requested', {
       sinceOpenMs: performance.now() - state.openedAt,
@@ -4105,14 +4140,14 @@ function register() {
       currentImagePath: state.currentImagePath,
     };
   });
-  ipcMain.handle(IPC.THUMBNAIL_PICKER_PERF_OPEN, async (event) => {
+  handleIpc(IPC.THUMBNAIL_PICKER_PERF_OPEN, async (event) => {
     thumbnailPickerForSender(event.sender);
     const directory = path.dirname(pickerPerformanceLogPath(app.getPath('userData')));
     await mkdir(directory, { recursive: true });
     const error = await shell.openPath(directory);
     if (error) throw new Error(error);
   });
-  ipcMain.handle(IPC.THUMBNAIL_PICKER_PERF, (event, name: unknown, metrics: unknown) => {
+  handleIpc(IPC.THUMBNAIL_PICKER_PERF, (event, name: unknown, metrics: unknown) => {
     const state = thumbnailPickerForSender(event.sender);
     if (typeof name !== 'string' || !/^[a-z_]{1,40}$/.test(name)) return;
     if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) return;
@@ -4132,7 +4167,7 @@ function register() {
       sinceOpenMs: performance.now() - state.openedAt,
     });
   });
-  ipcMain.handle(IPC.THUMBNAIL_PICKER_PREVIEW, async (event, imagePath: unknown) => {
+  handleIpc(IPC.THUMBNAIL_PICKER_PREVIEW, async (event, imagePath: unknown) => {
     const state = thumbnailPickerForSender(event.sender);
     const requestId = ++state.previewRequestId;
     const resolved = await validateThumbnailPickerImage(state, imagePath);
@@ -4147,7 +4182,7 @@ function register() {
     });
     return ready;
   });
-  ipcMain.handle(
+  handleIpc(
     IPC.THUMBNAIL_PICKER_PREVIEW_RESULT,
     (
       event,
@@ -4174,7 +4209,7 @@ function register() {
       );
     },
   );
-  ipcMain.handle(IPC.THUMBNAIL_PICKER_COMMIT, async (event, imagePath: unknown) => {
+  handleIpc(IPC.THUMBNAIL_PICKER_COMMIT, async (event, imagePath: unknown) => {
     const state = thumbnailPickerForSender(event.sender);
     await ensureProjectWritable(state.root);
     const resolved = await validateThumbnailPickerImage(state, imagePath);
@@ -4189,7 +4224,7 @@ function register() {
     state.committed = true;
     state.window.close();
   });
-  ipcMain.handle(
+  handleIpc(
     IPC.THUMBNAIL_PICKER_COMMIT_RESULT,
     (event, sessionId: unknown, imagePath: unknown, ok: unknown, message: unknown) => {
       const state = [...thumbnailPickerWindows.values()].find(
@@ -4205,7 +4240,7 @@ function register() {
       return accepted;
     },
   );
-  ipcMain.handle(
+  handleIpc(
     IPC.THUMBNAIL_EXPORT,
     async (_e, root: unknown, documentId: unknown, format: unknown, dataUrl: unknown) => {
       validRoot(root);
@@ -4217,18 +4252,18 @@ function register() {
       return exportThumbnail(root, documentId, format, dataUrl);
     },
   );
-  ipcMain.handle(IPC.THUMBNAIL_DELETE_OUTPUTS, async (_e, root: unknown, documentId: unknown) => {
+  handleIpc(IPC.THUMBNAIL_DELETE_OUTPUTS, async (_e, root: unknown, documentId: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     if (typeof documentId !== 'number' || !Number.isSafeInteger(documentId) || documentId < 1)
       throw new Error('Invalid thumbnail document');
     return deleteThumbnailOutputs(root, documentId);
   });
-  ipcMain.handle(IPC.MARKETPLACE_LIST_THUMBNAILS, (_e, root: unknown) => {
+  handleIpc(IPC.MARKETPLACE_LIST_THUMBNAILS, (_e, root: unknown) => {
     validRoot(root);
     return listExportedThumbnails(root);
   });
-  ipcMain.handle(
+  handleIpc(
     IPC.MARKETPLACE_READ_SOURCE,
     (_e, root: unknown, imagePath: unknown, sourceType: unknown) => {
       validRoot(root);
@@ -4240,7 +4275,7 @@ function register() {
       return readMarketplaceSource(root, imagePath, sourceType);
     },
   );
-  ipcMain.handle(
+  handleIpc(
     IPC.MARKETPLACE_READ_SOURCE_PREVIEW,
     async (event, root: unknown, imagePath: unknown, sourceType: unknown) => {
       validRoot(root);
@@ -4279,12 +4314,12 @@ function register() {
       return source;
     },
   );
-  ipcMain.handle(IPC.MARKETPLACE_TARGETS, () => getMarketplaceImageTargets());
-  ipcMain.handle(IPC.MARKETPLACE_LOAD, (_e, root: unknown) => {
+  handleIpc(IPC.MARKETPLACE_TARGETS, () => getMarketplaceImageTargets());
+  handleIpc(IPC.MARKETPLACE_LOAD, (_e, root: unknown) => {
     validRoot(root);
     return loadMarketplaceImageState(root);
   });
-  ipcMain.handle(IPC.MARKETPLACE_RESTORE_BACKUP, async (event, root: unknown) => {
+  handleIpc(IPC.MARKETPLACE_RESTORE_BACKUP, async (event, root: unknown) => {
     validRoot(root);
     const owner = projectWindowForSender(event.sender);
     if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
@@ -4301,7 +4336,7 @@ function register() {
     });
     return choice.response === 1 ? restoreMarketplaceImageState(root) : null;
   });
-  ipcMain.handle(IPC.MARKETPLACE_INITIALIZE_CORRUPT, async (event, root: unknown) => {
+  handleIpc(IPC.MARKETPLACE_INITIALIZE_CORRUPT, async (event, root: unknown) => {
     validRoot(root);
     const owner = projectWindowForSender(event.sender);
     if (owner.projectRoot !== path.resolve(root)) throw new Error('Project mismatch.');
@@ -4318,12 +4353,12 @@ function register() {
     });
     return choice.response === 1 ? initializeCorruptMarketplaceImageState(root) : null;
   });
-  ipcMain.handle(IPC.MARKETPLACE_SAVE, async (_e, root: unknown, state: unknown) => {
+  handleIpc(IPC.MARKETPLACE_SAVE, async (_e, root: unknown, state: unknown) => {
     validRoot(root);
     await ensureProjectWritable(root);
     return saveMarketplaceImageState(root, state);
   });
-  ipcMain.handle(
+  handleIpc(
     IPC.MARKETPLACE_GENERATE,
     async (_e, root: unknown, state: unknown, webpDataUrls: unknown, sourcePngDataUrl: unknown) => {
       validRoot(root);
@@ -4340,7 +4375,7 @@ function register() {
       );
     },
   );
-  ipcMain.handle(
+  handleIpc(
     IPC.MARKETPLACE_GENERATE_ZIP,
     async (_e, root: unknown, format: unknown, state: unknown) => {
       validRoot(root);
@@ -4348,7 +4383,7 @@ function register() {
       return generateMarketplaceZip(root, format, state);
     },
   );
-  ipcMain.handle(
+  handleIpc(
     IPC.MARKETPLACE_EXPORT_CUSTOM,
     async (_e, root: unknown, state: unknown, webpDataUrl: unknown, sourcePngDataUrl: unknown) => {
       validRoot(root);
@@ -4361,7 +4396,7 @@ function register() {
       );
     },
   );
-  ipcMain.handle(
+  handleIpc(
     IPC.MARKETPLACE_RENDER_PNG,
     (
       _e,
@@ -4395,7 +4430,7 @@ function register() {
       );
     },
   );
-  ipcMain.handle(
+  handleIpc(
     IPC.MARKETPLACE_PICKER_OPEN,
     (event, root: unknown, currentImagePath: unknown, sourceType: unknown) => {
       validRoot(root);
@@ -4405,7 +4440,7 @@ function register() {
       return openMarketplacePickerWindow(event.sender, root, currentImagePath, sourceType);
     },
   );
-  ipcMain.handle(IPC.MARKETPLACE_PICKER_CONTEXT, (event) => {
+  handleIpc(IPC.MARKETPLACE_PICKER_CONTEXT, (event) => {
     const state = marketplacePickerForSender(event.sender);
     return {
       sessionId: state.sessionId,
@@ -4414,7 +4449,7 @@ function register() {
       sourceType: state.sourceType,
     };
   });
-  ipcMain.handle(IPC.MARKETPLACE_PICKER_PREVIEW, async (event, imagePath: unknown) => {
+  handleIpc(IPC.MARKETPLACE_PICKER_PREVIEW, async (event, imagePath: unknown) => {
     const state = marketplacePickerForSender(event.sender);
     const requestId = ++state.previewRequestId;
     const resolved = await validateMarketplacePickerImage(state, imagePath);
@@ -4428,7 +4463,7 @@ function register() {
     });
     return ready;
   });
-  ipcMain.handle(
+  handleIpc(
     IPC.MARKETPLACE_PICKER_PREVIEW_RESULT,
     (
       event,
@@ -4455,7 +4490,7 @@ function register() {
       );
     },
   );
-  ipcMain.handle(IPC.MARKETPLACE_PICKER_COMMIT, async (event, imagePath: unknown) => {
+  handleIpc(IPC.MARKETPLACE_PICKER_COMMIT, async (event, imagePath: unknown) => {
     const state = marketplacePickerForSender(event.sender);
     await ensureProjectWritable(state.root);
     const resolved = await validateMarketplacePickerImage(state, imagePath);
@@ -4469,7 +4504,7 @@ function register() {
     state.committed = true;
     state.window.close();
   });
-  ipcMain.handle(
+  handleIpc(
     IPC.MARKETPLACE_PICKER_COMMIT_RESULT,
     (event, sessionId: unknown, imagePath: unknown, ok: unknown, message: unknown) => {
       const state = [...marketplacePickerWindows.values()].find(
@@ -4485,44 +4520,44 @@ function register() {
       return accepted;
     },
   );
-  ipcMain.handle(IPC.R2_SETTINGS, () => r2().settings());
-  ipcMain.handle(IPC.R2_ENVIRONMENT, () => r2().environment());
-  ipcMain.handle(IPC.R2_TEST, (_e, input: R2ConnectionInput) => r2().test(input));
-  ipcMain.handle(IPC.R2_SAVE_SETTINGS, async (_e, input: R2ConnectionInput) => {
+  handleIpc(IPC.R2_SETTINGS, () => r2().settings());
+  handleIpc(IPC.R2_ENVIRONMENT, () => r2().environment());
+  handleIpc(IPC.R2_TEST, (_e, input: R2ConnectionInput) => r2().test(input));
+  handleIpc(IPC.R2_SAVE_SETTINGS, async (_e, input: R2ConnectionInput) => {
     const result = await r2().saveSettings(input);
     void r2Index()
       .sync()
       .catch((error) => console.warn('R2 index sync failed:', error));
     return result;
   });
-  ipcMain.handle(IPC.R2_BUCKETS, () => r2().buckets());
-  ipcMain.handle(IPC.R2_CREATE_BUCKET, async (_e, name: unknown) => {
+  handleIpc(IPC.R2_BUCKETS, () => r2().buckets());
+  handleIpc(IPC.R2_CREATE_BUCKET, async (_e, name: unknown) => {
     if (typeof name !== 'string') throw new Error('Invalid bucket');
     await r2().createBucket(name);
     void r2Index()
       .sync()
       .catch(() => {});
   });
-  ipcMain.handle(IPC.R2_DELETE_BUCKET, async (_e, name: unknown) => {
+  handleIpc(IPC.R2_DELETE_BUCKET, async (_e, name: unknown) => {
     if (typeof name !== 'string') throw new Error('Invalid bucket');
     await r2().deleteBucket(name);
     void r2Index()
       .sync()
       .catch(() => {});
   });
-  ipcMain.handle(IPC.R2_LIST, (_e, b: unknown, p: unknown, t: unknown) => {
+  handleIpc(IPC.R2_LIST, (_e, b: unknown, p: unknown, t: unknown) => {
     if (typeof b !== 'string' || typeof p !== 'string') throw new Error('Invalid R2 path');
     return r2().list(b, p, typeof t === 'string' ? t : null);
   });
-  ipcMain.handle(IPC.R2_SEARCH, (_e, b: unknown, q: unknown, t: unknown) => {
+  handleIpc(IPC.R2_SEARCH, (_e, b: unknown, q: unknown, t: unknown) => {
     if (typeof b !== 'string' || typeof q !== 'string') throw new Error('Invalid search');
     return r2Index().search(b, q, typeof t === 'string' ? t : null);
   });
-  ipcMain.handle(IPC.R2_DOWNLOAD_INFO, (_e, b: unknown, k: unknown, ex: unknown) => {
+  handleIpc(IPC.R2_DOWNLOAD_INFO, (_e, b: unknown, k: unknown, ex: unknown) => {
     if (typeof b !== 'string' || typeof k !== 'string') throw new Error('Invalid object');
     return r2().downloadInfo(b, k, typeof ex === 'number' ? ex : 3600);
   });
-  ipcMain.handle(IPC.R2_BATCH_DOWNLOAD_INFO, (_e, b: unknown, keys: unknown, ex: unknown) => {
+  handleIpc(IPC.R2_BATCH_DOWNLOAD_INFO, (_e, b: unknown, keys: unknown, ex: unknown) => {
     if (typeof b !== 'string' || !Array.isArray(keys)) throw new Error('Invalid batch objects');
     return r2().batchDownloadInfo(
       b,
@@ -4530,7 +4565,7 @@ function register() {
       typeof ex === 'number' ? ex : 3600,
     );
   });
-  ipcMain.handle(IPC.R2_PUT_URL_INFO, (_e, b: unknown, k: unknown, ex: unknown, ct: unknown) => {
+  handleIpc(IPC.R2_PUT_URL_INFO, (_e, b: unknown, k: unknown, ex: unknown, ct: unknown) => {
     if (
       typeof b !== 'string' ||
       typeof k !== 'string' ||
@@ -4544,7 +4579,7 @@ function register() {
       typeof ct === 'string' ? ct : '',
     );
   });
-  ipcMain.handle(IPC.R2_DELETE_OBJECTS, async (_e, b: unknown, keys: unknown) => {
+  handleIpc(IPC.R2_DELETE_OBJECTS, async (_e, b: unknown, keys: unknown) => {
     if (typeof b !== 'string' || !Array.isArray(keys)) throw new Error('Invalid delete');
     const result = await r2().deleteObjects(
       b,
@@ -4555,7 +4590,7 @@ function register() {
       .catch(() => {});
     return result;
   });
-  ipcMain.handle(IPC.R2_MOVE, async (_e, b: unknown, s: unknown, d: unknown, o: unknown) => {
+  handleIpc(IPC.R2_MOVE, async (_e, b: unknown, s: unknown, d: unknown, o: unknown) => {
     if (typeof b !== 'string' || typeof s !== 'string' || typeof d !== 'string')
       throw new Error('Invalid move');
     await r2().move(b, s, d, o === true);
@@ -4563,41 +4598,41 @@ function register() {
       .sync()
       .catch(() => {});
   });
-  ipcMain.handle(IPC.R2_SELECT_UPLOAD_FILES, async () => {
+  handleIpc(IPC.R2_SELECT_UPLOAD_FILES, async () => {
     const result = await dialog.showOpenDialog({
       title: 'R2へアップロードするファイルを選択',
       properties: ['openFile', 'multiSelections'],
     });
     return result.canceled ? [] : result.filePaths;
   });
-  ipcMain.handle(IPC.R2_BEGIN_UPLOAD, (_e, b: unknown, p: unknown, f: unknown, o: unknown) => {
+  handleIpc(IPC.R2_BEGIN_UPLOAD, (_e, b: unknown, p: unknown, f: unknown, o: unknown) => {
     if (typeof b !== 'string' || typeof p !== 'string' || typeof f !== 'string')
       throw new Error('Invalid upload');
     return r2().beginUpload(b, p, f, o === true);
   });
-  ipcMain.handle(IPC.R2_UPLOADS, () => r2().uploads());
-  ipcMain.handle(IPC.R2_RESUME_UPLOAD, (_e, id: unknown) => {
+  handleIpc(IPC.R2_UPLOADS, () => r2().uploads());
+  handleIpc(IPC.R2_RESUME_UPLOAD, (_e, id: unknown) => {
     if (typeof id !== 'string') throw new Error('Invalid upload id');
     return r2().resumeUpload(id);
   });
-  ipcMain.handle(IPC.R2_PAUSE_UPLOAD, (_e, id: unknown) => {
+  handleIpc(IPC.R2_PAUSE_UPLOAD, (_e, id: unknown) => {
     if (typeof id !== 'string') throw new Error('Invalid upload id');
     return r2().pauseUpload(id);
   });
-  ipcMain.handle(IPC.R2_CANCEL_UPLOAD, (_e, id: unknown) => {
+  handleIpc(IPC.R2_CANCEL_UPLOAD, (_e, id: unknown) => {
     if (typeof id !== 'string') throw new Error('Invalid upload id');
     return r2().cancelUpload(id);
   });
-  ipcMain.handle(IPC.R2_TEMPLATES, (_e, b: unknown) =>
+  handleIpc(IPC.R2_TEMPLATES, (_e, b: unknown) =>
     r2().templates(typeof b === 'string' ? b : undefined),
   );
-  ipcMain.handle(IPC.R2_SAVE_TEMPLATE, (_e, input: any) => r2().saveTemplate(input));
-  ipcMain.handle(IPC.R2_DELETE_TEMPLATE, (_e, id: unknown) => {
+  handleIpc(IPC.R2_SAVE_TEMPLATE, (_e, input: any) => r2().saveTemplate(input));
+  handleIpc(IPC.R2_DELETE_TEMPLATE, (_e, id: unknown) => {
     if (typeof id !== 'string') throw new Error('Invalid template id');
     return r2().deleteTemplate(id);
   });
-  ipcMain.handle(IPC.R2_METRICS, () => r2().metrics());
-  ipcMain.handle(IPC.CLIPBOARD_WRITE_TEXT, (_e, text: unknown) => {
+  handleIpc(IPC.R2_METRICS, () => r2().metrics());
+  handleIpc(IPC.CLIPBOARD_WRITE_TEXT, (_e, text: unknown) => {
     if (typeof text !== 'string') throw new Error('Clipboard text must be string');
     clipboard.writeText(text);
   });
@@ -4640,8 +4675,8 @@ function register() {
     return provider;
   };
   // Legacy Codex-named channels are retained for existing preload consumers.
-  ipcMain.handle(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider);
-  ipcMain.handle(IPC.CODEX_GET_PROVIDER, getAssistantProvider);
+  handleIpc(IPC.ASSISTANT_GET_PROVIDER, getAssistantProvider);
+  handleIpc(IPC.CODEX_GET_PROVIDER, getAssistantProvider);
   const setAssistantProvider = async (
     event: IpcMainInvokeEvent,
     provider: unknown,
@@ -4662,9 +4697,9 @@ function register() {
     layoutProjectWindow(state);
     return paneState(state);
   };
-  ipcMain.handle(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider);
-  ipcMain.handle(IPC.CODEX_SET_PROVIDER, setAssistantProvider);
-  ipcMain.handle(IPC.CODEX_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
+  handleIpc(IPC.ASSISTANT_SET_PROVIDER, setAssistantProvider);
+  handleIpc(IPC.CODEX_SET_PROVIDER, setAssistantProvider);
+  handleIpc(IPC.CODEX_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
     const state = projectWindowForSender(event.sender);
     if (event.sender.id !== state.localView.webContents.id)
       throw new Error('Only the project window can select an AI context.');
@@ -4676,11 +4711,11 @@ function register() {
     stateCodexActiveThread.set(state.window.id, null);
     state.codexView.webContents.send(IPC.CODEX_CONTEXT_CHANGED, state.codexContext);
   });
-  ipcMain.handle(IPC.CODEX_CONTEXT, (event) => {
+  handleIpc(IPC.CODEX_CONTEXT, (event) => {
     const state = projectWindowForSender(event.sender);
     return state.codexContext;
   });
-  ipcMain.handle(IPC.CODEX_SELECT_STAGE_TASK, (event, root: unknown, stage: unknown) => {
+  handleIpc(IPC.CODEX_SELECT_STAGE_TASK, (event, root: unknown, stage: unknown) => {
     const state = projectWindowForSender(event.sender);
     if (event.sender.id !== state.localView.webContents.id)
       throw new Error('Only the project window can select a Codex task.');
@@ -4697,8 +4732,8 @@ function register() {
     state.codexView.webContents.send(IPC.CODEX_STAGE_TASK_SELECTED, stage);
   });
 
-  ipcMain.handle(IPC.CODEX_STATUS, () => codexAccount());
-  ipcMain.handle(IPC.CODEX_SIGN_IN, async () => {
+  handleIpc(IPC.CODEX_STATUS, () => codexAccount());
+  handleIpc(IPC.CODEX_SIGN_IN, async () => {
     const { server } = codexService();
     const response = await server.request<{ type: string; authUrl?: string }>(
       'account/login/start',
@@ -4714,16 +4749,14 @@ function register() {
       throw new Error('Codexが予期しないサインインURLを返しました。');
     await shell.openExternal(url.toString());
   });
-  ipcMain.handle(IPC.CODEX_SNAPSHOT, (event) =>
-    codexSnapshot(projectWindowForSender(event.sender)),
-  );
-  ipcMain.handle(IPC.CODEX_MODELS, (event) =>
+  handleIpc(IPC.CODEX_SNAPSHOT, (event) => codexSnapshot(projectWindowForSender(event.sender)));
+  handleIpc(IPC.CODEX_MODELS, (event) =>
     codexModelSettings(codexContextFor(projectWindowForSender(event.sender))),
   );
-  ipcMain.handle(IPC.CODEX_SELECT_MODEL, (event, selection: unknown) =>
+  handleIpc(IPC.CODEX_SELECT_MODEL, (event, selection: unknown) =>
     codexChooseModel(projectWindowForSender(event.sender), selection),
   );
-  ipcMain.handle(IPC.CODEX_NEW_CHAT, async (event) => {
+  handleIpc(IPC.CODEX_NEW_CHAT, async (event) => {
     const state = projectWindowForSender(event.sender);
     const context = codexContextFor(state);
     const { store } = codexService();
@@ -4731,7 +4764,7 @@ function register() {
     stateCodexActiveThread.set(state.window.id, null);
     return codexSnapshot(state);
   });
-  ipcMain.handle(IPC.CODEX_RESTORE_CHAT, async (event, id: unknown) => {
+  handleIpc(IPC.CODEX_RESTORE_CHAT, async (event, id: unknown) => {
     const state = projectWindowForSender(event.sender);
     const context = codexContextFor(state);
     if (typeof id !== 'string' || !id) throw new Error('Invalid Codex thread ID.');
@@ -4742,14 +4775,12 @@ function register() {
     stateCodexActiveThread.set(state.window.id, id);
     return codexSnapshot(state);
   });
-  ipcMain.handle(IPC.CODEX_STOP_TURN, (event) =>
-    codexStopTurn(projectWindowForSender(event.sender)),
-  );
-  ipcMain.handle(IPC.CODEX_SEND, (event, input: unknown) => {
+  handleIpc(IPC.CODEX_STOP_TURN, (event) => codexStopTurn(projectWindowForSender(event.sender)));
+  handleIpc(IPC.CODEX_SEND, (event, input: unknown) => {
     if (typeof input !== 'string') throw new Error('Invalid Codex prompt.');
     return codexSend(projectWindowForSender(event.sender), input);
   });
-  ipcMain.handle(IPC.CODEX_SEND_TASK, (event, stage: unknown, extra: unknown) => {
+  handleIpc(IPC.CODEX_SEND_TASK, (event, stage: unknown, extra: unknown) => {
     const validStages = Object.values(codexTaskContexts).flat();
     if (!validStages.includes(stage as GrokTask['stage'])) throw new Error('Invalid task stage.');
     if (extra != null && (typeof extra !== 'string' || extra.length > 30_000))
@@ -4760,13 +4791,13 @@ function register() {
       typeof extra === 'string' ? extra : '',
     );
   });
-  ipcMain.handle(IPC.CODEX_LATEST_ARTIFACT, async (event) => {
+  handleIpc(IPC.CODEX_LATEST_ARTIFACT, async (event) => {
     const state = projectWindowForSender(event.sender);
     const context = codexContextFor(state);
     const saved = await codexService().store.get(context.root, context.stage);
     return codexArtifactFor(context, saved.activeThreadId);
   });
-  ipcMain.handle(IPC.CODEX_RETRY_ARTIFACT, async (event) => {
+  handleIpc(IPC.CODEX_RETRY_ARTIFACT, async (event) => {
     const context = codexContextFor(projectWindowForSender(event.sender));
     const saved = await codexService().store.get(context.root, context.stage);
     const threadId = saved.activeThreadId;
@@ -4833,7 +4864,7 @@ function register() {
       notifyAutoArtifact,
     );
   });
-  ipcMain.handle(IPC.CODEX_SAVE_RESPONSE, async (event, response: unknown) => {
+  handleIpc(IPC.CODEX_SAVE_RESPONSE, async (event, response: unknown) => {
     const state = projectWindowForSender(event.sender);
     const context = codexContextFor(state);
     if (typeof response !== 'string' || response.length > 10_000_000)
@@ -4852,25 +4883,25 @@ function register() {
     await writeFile(selected.filePath, response, 'utf8');
     return selected.filePath;
   });
-  ipcMain.handle(IPC.GROK_SET_VISIBLE, (event, v: unknown) => {
+  handleIpc(IPC.GROK_SET_VISIBLE, (event, v: unknown) => {
     const state = projectWindowForSender(event.sender);
     state.grokVisible = v === true;
     layoutProjectWindow(state);
     return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
+  handleIpc(IPC.GROK_SET_CONTEXT, (event, root: unknown, stage: unknown) => {
     validRoot(root);
     validGrokContextStage(stage);
     return setGrokContext(projectWindowForSender(event.sender), root, stage);
   });
-  ipcMain.handle(IPC.GROK_SET_RATIO, (event, r: unknown) => {
+  handleIpc(IPC.GROK_SET_RATIO, (event, r: unknown) => {
     if (typeof r !== 'number' || !Number.isFinite(r)) throw new Error('Invalid ratio');
     const state = projectWindowForSender(event.sender);
     state.localRatio = Math.max(0.3, Math.min(0.7, r));
     layoutProjectWindow(state);
     return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_SET_DIVIDER_X, (event, x: unknown) => {
+  handleIpc(IPC.GROK_SET_DIVIDER_X, (event, x: unknown) => {
     if (typeof x !== 'number' || !Number.isFinite(x)) throw new Error('Invalid divider position');
     const state = projectWindowForSender(event.sender),
       bounds = state.window.getContentBounds();
@@ -4878,10 +4909,10 @@ function register() {
     layoutProjectWindow(state);
     return paneState(state);
   });
-  ipcMain.handle(IPC.GROK_RELOAD, (event) =>
+  handleIpc(IPC.GROK_RELOAD, (event) =>
     projectWindowForSender(event.sender).grokView.webContents.reload(),
   );
-  ipcMain.handle(IPC.GROK_OPEN_EXTERNAL, () => shell.openExternal(GROK_URL));
+  handleIpc(IPC.GROK_OPEN_EXTERNAL, () => shell.openExternal(GROK_URL));
 }
 
 function maybeQuitAfterExecution() {

@@ -27,7 +27,7 @@ const types = source('src/shared/types.ts');
 assert.match(ipc, /CODEX_STOP_TURN: 'codex:stop-turn'/);
 assert.match(preload, /stopTurn: \(\) => ipcRenderer\.invoke\(I\.CODEX_STOP_TURN\)/);
 assert.match(types, /stopTurn: \(\) => Promise<CodexSnapshot>/);
-assert.match(main, /ipcMain\.handle\(IPC\.CODEX_STOP_TURN/);
+assert.match(main, /handleIpc\(IPC\.CODEX_STOP_TURN/);
 assert.match(main, /server\.request\('turn\/interrupt', \{ threadId, turnId \}\)/);
 assert.match(main, /codexTurnStartRequests\.set\(threadId, turnIdRequest\)/);
 assert.match(main, /codexActiveTurnIds\.get\(threadId\)/);
