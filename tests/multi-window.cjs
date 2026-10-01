@@ -10,7 +10,10 @@ const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 
 
 matchCode(main, /const projectWindows=new Map<number,ProjectWindowState>\(\)/);
 matchCode(main, /function projectWindowForSender\(contents:WebContents\)/);
-matchCode(main, /projectWindowForSender\(event\.sender\)/);
+matchCode(
+  fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-registration', 'assistant.ts'), 'utf8'),
+  /projectWindowForSender\(event\.sender\)/,
+);
 matchCode(main, /function projectWindowForRoot\(/);
 matchCode(main, /createProjectWindow\(\{restoreLastProject:true\}\)/);
 matchCode(main, /rememberMostRecentOpenProject\(false\)/);
