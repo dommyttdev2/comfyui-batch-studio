@@ -5,7 +5,7 @@ import type {
   ImportResult,
   ProjectSummary,
 } from '../shared/types';
-import { GrokBridge } from './GrokStages';
+import { AgentStageBridge } from './GrokStages';
 import type { Runner } from './ui';
 import { issuesView } from './ui';
 
@@ -74,7 +74,7 @@ export function CaptionStage({
 
   return (
     <>
-      <GrokBridge
+      <AgentStageBridge
         project={project}
         stage="caption"
         provider={provider}
