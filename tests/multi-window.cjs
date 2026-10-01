@@ -2,12 +2,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
+const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
-const main = [
-  fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8'),
-  fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-registration.ts'), 'utf8'),
-].join('\n');
+const main = readMainProcessSource(repo);
 const app = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8');
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
 const ipcAccess = fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-access.ts'), 'utf8');
