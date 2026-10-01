@@ -11,8 +11,6 @@ export function registerProjectIpc(dependencies: IpcRegistrationDependencies) {
   const {
     IPC,
     beginEditArtifact,
-    buildGrokTask,
-    codexTaskContexts,
     confirmArtifact,
     confirmRunStopBeforeLeave,
     createProject,
