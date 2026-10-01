@@ -1,4 +1,4 @@
-import type { MarketplaceSourceType, ThumbnailSlotKey } from '../../shared/types.js';
+import type { MarketplaceCropRect, MarketplaceSourceType, ThumbnailSlotKey } from '../../shared/types.js';
 import type { ThumbnailCacheTiming } from '../thumbnail-image-cache.js';
 import type { PickerMetrics } from '../thumbnail-picker-perf.js';
 import type { IpcRegistrationDependencies } from '../ipc-registration.js';
@@ -41,6 +41,7 @@ export function registerImageIpc(dependencies: IpcRegistrationDependencies) {
     readFinalArtifactImage,
     readFinalArtifactPreview,
     readMarketplaceSource,
+    readProjectMeta,
     readMarketplaceSourcePreview,
     readThumbnailImage,
     readThumbnailPreview,
@@ -49,6 +50,7 @@ export function registerImageIpc(dependencies: IpcRegistrationDependencies) {
     restoreMarketplaceImageState,
     restoreThumbnailState,
     saveMarketplaceImageState,
+    saveProjectSettings,
     savePixivTitle,
     saveThumbnailState,
     shell,
@@ -59,6 +61,20 @@ export function registerImageIpc(dependencies: IpcRegistrationDependencies) {
     validateMarketplacePickerImage,
     validateThumbnailPickerImage,
   } = dependencies;
+  const validRoot: IpcRegistrationDependencies['validRoot'] = dependencies.validRoot;
+  const selectFinalArtifactDirectory = async (root: string) => {
+    const currentStatus = await getFinalArtifactStatus(root);
+    const meta = await readProjectMeta(root);
+    const fallback = meta?.settings.artifactOutputPath?.trim();
+    const result = await dialog.showOpenDialog({
+      title: '最終成果物ディレクトリを選択',
+      defaultPath: currentStatus.directory || fallback || root,
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) return currentStatus;
+    await saveProjectSettings(root, { finalArtifactDirectory: result.filePaths[0] });
+    return getFinalArtifactStatus(root);
+  };
 
   handleIpc(IPC.FINAL_ARTIFACT_STATUS, (_e, root: unknown) => {
     validRoot(root);
@@ -583,7 +599,7 @@ export function registerImageIpc(dependencies: IpcRegistrationDependencies) {
       return renderMarketplacePng(
         root,
         sourceImagePath,
-        crop as import('../shared/types.js').MarketplaceCropRect,
+        crop as MarketplaceCropRect,
         width,
         height,
         typeof sourcePngDataUrl === 'string' ? sourcePngDataUrl : undefined,
