@@ -437,7 +437,6 @@ function task(root, workspace = true) {
   }
 
 
-
   console.log(
     'Codex CLI JSONL, resume guard, cancellation, probes and argument safety tests passed.',
   );
