@@ -2237,6 +2237,7 @@ function createIpcRegistrationDependencies() {
     storeWebpThumbnailPreview,
     thumbnailPickerForSender,
     thumbnailPickerWindows,
+    thumbnailCachePruneMetrics,
     validCivitaiUrl,
     validGrokContextStage,
     validInstanceId,
