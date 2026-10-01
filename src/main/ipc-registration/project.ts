@@ -161,9 +161,7 @@ export function registerProjectIpc(dependencies: IpcRegistrationDependencies) {
     )
       throw new Error('Runの停止がキャンセルされました。');
     state.projectRoot = null;
-    state.activeGrokContext = null;
-    state.codexContext = null;
-    state.codexView.webContents.send(IPC.CODEX_CONTEXT_CHANGED, null);
+    state.assistantContext = null;
     state.grokVisible = false;
     layoutProjectWindow(state);
     await rememberMostRecentOpenProject();
@@ -264,24 +262,6 @@ export function registerProjectIpc(dependencies: IpcRegistrationDependencies) {
     validRoot(root);
     await ensureProjectWritable(root);
     return savePromptPlan(root, plan);
-  });
-  handleIpc(IPC.AUTO_ARTIFACT_GROK_ARM, (event, root: unknown, stage: unknown) => {
-    validRoot(root);
-    const state = projectWindowForSender(event.sender);
-    if (!state.projectRoot || projectRootKey(root) !== projectRootKey(state.projectRoot))
-      throw new Error('選択中のプロジェクトと自動取り込み対象が一致しません。');
-    if (
-      !Object.values(codexTaskContexts)
-        .flat()
-        .includes(stage as GrokTask['stage'])
-    )
-      throw new Error('Invalid Grok artifact stage.');
-    if (!state.grokArtifactWatcher) throw new Error('Grokの監視が初期化されていません。');
-    return state.grokArtifactWatcher.arm(state.projectRoot, stage as GrokTask['stage']);
-  });
-  handleIpc(IPC.GROK_TASK_BUILD, (_e, root: unknown, stage: GrokTask['stage'], extra: unknown) => {
-    validRoot(root);
-    return buildGrokTask(root, stage, typeof extra === 'string' ? extra : '');
   });
   handleIpc(IPC.FILE_SHOW_IN_FOLDER, (_e, filePath: unknown) => {
     if (typeof filePath !== 'string' || !path.isAbsolute(filePath))
