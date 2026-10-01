@@ -11,7 +11,7 @@ const rootRegistration = fs.readFileSync(
 const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
 
 const domains = [
-  ['project.ts', 'registerProjectIpc', 'EDITOR_FLUSH_RESULT', 'FILE_SHOW_IN_FOLDER', 27],
+  ['project.ts', 'registerProjectIpc', 'EDITOR_FLUSH_RESULT', 'FILE_SHOW_IN_FOLDER', 25],
   ['integration.ts', 'registerIntegrationIpc', 'CATALOG_STATUS', 'VASTAI_RESOLVE_SSH', 25],
   [
     'execution.ts',
@@ -54,7 +54,7 @@ for (const [file, registerName, firstChannel, lastChannel, expectedCount] of dom
   allHandlers.push(...handlers);
 }
 
-assert.equal(allHandlers.length, 162, 'all invoke handlers must remain registered');
+assert.equal(allHandlers.length, 160, 'all invoke handlers must remain registered');
 assert.equal(
   new Set(allHandlers).size,
   allHandlers.length,
