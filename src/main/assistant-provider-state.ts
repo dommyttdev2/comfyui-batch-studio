@@ -54,7 +54,7 @@ export class AssistantProviderStore {
         projects: Object.fromEntries(
           Object.entries(value.projects)
             .filter(([, provider]) => isAssistantProvider(provider))
-            .map(([root, provider]) => [root, { lastProvider: provider, stages: {} }]),
+            .map(([root, provider]) => [projectKey(root), { lastProvider: provider, stages: {} }]),
         ),
       };
     }
