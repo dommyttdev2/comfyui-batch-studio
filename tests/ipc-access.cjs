@@ -19,9 +19,9 @@ execFileSync(
   const access = await import(pathToFileURL(path.join(runtime, 'main', 'ipc-access.js')).href);
   const { IPC } = await import(pathToFileURL(path.join(runtime, 'shared', 'ipc.js')).href);
 
-  const registeredKeys = [
-    ...mainSource.matchAll(/handleIpc\(\s*IPC\.([A-Z0-9_]+)/g),
-  ].map((match) => match[1]);
+  const registeredKeys = [...mainSource.matchAll(/handleIpc\(\s*IPC\.([A-Z0-9_]+)/g)].map(
+    (match) => match[1],
+  );
   assert.equal(registeredKeys.length, new Set(registeredKeys).size, 'IPC handlers must be unique');
 
   const registeredChannels = registeredKeys.map((key) => IPC[key]).sort();
@@ -47,11 +47,7 @@ execFileSync(
   );
   assert.throws(
     () =>
-      access.authorizeIpcAccess(
-        IPC.APP_SETTINGS_GET,
-        { kind: 'unknown', projectRoot: null },
-        [],
-      ),
+      access.authorizeIpcAccess(IPC.APP_SETTINGS_GET, { kind: 'unknown', projectRoot: null }, []),
     /現在のWindow/,
     'unregistered WebContents must be denied',
   );
@@ -85,19 +81,17 @@ execFileSync(
     'Execution controls must keep their specialized Run-state guard rather than self-blocking',
   );
 
-  assert.deepEqual(
-    access.authorizeIpcAccess(IPC.R2_SETTINGS, { kind: 'tool-r2' }, []),
-    { writeRoot: null },
-  );
+  assert.deepEqual(access.authorizeIpcAccess(IPC.R2_SETTINGS, { kind: 'tool-r2' }, []), {
+    writeRoot: null,
+  });
   assert.throws(
     () => access.authorizeIpcAccess(IPC.VASTAI_SETTINGS, { kind: 'tool-r2' }, []),
     /現在のWindow/,
     'standalone tools must not cross service boundaries',
   );
-  assert.deepEqual(
-    access.authorizeIpcAccess(IPC.VASTAI_SETTINGS, { kind: 'tool-vastai' }, []),
-    { writeRoot: null },
-  );
+  assert.deepEqual(access.authorizeIpcAccess(IPC.VASTAI_SETTINGS, { kind: 'tool-vastai' }, []), {
+    writeRoot: null,
+  });
 
   assert.match(
     mainSource,
