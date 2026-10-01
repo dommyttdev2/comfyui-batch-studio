@@ -10,6 +10,7 @@ import type {
   AgentTurn,
 } from '../shared/types.js';
 import type { AgentCliAdapter, AgentEventSink } from './agent-cli-adapter.js';
+import { sanitizeAgentDiagnostic, sanitizeAgentEvent } from './agent-cli-diagnostic.js';
 import { CodexCliEventParser, CodexCliProtocolError } from './codex-cli-events.js';
 
 export class CodexCliResumeMismatchError extends Error {
@@ -139,7 +140,7 @@ async function defaultKillProcessTree(child: ChildProcessWithoutNullStreams): Pr
 }
 
 function errorText(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  return sanitizeAgentDiagnostic(error);
 }
 
 export class CodexCliAdapter implements AgentCliAdapter {
@@ -443,7 +444,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
         }
       }
 
-      for (const event of normalized.events) onEvent(event);
+      for (const event of normalized.events) onEvent(sanitizeAgentEvent(event, this.env));
       if (normalized.terminal === 'failed') {
         fail(new Error(normalized.error || 'Codex CLI turn failed.'), false);
         void this.killProcessTree(child);
@@ -479,7 +480,10 @@ export class CodexCliAdapter implements AgentCliAdapter {
         return;
       }
       if (running.failed) return;
-      const detail = Buffer.concat(stderr).toString('utf8').trim();
+      const detail = sanitizeAgentDiagnostic(
+        Buffer.concat(stderr).toString('utf8').trim(),
+        this.env,
+      );
       if (code !== 0 || signal) {
         fail(
           new Error(
@@ -519,7 +523,7 @@ export class CodexCliAdapter implements AgentCliAdapter {
           stdio: 'pipe',
         });
       } catch (error) {
-        resolve({ ok: false, output: '', detail: errorText(error) });
+        resolve({ ok: false, output: '', detail: sanitizeAgentDiagnostic(error, this.env) });
         return;
       }
       const stdout: Buffer[] = [];
@@ -541,10 +545,18 @@ export class CodexCliAdapter implements AgentCliAdapter {
         void this.killProcessTree(child);
         finish({ ok: false, output: '', detail: 'Codex CLI probe timed out.' });
       }, this.probeTimeoutMs);
-      child.once('error', (error) => finish({ ok: false, output: '', detail: errorText(error) }));
+      child.once('error', (error) =>
+        finish({ ok: false, output: '', detail: sanitizeAgentDiagnostic(error, this.env) }),
+      );
       child.once('close', (code, signal) => {
-        const out = Buffer.concat(stdout).toString('utf8').trim();
-        const err = Buffer.concat(stderr).toString('utf8').trim();
+        const out = sanitizeAgentDiagnostic(
+          Buffer.concat(stdout).toString('utf8').trim(),
+          this.env,
+        );
+        const err = sanitizeAgentDiagnostic(
+          Buffer.concat(stderr).toString('utf8').trim(),
+          this.env,
+        );
         finish({
           ok: code === 0 && !signal,
           output: [out, err].filter(Boolean).join('\n'),
