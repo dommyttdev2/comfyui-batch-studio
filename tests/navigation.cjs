@@ -30,7 +30,10 @@ const progressSource = fs.readFileSync(
   path.join(repo, 'src', 'shared', 'execution-progress.ts'),
   'utf8',
 );
-const mainSource = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
+const mainSource = [
+  fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8'),
+  fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-registration.ts'), 'utf8'),
+].join('\n');
 matchCode(
   uiSource,
   /実行前チェック','実行'/,
