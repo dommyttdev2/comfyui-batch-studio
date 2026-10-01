@@ -36,7 +36,10 @@ const finalArtifactImageService = fs.readFileSync(
   path.join(repo, 'src', 'main', 'final-artifact-image-service.ts'),
   'utf8',
 );
-const main = fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8');
+const main = [
+  fs.readFileSync(path.join(repo, 'src', 'main', 'main.ts'), 'utf8'),
+  fs.readFileSync(path.join(repo, 'src', 'main', 'ipc-registration.ts'), 'utf8'),
+].join('\n');
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
 const runtimeCopy = fs.readFileSync(path.join(repo, 'scripts', 'copy-runtime.cjs'), 'utf8');
 const pickerPerf = fs.readFileSync(
