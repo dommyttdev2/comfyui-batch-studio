@@ -20,7 +20,6 @@ import type { ThumbnailCacheTiming } from './thumbnail-image-cache.js';
 import type { PickerMetrics } from './thumbnail-picker-perf.js';
 import type { IpcRegistrationDependencies } from './main.js';
 
-
 export function registerIpc(dependencies: IpcRegistrationDependencies) {
   const {
     GROK_URL,
