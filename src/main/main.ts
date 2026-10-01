@@ -2085,11 +2085,7 @@ async function assistantSnapshot(state: ProjectWindowState): Promise<AssistantPa
   let modelSettings: AgentModelSettings | null = null;
   if (availability.state === 'available' && adapter.capabilities.modelSelection) {
     try {
-      modelSettings = await assistantModelSettings(
-        context.root,
-        context.stage,
-        context.provider,
-      );
+      modelSettings = await assistantModelSettings(context.root, context.stage, context.provider);
     } catch {
       modelSettings = null;
     }
@@ -2569,8 +2565,7 @@ async function assistantModelSettings(
   const requestedEffort = saved?.reasoningEffort;
   const supported = model?.supportedReasoningEfforts;
   const reasoningEffort =
-    requestedEffort &&
-    (!supported?.length || supported.includes(requestedEffort))
+    requestedEffort && (!supported?.length || supported.includes(requestedEffort))
       ? requestedEffort
       : available.selection.reasoningEffort;
   return {
@@ -2609,9 +2604,7 @@ async function assistantChooseModel(
 
   const normalized: AgentModelSelection = {
     model: requested.model,
-    ...(requested.reasoningEffort != null
-      ? { reasoningEffort: requested.reasoningEffort }
-      : {}),
+    ...(requested.reasoningEffort != null ? { reasoningEffort: requested.reasoningEffort } : {}),
   };
   if (provider === 'codex' && normalized.model) {
     const codexSettings = await codexModelSettings({ root, stage });
