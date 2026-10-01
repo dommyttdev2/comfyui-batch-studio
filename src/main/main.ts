@@ -2047,9 +2047,10 @@ function codexCliService() {
 function notifyAgentEvent(
   provider: AgentProvider,
   context: { root: string; stage: GrokContextStage },
+  taskStage: GrokTask['stage'],
   event: AgentEvent,
 ) {
-  const envelope = { provider, root: context.root, stage: context.stage, event };
+  const envelope = { provider, root: context.root, stage: context.stage, taskStage, event };
   for (const state of projectWindows.values()) {
     if (!state.projectRoot || projectRootKey(state.projectRoot) !== projectRootKey(context.root))
       continue;
@@ -2065,11 +2066,12 @@ function notifyAgentEvent(
 }
 function forwardCodexCliEvent(
   context: CodexContext,
+  taskStage: GrokTask['stage'],
   threadId: string,
   turnId: string,
   event: AgentEvent,
 ) {
-  notifyAgentEvent('codex', context, event);
+  notifyAgentEvent('codex', context, taskStage, event);
   if (event.type === 'turn.started') {
     forwardCodexNotification({
       method: 'turn/started',
@@ -2489,6 +2491,7 @@ async function codexSendViaCli(
   if (availability.state !== 'available')
     throw new Error(availability.message ?? 'Codex CLIを利用できません。');
 
+  const taskStage = artifactStage ?? defaultTaskStage(context.stage);
   const settings = await codexModelSettings(context);
   const saved = await legacyStore.get(context.root, context.stage);
   const existingThreadId = saved.activeThreadId;
@@ -2501,7 +2504,7 @@ async function codexSendViaCli(
   const dispatch = (event: AgentEvent) => {
     if (event.type === 'session.started') {
       observedThreadId = event.sessionId;
-      notifyAgentEvent('codex', context, event);
+      notifyAgentEvent('codex', context, taskStage, event);
       return;
     }
     if (!ready) {
@@ -2510,12 +2513,13 @@ async function codexSendViaCli(
     }
     if (!observedThreadId) return;
     const activeTurnId = codexCliActiveTurnIds.get(observedThreadId);
-    if (activeTurnId) forwardCodexCliEvent(context, observedThreadId, activeTurnId, event);
-    else notifyAgentEvent('codex', context, event);
+    if (activeTurnId)
+      forwardCodexCliEvent(context, taskStage, observedThreadId, activeTurnId, event);
+    else notifyAgentEvent('codex', context, taskStage, event);
   };
   const request = {
     context,
-    taskStage: artifactStage ?? defaultTaskStage(context.stage),
+    taskStage,
     prompt: input,
     extra: '',
     ...(workspace ? { workspace } : {}),
@@ -2550,7 +2554,8 @@ async function codexSendViaCli(
   if (workspace) await rememberAgentWorkspace(context.root, workspace, threadId, turn.turnId);
 
   ready = true;
-  for (const event of queued.splice(0)) forwardCodexCliEvent(context, threadId, turn.turnId, event);
+  for (const event of queued.splice(0))
+    forwardCodexCliEvent(context, taskStage, threadId, turn.turnId, event);
 
   void adapter.waitForCompletion(turn.turnId).catch((error) => {
     if (error instanceof AgentTurnCancelledError) return;
@@ -2580,11 +2585,12 @@ async function codexSend(
   message: string,
   artifactStage?: GrokTask['stage'],
   workspace?: FileArtifactWorkspace | AgentWorkspace,
+  forceCli = false,
 ): Promise<CodexSendResult> {
   const context = codexContextFor(state);
   const input = message.trim();
   if (!input || input.length > 750_000) throw new Error('Codexへの依頼文が空、または長すぎます。');
-  if (codexCliTransportEnabled()) {
+  if (forceCli || codexCliTransportEnabled()) {
     const cliWorkspace: AgentWorkspace | undefined = workspace
       ? isAgentWorkspace(workspace)
         ? workspace
@@ -2704,9 +2710,9 @@ async function codexSend(
         : null,
   };
 }
-async function codexStopTurn(state: ProjectWindowState): Promise<CodexSnapshot> {
+async function codexStopTurn(state: ProjectWindowState, forceCli = false): Promise<CodexSnapshot> {
   const context = codexContextFor(state);
-  if (codexCliTransportEnabled()) {
+  if (forceCli || codexCliTransportEnabled()) {
     const { adapter, legacyStore } = codexCliService();
     const saved = await legacyStore.get(context.root, context.stage);
     const threadId = saved.activeThreadId;
@@ -2858,6 +2864,14 @@ const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
   'prompt-plan': ['prompt-plan', 'prompt-plan-fix', 'prompt-plan-patch'],
   caption: ['caption'],
 };
+function contextStageForTask(stage: GrokTask['stage']): GrokContextStage {
+  for (const [contextStage, stages] of Object.entries(codexTaskContexts) as Array<
+    [GrokContextStage, GrokTask['stage'][]]
+  >) {
+    if (stages.includes(stage)) return contextStage;
+  }
+  throw new Error('Invalid task stage.');
+}
 const codexReturnFile: Record<GrokContextStage, string> = {
   story: 'story.md',
   models: 'model_loras.json',
@@ -2868,13 +2882,15 @@ async function codexSendTask(
   state: ProjectWindowState,
   stage: GrokTask['stage'],
   extra: string,
+  forceCli = false,
 ): Promise<CodexSendResult> {
   const context = codexContextFor(state);
+  const useCli = forceCli || codexCliTransportEnabled();
   if (!codexTaskContexts[context.stage].includes(stage))
     throw new Error('選択した工程に対応しない依頼です。');
   if (stage === 'prompt-plan-patch') {
     const baseline = await promptPlanPatchBase(context.root);
-    const workspace = codexCliTransportEnabled()
+    const workspace = useCli
       ? await prepareAgentWorkspace(app.getPath('userData'), 'codex', stage, [
           { name: 'prompt_plan.json', content: await readFile(baseline.filePath, 'utf8') },
         ])
@@ -2936,6 +2952,8 @@ ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
       prompt +
         '\n\n## Codex向け出力契約\nこれは対話用の検討依頼です。成果物ファイルはまだ作成しません。',
       stage,
+      undefined,
+      forceCli,
     );
   const references: Array<{ name: string; content: string }> = [];
   const referenceGuide: string[] = [];
@@ -2949,7 +2967,7 @@ ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
     references.push({ name: filename, content });
     referenceGuide.push('input/' + references.length + '-' + filename + ' — ' + attachment.purpose);
   }
-  const workspace = codexCliTransportEnabled()
+  const workspace = useCli
     ? await prepareAgentWorkspace(app.getPath('userData'), 'codex', stage, references)
     : await prepareCodexFileWorkspace(app.getPath('userData'), stage, references);
   return codexSend(
@@ -2962,6 +2980,7 @@ ${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
         : workspaceOutputInstruction(workspace)),
     stage,
     workspace,
+    forceCli,
   );
 }
 
@@ -3256,6 +3275,8 @@ export function createIpcRegistrationDependencies() {
     vastStore,
     writeFile,
     codexTaskContexts,
+    contextStageForTask,
+    grokCliTaskRunner,
     codexReturnFile,
     maybeQuitAfterExecution,
   };
@@ -3365,7 +3386,7 @@ async function initializeApplication() {
     userDataPath: userData,
     adapter: grokCliAdapter,
     sessions: agentSessionState,
-    onEvent: (context, event) => notifyAgentEvent('grok', context, event),
+    onEvent: (context, event) => notifyAgentEvent('grok', context, context.taskStage, event),
     onArtifact: notifyAutoArtifact,
   });
   codexAppServer = new CodexAppServer();

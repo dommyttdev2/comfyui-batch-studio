@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
-const { matchCode } = require('./source-match.cjs');
+const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
 const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
@@ -128,14 +128,39 @@ matchCode(
   'Stage-targeted Codex selection must have an IPC channel',
 );
 matchCode(
+  ipc,
+  /AGENT_TASK_START:/,
+  'Provider-neutral stage execution must have a shared start IPC channel',
+);
+matchCode(
+  ipc,
+  /AGENT_TASK_STOP:/,
+  'Provider-neutral stage execution must have a shared stop IPC channel',
+);
+matchCode(
   preload,
   /selectStageTask: \(root, stage\)/,
   'Project steps must be able to select their own Codex task',
 );
 matchCode(
+  preload,
+  /startTask: \(root, stage, extra\)/,
+  'Project steps must start their exact task through the shared assistant API',
+);
+matchCode(
+  stages,
+  /assistant\.startTask\(project\.rootPath, stage, extra\)/,
+  'Every AI step must launch its exact stage from the left pane',
+);
+doesNotMatchCode(
   stages,
   /codex\.selectStageTask\(project\.rootPath, stage\)/,
-  'Every AI step must select its exact stage instead of using the default Codex dropdown',
+  'Stage UI must not require Codex right-pane selection before execution',
+);
+matchCode(
+  stages,
+  /assistant\.stopTask\(project\.rootPath, stage\)/,
+  'Every AI step must expose shared left-pane cancellation',
 );
 matchCode(
   main,
@@ -143,12 +168,16 @@ matchCode(
   'A requested task must belong to the currently selected project stage',
 );
 matchCode(
+  main,
+  /contextStageForTask\(stage as GrokTask\['stage'\]\)/,
+  'A shared AI task must resolve to its exact project context stage',
+);
+matchCode(
   codex,
   /onStageTaskSelected\([\s\S]*setTask\(selected\)/,
-  'The Codex pane must accept stage selection requests from the corresponding project step',
+  'The Codex pane must accept legacy stage selection requests during the migration window',
 );
 for (const expected of [
-  "'story-initial'",
   "'story-finalize'",
   "'story-fix'",
   "'models'",

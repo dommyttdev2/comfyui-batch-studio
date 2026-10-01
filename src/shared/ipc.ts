@@ -154,6 +154,8 @@ export const IPC = {
   CLIPBOARD_WRITE_TEXT: 'clipboard:write-text',
   ASSISTANT_GET_PROVIDER: 'assistant:get-provider',
   ASSISTANT_SET_PROVIDER: 'assistant:set-provider',
+  AGENT_TASK_START: 'agent:task-start',
+  AGENT_TASK_STOP: 'agent:task-stop',
   AGENT_EVENT: 'agent:event',
   CODEX_GET_PROVIDER: 'codex:get-provider',
   CODEX_SET_PROVIDER: 'codex:set-provider',

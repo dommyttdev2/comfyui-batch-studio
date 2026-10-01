@@ -32,7 +32,10 @@ export interface GrokCliTaskRunnerOptions {
   userDataPath: string;
   adapter: AgentCliAdapter;
   sessions: AgentSessionStateStore;
-  onEvent: (context: { root: string; stage: GrokContextStage }, event: AgentEvent) => void;
+  onEvent: (
+    context: { root: string; stage: GrokContextStage; taskStage: GrokTask['stage'] },
+    event: AgentEvent,
+  ) => void;
   onArtifact: (event: AutoArtifactEvent) => void;
   buildTask?: TaskBuilder;
   importArtifact?: ArtifactImporter;
@@ -153,7 +156,8 @@ export class GrokCliTaskRunner {
       ...(taskWorkspace ? { workspace: taskWorkspace } : {}),
       ...(model ? { model } : {}),
     };
-    const forward = (event: AgentEvent) => this.onEvent({ root, stage: contextStage }, event);
+    const forward = (event: AgentEvent) =>
+      this.onEvent({ root, stage: contextStage, taskStage }, event);
     let turn: AgentTurn | null = null;
     try {
       turn = saved.activeSessionId
