@@ -14,7 +14,7 @@ const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-r2-parity-')
 fs.symlinkSync(
   path.join(repo, 'node_modules'),
   path.join(runtime, 'node_modules'),
-  process.platform === 'win32' ? 'junction' : 'dir',
+  'dir',
 );
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(
