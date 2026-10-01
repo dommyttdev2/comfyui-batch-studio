@@ -38,8 +38,8 @@ assert.match(app, /<StageView[\s\S]+?<\/StageErrorBoundary>/);
 assert.match(app, /setStageReloadRevision\(\(revision\) => revision \+ 1\)/);
 assert.match(
   readMainProcessSource(root),
-  /handleIpc\(IPC\.CODEX_GET_PROVIDER/,
-  'The main process must register the provider lookup channel',
+  /handleIpc\(IPC\.ASSISTANT_GET_PROVIDER/,
+  'The main process must register the provider-neutral lookup channel',
 );
 assert.match(
   app,
