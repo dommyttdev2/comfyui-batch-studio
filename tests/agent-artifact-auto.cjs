@@ -4,7 +4,6 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
-const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-auto-artifact-'));
@@ -20,200 +19,32 @@ execFileSync(
   { cwd: repo, stdio: 'inherit' },
 );
 const source = (name) => fs.readFileSync(path.join(repo, name), 'utf8');
-const main = readMainProcessSource(repo);
-const pane = source('src/renderer/CodexPane.tsx');
-assert.match(
-  main,
-  /notification\.method === 'item\/agentMessage\/delta' &&[\s\S]*!codexPendingArtifacts\.has\(threadId as string\)/,
-  'Artifact answer deltas must not be forwarded to the renderer',
-);
-assert.match(main, /codexTaskFileForTurn\(turn\)/);
-assert.match(main, /collectCodexArtifact\(threadId, pending, notification\.params\)/);
-assert.match(pane, /retryArtifact\(\)/);
-assert.match(
-  pane,
-  /window\.batchStudio\.codex\.sendTask\('prompt-plan-patch', extra\)/,
-  'A completed conversational revision must have an explicit route to an artifact task',
-);
-assert.match(
-  pane,
-  /通常の「送信」は相談用です/,
-  'A normal chat reply must not imply the project draft was changed',
-);
-const taskBuilder = main.slice(main.indexOf('async function codexSendTask('));
-assert.match(
-  taskBuilder,
-  /prepareCodexFileWorkspace[\s\S]*workspaceOutputInstruction\(workspace\)/,
-  'Artifact tasks must stage input files and request a written output file',
-);
-assert.match(
-  main,
-  /sandboxPolicy:\s*\{[\s\S]*type: 'workspaceWrite'[\s\S]*writableRoots: \[cwd\]/,
-  'Writable Codex turns must be limited to the isolated workspace',
-);
-assert.match(
-  main,
-  /readCodexOutput\(pending\.workspace\)/,
-  'Codex file output must be read from disk rather than the assistant final message',
-);
-assert.match(
-  main,
-  /findCodexWorkspace\([\s\S]*readCodexOutput\(workspace\)/,
-  'Retry should restore and read the completed workspace artifact',
-);
+const main = source('src/main/main.ts');
+const codexRunner = source('src/main/codex-cli-task-runner.ts');
+const grokRunner = source('src/main/grok-cli-task-runner.ts');
+const stages = source('src/renderer/GrokStages.tsx');
 
+assert.match(main, /notifyAutoArtifact/);
+assert.match(codexRunner, /prepareAgentWorkspace\(this\.userDataPath, 'codex'/);
+assert.match(codexRunner, /readAgentWorkspaceOutput\(run\.workspace\)/);
+assert.match(codexRunner, /importArtifact\([\s\S]*'codex'/);
+assert.match(grokRunner, /prepareAgentWorkspace\(this\.userDataPath, 'grok'/);
+assert.match(grokRunner, /readAgentWorkspaceOutput\(run\.workspace\)/);
+assert.match(grokRunner, /importArtifact\([\s\S]*'grok'/);
 assert.match(
-  source('src/main/grok-auto-artifact-watcher.ts'),
-  /MutationObserver|observeGrokArtifact/,
+  stages,
+  /assistant\.startTask/,
+  'Left-pane AI execution must rely on the shared task runners.',
 );
-assert.match(source('src/renderer/GrokStages.tsx'), /assistant\.startTask/);
-assert.doesNotMatch(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGrok/);
+assert.doesNotMatch(stages, /autoArtifact\.armGrok|grokTask\.build/);
+assert.doesNotMatch(main, /CodexAppServer|grokArtifactWatcher|codexPendingArtifacts/);
 
 (async () => {
   const { importAutoArtifact, latestAutoArtifact, expectedArtifact, artifactFileContent } =
     await import(pathToFileURL(path.join(runtime, 'main', 'agent-artifact-import.js')).href);
-  const { codexTaskFileForTurn, latestCompletedArtifactTurn } = await import(
-    pathToFileURL(path.join(runtime, 'main', 'codex-artifact-turn.js')).href
-  );
   const { promptPlanPatchBase, applyPromptPlanPatch } = await import(
     pathToFileURL(path.join(runtime, 'main', 'prompt-plan-patch.js')).href
   );
-  const {
-    prepareCodexFileWorkspace,
-    workspaceOutputInstruction,
-    rememberCodexWorkspace,
-    findCodexWorkspace,
-    readCodexOutput,
-  } = await import(pathToFileURL(path.join(runtime, 'main', 'codex-file-artifact.js')).href);
-  const sandboxRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-sandbox-'));
-  const isolatedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-codex-project-'));
-  const prepared = await prepareCodexFileWorkspace(sandboxRoot, 'prompt-plan', [
-    { name: 'story.md', content: '# Story' },
-    { name: 'models.json', content: '{"schemaVersion":3}' },
-  ]);
-  assert.ok(prepared.directory.startsWith(sandboxRoot));
-  assert.deepEqual(fs.readdirSync(path.join(prepared.directory, 'input')), [
-    '1-story.md',
-    '2-models.json',
-  ]);
-  assert.match(workspaceOutputInstruction(prepared), /output\/prompt_plan\.json/);
-  assert.match(
-    workspaceOutputInstruction(prepared),
-    /回答の最後に prompt_plan\.json の生成状況のみ/,
-  );
-  await assert.rejects(readCodexOutput(prepared), /output\/prompt_plan\.json を生成しませんでした/);
-  fs.writeFileSync(prepared.outputPath, '{"schemaVersion":2}');
-  assert.equal(await readCodexOutput(prepared), '{"schemaVersion":2}');
-  await rememberCodexWorkspace(isolatedRoot, prepared, 'thread-files', 'turn-files');
-  const located = await findCodexWorkspace(
-    isolatedRoot,
-    sandboxRoot,
-    'thread-files',
-    'turn-files',
-    'prompt-plan',
-  );
-  assert.equal(located?.outputPath, prepared.outputPath);
-  assert.equal(
-    await findCodexWorkspace(isolatedRoot, sandboxRoot, 'thread-files', 'turn-files', 'caption'),
-    null,
-  );
-  fs.unlinkSync(prepared.outputPath);
-  fs.symlinkSync(path.join(prepared.directory, 'input', '2-models.json'), prepared.outputPath);
-  await assert.rejects(readCodexOutput(prepared), /通常のファイルではない/);
-  fs.unlinkSync(prepared.outputPath);
-  console.log('Codex isolated file workspace, safe output read and persisted retry passed.');
-
-  const taskTurn = (fileName) => ({
-    status: 'completed',
-    items: [
-      {
-        type: 'userMessage',
-        content: [
-          {
-            text: `## Codex向け出力契約\\n回答の最後に ${fileName} の完成した内容だけを出力してください。`,
-          },
-        ],
-      },
-      { type: 'agentMessage', text: '{"schemaVersion":1}' },
-    ],
-  });
-  for (const fileName of [
-    'story.md',
-    'model_loras.json',
-    'prompt_plan.json',
-    'prompt_plan_patch.json',
-    'caption_content.json',
-  ]) {
-    assert.equal(codexTaskFileForTurn(taskTurn(fileName)), fileName);
-    assert.equal(
-      codexTaskFileForTurn({
-        status: 'completed',
-        items: [
-          {
-            type: 'userMessage',
-            text:
-              '## Batch Studio向け成果物出力契約\\n' +
-              '作業ディレクトリ内の output/' +
-              fileName +
-              ' に完成した成果物を直接書き込んでください。',
-          },
-        ],
-      }),
-      fileName,
-      'Shared CLI workspace contract must remain classifiable from Codex history',
-    );
-  }
-  assert.equal(
-    codexTaskFileForTurn({
-      items: [
-        {
-          type: 'userMessage',
-          text: '## Codex向け出力契約\\nこれは対話用の検討依頼です。story.mdについて議論します。',
-        },
-      ],
-    }),
-    null,
-  );
-  assert.equal(
-    codexTaskFileForTurn({
-      items: [{ type: 'userMessage', text: 'caption_content.json を作ってください。' }],
-    }),
-    null,
-  );
-  assert.equal(
-    codexTaskFileForTurn({
-      items: [
-        { type: 'userMessage', text: '通常の依頼' },
-        { type: 'agentMessage', text: '回答の最後に caption_content.json' },
-      ],
-    }),
-    null,
-  );
-  const patchTurn = taskTurn('prompt_plan_patch.json');
-  assert.equal(
-    latestCompletedArtifactTurn(
-      [taskTurn('prompt_plan.json'), patchTurn, { status: 'completed', items: [] }],
-      ['prompt_plan.json', 'prompt_plan_patch.json'],
-    ),
-    patchTurn,
-    'Retry must select the latest patch task, not an older full Plan task.',
-  );
-  const captionTurn = taskTurn('caption_content.json');
-  const otherTurn = taskTurn('prompt_plan.json');
-  assert.equal(
-    latestCompletedArtifactTurn(
-      [
-        captionTurn,
-        otherTurn,
-        { ...taskTurn('caption_content.json'), status: 'failed' },
-        { status: 'completed', items: [] },
-      ],
-      'caption_content.json',
-    ),
-    captionTurn,
-    'Retry must locate the latest completed task for the current stage even after later chat turns.',
-  );
-
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-auto-artifact-project-'));
   const draft = path.join(root, '._batch_studio', 'drafts', 'story.md');
   assert.equal(expectedArtifact('story-initial'), null);
@@ -294,7 +125,6 @@ assert.doesNotMatch(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGro
     );
   }
   assert.match(source('src/renderer/GrokStages.tsx'), /rawResponsePath/);
-  assert.match(source('src/renderer/CodexPane.tsx'), /rawResponsePath/);
 
   const largeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-plan-patch-'));
   let nextLeaf = 0;
@@ -442,7 +272,7 @@ assert.doesNotMatch(source('src/renderer/GrokStages.tsx'), /autoArtifact\.armGro
   assert.equal(invalidCaption.phase, 'invalid');
   assert.equal(fs.readFileSync(captionDraft, 'utf8'), original);
   console.log(
-    'Shared Grok/Codex artifact auto-import, file output, deduplication and draft preservation passed.',
+    'Shared CLI artifact auto-import, deduplication, patching and draft preservation passed.',
   );
 })().catch((error) => {
   console.error(error);
