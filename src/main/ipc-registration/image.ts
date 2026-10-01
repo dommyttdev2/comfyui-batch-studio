@@ -1,4 +1,8 @@
-import type { MarketplaceCropRect, MarketplaceSourceType, ThumbnailSlotKey } from '../../shared/types.js';
+import type {
+  MarketplaceCropRect,
+  MarketplaceSourceType,
+  ThumbnailSlotKey,
+} from '../../shared/types.js';
 import type { ThumbnailCacheTiming } from '../thumbnail-image-cache.js';
 import type { PickerMetrics } from '../thumbnail-picker-perf.js';
 import type { IpcRegistrationDependencies } from '../ipc-registration.js';
