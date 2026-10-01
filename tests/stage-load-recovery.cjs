@@ -36,7 +36,7 @@ assert.match(app, /<StageErrorBoundary/);
 assert.match(app, /<StageView[\s\S]+?<\/StageErrorBoundary>/);
 assert.match(app, /setStageReloadRevision\(\(revision\) => revision \+ 1\)/);
 assert.match(
-  source('src/main/main.ts'),
+  source('src/main/main.ts') + source('src/main/ipc-registration.ts'),
   /handleIpc\(IPC\.CODEX_GET_PROVIDER/,
   'The main process must register the provider lookup channel',
 );
