@@ -475,7 +475,8 @@ def mark_prompt_success(root,state,branch,index,endpoint):
  image=images[0];filename=str(image.get("filename") or "");subfolder=str(image.get("subfolder") or "").replace(chr(92),"/")
  prefix=str((state.get("artifact") or {}).get("outputPrefix") or "").strip("/")
  if image.get("type")!="output" or not filename or "/" in filename or chr(92) in filename or filename in (".","..") or not subfolder.startswith(prefix+"/") or any(part in (".","..","") for part in subfolder.split("/")) or os.path.splitext(filename)[1].lower() not in IMAGE_EXTENSIONS:raise WorkerError("REMOTE_IMAGE_OUTPUT_INVALID")
- record={"branchId":branch["branchId"],"leafId":branch["leafIds"][index],"promptId":prompt_id,"path":subfolder[len(prefix)+1:]+"/"+filename,"inputs":task["graph"]}
+ submitted_graph=copy.deepcopy(task["graph"]);set_output_prefix(submitted_graph,prefix,branch["branchId"],branch["leafIds"][index])
+ record={"branchId":branch["branchId"],"leafId":branch["leafIds"][index],"promptId":prompt_id,"path":subfolder[len(prefix)+1:]+"/"+filename,"inputs":submitted_graph}
  records=state.setdefault("imageOutputs",[])
  if not any(item.get("promptId")==prompt_id for item in records):records.append(record)
  completed=state.setdefault("completed",{});before=int(completed.get(branch["branchId"],0))

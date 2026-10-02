@@ -29,7 +29,7 @@ global underscore conversion is retained. Authored weights and trainedWords are
 passed verbatim. Model-family prompt authoring policy remains in Batch Studio.
 
 Project previews use seed 0. Run creation assigns each KSampler an independent
-random integer in [0, 2^48), safe in JavaScript and accepted by ComfyUI. Seeded UI
+random integer below 2^48 - 1, safe in JavaScript and accepted by ComfyUI. Seeded UI
 and API graphs are persisted into the immutable Run snapshot, with fresh hashes
 and identity; source workflow identity is retained separately for stale checks.
 Resume reuses these graphs and seeds. New Runs allocate new seeds. Input equality

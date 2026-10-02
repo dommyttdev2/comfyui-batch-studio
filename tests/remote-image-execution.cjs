@@ -7,7 +7,7 @@ const { spawn, execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
 const repo = path.resolve(__dirname, '..');
-const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-remote-scene-'));
+const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-remote-images-'));
 const compiled = path.join(runtime, 'compiled');
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(
@@ -224,9 +224,6 @@ function startMock() {
         overallCompleted: 0,
         overallTotal: 2,
         promptIds: ['recovered-1'],
-        branchRuns: {
-          'branch-a': { runHandle: 'handle-recovered', claimed: true, lastPromptId: 'recovered-1' },
-        },
         artifact: { outputPrefix: 'BatchStudio/test', capturedAt: new Date().toISOString() },
         error: null,
       }),
@@ -258,7 +255,7 @@ function startMock() {
         overallCompleted: 0,
         overallTotal: 2,
         promptIds: [],
-        branchRuns: {},
+
         artifact: { outputPrefix: 'BatchStudio/test' },
         error: null,
       }),
@@ -316,7 +313,7 @@ function startMock() {
         completed: { 'branch-a': 1 },
         overallCompleted: 1,
         promptIds: ['already-completed'],
-        branchRuns: {},
+
         error: null,
       }),
     );
@@ -357,7 +354,7 @@ function startMock() {
           completed: { 'branch-a': 1 },
           overallCompleted: 1,
           promptIds: ['completed-first'],
-          branchRuns: {},
+
           error:
             priorStatus === 'failed'
               ? { code: 'REMOTE_PROMPT_FAILED', message: 'Previous prompt was terminal error.' }
@@ -399,7 +396,7 @@ function startMock() {
     assert.equal(result.lines.at(-1).error.code, 'REMOTE_RESUME_UNSAFE');
     assert.equal(mock.calls.prompts.length, unsafeBefore);
 
-    // The worker must stop waiting and release its run_handle if ComfyUI loses
+    // The worker must stop waiting without resubmitting if ComfyUI loses
     // a submitted prompt from both Queue and History.
     const lostDir = path.join(runtime, 'lost-prompt');
     fs.mkdirSync(lostDir);
@@ -429,7 +426,7 @@ function startMock() {
         overallCompleted: 0,
         overallTotal: 2,
         promptIds: ['owned-prompt'],
-        branchRuns: {},
+
         artifact: { outputPrefix: 'BatchStudio/test' },
         error: null,
       }),

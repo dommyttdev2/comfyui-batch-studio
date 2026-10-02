@@ -31,7 +31,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
     readProjectMeta,
     reconcilePersistedExecutionRuns,
     remoteExecutor,
-    remoteSceneExecutor,
+    remoteImageExecutor,
     requestForceInterrupt,
     requestStopScheduling,
     restoreExecutionRunBackup,
@@ -202,7 +202,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
       });
     }
     try {
-      if (run.executionTarget === 'remote') await remoteSceneExecutor().stopScheduling(root, runId);
+      if (run.executionTarget === 'remote') await remoteImageExecutor().stopScheduling(root, runId);
     } catch (error) {
       await mutateExecutionRun(root, runId, (r) => {
         if (r.lifecycle === 'RUNNING') {
@@ -232,7 +232,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
     const run = await requestForceInterrupt(root, runId);
     try {
       if (run.executionTarget === 'local') await localExecutor().forceInterrupt(root, runId);
-      else await remoteSceneExecutor().forceInterrupt(root, runId);
+      else await remoteImageExecutor().forceInterrupt(root, runId);
     } catch (error) {
       if (run.executionTarget === 'remote' && error instanceof VastAiInstanceNotFoundError) {
         return mutateExecutionRun(root, runId, (r) => {
@@ -428,7 +428,7 @@ export function registerExecutionIpc(dependencies: IpcRegistrationDependencies) 
 
     for (const candidate of restartable) {
       if (candidate.executionTarget === 'remote') {
-        const executor = remoteSceneExecutor();
+        const executor = remoteImageExecutor();
         executor.beginDiscard(candidate.runId);
         try {
           if (candidate.lifecycle === 'RUNNING' && candidate.phase === 'EXECUTING') {

@@ -84,7 +84,8 @@ async function recordPromptOutputs(
     entry = history?.[promptId],
     recorded = new Set<string>();
   const images = saveNodeIds.flatMap((id) => entry?.outputs?.[id]?.images ?? []);
-  if (!images.length) throw new Error(`ComfyUI prompt ${promptId} returned no SaveImage files.`);
+  if (images.length !== 1)
+    throw new Error(`ComfyUI prompt ${promptId} must return exactly one SaveImage file.`);
   for (const image of images) {
     if (
       image?.type !== 'output' ||

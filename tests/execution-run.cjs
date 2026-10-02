@@ -470,7 +470,7 @@ const writeJson = (file, value) => {
   assert.equal(restartHandler.includes('listExecutionRuns(root)'), true);
   assert.equal(restartHandler.includes("['RUNNING', 'PAUSED', 'INTERRUPTED']"), true);
   assert.equal(restartHandler.includes('localExecutor()'), true);
-  assert.equal(restartHandler.includes('remoteSceneExecutor()'), true);
+  assert.equal(restartHandler.includes('remoteImageExecutor()'), true);
   assert.ok(
     restartHandler.indexOf('await compileWorkflow(root);') <
       restartHandler.indexOf('await startExecutionRun(root, async () => preflight);'),

@@ -189,6 +189,17 @@ export function enumerateImageTasks(
         keep.add(id);
       };
       visit(saveNodeId);
+      const nodes = [...keep].map((id) => graph[id]);
+      const latents = nodes.filter((node) =>
+        ['EmptyLatentImage', 'EmptySD3LatentImage'].includes(node.class_type),
+      );
+      if (
+        nodes.filter((node) => node.class_type === 'SaveImage').length !== 1 ||
+        nodes.filter((node) => node.class_type === 'KSampler').length !== 1 ||
+        latents.length !== 1 ||
+        latents[0].inputs.batch_size !== 1
+      )
+        throw new Error('IMAGE_TASK_SINGLE_IMAGE_REQUIRED');
       tasks.push({
         branchId: branch.branchId,
         leafId,

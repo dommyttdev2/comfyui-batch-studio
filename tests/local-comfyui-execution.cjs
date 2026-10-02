@@ -122,8 +122,7 @@ function startServer(install, options = {}) {
     history = new Map(),
     submissionIds = new Map(),
     outputs = new Map(),
-    running = new Set(),
-    claimedHandles = new Map();
+    running = new Set();
   let holdFirst = Boolean(options.holdFirst);
   let viewUnavailable = Boolean(options.viewUnavailable);
   const server = http.createServer(async (req, res) => {
@@ -275,7 +274,6 @@ function startServer(install, options = {}) {
     const { root, install, run, ready } = await makeProject(execution, hashCanonicalJson),
       mock = await startServer(install);
     try {
-      const api = JSON.parse(fs.readFileSync(path.join(root, 'LoRA_project.api.json'), 'utf8'));
       const service = new LocalExecutionService(async () => ({
         endpoint: mock.endpoint,
         installPath: install,

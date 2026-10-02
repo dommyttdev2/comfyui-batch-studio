@@ -44,7 +44,7 @@ Batch Studio は次を所有する。
 - Prompt semantic validation。
 - Illustrious / Anima の tag dialect validation。
 - 最終 positive / negative 文字列化。
-- ScenePrompter / SceneMatrix への mapping。
+- 標準CLIPTextEncodeへのmapping。
 
 ### User
 
@@ -422,7 +422,7 @@ Branch / Leaf ID:
 - Leaf ID は全 Branch を横断して一意。
 - Array order が生成順。
 - `order` field は持たない。
-- Leaf ID を SceneMatrix `row_id` / `path_label` / `name` へ使用する。
+- Leaf IDをSaveImageの`_meta.batchStudio.leafId`へ使用する。
 - `leaf.name` はUI用の人間可読名。
 
 ## 14. Compile mapping
@@ -434,18 +434,20 @@ common structured prompt
  + quality policy
  + selected common trigger words
       ↓
-ScenePrompter common positive / negative
+common positive / negative
 
 branch structured prompt
  + leaf structured prompt
  + selected branch/leaf trigger words
       ↓
-SceneMatrix positive_base / negative_base
+branch + leaf positive / negative
+      ↓
+common + branch + leaf → CLIPTextEncode
 ```
 
 Commonに存在する exact same tag は Leaf側compiled Promptから除外する。
 
-ComfyUI SceneMatrix内部fieldはPrompt Planへ保存しない。
+ComfyUIノード内部fieldはPrompt Planへ保存しない。
 
 ## 15. Validation
 

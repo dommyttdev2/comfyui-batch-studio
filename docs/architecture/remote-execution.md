@@ -9,7 +9,7 @@ ComfyUI Batch Studio に `実行前チェック` の後段として `実行` 工
 対象:
 
 - Local ComfyUI での Workflow 実行。
-- Scene Prompt Tools の `ScenePrompterExpand` による連続生成の API 再現。
+- 標準ComfyUI APIによる画像ごとの連続生成。
 - Cloud Instance Provider から Remote 実行先を解決する処理。
 - Remote ComfyUI 環境への必要モデル配置。
 - Remote 生成結果の Cloudflare R2 への保存。
@@ -43,9 +43,9 @@ Local Run は Workflow 実行と Local 成果物確認まで完了した時点�
 
 Remote Run は次の全工程が成功した時点でのみ完了とする。
 
-1. Cloud Instance / Remote environment準備（aria2 / GitHub CLI、GitHub認証、ComfyUI latest release、workflow依存 custom_nodes）。
+1. Cloud Instance / Remote environment準備（aria2 / GitHub CLI、GitHub認証、ComfyUI latest release）。
 2. 必要モデル配置。
-3. Scene Prompt Expand連続生成。
+3. 画像ごとの連続生成。
 4. 成果物収集とpackage化。
 5. RemoteからR2へのupload。
 6. R2からLocalへのdownload。
@@ -215,7 +215,7 @@ ExecutionCoordinator
     +-- SshService
     +-- RemoteWorkerClient
     +-- RemoteModelStager
-    +-- ScenePromptExecutionCoordinator
+    +-- ExecutionCoordinator
     +-- RemoteArtifactService
     +-- R2TransferService
     `-- ExecutionStateStore
@@ -247,13 +247,13 @@ Preflight PASS
 Local ComfyUI API endpoint解決
     |
     v
-ComfyUI / Scene Prompt Tools capability確認
+ComfyUI standard-node capability確認
     |
     v
 API-format prompt graph準備
     |
     v
-Scene Prompt Expand branches実行
+image tasks実行
     |
     v
 prompt completion監視
@@ -429,11 +429,8 @@ comfy.queue
 comfy.prompt
 comfy.history
 comfy.interrupt
-scene_prompt.prepare
-scene_prompt.claim
-scene_prompt.execute_sequence
-scene_prompt.finalize
-scene_prompt.release
+run_image_sequence
+stop_image_sequence
 artifact.manifest
 artifact.package
 artifact.hash
@@ -462,7 +459,6 @@ SSH / Remote Worker ready
   -> tracked local changes check
   -> latest release commit checkout
   -> requirements.txt / manager_requirements.txt sync
-  -> Environment Settingsで指定した custom_nodes clone/update
   -> custom_node requirements sync
   -> supervisorctl restart comfyui
   -> Remote model staging (aria2)
@@ -472,7 +468,7 @@ GitHub PATは `BATCH_STUDIO_GITHUB_PAT` または `GH_TOKEN` を優先し、Envi
 
 ComfyUI releaseは `comfyanonymous/ComfyUI` の `releases/latest` から実行時にtagを取得し、tag名をhard-codeしない。Remote ComfyUIまたは管理対象custom_nodeにtracked local changesがある場合は自動破棄せずbootstrapを停止する。
 
-workflow依存 custom_nodes はEnvironment Settingsのapp-wide listを正本とする。各entryはGitHub `owner/repo` と任意の `ref` を持つ。未導入ならclone、導入済みならorigin一致を確認してfetch/checkoutする。空listはcustom_node同期をskipする。
+Remote bootstrapはComfyUI本体とそのrequirementsのみを準備する。追加custom_nodesの設定・同期は行わない。
 
 model downloadはRemote側の `aria2c` を使用する。presigned URLはprocess argvへ載せずstdinのinput-fileとして渡し、size/SHA-256検証後にatomic renameする。複数モデルが必要な場合は最大4モデルを並列stagingし、各モデル内部ではaria2の最大8接続による分割downloadを行う。
 
@@ -579,44 +575,19 @@ Workflow Compiler / Template systemはUI WorkflowとdeterministicなAPI graphを
 
 任意のGUI Workflowを汎用変換するconverterを主アーキテクチャにしない。Custom nodeのhidden input / widget mappingが壊れやすいためである。
 
-`/scene_prompt/runs/prepare`等がUI Workflow metadataを必要とする場合はHTTP control payloadとして渡す。Remote filesystemへのWorkflow file配置を必須にしない。
+画像ごとのUI Workflow metadataを`extra_data.extra_pnginfo`として標準`POST /prompt`へ渡す。
 
 ---
 
-## 15. Scene Prompt Expand Continuous Execution
+## 15. Standard Image Sequence
 
-`ScenePrompterExpand`の「連続生成」はComfyUI frontend JavaScript上の操作であり、button click用server endpointではない。
+Run snapshotの標準API graphからSaveImageの祖先だけを抽出し、Prompt PlanのBranch・Leaf順に実行する。1 Leaf = 1 POST /prompt = 1 image。前promptのterminal Historyを確認してから次を送信する。
 
-Batch Studioは標準ComfyUI APIとScene Prompt Tools custom run-context APIで同等sequenceを再現する。
+使用するAPIは`/system_stats`、`/object_info`、`/prompt`、`/history/{prompt_id}`、`/queue`、`/interrupt`。custom endpoint、run handle、claim/finalize/releaseは使用しない。
 
-```text
-prepare
-  -> current_index=0 submit
-  -> wait terminal
-  -> reconcile / claim
-  -> current_index=1 submit
-  -> wait terminal
-  -> ...
-  -> finalize
-  -> release
-```
+Root LoRA、Branch LoRA、合成済みpositive/negative、seedはRun snapshotで固定する。Worker state v2は送信前のattempt identity、graph hash、prompt ID、Branch/Leaf identity、画像のHistory pathを永続化する。通信断時はQueue/Historyで照合し、受理状況が不明なPOSTを再送しない。旧Worker stateや変更されたtask inputsはResumeを拒否する。
 
-全indexを無条件に一括queueしない。前promptがterminalになったことを確認してから次をsubmitする。
-
-Remote executionではRemote Workerがlocalhostから次を呼ぶ。
-
-```text
-/scene_prompt/runs/prepare
-/prompt
-/history/{prompt_id}
-/queue
-/scene_prompt/runs/claim
-/scene_prompt/runs/finalize
-/scene_prompt/runs/release
-/interrupt when explicitly requested
-```
-
-Workflow内に複数`ScenePrompterExpand`がある場合、実行対象branchを決定論的順序で列挙してFIFO実行する。
+Worker protocol versionは12。成果物manifest version 2のimageTasksに送信入力と画像identityを記録する。詳細は[標準画像実行契約](standard-image-execution.md)を参照。
 
 ---
 
@@ -635,7 +606,6 @@ CLOUD_INSTANCE_RESOLVING
   -> REMOTE_DEPENDENCIES_INSTALLING
   -> REMOTE_GITHUB_AUTHENTICATING
   -> REMOTE_COMFYUI_UPDATING
-  -> REMOTE_CUSTOM_NODES_SYNCING
   -> REMOTE_COMFYUI_RESTARTING
   -> REMOTE_ENVIRONMENT_READY
   -> REMOTE_MODELS_CHECKING
@@ -693,7 +663,7 @@ Remote outputs
 
 ZIP内には `manifest.json` を含めない。ZIP entryはユーザー向け成果物構造に正規化し、Remote ComfyUI側の内部階層を露出させない。
 
-成果物件数の照合・manifest作成・ZIP格納対象は、Run固有output prefix配下の画像ファイル（`.png` / `.jpg` / `.jpeg` / `.webp`、拡張子は大文字小文字を区別しない）に統一する。Scene Prompt Tools等の状態管理用 `.state` / `.lock` を含む非画像ファイルは対象外とし、packaging時には削除しない。Resumeも同じ画像ファイル基準で件数を再検証する。
+成果物件数の照合・manifest作成・ZIP格納対象は、Run固有output prefix配下の画像ファイル（`.png` / `.jpg` / `.jpeg` / `.webp`、拡張子は大文字小文字を区別しない）に統一する。状態管理用 `.state` / `.lock` を含む非画像ファイルは対象外とし、packaging時には削除しない。Resumeも同じ画像ファイル基準で件数を再検証する。
 
 ```text
 {yyyymmdd_hhmmss}.zip
@@ -775,7 +745,7 @@ Remote Runは次を全て満たした場合のみ`COMPLETED`とする。
 ```text
 selected cloud instance resolved
 AND remote execution environment valid
-AND all Scene Prompt jobs complete
+AND all image tasks complete
 AND expected artifacts exist
 AND package creation succeeds
 AND remote package SHA-256 is known
@@ -812,7 +782,7 @@ model placement snapshot
 remote worker version/hash
 remote paths
 current phase
-Scene Prompt branch state
+image sequence branch state
 prompt ids
 artifact baseline
 artifact manifest
@@ -854,7 +824,7 @@ Cancellationは意味を分離する。
 
 ### Stop Scheduling
 
-次のScene Prompt itemをsubmitしない。
+次のimage taskをsubmitしない。
 
 ### Force Interrupt
 
@@ -880,9 +850,9 @@ CancelしただけでVast.ai Instanceを無条件destroyしない。Stop Schedul
 
 ```text
 Local ComfyUI API reachable
-ScenePrompterExpand registered
-Scene Prompt Tools custom APIs available
-required custom nodes available
+standard graph node types registered
+standard ComfyUI APIs available
+required standard nodes available
 workflow/API graph valid
 required Local models available
 output path writable
@@ -904,7 +874,6 @@ Service Integration
   SSH private key path exists
   Remote ComfyUI install path configured in Environment Settings
   GitHub PAT resolved from safeStorage / BATCH_STUDIO_GITHUB_PAT / GH_TOKEN
-  workflow依存 custom_nodes list valid
 
 Execution environment
   Instance can become running
@@ -915,9 +884,9 @@ Execution environment
   worker runtime available
   remote disk capacity sufficient
   remote localhost ComfyUI API reachable
-  ScenePrompterExpand registered
-  Scene Prompt Tools APIs available
-  required custom nodes available
+  standard graph node types registered
+  standard ComfyUI APIs available
+  required standard nodes available
   required R2 model objects exist
 ```
 
@@ -1015,7 +984,7 @@ path traversal / symlink escapeを拒否する。
 | model GET URL発行 | Yes | - | URL transport | receives | - | serves |
 | model bytes transfer | No | - | No | downloads | - | serves |
 | Workflow execution | coordinate | - | control | orchestrates | executes | - |
-| Scene Prompt continuous run | monitor | - | events | orchestrates | executes | - |
+| standard image sequence | monitor | - | events | orchestrates | executes | - |
 | remote output package | coordinate | - | control | Yes | produces | - |
 | artifact upload authorization | Yes | - | URL transport | receives | - | accepts |
 | R2 -> Local download | Yes | - | No | No | - | serves |
@@ -1072,7 +1041,7 @@ Cloud Instance status
 SSH connection status
 Model preparation status
 Overall generation progress
-Current Scene Prompt branch
+Current image sequence branch
 Branch progress
 Current prompt ID
 Artifact packaging status
@@ -1132,7 +1101,7 @@ Local Executionとして現在実装済み:
 
 ```text
 Local ComfyUI API client
-Scene Prompt Tools prepare / claim / finalize / release
+standard image tasks / immutable inputs / durable submission reconciliation
 deterministic branch enumeration
 prompt submission / history wait
 Stop scheduling
@@ -1150,12 +1119,12 @@ SSH client / Host Key verification
 Remote Worker deploy + SHA-256 verification
 Remote ComfyUI install path validation
 Remote environment bootstrap
-  aria2 / gh / PAT / latest ComfyUI release / requirements / Manager / custom_nodes / restart
+  aria2 / gh / PAT / latest ComfyUI release / requirements / Manager / restart
 R2 -> Remote model staging with up to 4 concurrent model downloads
 per-model progress / evidence / Resume skip
 model size / SHA-256 verification + .part + atomic rename
 signed URL non-persistence + expiry retry
-Remote Scene Prompt continuous execution inside the Remote Worker
+Remote standard image execution inside the Remote Worker
 Remote progress recovery / stop scheduling / force interrupt
 artifact count verification
 Remote ZIP + external manifest + SHA-256
@@ -1167,7 +1136,7 @@ Remote/R2 temporary artifact cleanup
 Resume from generation / package / upload / local verification evidence
 ```
 
-PreflightはWorkflow/API graph、Artifact/model availability、provider/key/Instance等のGateを実装している。一方、SSH authentication、Host Key、Remote filesystem/runtime、ComfyUI/Scene Prompt capability等の一部operational validationはRun開始後の各phaseでも実施する。Preflight READYとruntime validationを同義にしない。
+PreflightはWorkflow/API graph、Artifact/model availability、provider/key/Instance等のGateを実装している。一方、SSH authentication、Host Key、Remote filesystem/runtime、ComfyUI standard-node capability等の一部operational validationはRun開始後の各phaseでも実施する。Preflight READYとruntime validationを同義にしない。
 
 ### Restart from scratch
 

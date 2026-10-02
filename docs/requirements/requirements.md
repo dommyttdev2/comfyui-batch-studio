@@ -57,14 +57,14 @@ Status: Active
 | ID | Status | Requirement | Owner |
 | --- | --- | --- | --- |
 | REQ-WF-001 | Decided | 最終 ComfyUI Workflow は Batch Studio が機械的に生成する。Grok に Workflow JSON を編集・生成させない。 | `architecture/workflow-compiler.md` |
-| REQ-WF-002 | Decided | 基本テンプレート Workflow は共通部と枝 Prototype 1本だけを持つ。 | `architecture/workflow-compiler.md` |
-| REQ-WF-003 | Decided | `prompt_plan` の枝数に応じて Prototype を複製し、必要な枝だけを最終 Workflow に存在させる。 | `architecture/workflow-compiler.md` |
+| REQ-WF-002 | Implemented | Templateはcontract、modelFamily、生成設定を持つJSONとし、UI prototype graphを使用しない。 | `architecture/workflow-compiler.md` |
+| REQ-WF-003 | Implemented | Prompt PlanのBranch/Leaf配列から必要な標準ノードのみを直接生成する。 | `architecture/workflow-compiler.md` |
 | REQ-WF-004 | Decided | 最終 Workflow に未使用枝、空の予約枝、未使用枝用 bypass ノード群を残さない。 | `architecture/workflow-compiler.md` |
-| REQ-WF-005 | Decided | Compiler は枝複製時に Node ID、Link ID、関連参照、Group、座標を衝突なく再生成する。 | `architecture/workflow-compiler.md` |
+| REQ-WF-005 | Implemented | CompilerはNode IDとLink IDを一意に採番し、同じ入力から同じUI/APIグラフを生成する。 | `architecture/workflow-compiler.md` |
 | REQ-WF-006 | Decided | Root LoRA は全枝共通、Branch LoRA は当該枝だけに適用する。Root LoRA が不要なプロジェクトでは空 Stack を許容する。 | `architecture/workflow-compiler.md` |
-| REQ-WF-007 | Decided | Template の可変Nodeを Node ID のコード埋め込みで特定せず、`schemas/workflow-template-manifest.schema.json` に従う Manifest の semantic role、Prototype ownership、Common→Branch boundary から解決する。Prototype内部Linkは両端Nodeのownershipから自動導出し、ManifestへLink ID一覧を重複保持しない。 | `architecture/workflow-compiler.md` |
-| REQ-WF-008 | Decided | Manifest Schema v1 は Common/Branch role、`branchPrototype.nodeIds` / `groupIds`、Boundaryのrole+slot、2次元layout offset、`manifestVersion`、Template `id` / `version` / SHA-256 binding を定義する。Template hash不一致や未宣言cross-boundary LinkはCompileをBlockする。Compiler versionとManifest hashはManifest自身ではなくWorkflow build provenanceとして `project_meta.json` 側へ記録する。 | `architecture/workflow-compiler.md` |
-| REQ-WF-009 | Decided | v1 の生成枚数は `1 leaf = 1 image` とし、Branch枚数は `branch.leaves.length`、Project実枚数は全leaf総数からCompilerが算出する。`project_brief.json` の `generation.target_image_count` はPrompt設計の目標値であり差分だけではCompileをBlockしない。Workflow名は `LoRA_{Project実フォルダの親フォルダ名}.json`、ComfyUI保存先は `BatchStudio/{project.id}/{branch.id}`、SceneMatrix `row_id` / `path_label` / `name` はいずれも `leaf.id` とする。`leaf.name` はBatch Studio UI上の人間向け表示名として保持する。 | `architecture/workflow-compiler.md` |
+| REQ-WF-007 | Implemented | Compilerが標準ノードと入出力契約を所有する。Templateに固定Node IDや旧role/prototype/boundaryを保存しない。 | `architecture/workflow-compiler.md` |
+| REQ-WF-008 | Implemented | Manifest schema 2はmanifestVersionとTemplate id/version/SHA-256を定義する。旧schema 1と追加fieldを拒否し、Template hash不一致をBlockする。Compiler versionとManifest hashはproject_meta.jsonのbuild provenanceへ記録する。 | `architecture/workflow-compiler.md` |
+| REQ-WF-009 | Decided | v1 の生成枚数は `1 leaf = 1 image` とし、Branch枚数は `branch.leaves.length`、Project実枚数は全leaf総数からCompilerが算出する。`project_brief.json` の `generation.target_image_count` はPrompt設計の目標値であり差分だけではCompileをBlockしない。Workflow名は `LoRA_{Project実フォルダの親フォルダ名}.json`、ComfyUI保存先は `BatchStudio/{project.id}/{run.id}/{branch.id}/{leaf.id}`、SaveImageの_meta.batchStudioでBranch/Leafを識別する。`leaf.name` はBatch Studio UI上の人間向け表示名として保持する。 | `architecture/workflow-compiler.md` |
 | REQ-WF-010 | Decided | Execution用にUI Workflowと対応するdeterministicなComfyUI API-format graphを生成またはTemplate contractから解決できるようにする。任意のUI Workflowを汎用変換する方式を主経路にしない。 | `architecture/remote-execution.md` |
 
 ## 6. Integrations
@@ -95,7 +95,7 @@ Status: Active
 | REQ-EXEC-001 | Decided | `executionTarget=local` ではLocal ComfyUI APIを使用し、必要モデルのLocal配置を必須、R2配置を任意とする。 | `architecture/remote-execution.md` |
 | REQ-EXEC-002 | Decided | `executionTarget=remote` ではCloud Instance Providerからcurrent SSH endpointを解決し、公開SSH endpointへの秘密鍵認証をcontrol planeとする。SSH Tunnelを使用せず、Remote WorkerがRemote host内のlocalhost ComfyUI APIを操作する。 | `architecture/remote-execution.md` |
 | REQ-EXEC-003 | Decided | Remote targetの必要モデルはR2をsourceとし、public/presigned GET URLでRemote hostが直接取得する。multi-GB model binaryをSSH/SCPで転送しない。 | `architecture/remote-execution.md` |
-| REQ-EXEC-004 | Decided | Scene Prompt Tools `ScenePrompterExpand` の連続生成はfrontend button操作ではなく、標準ComfyUI APIとScene Prompt Tools custom run-context APIのorchestrationで再現する。 | `architecture/remote-execution.md` |
+| REQ-EXEC-004 | Implemented | 標準ノードのみで1 Leaf = 1 POST /prompt = 1 imageをPlan順に実行する。Root/Branch LoRAは標準LoraLoader、最終PromptはBatch Studioで合成する。seedはRun snapshotで固定しResumeで再使用する。旧Template/Workflow/Runおよびcustom endpointとの後方互換性は提供しない。 | `architecture/standard-image-execution.md` |
 | REQ-EXEC-005 | Decided | Remote成果物はRemoteでmanifest/package/hashを作成し、Main Processが発行する短命presigned PUT URLでR2へuploadする。R2 credentialをRemoteへ渡さない。 | `architecture/remote-execution.md` |
 | REQ-EXEC-006 | Decided | Remote RunはR2へuploadした成果物をLocalへdownloadし、Local SHA-256とRemote package SHA-256が一致した後にのみ`COMPLETED`とする。 | `architecture/remote-execution.md` |
 | REQ-EXEC-007 | Decided | Executionはpersistent Runとしてphase、prompt ID、artifact evidence等を保持し、既に検証済みの高コスト工程を無条件に再実行せずResume可能とする。Secretや不要なsigned URLはRun Stateへ保存しない。 | `architecture/remote-execution.md` |

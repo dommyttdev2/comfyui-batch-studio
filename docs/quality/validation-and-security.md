@@ -136,7 +136,7 @@ Blocking:
 - group id collision。
 - `last_node_id` / `last_link_id` 不整合。
 - final branch count と Prompt Plan branch count の不一致。
-- main SceneMatrix が空の branch。
+- Leafが空のBranch。
 - Workflow が `models.json` にない Model を参照。
 - Execution用API-format graphが生成不能またはUI Workflowと整合しない。
 
@@ -213,9 +213,9 @@ READY 判定前に次をまとめて表示する。
 `executionTarget=local` では最低限:
 
 - Local ComfyUI API reachable。
-- `ScenePrompterExpand` registered。
-- Scene Prompt Tools custom APIs available。
-- required custom nodes available。
+- standard graph node types registered。
+- standard ComfyUI APIs available。
+- required standard nodes available。
 - Local output path writable。
 
 ### Remote operational checks
@@ -231,9 +231,9 @@ READY 判定前に次をまとめて表示する。
 - Remote Worker runtime available。
 - Remote disk capacity sufficient。
 - Remote host内からComfyUI localhost API reachable。
-- `ScenePrompterExpand` registered。
-- Scene Prompt Tools custom APIs available。
-- required custom nodes available。
+- standard graph node types registered。
+- standard ComfyUI APIs available。
+- required standard nodes available。
 - required R2 model objects exist。
 - R2 connection / bucket valid。
 - Remote model destination mapping valid。
@@ -254,7 +254,7 @@ Blocking が1件でもあれば `BLOCKED`。
 
 Execution用API-format graphの生成・構造・hash / workflow identity検証は実装済みである。
 
-一方、Local ComfyUI API到達性、Scene Prompt Tools / required custom nodes、実SSH authentication、Host Key、Remote Worker、remote filesystem/disk、Remote localhost ComfyUI capability等の一部operational checkはPreflightでは未実装である。これらの多くはExecution開始後のLocal / Remote各phaseでruntime validationされる。
+一方、Local ComfyUI API到達性、required standard nodes、実SSH authentication、Host Key、Remote Worker、remote filesystem/disk、Remote localhost ComfyUI capability等の一部operational checkはPreflightでは未実装である。これらの多くはExecution開始後のLocal / Remote各phaseでruntime validationされる。
 
 したがって現在の `READY` は実装済みPreflight Gate範囲の結果であり、本章で定義する「全runtime capabilityを開始前に検証済み」という意味ではない。Preflightで未検証の項目を成功扱いせず、runtime validation failureもExecution errorとして明示する。
 

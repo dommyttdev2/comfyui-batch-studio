@@ -1030,7 +1030,7 @@ async function finalizeRemoteInstance(root: string, runId: string) {
     });
   }
 }
-function remoteSceneExecutor() {
+function remoteImageExecutor() {
   if (!remoteExecutionService)
     remoteExecutionService = new RemoteExecutionService(
       remoteExecutor(),
@@ -1079,7 +1079,7 @@ async function prepareRemoteExecution(root: string, runId: string) {
       githubToken,
     });
     await remoteStager().stage(root, runId);
-    await remoteSceneExecutor().start(root, runId);
+    await remoteImageExecutor().start(root, runId);
     const settled = await getExecutionRun(root, runId);
     if (settled?.lifecycle === 'DISCARDED') await finalizeRemoteInstance(root, runId);
   } catch (error) {
@@ -1313,10 +1313,10 @@ async function stopRunForExit(root: string, runId: string, mode: ExitMode) {
     } else {
       await requestStopScheduling(root, runId);
       if (run.executionTarget === 'remote') {
-        await remoteSceneExecutor().stopScheduling(root, runId);
+        await remoteImageExecutor().stopScheduling(root, runId);
         if (mode === 'interrupt') {
           await requestForceInterrupt(root, runId);
-          await remoteSceneExecutor().forceInterrupt(root, runId);
+          await remoteImageExecutor().forceInterrupt(root, runId);
         }
       } else if (mode === 'interrupt') {
         await requestForceInterrupt(root, runId);
@@ -1675,7 +1675,7 @@ async function reconcilePersistedExecutionRuns(root: string) {
             try {
               if (run.phase === 'CLOUD_INSTANCE_FINALIZING')
                 await recoverRemoteFinalization(root, run.runId);
-              else await remoteSceneExecutor().recover(root, run.runId);
+              else await remoteImageExecutor().recover(root, run.runId);
             } catch (error) {
               await markExecutionRecoveryUncertain(root, run.runId, error);
             }
@@ -2201,7 +2201,7 @@ function createIpcRegistrationDependencies() {
     rememberMostRecentOpenProject,
     rememberProjectAndRefreshMenu,
     remoteExecutor,
-    remoteSceneExecutor,
+    remoteImageExecutor,
     renderMarketplacePng,
     requestForceInterrupt,
     requestStopScheduling,

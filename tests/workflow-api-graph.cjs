@@ -111,10 +111,6 @@ async function makeProject(family) {
   return root;
 }
 
-function byTitle(graph, prefix) {
-  return Object.values(graph).find((node) => String(node?._meta?.title || '').startsWith(prefix));
-}
-
 (async () => {
   const { compileWorkflow } = await load('compiler.js');
   const { hashCanonicalJson, validateApiGraphStructure } = await load('workflow-api.js');
@@ -214,6 +210,18 @@ function byTitle(graph, prefix) {
         assert.deepEqual(rebuilt[id].inputs, task.graph[id].inputs);
     }
     const duplicate = structuredClone(api);
+    const batch = structuredClone(tasks[0].graph);
+    Object.values(batch).find((node) => node.class_type.includes('LatentImage')).inputs.batch_size =
+      2;
+    assert.throws(
+      () =>
+        enumerateImageTasks(batch, {
+          snapshot: {
+            plan: { branches: [{ branchId: tasks[0].branchId, leafIds: [tasks[0].leafId] }] },
+          },
+        }),
+      /SINGLE_IMAGE_REQUIRED/,
+    );
     duplicate[999] = structuredClone(duplicate[tasks[0].saveNodeId]);
     assert.throws(
       () =>

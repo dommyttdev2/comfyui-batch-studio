@@ -429,8 +429,7 @@ function requireRunOwnedSnapshot(run: ExecutionRun) {
 }
 
 // Every graph consumer verifies the Run's recorded hashes before executing.
-// Legacy Runs without an immutable snapshot may only read their original
-// recorded file with the matching hash; they must never silently fall back.
+// Only the standard contract with an immutable, seeded snapshot can execute.
 export async function readExecutionWorkflow(root: string, run: ExecutionRun) {
   requireRunOwnedSnapshot(run);
   const { workflow } = run.snapshot;

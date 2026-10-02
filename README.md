@@ -40,7 +40,7 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - **Grok CLI または Codex CLI**: Story / モデル選定 / Prompt Plan / Caption で AI agent を利用するとき。利用する provider の CLI をインストールし、CLI 側で認証を完了してください
 - **Civitai API Key**: 統合モデルカタログを新規同期するとき
 - **Cloudflare R2 credentials**: R2 機能を利用するとき
-- **Local ComfyUI installation + Workflow依存custom_nodes**: Localモデル配置・Local生成を利用するとき。Local実行には起動中のComfyUI APIが必要です
+- **Local ComfyUI installation（標準ノードのみ）**: Localモデル配置・Local生成を利用するとき。Local実行には起動中のComfyUI APIが必要です。追加custom_nodesは不要です
 - **Vast.ai API Key + SSH private key path + Remote ComfyUIインストール先 + R2**: Vast.ai Remote実行を利用するとき。選択InstanceへのSSH接続とRemote環境準備・R2転送が必要です
 
 ## セットアップ
