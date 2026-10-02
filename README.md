@@ -9,6 +9,8 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 
 ## 主な機能
 
+バージョン付番は[プロジェクトの付番ルール](docs/operations/versioning.md)で定義します。開発版 `0.x.y` の x は機能追加・機能拡張、y はバグ修正・互換性を保つ改善を表します。互換性のない変更も x を増やし、影響と移行方法をリリースノートに記載します。
+
 - Project Brief からのプロジェクト作成
 - 共通 AssistantPane から Grok CLI / Codex CLI を利用する Story 作成支援
 - Civitai Model Collection の同期と統合 `model_catalog.json` 管理

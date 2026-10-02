@@ -58,6 +58,7 @@ docs/
 | `integrations/external-tools.md` | Batch Studio内蔵Civitai Catalog、Cloudflare R2、ComfyUI、Project filesystemとの境界。旧Standalone reposの位置づけ |
 | `integrations/service-integrations.md` | Homeのサービス連携、外部credential UI、Cloud Instance Provider abstraction、Vast.ai API/Instance管理、Remote Executionへのprovider handoff |
 | `quality/validation-and-security.md` | 検証、Preflight、秘密情報、AI CLI workspace隔離、failure policy |
+| `operations/versioning.md` | エージェント向けのアプリ付番、独立した契約バージョン、リリース準備・検証手順 |
 | `roadmap/implementation-phases.md` | 依存関係に沿った実装順序。要件の正本ではない |
 | `decisions/decision-log.md` | 合意済み設計判断、置換された判断、未決判断の履歴 |
 
