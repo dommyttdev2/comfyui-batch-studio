@@ -1,16 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ComfyUI Batch Studio Workflow Template Manifest",
-  "description": "Formal JSON Schema for Workflow Template Manifest schemaVersion 1 with family-specific model-loader roles.",
+  "description": "Standard ComfyUI generation template binding, schemaVersion 2. Legacy node roles are unsupported.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "manifestVersion", "template", "common", "branchPrototype"],
+  "required": [
+    "schemaVersion",
+    "manifestVersion",
+    "template"
+  ],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "manifestVersion": { "$ref": "#/$defs/semver" },
-    "template": { "$ref": "#/$defs/templateBinding" },
-    "common": { "$ref": "#/$defs/commonArea" },
-    "branchPrototype": { "$ref": "#/$defs/branchPrototype" }
+    "schemaVersion": {
+      "const": 2
+    },
+    "manifestVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "template": {
+      "$ref": "#/$defs/templateBinding"
+    }
   },
   "$defs": {
     "semver": {
@@ -27,147 +35,24 @@
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
-    "roleNode": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["nodeId"],
-      "properties": { "nodeId": { "type": "integer", "minimum": 0 } }
-    },
     "templateBinding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "version", "sha256"],
+      "required": [
+        "id",
+        "version",
+        "sha256"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/stableId" },
-        "version": { "$ref": "#/$defs/semver" },
-        "sha256": { "$ref": "#/$defs/sha256" }
-      }
-    },
-    "illustriousCommonRoles": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["checkpoint", "rootLoraStack", "planCommonPrompt", "promptOutput"],
-      "properties": {
-        "checkpoint": { "$ref": "#/$defs/roleNode" },
-        "rootLoraStack": { "$ref": "#/$defs/roleNode" },
-        "planCommonPrompt": { "$ref": "#/$defs/roleNode" },
-        "promptOutput": { "$ref": "#/$defs/roleNode" }
-      }
-    },
-    "animaCommonRoles": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["diffusionModel", "textEncoder", "vae", "rootLoraStack", "planCommonPrompt", "promptOutput"],
-      "properties": {
-        "diffusionModel": { "$ref": "#/$defs/roleNode" },
-        "textEncoder": { "$ref": "#/$defs/roleNode" },
-        "vae": { "$ref": "#/$defs/roleNode" },
-        "rootLoraStack": { "$ref": "#/$defs/roleNode" },
-        "planCommonPrompt": { "$ref": "#/$defs/roleNode" },
-        "promptOutput": { "$ref": "#/$defs/roleNode" }
-      }
-    },
-    "commonArea": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["roles"],
-      "properties": {
-        "roles": {
-          "oneOf": [
-            { "$ref": "#/$defs/illustriousCommonRoles" },
-            { "$ref": "#/$defs/animaCommonRoles" }
-          ]
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
         }
-      }
-    },
-    "branchRoles": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["loraStack", "promptIngress", "mainMatrix", "prompter", "counter", "latent", "expand", "positiveEncode", "negativeEncode", "sampler", "vaeDecode", "save"],
-      "properties": {
-        "loraStack": { "$ref": "#/$defs/roleNode" },
-        "promptIngress": { "$ref": "#/$defs/roleNode" },
-        "mainMatrix": { "$ref": "#/$defs/roleNode" },
-        "fixedMatrix": { "$ref": "#/$defs/roleNode" },
-        "prompter": { "$ref": "#/$defs/roleNode" },
-        "counter": { "$ref": "#/$defs/roleNode" },
-        "latent": { "$ref": "#/$defs/roleNode" },
-        "animaLatent": { "$ref": "#/$defs/roleNode" },
-        "expand": { "$ref": "#/$defs/roleNode" },
-        "positiveEncode": { "$ref": "#/$defs/roleNode" },
-        "negativeEncode": { "$ref": "#/$defs/roleNode" },
-        "sampler": { "$ref": "#/$defs/roleNode" },
-        "vaeDecode": { "$ref": "#/$defs/roleNode" },
-        "save": { "$ref": "#/$defs/roleNode" }
-      }
-    },
-    "commonBoundaryEndpoint": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["role", "slot"],
-      "properties": {
-        "role": {
-          "enum": ["checkpoint", "diffusionModel", "textEncoder", "vae", "rootLoraStack", "planCommonPrompt", "promptOutput"]
-        },
-        "slot": { "type": "integer", "minimum": 0 }
-      }
-    },
-    "branchBoundaryEndpoint": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["role", "slot"],
-      "properties": {
-        "role": {
-          "enum": ["loraStack", "promptIngress", "mainMatrix", "fixedMatrix", "prompter", "counter", "latent", "animaLatent", "expand", "positiveEncode", "negativeEncode", "sampler", "vaeDecode", "save"]
-        },
-        "slot": { "type": "integer", "minimum": 0 }
-      }
-    },
-    "boundary": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "source", "target"],
-      "properties": {
-        "id": { "$ref": "#/$defs/stableId" },
-        "source": { "$ref": "#/$defs/commonBoundaryEndpoint" },
-        "target": { "$ref": "#/$defs/branchBoundaryEndpoint" }
-      }
-    },
-    "layoutOffset": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["x", "y"],
-      "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
-    },
-    "layout": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["offset"],
-      "properties": { "offset": { "$ref": "#/$defs/layoutOffset" } }
-    },
-    "branchPrototype": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["nodeIds", "groupIds", "roles", "boundaries", "layout"],
-      "properties": {
-        "nodeIds": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "type": "integer", "minimum": 0 }
-        },
-        "groupIds": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "type": "integer", "minimum": 0 }
-        },
-        "roles": { "$ref": "#/$defs/branchRoles" },
-        "boundaries": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "$ref": "#/$defs/boundary" }
-        },
-        "layout": { "$ref": "#/$defs/layout" }
       }
     }
   },

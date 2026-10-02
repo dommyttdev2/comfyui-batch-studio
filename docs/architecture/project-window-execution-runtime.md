@@ -410,7 +410,7 @@ vastai:<instanceId>
 
 同一Instance排他が必要な理由:
 
-- Remote environment update / custom_nodes syncが共有環境を変更する。
+- Remote environment updateが共有環境を変更する。
 - ComfyUI queue / interruptが共有される。
 - Run Aの正常完了時は開始前からrunningでもInstanceを必ずstopする。非成功終了時にもinitial-state restoreでstopする場合があり、Run Bを巻き込まないため同一Instance排他が必要。
 

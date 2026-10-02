@@ -52,10 +52,6 @@ export interface ProjectBriefInput {
 }
 export type ExecutionTarget = 'local' | 'remote';
 export type CloudInstanceProviderId = 'vastai';
-export interface RemoteCustomNodeRepository {
-  repository: string;
-  ref?: string;
-}
 export interface AppSettings {
   comfyUiInstallPath: string;
   assistantProvider?: 'grok' | 'codex';
@@ -63,7 +59,6 @@ export interface AppSettings {
   comfyUiApiEndpoint?: string;
   projectRoot?: string;
   artifactRoot?: string;
-  remoteCustomNodes?: RemoteCustomNodeRepository[];
   catalogPath?: string;
   r2Bucket?: string;
   r2ModelPrefix?: string;
@@ -786,21 +781,9 @@ export interface GrokTask {
   attachments: Array<{ name: string; path: string; purpose: string; exists: boolean }>;
 }
 export interface WorkflowManifest {
-  schemaVersion: 1;
+  schemaVersion: 2;
   manifestVersion: string;
   template: { id: string; version: string; sha256: string };
-  common: { roles: Record<string, { nodeId: number }> };
-  branchPrototype: {
-    nodeIds: number[];
-    groupIds: number[];
-    roles: Record<string, { nodeId: number }>;
-    boundaries: Array<{
-      id: string;
-      source: { role: string; slot: number };
-      target: { role: string; slot: number };
-    }>;
-    layout: { offset: { x: number; y: number } };
-  };
 }
 export interface CompileResult {
   outputPath: string;
@@ -862,7 +845,6 @@ export type ExecutionPhase =
   | 'REMOTE_COMFYUI_CHECKING_OUT'
   | 'REMOTE_COMFYUI_REQUIREMENTS_INSTALLING'
   | 'REMOTE_COMFYUI_MANAGER_CONFIGURING'
-  | 'REMOTE_CUSTOM_NODES_SYNCING'
   | 'REMOTE_COMFYUI_RESTARTING'
   | 'REMOTE_ENVIRONMENT_READY'
   | 'REMOTE_MODELS_CHECKING'
@@ -947,6 +929,7 @@ export interface ExecutionRunSnapshot {
     apiSha256: string;
     workflowIdentity: string;
     modelsSha256?: string;
+    sourceWorkflowIdentity?: string;
     immutable?: {
       planPath: string;
       modelsPath: string;

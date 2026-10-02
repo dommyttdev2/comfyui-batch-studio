@@ -90,43 +90,18 @@ const writeJson = (p, v) => {
   const result = await compileWorkflow(root);
   assert.equal(result.validation.valid, true);
   const workflow = JSON.parse(fs.readFileSync(result.outputPath, 'utf8'));
-  const withLora = workflow.nodes.find(
-    (n) => n.type === 'AnimaLoraStack' && String(n.title).startsWith('LoRA - with-lora -'),
-  );
-  const withoutLora = workflow.nodes.find(
-    (n) => n.type === 'AnimaLoraStack' && String(n.title).startsWith('LoRA - without-lora -'),
-  );
-  assert.ok(withLora, 'LoRA branch stack must exist');
-  assert.ok(withoutLora, 'non-LoRA branch stack must exist');
-  assert.equal(withLora.mode, 0, 'branch with LoRA must be enabled');
-  assert.equal(withoutLora.mode, 4, 'branch without LoRA must be bypassed');
-  assert.equal(JSON.parse(withLora.widgets_values[0]).loras.length, 1);
-  assert.equal(JSON.parse(withoutLora.widgets_values[0]).loras.length, 0);
-
-  const withLoraMatrix = workflow.nodes.find(
-    (n) => n.type === 'SceneMatrix' && String(n.title).startsWith('Prompt - with-lora -'),
-  );
-  const withoutLoraMatrix = workflow.nodes.find(
-    (n) => n.type === 'SceneMatrix' && String(n.title).startsWith('Prompt - without-lora -'),
-  );
-  assert.ok(withLoraMatrix, 'with-LoRA SceneMatrix must exist');
-  assert.ok(withoutLoraMatrix, 'without-LoRA SceneMatrix must exist');
-  const withLoraRow = JSON.parse(withLoraMatrix.widgets_values[0]).sets[0];
-  const withoutLoraRow = JSON.parse(withoutLoraMatrix.widgets_values[0]).sets[0];
-  assert.equal(withLoraRow.row_id, 'leaf-one');
+  const loras = workflow.nodes.filter((n) => n.type === 'LoraLoader');
+  assert.equal(loras.length, 1);
+  assert.deepEqual(loras[0].widgets_values, ['character.safetensors', 0.7, 0.7]);
+  assert.equal(loras[0].mode, 0);
+  const api = JSON.parse(fs.readFileSync(result.apiOutputPath, 'utf8'));
+  const enc = Object.values(api).find((n) => n._meta?.title === 'Positive - without-lora/leaf-two');
   assert.equal(
-    withLoraRow.name,
-    'leaf-one',
-    'SceneMatrix row name must use prompt id, not prompt_plan name',
+    api[enc.inputs.clip[0]].class_type,
+    'CheckpointLoaderSimple',
+    'zero LoRAs directly uses loader CLIP',
   );
-  assert.equal(withLoraRow.path_label, 'leaf-one');
-  assert.equal(withoutLoraRow.row_id, 'leaf-two');
-  assert.equal(
-    withoutLoraRow.name,
-    'leaf-two',
-    'SceneMatrix row name must use prompt id, not prompt_plan name',
-  );
-  assert.equal(withoutLoraRow.path_label, 'leaf-two');
+  assert.equal(workflow.nodes.filter((n) => n.type === 'SaveImage').length, 2);
   console.log('Compiler LoRA mode tests passed.');
 })().catch((error) => {
   console.error(error);

@@ -351,12 +351,7 @@ function plan() {
   assert.equal(new Set(groupIds).size, groupIds.length, 'compiled group ids must be unique');
   assert.equal(compiled.last_node_id, Math.max(...nodeIds));
   assert.equal(compiled.last_link_id, Math.max(...linkIds));
-  const counters = compiled.nodes.filter((n) => n.type === 'ScenePromptCounter');
-  assert.equal(counters.length, 2);
-  assert.ok(
-    counters.every((n) => n.widgets_values?.[0] === 1),
-    'all branch counters must equal 1',
-  );
+  assert.equal(compiled.nodes.filter((n) => n.type === 'SaveImage').length, 3);
   let summary = await scan.scanProject(root);
   assert.equal(summary.artifacts.find((a) => a.key === 'workflow').state, 'generated');
   let pf = await preflight.runPreflight(root);

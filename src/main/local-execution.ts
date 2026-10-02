@@ -1,4 +1,4 @@
-import { createHash, randomInt, randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -9,9 +9,9 @@ import {
   markGenerationStarted,
 } from '../shared/execution-progress.js';
 import { readJson } from './fs-utils.js';
-import type { ApiGraph, ApiGraphNode } from './workflow-api.js';
+import type { ApiGraph } from './workflow-api.js';
 import { ComfyUiClient } from './comfyui-client.js';
-import { ScenePromptRunClient } from './scene-prompt-client.js';
+import { enumerateImageTasks, graphToWorkflow } from './image-tasks.js';
 import {
   getExecutionRun,
   readExecutionWorkflow,
@@ -22,7 +22,6 @@ import {
 
 type LocalExecutionSettings = { endpoint: string; installPath: string };
 type SettingsProvider = () => Promise<LocalExecutionSettings>;
-type BranchBinding = { branchId: string; leafIds: string[]; expandNodeId: string };
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const LOCAL_FILE_SCOPE = 'local-generated-file';
 const LOCAL_OUTPUT_COLLECTION_FAILED = 'LOCAL_OUTPUT_COLLECTION_FAILED';
@@ -59,14 +58,16 @@ async function sha256File(file: string) {
   return hash.digest('hex');
 }
 function isolateBranchSavePaths(graph: ApiGraph, run: ExecutionRun, branchId: string) {
-  const saveNodes = Object.entries(graph).filter(
-    ([, node]) => node.class_type === 'SceneSaveImage',
-  );
-  if (!saveNodes.length) throw new Error(`Branch ${branchId} has no SceneSaveImage output.`);
+  const saveNodes = Object.entries(graph).filter(([, node]) => node.class_type === 'SaveImage');
+  if (!saveNodes.length) throw new Error(`Branch ${branchId} has no SaveImage output.`);
   // Alter only the submitted API graph. The Compiler snapshot and the user's
   // legacy output folders remain untouched.
   for (const [, node] of saveNodes)
-    node.inputs.path = path.posix.join(localRunOutputRelative(run), encodeURIComponent(branchId));
+    node.inputs.filename_prefix = path.posix.join(
+      localRunOutputRelative(run),
+      encodeURIComponent(branchId),
+      encodeURIComponent(node._meta!.batchStudio!.leafId),
+    );
   return saveNodes.map(([id]) => id);
 }
 async function recordPromptOutputs(
@@ -83,8 +84,8 @@ async function recordPromptOutputs(
     entry = history?.[promptId],
     recorded = new Set<string>();
   const images = saveNodeIds.flatMap((id) => entry?.outputs?.[id]?.images ?? []);
-  if (!images.length)
-    throw new Error(`ComfyUI prompt ${promptId} returned no SceneSaveImage files.`);
+  if (images.length !== 1)
+    throw new Error(`ComfyUI prompt ${promptId} must return exactly one SaveImage file.`);
   for (const image of images) {
     if (
       image?.type !== 'output' ||
@@ -137,6 +138,8 @@ async function recordPromptOutputs(
       scope: LOCAL_FILE_SCOPE,
       data: {
         promptId,
+        branchId: run.current.branchId,
+        leafId: run.current.leafId,
         relativePath,
         size: metadata.size,
         sha256: await sha256File(actualFile),
@@ -146,98 +149,6 @@ async function recordPromptOutputs(
   return recorded.size;
 }
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-function clone<T>(value: T): T {
-  return structuredClone(value);
-}
-function linkId(value: unknown) {
-  return Array.isArray(value) && value.length === 2 && typeof value[0] === 'string'
-    ? value[0]
-    : null;
-}
-function ancestors(graph: ApiGraph, nodeId: string) {
-  const seen = new Set<string>(),
-    pending = [nodeId];
-  while (pending.length) {
-    const id = pending.pop()!;
-    if (seen.has(id) || !graph[id]) continue;
-    seen.add(id);
-    for (const value of Object.values(graph[id].inputs ?? {})) {
-      const linked = linkId(value);
-      if (linked) pending.push(linked);
-    }
-  }
-  return seen;
-}
-function descendants(graph: ApiGraph, nodeId: string) {
-  const targets = new Map<string, string[]>();
-  for (const [id, node] of Object.entries(graph))
-    for (const value of Object.values(node.inputs ?? {})) {
-      const linked = linkId(value);
-      if (linked) targets.set(linked, [...(targets.get(linked) ?? []), id]);
-    }
-  const seen = new Set<string>(),
-    pending = [nodeId];
-  while (pending.length) {
-    const id = pending.pop()!;
-    if (seen.has(id) || !graph[id]) continue;
-    seen.add(id);
-    pending.push(...(targets.get(id) ?? []));
-  }
-  return seen;
-}
-function matrixLeafIds(node: ApiGraphNode | undefined) {
-  if (node?.class_type !== 'SceneMatrix') return null;
-  try {
-    const parsed = JSON.parse(String(node.inputs.matrix_json ?? '')),
-      sets = Array.isArray(parsed?.sets) ? parsed.sets : [];
-    return sets
-      .filter((row: any) => row?.enabled !== false)
-      .map((row: any) => String(row?.row_id ?? ''));
-  } catch {
-    return null;
-  }
-}
-export function enumerateSceneBranches(graph: ApiGraph, run: ExecutionRun): BranchBinding[] {
-  const expandIds = Object.entries(graph)
-    .filter(([, node]) => node.class_type === 'ScenePrompterExpand')
-    .map(([id]) => id);
-  return run.snapshot.plan.branches.map((branch) => {
-    const matches = expandIds.filter((expandId) => {
-      const up = ancestors(graph, expandId);
-      return [...up].some((id) => {
-        const leafIds = matrixLeafIds(graph[id]);
-        return leafIds != null && JSON.stringify(leafIds) === JSON.stringify(branch.leafIds);
-      });
-    });
-    if (matches.length !== 1)
-      throw new Error(
-        `Branch ${branch.branchId} must map to exactly one ScenePrompterExpand (found ${matches.length}).`,
-      );
-    return { branchId: branch.branchId, leafIds: branch.leafIds, expandNodeId: matches[0] };
-  });
-}
-export function sliceSceneBranchGraph(graph: ApiGraph, expandNodeId: string): ApiGraph {
-  if (!graph[expandNodeId]) throw new Error(`ScenePrompterExpand ${expandNodeId} was not found.`);
-  const down = descendants(graph, expandNodeId),
-    keep = ancestors(graph, [...down][0] ?? expandNodeId);
-  for (const id of down) keep.add(id);
-  for (const id of [...down]) for (const ancestor of ancestors(graph, id)) keep.add(ancestor);
-  for (const id of keep)
-    if (id !== expandNodeId && graph[id]?.class_type === 'ScenePrompterExpand')
-      throw new Error('A branch slice contains multiple ScenePrompterExpand nodes.');
-  return Object.fromEntries(
-    [...keep].sort((a, b) => Number(a) - Number(b)).map((id) => [id, clone(graph[id])]),
-  );
-}
-function applyExpandState(graph: ApiGraph, expandNodeId: string, runId: string, index: number) {
-  const node = graph[expandNodeId];
-  if (!node || node.class_type !== 'ScenePrompterExpand')
-    throw new Error('ScenePrompterExpand is missing from branch graph.');
-  node.inputs.current_index = index;
-  node.inputs.run_id = runId;
-  node.inputs.seed_base = randomInt(0, 0x7fffffff);
-  (node.inputs as any).seed_base_literal = false;
-}
 function errorOf(
   run: ExecutionRun,
   code: string,
@@ -342,7 +253,6 @@ export class LocalExecutionService {
     private readonly settingsProvider: SettingsProvider,
     private readonly clientFactory = (endpoint: string) => ({
       comfy: new ComfyUiClient(endpoint),
-      scene: new ScenePromptRunClient(endpoint),
     }),
   ) {}
   start(root: string, runId: string): Promise<void> {
@@ -443,16 +353,17 @@ export class LocalExecutionService {
       await sleep(750);
     }
     const { api: graph } = await readExecutionWorkflow(root, run);
-    const binding = enumerateSceneBranches(graph, run).find(
-      (item) => item.branchId === run.current.branchId,
+    const task = enumerateImageTasks(graph, run).find(
+      (item) => item.branchId === run.current.branchId && item.leafId === run.current.leafId,
     );
     const progress = run.progress.branches.find((item) => item.branchId === run.current.branchId);
-    if (!binding || !progress || binding.leafIds[progress.completed] !== run.current.leafId)
-      throw new Error(
-        'Persisted branch/leaf does not match progress; refusing to count the prompt twice.',
-      );
-    const sliced = sliceSceneBranchGraph(graph, binding.expandNodeId),
-      saveNodeIds = isolateBranchSavePaths(sliced, run, binding.branchId);
+    const branchPlan = run.snapshot.plan.branches.find(
+      (item) => item.branchId === run.current.branchId,
+    );
+    if (!task || !progress || branchPlan?.leafIds[progress.completed] !== run.current.leafId)
+      throw new Error('Persisted branch/leaf does not match progress.');
+    const binding = task;
+    const saveNodeIds = isolateBranchSavePaths(task.graph, run, task.branchId);
     try {
       await recordPromptOutputs(
         root,
@@ -504,7 +415,7 @@ export class LocalExecutionService {
     let run = await getExecutionRun(root, runId);
     if (!run || run.executionTarget !== 'local' || run.lifecycle !== 'RUNNING') return;
     const settings = await this.settingsProvider(),
-      { comfy, scene } = this.clientFactory(settings.endpoint);
+      { comfy } = this.clientFactory(settings.endpoint);
     await mutateExecutionRun(root, runId, (r) => {
       r.phase = 'LOCAL_COMFYUI_CONNECTING';
     });
@@ -512,13 +423,17 @@ export class LocalExecutionService {
     await mutateExecutionRun(root, runId, (r) => {
       r.phase = 'LOCAL_CAPABILITY_CHECKING';
     });
-    const { api: graph, ui: workflow } = await readExecutionWorkflow(root, run);
+    const { api: graph } = await readExecutionWorkflow(root, run);
     const info = await comfy.objectInfo(),
       required = new Set(Object.values(graph).map((node) => node.class_type));
     const missing = [...required].filter((name) => !info?.[name]);
     if (missing.length)
       throw new Error(`Local ComfyUI is missing required node types: ${missing.join(', ')}`);
-    const branches = enumerateSceneBranches(graph, run);
+    const tasks = enumerateImageTasks(graph, run);
+    const branches = run.snapshot.plan.branches.map((branch) => ({
+      ...branch,
+      tasks: tasks.filter((task) => task.branchId === branch.branchId),
+    }));
     await mutateExecutionRun(root, runId, (r) => {
       r.phase = 'WORKFLOW_PREPARING';
     });
@@ -534,19 +449,8 @@ export class LocalExecutionService {
         await pauseForStop(root, runId);
         return;
       }
-      const branchGraph = sliceSceneBranchGraph(graph, binding.expandNodeId),
-        continuousId = `${run.runId}:${binding.branchId}`;
-      const saveNodeIds = isolateBranchSavePaths(branchGraph, run, binding.branchId);
-      applyExpandState(branchGraph, binding.expandNodeId, continuousId, branchProgress.completed);
-      const wrapper = { output: branchGraph },
-        prepared = await scene.prepare(wrapper, binding.expandNodeId, workflow, run.runId);
-      if (Number(prepared.total_batches) !== binding.leafIds.length)
-        throw new Error(
-          `Scene Prompt plan mismatch for ${binding.branchId}: expected ${binding.leafIds.length} batches, got ${prepared.total_batches}.`,
-        );
-      let lastPromptId = '',
-        runHandleClaimed = false;
-      try {
+      let lastPromptId = '';
+      {
         for (let index = branchProgress.completed; index < binding.leafIds.length; index++) {
           run = await getExecutionRun(root, runId);
           if (!run || run.lifecycle !== 'RUNNING') return;
@@ -554,7 +458,9 @@ export class LocalExecutionService {
             await pauseForStop(root, runId);
             return;
           }
-          applyExpandState(branchGraph, binding.expandNodeId, continuousId, index);
+          const task = binding.tasks[index],
+            branchGraph = task.graph;
+          const saveNodeIds = isolateBranchSavePaths(branchGraph, run, binding.branchId);
           const attemptId = randomUUID(),
             graphSha256 = createHash('sha256').update(JSON.stringify(branchGraph)).digest('hex');
           await mutateExecutionRun(root, runId, (r) => {
@@ -584,7 +490,15 @@ export class LocalExecutionService {
               throw new Error('Prompt submission attempt was replaced before POST.');
             r.submission.status = 'sending';
           });
-          const submitted = await comfy.prompt(branchGraph, run.runId, attemptId);
+          const submitted = await comfy.prompt(branchGraph, run.runId, attemptId, {
+            workflow: graphToWorkflow(branchGraph),
+            batch_studio: {
+              contract: 1,
+              runId: run.runId,
+              branchId: task.branchId,
+              leafId: task.leafId,
+            },
+          });
           lastPromptId = submitted.prompt_id;
           await mutateExecutionRun(root, runId, (r) => {
             if (r.submission?.attemptId !== attemptId)
@@ -595,10 +509,6 @@ export class LocalExecutionService {
             if (!r.promptIds.includes(lastPromptId)) r.promptIds.push(lastPromptId);
             markGenerationStarted(r, lastPromptId);
           });
-          if (!runHandleClaimed) {
-            await scene.claim(prepared.run_handle, lastPromptId);
-            runHandleClaimed = true;
-          }
           let terminal: 'success' | 'error' = 'error',
             terminalHistory: any = null,
             missingPolls = 0,
@@ -684,25 +594,11 @@ export class LocalExecutionService {
             return;
           }
         }
-        if (lastPromptId) {
-          for (let poll = 0; poll < 120; poll++) {
-            const state = await scene.finalize(
-              prepared.run_handle,
-              binding.expandNodeId,
-              lastPromptId,
-            );
-            if (state === 'finalized') break;
-            if (poll === 119) throw new Error('Scene Prompt finalize timed out.');
-            await sleep(500);
-          }
-        }
         await mutateExecutionRun(root, runId, (r) => {
           const bp = r.progress.branches.find((x) => x.branchId === binding.branchId);
           if (bp) bp.state = 'completed';
           r.current = { branchId: null, leafId: null, promptId: null };
         });
-      } finally {
-        await scene.release(prepared.run_handle).catch(() => false);
       }
     }
     run = await getExecutionRun(root, runId);

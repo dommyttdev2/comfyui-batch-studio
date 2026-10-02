@@ -1,31 +1,9 @@
 import { useEffect, useState } from 'react';
-import type {
-  AppSettings,
-  AppSettingsSaveInput,
-  AppSettingsStatus,
-  RemoteCustomNodeRepository,
-} from '../shared/types';
+import type { AppSettings, AppSettingsSaveInput, AppSettingsStatus } from '../shared/types';
 import type { Runner } from './ui';
 
 type FormState = Required<AppSettings> & { githubPat: string };
-type StringField = Exclude<keyof Required<AppSettings>, 'remoteCustomNodes'>;
-function githubCloneUrl(repository: string) {
-  const raw = repository.trim().replace(/\.git$/i, '');
-  if (!raw) return '';
-  let nameWithOwner = raw;
-  if (/^https?:\/\//i.test(raw)) {
-    try {
-      const url = new URL(raw);
-      if (url.hostname.toLowerCase() !== 'github.com') return '';
-      nameWithOwner = url.pathname.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '');
-    } catch {
-      return '';
-    }
-  }
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(nameWithOwner)) return '';
-  return `https://github.com/${nameWithOwner}.git`;
-}
-
+type StringField = keyof Required<AppSettings>;
 const EMPTY_SETTINGS: FormState = {
   comfyUiInstallPath: '',
   assistantProvider: 'grok',
@@ -33,7 +11,6 @@ const EMPTY_SETTINGS: FormState = {
   comfyUiApiEndpoint: 'http://127.0.0.1:8188',
   projectRoot: '',
   artifactRoot: '',
-  remoteCustomNodes: [],
   catalogPath: '',
   r2Bucket: '',
   r2ModelPrefix: '',
@@ -60,7 +37,6 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
           comfyUiApiEndpoint: appSettings.comfyUiApiEndpoint,
           projectRoot: appSettings.projectRoot,
           artifactRoot: appSettings.artifactRoot,
-          remoteCustomNodes: appSettings.remoteCustomNodes,
           catalogPath: appSettings.catalogPath,
           r2Bucket: appSettings.r2Bucket,
           r2ModelPrefix: appSettings.r2ModelPrefix,
@@ -77,8 +53,6 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
   }, []);
   const setField = (key: StringField, value: string) =>
     setSettings((prev) => ({ ...prev, [key]: value }));
-  const setCustomNodes = (remoteCustomNodes: RemoteCustomNodeRepository[]) =>
-    setSettings((prev) => ({ ...prev, remoteCustomNodes }));
   const chooseComfyUi = () =>
     run(async () => {
       const selected = await window.batchStudio.appSettings.selectComfyUiDirectory();
@@ -89,22 +63,10 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
       const selected = await window.batchStudio.project.selectParent();
       if (selected) setField(key, selected);
     });
-  const addCustomNode = () =>
-    setCustomNodes([...settings.remoteCustomNodes, { repository: '', ref: '' }]);
-  const updateCustomNode = (index: number, patch: Partial<RemoteCustomNodeRepository>) =>
-    setCustomNodes(
-      settings.remoteCustomNodes.map((node, i) => (i === index ? { ...node, ...patch } : node)),
-    );
-  const removeCustomNode = (index: number) =>
-    setCustomNodes(settings.remoteCustomNodes.filter((_node, i) => i !== index));
   const save = () =>
     run(async () => {
       const input: AppSettingsSaveInput = {
         ...settings,
-        remoteCustomNodes: settings.remoteCustomNodes.map((node) => ({
-          repository: node.repository,
-          ref: node.ref?.trim() || undefined,
-        })),
         githubPat: settings.githubPat.trim() || undefined,
       };
       const next = await window.batchStudio.appSettings.save(input);
@@ -303,10 +265,7 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
           <div className="panelhead">
             <div>
               <h3>Remote 実行設定</h3>
-              <p>
-                リモート実行前に aria2 / GitHub CLI、ComfyUI最新release、custom_nodes
-                を自動整備します。
-              </p>
+              <p>リモート実行前に aria2 / GitHub CLI、ComfyUI最新release を自動整備します。</p>
             </div>
           </div>
           <div className="formgrid">
@@ -346,52 +305,6 @@ export function EnvironmentSettings({ onClose, run }: { onClose: () => void; run
             <b>
               {status?.githubPatConfigured ? '設定済み (' + status.githubPatSource + ')' : '未設定'}
             </b>
-          </p>
-          <div className="panelhead">
-            <div>
-              <h4>Workflow依存 custom_nodes</h4>
-              <p>
-                必要なGitHubリポジトリだけを追加してください。実行前に未導入ならclone、導入済みなら安全に更新します。
-              </p>
-            </div>
-            <button onClick={addCustomNode}>custom_nodeを追加</button>
-          </div>
-          {settings.remoteCustomNodes.length === 0 ? (
-            <p className="hint">custom_node は未設定です。</p>
-          ) : (
-            <div className="table">
-              {settings.remoteCustomNodes.map((node, index) => (
-                <div className="tablerow environment-custom-node-row" key={index}>
-                  <input
-                    aria-label={'custom node repository ' + (index + 1)}
-                    value={node.repository}
-                    onChange={(e) => updateCustomNode(index, { repository: e.target.value })}
-                    placeholder="owner/repository または https://github.com/owner/repository"
-                  />
-                  <input
-                    aria-label={'custom node ref ' + (index + 1)}
-                    value={node.ref ?? ''}
-                    onChange={(e) => updateCustomNode(index, { ref: e.target.value })}
-                    placeholder="ref（任意: branch / tag / SHA）"
-                  />
-                  <div className="environment-custom-node-clone-url">
-                    <span>Clone URL</span>
-                    <input
-                      aria-label={'custom node clone url ' + (index + 1)}
-                      value={githubCloneUrl(node.repository)}
-                      readOnly
-                      placeholder="-"
-                    />
-                  </div>
-                  <button className="danger" onClick={() => removeCustomNode(index)}>
-                    削除
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="hint">
-            同じリポジトリ名の重複は保存時に拒否します。Remote上に追跡済みのローカル変更があるComfyUI/custom_nodeは自動破棄せず、bootstrapを停止してエラーにします。
           </p>
         </section>
 

@@ -21,7 +21,7 @@ interface RemoteHandle {
 }
 type EndpointResolver = (instanceId: number) => Promise<VastAiSshEndpoint>;
 const LOCAL_COMFY_OPS = new Set([
-  'run_scene_sequence',
+  'run_image_sequence',
   'force_interrupt_sequence',
   'reconcile_submission',
 ]);

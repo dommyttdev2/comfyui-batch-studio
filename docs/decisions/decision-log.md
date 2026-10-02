@@ -1574,3 +1574,25 @@ Codex model catalogは `codex debug models` を使用する。Codex App Server�
 - `REQ-SCOPE-002`
 - `REQ-SEC-001`
 - `REQ-SEC-002`
+
+---
+
+## DEC-028: Standard ComfyUI image tasks replace custom-node execution
+
+Date: 2026-10-02
+Status: Accepted
+Parent issue: #284
+
+### Decision
+
+Batch Studioが共通・Branch・Leafの最終Promptを合成し、標準LoraLoaderでRoot→Branchの順にモデルとCLIPへ適用する。1 Leaf = 1 POST /prompt = 1 imageとし、Run作成時に画像ごとのseedをimmutable snapshotへ固定する。Local / Remoteは同じSaveImage bindingからtask graphを抽出する。
+
+追加custom_nodes、独自run-context API、custom-node repository設定と同期処理を廃止する。旧Template、Manifest、生成済みWorkflow、Runの実行・Resume互換性は残さず、Workflow再生成と新Run作成を必要とする。
+
+### Rationale
+
+標準ComfyUI APIに境界を統一し、画像identity、Prompt、seed、二重送信防止、成果物検証をBatch Studio自身で管理する。利用者が追加ノードを導入しなくてもLocal / Remoteを実行できるようにする。
+
+### Consequence
+
+旧実行設計を記述した履歴は現行仕様ではない。保存済みデータと利用者のComfyUIインストールは削除しない。アプリの付番はリリース準備時に実施する。現行契約と検証結果はarchitecture/standard-image-execution.mdとquality/standard-image-execution-validation.mdを参照する。

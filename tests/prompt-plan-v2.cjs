@@ -235,20 +235,22 @@ const model = (ref, fileName, trainedWords, id) => ({
   const result = await compileWorkflow(root);
   assert.equal(result.validation.valid, true);
   const workflow = JSON.parse(fs.readFileSync(result.outputPath, 'utf8'));
-  const common = workflow.nodes.find(
-    (node) => node.type === 'ScenePrompter' && node.title === 'Prompt Plan 共通',
+  const positive = workflow.nodes.find(
+    (node) => node.type === 'CLIPTextEncode' && node.title === 'Positive - b01/s1-01-c1',
   );
-  assert.ok(common);
-  assert.equal(common.widgets_values[1], compiled.common.positive);
-  assert.equal(common.widgets_values[3], compiled.common.negative);
-  const matrix = workflow.nodes.find(
-    (node) => node.type === 'SceneMatrix' && String(node.title).startsWith('Prompt - b01 -'),
+  const negative = workflow.nodes.find(
+    (node) => node.type === 'CLIPTextEncode' && node.title === 'Negative - b01/s1-01-c1',
   );
-  assert.ok(matrix);
-  const row = JSON.parse(matrix.widgets_values[0]).sets[0];
-  assert.equal(row.positive_base, leaf.positive);
-  assert.equal(row.negative_base, leaf.negative);
-
+  assert.ok(positive);
+  assert.ok(negative);
+  assert.equal(
+    positive.widgets_values[0],
+    [compiled.common.positive, leaf.positive].filter(Boolean).join(', '),
+  );
+  assert.equal(
+    negative.widgets_values[0],
+    [compiled.common.negative, leaf.negative].filter(Boolean).join(', '),
+  );
   console.log('Prompt Plan v2 structured prompt tests passed.');
 })().catch((error) => {
   console.error(error);

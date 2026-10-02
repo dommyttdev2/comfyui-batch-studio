@@ -152,7 +152,7 @@ ExecutionService
     +-- SshService
     +-- RemoteWorkerClient
     +-- RemoteModelStager
-    +-- ScenePromptExecutionCoordinator
+    +-- ExecutionCoordinator
     +-- RemoteArtifactService
     +-- R2TransferService
     +-- ExecutionStateStore
@@ -165,7 +165,7 @@ ExecutionService
 - SSH Tunnelは使用しない。
 - Remote WorkerがRemote host内の `127.0.0.1:<comfy-port>` へComfyUI API requestを送る。
 - SSHはcontrol plane、R2はlarge binary transfer plane。
-- Scene Prompt Expand連続生成はfrontend button操作ではなくAPI orchestrationで再現。
+- 画像ごとの連続生成はfrontend button操作ではなくAPI orchestrationで再現。
 - Remote RunはR2 upload、Local download、hash verificationまで成功して完了。
 
 Local / Remote の個別実行手順は `remote-execution.md` を正本とする。Project Window / Project / Execution Runtime の ownership と lifecycle は `project-window-execution-runtime.md` を正本とする。

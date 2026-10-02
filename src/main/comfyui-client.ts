@@ -69,6 +69,7 @@ export class ComfyUiClient {
     graph: Record<string, unknown>,
     clientId: string,
     submissionId?: string,
+    extraPngInfo?: Record<string, unknown>,
   ): Promise<ComfyUiPromptResult> {
     const response = await this.request('/prompt', {
       method: 'POST',
@@ -76,7 +77,10 @@ export class ComfyUiClient {
       body: JSON.stringify({
         prompt: graph,
         client_id: clientId,
-        ...(submissionId ? { extra_data: { batch_studio_submission_id: submissionId } } : {}),
+        extra_data: {
+          ...(submissionId ? { batch_studio_submission_id: submissionId } : {}),
+          ...(extraPngInfo ? { extra_pnginfo: extraPngInfo } : {}),
+        },
       }),
     });
     const data = await readJson(response, 'ComfyUI prompt submission failed');

@@ -26,7 +26,9 @@ const writeJson = (file, value) => {
   const { hashCanonicalJson, hashWorkflowModelInputs } = await load('workflow-api.js');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-execution-project-'));
   const ui = { nodes: [{ id: 1, type: 'TestNode' }], links: [] };
-  const api = { 1: { class_type: 'TestNode', inputs: {} } };
+  const api = require('./standard-graph-fixture.cjs')([
+    { branchId: 'branch-a', leafIds: ['leaf-a1', 'leaf-a2'] },
+  ]);
   const uiSha256 = hashCanonicalJson(ui),
     apiSha256 = hashCanonicalJson(api),
     workflowIdentity = hashCanonicalJson({ uiSha256, apiSha256 });
@@ -94,7 +96,7 @@ const writeJson = (file, value) => {
   assert.equal(started.lifecycle, 'RUNNING');
   assert.equal(started.phase, 'LOCAL_COMFYUI_CONNECTING');
   assert.equal(started.snapshot.preflight.plannedImages, 2);
-  assert.equal(started.snapshot.workflow.workflowIdentity, workflowIdentity);
+  assert.equal(started.snapshot.workflow.sourceWorkflowIdentity, workflowIdentity);
   assert.deepEqual(started.snapshot.plan.branches, [
     { branchId: 'branch-a', leafIds: ['leaf-a1', 'leaf-a2'] },
   ]);
@@ -108,19 +110,27 @@ const writeJson = (file, value) => {
   );
   const runOwnedApi = path.join(root, started.snapshot.workflow.apiPath);
   const frozenApi = fs.readFileSync(runOwnedApi);
-  assert.deepEqual((await execution.readExecutionWorkflow(root, started)).api, api);
+  const seededApi = JSON.parse(frozenApi);
+  assert.notEqual(hashCanonicalJson(seededApi), hashCanonicalJson(api));
+  const oldRun = structuredClone(started);
+  delete oldRun.snapshot.workflow.sourceWorkflowIdentity;
+  await assert.rejects(
+    () => execution.readExecutionWorkflow(root, oldRun),
+    /STANDARD_RUN_REQUIRED/,
+  );
+  assert.deepEqual((await execution.readExecutionWorkflow(root, started)).api, seededApi);
   writeJson(path.join(root, 'LoRA_project.api.json'), {
     1: { class_type: 'RecompiledNode', inputs: {} },
   });
   assert.deepEqual(
     (await execution.readExecutionWorkflow(root, started)).api,
-    api,
+    seededApi,
     'a changed project graph must not affect a running Run snapshot',
   );
   fs.rmSync(path.join(root, 'LoRA_project.api.json'));
   assert.deepEqual(
     (await execution.readExecutionWorkflow(root, started)).api,
-    api,
+    seededApi,
     'project workflow reset must not remove the Run-owned graph',
   );
   writeJson(path.join(root, 'LoRA_project.api.json'), api);
@@ -460,7 +470,7 @@ const writeJson = (file, value) => {
   assert.equal(restartHandler.includes('listExecutionRuns(root)'), true);
   assert.equal(restartHandler.includes("['RUNNING', 'PAUSED', 'INTERRUPTED']"), true);
   assert.equal(restartHandler.includes('localExecutor()'), true);
-  assert.equal(restartHandler.includes('remoteSceneExecutor()'), true);
+  assert.equal(restartHandler.includes('remoteImageExecutor()'), true);
   assert.ok(
     restartHandler.indexOf('await compileWorkflow(root);') <
       restartHandler.indexOf('await startExecutionRun(root, async () => preflight);'),

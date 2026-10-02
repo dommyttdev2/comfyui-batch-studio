@@ -1,11 +1,10 @@
-export const REMOTE_WORKER_VERSION = '11';
+export const REMOTE_WORKER_VERSION = '12';
 export const REMOTE_WORKER_FILE = `#!/usr/bin/env python3
 import base64,copy,hashlib,http.client,json,os,random,re,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,zipfile,uuid
-VERSION="11"
+VERSION="12"
 import fcntl
 CHUNK_SIZE=8*1024*1024
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".webp"}
-REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 class WorkerError(Exception):
  def __init__(self,code,message=None):
@@ -311,64 +310,6 @@ def update_comfyui(comfy_root,token):
  manager=comfyui_configure_manager(comfy_root)
  return {"tag":check["tag"],"commit":fetched["commit"],"changed":checkout["changed"],"requirementsInstalled":requirements["requirementsInstalled"],"managerEnabled":manager["managerEnabled"]}
 
-def normalize_origin(value):
- raw=str(value or "").strip().replace("\\\\","/")
- if raw.startswith("git@github.com:"):raw=raw.split(":",1)[1]
- elif raw.startswith("ssh://git@github.com/"):raw=raw.split("github.com/",1)[1]
- elif "github.com/" in raw:raw=raw.split("github.com/",1)[1]
- raw=raw.rstrip("/");raw=raw[:-4] if raw.lower().endswith(".git") else raw
- return raw
-
-def custom_node_commit(dest,ref,env):
- run_cmd(["git","fetch","origin","--prune","--tags"],cwd=dest,env=env,error_code="CUSTOM_NODE_FETCH_FAILED")
- if ref:
-  candidates=[f"refs/remotes/origin/{ref}^{{commit}}",f"refs/tags/{ref}^{{commit}}",f"{ref}^{{commit}}"]
-  commit=""
-  for candidate in candidates:
-   result=run_cmd(["git","rev-parse","--verify",candidate],cwd=dest,allow_failure=True)
-   if result and result.returncode==0:commit=result.stdout.strip();break
-  if not commit:
-   fetched=run_cmd(["git","fetch","origin",ref],cwd=dest,env=env,allow_failure=True)
-   if fetched and fetched.returncode==0:commit=run_cmd(["git","rev-parse","FETCH_HEAD"],cwd=dest,error_code="CUSTOM_NODE_REF_NOT_FOUND").stdout.strip()
-  if not commit:raise WorkerError("CUSTOM_NODE_REF_NOT_FOUND",f"custom_node ref was not found: {ref}")
- else:
-  run_cmd(["git","remote","set-head","origin","--auto"],cwd=dest,env=env,allow_failure=True)
-  head=run_cmd(["git","symbolic-ref","refs/remotes/origin/HEAD"],cwd=dest,allow_failure=True)
-  if head and head.returncode==0:commit=run_cmd(["git","rev-parse",head.stdout.strip()],cwd=dest,error_code="CUSTOM_NODE_FETCH_FAILED").stdout.strip()
-  else:commit=run_cmd(["git","rev-parse","HEAD"],cwd=dest,error_code="CUSTOM_NODE_FETCH_FAILED").stdout.strip()
- run_cmd(["git","checkout","--detach",commit],cwd=dest,error_code="CUSTOM_NODE_CHECKOUT_FAILED")
- return commit
-
-def sync_custom_nodes(comfy_root,token,nodes):
- if not isinstance(nodes,list):raise WorkerError("CUSTOM_NODE_CONFIG_INVALID")
- cli_env=github_cli_env(token);git_env=github_git_env(token);custom_root=os.path.join(comfy_root,"custom_nodes");os.makedirs(custom_root,exist_ok=True)
- results=[]
- for item in nodes:
-  repository=str((item or {}).get("repository") or "").strip();ref=str((item or {}).get("ref") or "").strip()
-  if not REPO_RE.match(repository):raise WorkerError("CUSTOM_NODE_REPOSITORY_INVALID",repository)
-  name=repository.split("/",1)[1];dest=os.path.join(custom_root,name);cloned=False
-  if os.path.exists(dest):
-   if not os.path.isdir(os.path.join(dest,".git")):raise WorkerError("CUSTOM_NODE_DESTINATION_CONFLICT",name)
-   dirty=run_cmd(["git","status","--porcelain","--untracked-files=no"],cwd=dest,error_code="CUSTOM_NODE_GIT_STATUS_FAILED").stdout.strip()
-   if dirty:raise WorkerError("CUSTOM_NODE_GIT_DIRTY",f"{name} has tracked local changes; automatic repository replacement was stopped.")
-   identity=run_cmd(["gh","repo","view","--json","nameWithOwner","--jq",".nameWithOwner"],cwd=dest,env=cli_env,error_code="CUSTOM_NODE_IDENTITY_LOOKUP_FAILED").stdout.strip()
-   if identity.lower()!=repository.lower():
-    backup_root=os.path.join(comfy_root,".batch-studio","bootstrap","custom-node-backups");os.makedirs(backup_root,exist_ok=True)
-    stamp=time.strftime("%Y%m%d-%H%M%S",time.gmtime());safe_identity=re.sub(r"[^A-Za-z0-9_.-]+","__",identity or "unknown")
-    backup=os.path.join(backup_root,f"{stamp}-{name}-{safe_identity}");suffix=1
-    while os.path.exists(backup):
-     backup=os.path.join(backup_root,f"{stamp}-{name}-{safe_identity}-{suffix}");suffix+=1
-    shutil.move(dest,backup)
-    run_cmd(["gh","repo","clone",repository,dest],env=cli_env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
-  else:
-   run_cmd(["gh","repo","clone",repository,dest],env=cli_env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
-  commit=custom_node_commit(dest,ref,git_env)
-  req=os.path.join(dest,"requirements.txt")
-  marker="custom-node-"+repository.replace("/","__")+".sha256"
-  installed=install_requirements(comfy_root,[req],marker)
-  results.append({"repository":repository,"ref":ref or None,"commit":commit,"cloned":cloned,"requirementsInstalled":installed})
- return {"count":len(results),"nodes":results}
-
 def restart_comfyui():
  if not shutil.which("supervisorctl"):raise WorkerError("SUPERVISORCTL_MISSING","supervisorctl is required to restart ComfyUI after bootstrap.")
  run_cmd(root_args(["supervisorctl","restart","comfyui"]),error_code="COMFYUI_RESTART_FAILED")
@@ -510,37 +451,34 @@ def reconcile_submission(root,state,endpoint):
   save_state(root,state);return False
  current["promptId"]=prompt_id;intent["status"]="acknowledged";intent["promptId"]=prompt_id
  if prompt_id not in state.setdefault("promptIds",[]):state["promptIds"].append(prompt_id)
- branch_id=current.get("branchId")
- meta=(state.get("branchRuns") or {}).get(branch_id)
- if isinstance(meta,dict):meta["lastPromptId"]=prompt_id
  state["current"]=current;state["error"]=None
  if state.get("status") in ("failed","running") and not sequence_running(root):
   state["status"]="paused";state["workerPid"]=0
  save_state(root,state)
  return True
 
-def set_run_handle(graph,run_handle):
- for node in graph.values():
-  if isinstance(node,dict) and node.get("class_type") in ("ScenePrompter","SceneMatrix","ScenePresetReference","ScenePrompterExpand"):
-   inputs=node.setdefault("inputs",{});inputs["run_handle"]=run_handle;inputs.pop("user_id",None)
-
-def set_expand(graph,expand_node_id,continuous_id,index):
- node=graph.get(str(expand_node_id))
- if not isinstance(node,dict) or node.get("class_type")!="ScenePrompterExpand":raise WorkerError("REMOTE_EXPAND_NODE_MISSING")
- inputs=node.setdefault("inputs",{});inputs["current_index"]=int(index);inputs["run_id"]=continuous_id;inputs["seed_base"]=random.randint(0,0x7fffffff);inputs["seed_base_literal"]=False
-
-def set_output_prefix(graph,output_prefix,branch_id):
- prefix=str(output_prefix or "").replace("\\\\","/").strip("/")
- branch=re.sub(r"[^A-Za-z0-9_.-]+","_",str(branch_id or "branch")).strip("._") or "branch"
- if not prefix:raise WorkerError("REMOTE_OUTPUT_PREFIX_INVALID")
- for node in graph.values():
-  if isinstance(node,dict) and node.get("class_type")=="SceneSaveImage":
-   node.setdefault("inputs",{})["path"]=prefix+"/"+branch
-
+def set_output_prefix(graph,output_prefix,branch_id,leaf_id):
+ prefix=str(output_prefix or "").replace(chr(92),"/").strip("/")
+ if not prefix or any(part in (".","..","") for part in prefix.split("/")):raise WorkerError("REMOTE_OUTPUT_PREFIX_INVALID")
+ save_nodes=[node for node in graph.values() if node.get("class_type")=="SaveImage"]
+ if len(save_nodes)!=1:raise WorkerError("REMOTE_IMAGE_OUTPUT_INVALID")
+ save_nodes[0]["inputs"]["filename_prefix"]=prefix+"/"+urllib.parse.quote(str(branch_id),safe="")+"/"+urllib.parse.quote(str(leaf_id),safe="")
 def sequence_progress(state,stage,**extra):
  emit("progress",stage=stage,runId=state.get("runId"),status=state.get("status"),current=state.get("current"),overallCompleted=state.get("overallCompleted",0),**extra)
 
-def mark_prompt_success(root,state,branch,index):
+def mark_prompt_success(root,state,branch,index,endpoint):
+ prompt_id=(state.get("current") or {}).get("promptId")
+ task=branch["tasks"][index];save_ids=[node_id for node_id,node in task["graph"].items() if node.get("class_type")=="SaveImage"]
+ history=require_api(endpoint,"/history/"+urllib.parse.quote(str(prompt_id),safe=""))
+ images=[image for node_id in save_ids for image in ((history.get(prompt_id) or {}).get("outputs",{}).get(node_id) or {}).get("images",[])]
+ if len(images)!=1:raise WorkerError("REMOTE_IMAGE_OUTPUT_MISSING")
+ image=images[0];filename=str(image.get("filename") or "");subfolder=str(image.get("subfolder") or "").replace(chr(92),"/")
+ prefix=str((state.get("artifact") or {}).get("outputPrefix") or "").strip("/")
+ if image.get("type")!="output" or not filename or "/" in filename or chr(92) in filename or filename in (".","..") or not subfolder.startswith(prefix+"/") or any(part in (".","..","") for part in subfolder.split("/")) or os.path.splitext(filename)[1].lower() not in IMAGE_EXTENSIONS:raise WorkerError("REMOTE_IMAGE_OUTPUT_INVALID")
+ submitted_graph=copy.deepcopy(task["graph"]);set_output_prefix(submitted_graph,prefix,branch["branchId"],branch["leafIds"][index])
+ record={"branchId":branch["branchId"],"leafId":branch["leafIds"][index],"promptId":prompt_id,"path":subfolder[len(prefix)+1:]+"/"+filename,"inputs":submitted_graph}
+ records=state.setdefault("imageOutputs",[])
+ if not any(item.get("promptId")==prompt_id for item in records):records.append(record)
  completed=state.setdefault("completed",{});before=int(completed.get(branch["branchId"],0))
  if before<=index:
   completed[branch["branchId"]]=index+1
@@ -574,7 +512,7 @@ def wait_prompt_terminal(root,state,branch,index,endpoint,prompt_id):
    state["status"]="interrupting";save_state(root,state)
   time.sleep(0.25)
  if not failure_code and terminal=="success":
-  mark_prompt_success(root,state,branch,index);return "success"
+  mark_prompt_success(root,state,branch,index,endpoint);return "success"
  control=read_control(root)
  state["status"]="interrupted" if control.get("interruptRequested") else "failed"
  if state["status"]=="interrupted":state["error"]=None
@@ -601,49 +539,26 @@ def reconcile_current_prompt(root,state,branches,endpoint):
   return wait_prompt_terminal(root,state,branch,index,endpoint,prompt_id)=="success"
  if terminal=="success":
   sequence_progress(state,"reconciled",promptId=prompt_id,historyState="success")
-  mark_prompt_success(root,state,branch,index);return True
+  mark_prompt_success(root,state,branch,index,endpoint);return True
  control=read_control(root)
  state["status"]="interrupted" if control.get("interruptRequested") else "failed"
  state["current"]={"branchId":current.get("branchId"),"leafId":current.get("leafId"),"index":index,"promptId":None}
  if state["status"]=="failed":state["error"]={"code":"REMOTE_PROMPT_FAILED","message":"Recovered prompt is terminal error: "+str(prompt_id)}
  save_state(root,state);sequence_progress(state,"reconciled",promptId=prompt_id,historyState="error");return False
 
-def scene_prepare(endpoint,graph,expand_node_id,workflow,client_id):
- payload=require_api(endpoint,"/scene_prompt/runs/prepare","POST",{"api_graph":{"output":graph},"expand_node_id":str(expand_node_id),"workflow":workflow,"client_id":client_id})
- handle=str(payload.get("run_handle") or "")
- if not handle:raise WorkerError("REMOTE_SCENE_PREPARE_FAILED","Scene Prompt prepare returned no run_handle.")
- set_run_handle(graph,handle);return payload
-
-def scene_claim(endpoint,run_handle,prompt_id):
- payload=require_api(endpoint,"/scene_prompt/runs/claim","POST",{"run_handle":run_handle,"prompt_id":prompt_id})
- if not payload.get("claimed"):raise WorkerError("REMOTE_SCENE_CLAIM_FAILED")
- return True
-
-def scene_finalize(endpoint,run_handle,expand_node_id,prompt_id):
- for _ in range(120):
-  status,payload=api_request(endpoint,"/scene_prompt/runs/finalize","POST",{"run_handle":run_handle,"expand_node_id":str(expand_node_id),"prompt_id":prompt_id})
-  state=str(payload.get("state") or "") if isinstance(payload,dict) else ""
-  if status==200 and state=="finalized":return True
-  if status==202 or state in ("pending","in_progress"):time.sleep(0.25);continue
-  raise WorkerError("REMOTE_SCENE_FINALIZE_FAILED",f"state={state or 'unknown'} status={status}")
- raise WorkerError("REMOTE_SCENE_FINALIZE_TIMEOUT")
-
-def scene_release(endpoint,run_handle):
- status,payload=api_request(endpoint,"/scene_prompt/runs/release","POST",{"run_handle":run_handle})
- return status==200 and bool((payload or {}).get("released"))
-
 def initialize_sequence(root,req):
  previous=read_state(root)
  run_id=str(req.get("runId") or "")
  if not run_id:raise WorkerError("REMOTE_RUN_ID_REQUIRED")
  if isinstance(previous,dict) and previous.get("runId")==run_id and previous.get("status") in ("running","interrupting","paused","interrupted","completed","failed"):
+  if previous.get("version")!=2 or previous.get("taskInputs")!=req.get("branches"):raise WorkerError("STANDARD_RUN_REQUIRED","Old or changed image inputs cannot resume.")
   return previous
  branches=req.get("branches") or []
  total=sum(len(item.get("leafIds") or []) for item in branches)
- state={"version":1,"runId":run_id,"status":"running","workerPid":os.getpid(),"current":{"branchId":None,"leafId":None,"index":0,"promptId":None},"completed":{},"overallCompleted":0,"overallTotal":total,"promptIds":[],"branchRuns":{},"artifact":{"outputPrefix":str(req.get("outputPrefix") or ""),"capturedAt":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime())},"error":None}
+ state={"version":2,"taskInputs":copy.deepcopy(branches),"runId":run_id,"status":"running","workerPid":os.getpid(),"current":{"branchId":None,"leafId":None,"index":0,"promptId":None},"completed":{},"overallCompleted":0,"overallTotal":total,"promptIds":[],"artifact":{"outputPrefix":str(req.get("outputPrefix") or ""),"capturedAt":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime())},"error":None}
  save_state(root,state);write_control(root,{"stopRequested":False,"interruptRequested":False});return state
 
-def run_scene_sequence(root,req):
+def run_image_sequence(root,req):
  endpoint=resolve_comfy_endpoint(req.get("comfyEndpoint"))
  branches=req.get("branches") or [];workflow=req.get("workflow");run_id=str(req.get("runId") or "")
  state=initialize_sequence(root,req)
@@ -669,50 +584,35 @@ def run_scene_sequence(root,req):
   if not reconcile_submission(root,state,endpoint):return {"state":read_state(root)}
  if not reconcile_current_prompt(root,state,branches,endpoint):return {"state":read_state(root)}
  for branch in branches:
-  branch_id=str(branch.get("branchId") or "");leaf_ids=branch.get("leafIds") or [];expand_id=str(branch.get("expandNodeId") or "")
+  branch_id=str(branch.get("branchId") or "");leaf_ids=branch.get("leafIds") or [];tasks=branch.get("tasks") or []
+  if [task.get("leafId") for task in tasks]!=leaf_ids:raise WorkerError("REMOTE_TASK_BINDING_INVALID")
   completed=int((state.get("completed") or {}).get(branch_id,0))
-  if completed>=len(leaf_ids):continue
-  if read_control(root).get("stopRequested"):
-   state["status"]="paused";state["workerPid"]=0;save_state(root,state);sequence_progress(state,"scheduling_stopped");return {"state":state}
-  graph=copy.deepcopy(branch.get("graph") or {});continuous_id=run_id+":"+branch_id
-  set_output_prefix(graph,(state.get("artifact") or {}).get("outputPrefix"),branch_id)
-  branch_runs=state.setdefault("branchRuns",{});meta=branch_runs.get(branch_id) or {}
-  run_handle=str(meta.get("runHandle") or "")
-  if not run_handle:
-   set_expand(graph,expand_id,continuous_id,completed)
-   prepared=scene_prepare(endpoint,graph,expand_id,workflow,run_id);run_handle=str(prepared["run_handle"])
-   expected=len(leaf_ids)
-   if int(prepared.get("total_batches",expected))!=expected:raise WorkerError("REMOTE_SCENE_PLAN_MISMATCH")
-   meta={"runHandle":run_handle,"claimed":False,"lastPromptId":""};branch_runs[branch_id]=meta;save_state(root,state)
-  else:set_run_handle(graph,run_handle)
-  try:
-   for index in range(completed,len(leaf_ids)):
-    if read_control(root).get("stopRequested"):
-     state["status"]="paused";state["workerPid"]=0;save_state(root,state);sequence_progress(state,"scheduling_stopped");return {"state":state}
-    set_expand(graph,expand_id,continuous_id,index)
-    attempt_id=str(uuid.uuid4());graph_sha=hashlib.sha256(json.dumps(graph,sort_keys=True,separators=(",",":")).encode("utf-8")).hexdigest()
-    intent={"attemptId":attempt_id,"branchId":branch_id,"leafId":leaf_ids[index],"index":index,"graphSha256":graph_sha,"status":"prepared","promptId":None}
-    state["current"]={"branchId":branch_id,"leafId":leaf_ids[index],"index":index,"promptId":None,"submission":intent};save_state(root,state)
-    intent["status"]="sending";save_state(root,state);sequence_progress(state,"prompt_submitting")
-    submitted=require_api(endpoint,"/prompt","POST",{"prompt":graph,"client_id":run_id,"extra_data":{"batch_studio_submission_id":attempt_id}});prompt_id=str(submitted.get("prompt_id") or "")
-    if not prompt_id:raise WorkerError("REMOTE_PROMPT_SUBMIT_FAILED")
-    state["current"]["promptId"]=prompt_id;intent["status"]="acknowledged";intent["promptId"]=prompt_id
-    if prompt_id not in state["promptIds"]:state["promptIds"].append(prompt_id)
-    meta["lastPromptId"]=prompt_id;save_state(root,state);sequence_progress(state,"prompt_submitted",promptId=prompt_id)
-    if not meta.get("claimed"):
-     scene_claim(endpoint,run_handle,prompt_id);meta["claimed"]=True;save_state(root,state)
-    if wait_prompt_terminal(root,state,branch,index,endpoint,prompt_id)!="success":return {"state":read_state(root)}
-   last_prompt=str(meta.get("lastPromptId") or "")
-   if last_prompt:scene_finalize(endpoint,run_handle,expand_id,last_prompt)
-   sequence_progress(state,"branch_completed",branchId=branch_id)
-  finally:
-   try:scene_release(endpoint,run_handle)
-   except Exception:pass
-   branch_runs.pop(branch_id,None);save_state(root,state)
+  for index in range(completed,len(leaf_ids)):
+   if read_control(root).get("stopRequested"):
+    state["status"]="paused";state["workerPid"]=0;save_state(root,state);sequence_progress(state,"scheduling_stopped");return {"state":state}
+   task=tasks[index];graph=copy.deepcopy(task.get("graph") or {})
+   allowed={"CheckpointLoaderSimple","UNETLoader","CLIPLoader","VAELoader","LoraLoader","CLIPTextEncode","EmptyLatentImage","EmptySD3LatentImage","KSampler","VAEDecode","SaveImage"}
+   if not graph or any(node.get("class_type") not in allowed for node in graph.values()):raise WorkerError("STANDARD_WORKFLOW_REQUIRED")
+   set_output_prefix(graph,(state.get("artifact") or {}).get("outputPrefix"),branch_id,leaf_ids[index])
+   attempt_id=str(uuid.uuid4());graph_sha=hashlib.sha256(json.dumps(graph,sort_keys=True,separators=(",",":")).encode("utf-8")).hexdigest()
+   intent={"attemptId":attempt_id,"branchId":branch_id,"leafId":leaf_ids[index],"index":index,"graphSha256":graph_sha,"status":"prepared","promptId":None}
+   state["current"]={"branchId":branch_id,"leafId":leaf_ids[index],"index":index,"promptId":None,"submission":intent};save_state(root,state)
+   intent["status"]="sending";save_state(root,state);sequence_progress(state,"prompt_submitting")
+   workflow=copy.deepcopy(task.get("workflow") or {})
+   for node in workflow.get("nodes",[]):
+    api_node=graph.get(str(node.get("id"))) or {}
+    if node.get("type")=="SaveImage":node["widgets_values"]=[api_node.get("inputs",{}).get("filename_prefix","")]
+   submitted=require_api(endpoint,"/prompt","POST",{"prompt":graph,"client_id":run_id,"extra_data":{"batch_studio_submission_id":attempt_id,"extra_pnginfo":{"workflow":workflow,"batch_studio":{"contract":1,"runId":run_id,"branchId":branch_id,"leafId":leaf_ids[index]}}}});prompt_id=str(submitted.get("prompt_id") or "")
+   if not prompt_id:raise WorkerError("REMOTE_PROMPT_SUBMIT_FAILED")
+   state["current"]["promptId"]=prompt_id;intent["status"]="acknowledged";intent["promptId"]=prompt_id
+   if prompt_id not in state["promptIds"]:state["promptIds"].append(prompt_id)
+   save_state(root,state);sequence_progress(state,"prompt_submitted",promptId=prompt_id)
+   if wait_prompt_terminal(root,state,branch,index,endpoint,prompt_id)!="success":return {"state":read_state(root)}
+  sequence_progress(state,"branch_completed",branchId=branch_id)
  state["status"]="completed";state["workerPid"]=0;state["current"]={"branchId":None,"leafId":None,"index":0,"promptId":None};save_state(root,state);sequence_progress(state,"sequence_completed")
  return {"state":state}
 
-def stop_scene_sequence(root):
+def stop_image_sequence(root):
  state=read_state(root)
  if not isinstance(state,dict):return {"ok":False,"state":None}
  write_control(root,{"stopRequested":True})
@@ -765,7 +665,7 @@ def package_artifacts(root,comfy_root,req):
   if os.path.exists(tmp):os.unlink(tmp)
  package_size=os.path.getsize(package);package_sha=sha256_file(package)
  entries=[{"path":archive_path,"size":os.path.getsize(target),"sha256":sha256_file(target)} for archive_path,target in packaged]
- manifest={"version":2,"runId":run_id,"outputPrefix":prefix,"artifactCount":len(entries),"package":{"fileName":archive_name,"size":package_size,"sha256":package_sha},"artifacts":entries}
+ manifest={"version":2,"imageTasks":state.get("imageOutputs",[]),"runId":run_id,"outputPrefix":prefix,"artifactCount":len(entries),"package":{"fileName":archive_name,"size":package_size,"sha256":package_sha},"artifacts":entries}
  manifest_json=json.dumps(manifest,sort_keys=True,separators=(",",":"))+chr(10)
  manifest_bytes=manifest_json.encode("utf-8");manifest_sha=hashlib.sha256(manifest_bytes).hexdigest()
  manifest_path=contained(root,"artifacts/manifest.json");tmp_manifest=manifest_path+".tmp"
@@ -835,7 +735,7 @@ def cleanup_artifacts(root,comfy_root):
  return {"ok":True,"outputsRemoved":outputs_removed,"packageRemoved":package_removed}
 
 def sequence_running(root):
- lock=os.open(contained(root,"scene-sequence.lock"),os.O_RDWR|os.O_CREAT,0o600)
+ lock=os.open(contained(root,"image-sequence.lock"),os.O_RDWR|os.O_CREAT,0o600)
  try:
   try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
   except BlockingIOError:return True
@@ -856,15 +756,15 @@ def handle(req,root,model_root,comfy_root):
   endpoint=resolve_comfy_endpoint(req.get("comfyEndpoint"))
   found=reconcile_submission(root,state,endpoint)
   return {"ok":True,"state":read_state(root),"found":found}
- if op=="run_scene_sequence":
-  lock=os.open(contained(root,"scene-sequence.lock"),os.O_RDWR|os.O_CREAT,0o600)
+ if op=="run_image_sequence":
+  lock=os.open(contained(root,"image-sequence.lock"),os.O_RDWR|os.O_CREAT,0o600)
   try:
    try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
    except BlockingIOError:return {"state":read_state(root),"alreadyRunning":True}
-   return run_scene_sequence(root,req)
+   return run_image_sequence(root,req)
   finally:
    os.close(lock)
- if op=="stop_scene_sequence": return stop_scene_sequence(root)
+ if op=="stop_image_sequence": return stop_image_sequence(root)
  if op=="force_interrupt_sequence": return force_interrupt_sequence(root,str(req.get("comfyEndpoint") or "http://127.0.0.1:8188"))
  if op=="package_artifacts": return package_artifacts(root,comfy_root,req)
  if op=="upload_artifact_package": return upload_artifact_package(root,req)
@@ -894,9 +794,6 @@ def handle(req,root,model_root,comfy_root):
  if op=="comfyui_configure_manager":
   if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
   return comfyui_configure_manager(comfy_root)
- if op=="sync_custom_nodes":
-  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
-  return sync_custom_nodes(comfy_root,req.get("githubToken"),req.get("nodes") or [])
  if op=="restart_comfyui": return restart_comfyui()
  if op=="model_environment":
   if not model_root: raise WorkerError("MODEL_ROOT_NOT_CONFIGURED")

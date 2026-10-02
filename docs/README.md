@@ -47,8 +47,10 @@ docs/
 | `product/scope-and-flow.md` | 製品目的、責務境界、対象範囲、全体工程、工程 Gate |
 | `architecture/system-architecture.md` | Electron 構成、サービス境界、信頼境界、データフロー |
 | `architecture/project-window-execution-runtime.md` | Project Window / Project / Execution Run / app-wide Execution Runtime の ownership、Multi Window lifecycle、resource lock |
-| `architecture/workflow-compiler.md` | 1枝 Template から最終 ComfyUI Workflow を機械生成する方式 |
-| `architecture/remote-execution.md` | Local / Remote Execution、SSH + Remote Worker、Scene Prompt連続生成、R2経由のモデル配置・成果物回収、Run State / Resume |
+| `architecture/standard-image-execution.md` | 標準ノード、1 Leaf = 1 POST、seed固定、旧Run拒否の正本 |
+| `quality/standard-image-execution-validation.md` | #284の自動テスト・実ComfyUI生成・検証範囲 |
+| `architecture/workflow-compiler.md` | 生成設定Templateから標準ComfyUI Workflowを機械生成する方式 |
+| `architecture/remote-execution.md` | Local / Remote Execution、SSH + Remote Worker、標準画像連続生成、R2経由のモデル配置・成果物回収、Run State / Resume |
 | `contracts/project-artifacts.md` | プロジェクト内ファイル、正本関係、依存関係、互換性 |
 | `contracts/agent-contract.md` | Grok/Codex CLI の共通意味契約、session/workspace、AI成果物契約 |
 | `contracts/prompt-plan.md` | `prompt_plan.json` の意味構造と Draft schema |
@@ -73,7 +75,7 @@ docs/
 - `prompt_plan.json` のフィールド定義は `contracts/prompt-plan.md` が所有する。
 - Workflow の Node ID / Link ID 再採番は `architecture/workflow-compiler.md` が所有する。
 - Project Window / Project / Execution Run / app-wide Execution Runtime の ownership、Multi Window lifecycle、Window close / app quit、execution resource lock は `architecture/project-window-execution-runtime.md` が所有する。
-- Execution / Remote Execution の SSH、Remote Worker、Scene Prompt continuous run、R2 transfer、Run State詳細は `architecture/remote-execution.md` が所有する。
+- Execution / Remote Execution の SSH、Remote Worker、standard image sequence、R2 transfer、Run State詳細は `architecture/remote-execution.md` が所有する。
 - Home のサービス連携、Vast.ai API Key / Instance lifecycle / provider handoff は `integrations/service-integrations.md` が所有する。
 - AI agent が Workflow JSON を生成しないという責務境界は `product/scope-and-flow.md` と Decision Log で宣言し、具体的なAI成果物・session/workspace契約は `contracts/agent-contract.md` が所有する。
 - 主画面の UI 共通構造は `ui/application-shell.md` が所有する。

@@ -39,7 +39,7 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 - Local / R2 / `models.json` の所在差分確認。
 - Preflight。
 - `executionTarget` に応じた Local / Remote Execution。
-- Scene Prompt Tools `ScenePrompterExpand` の連続生成 orchestration。
+- 標準ComfyUIノードによる画像ごとの連続生成 orchestration。
 - Remote実行時のR2経由モデル配置、成果物upload、Local回収、完全性検証。
 - Execution Runのprogress / stop / resume状態管理。
 - 手作業で選定・モザイク処理された最終成果物ディレクトリの指定と後工程への引き渡し。
@@ -197,7 +197,7 @@ READY TO EXECUTE
 [9. Execution]
 executionTarget == local
   -> Local ComfyUI API
-  -> Scene Prompt continuous run
+  -> standard image sequence
   -> Local artifact confirmation
 
 executionTarget == remote
@@ -205,7 +205,7 @@ executionTarget == remote
   -> Remote Worker
   -> R2 GET model staging
   -> Remote localhost ComfyUI API
-  -> Scene Prompt continuous run
+  -> standard image sequence
   -> Remote package/hash
   -> presigned PUT -> R2
   -> R2 GET -> Local
@@ -331,17 +331,17 @@ Executionの詳細責務は `../architecture/remote-execution.md` を正本と�
 - SSH Tunnelは使用しない。
 - Remote WorkerがRemote host内のComfyUI localhost APIを利用する。
 - SSHはcontrol plane、R2はlarge binary transfer planeとする。
-- Scene Prompt Expand連続生成はfrontend button clickではなくAPI orchestrationで再現する。
+- 画像ごとの連続生成はfrontend button clickではなくAPI orchestrationで再現する。
 
 ### 7.4 Current implementation boundary
 
 現在のProject navigationは `概要 -> 基本設定 -> ストーリー -> モデル選定 -> プロンプト設計 -> ワークフロー -> モデル配置 -> 実行前チェック -> 実行 -> 最終成果物 -> キャプション -> サムネイル -> 販売サイト用画像` まで実装済みである。
 
-Executionではpersistent Run、Local ComfyUI API + Scene Prompt Tools連続生成、Stop scheduling / Force interrupt / Resume、Vast.ai Instance lifecycle、公開SSH + Host Key検証、Remote Worker、Remote環境bootstrap、R2からのmodel staging、Remote Scene Prompt連続生成、成果物ZIP/manifest作成、R2 upload、Local download、SHA-256検証、cleanupまで実装済みである。
+Executionではpersistent Run、Local ComfyUI API + 標準ノードによる画像ごとの連続生成、Stop scheduling / Force interrupt / Resume、Vast.ai Instance lifecycle、公開SSH + Host Key検証、Remote Worker、Remote環境bootstrap、R2からのmodel staging、Remote 標準画像連続生成、成果物ZIP/manifest作成、R2 upload、Local download、SHA-256検証、cleanupまで実装済みである。
 
 Vast.ai Remote Runは選択InstanceがstoppedならRun開始時に起動し、Batch Studioが起動したInstanceはRun終端後にinitial stateへ戻す。Run開始前からrunningだったInstanceはrunningを維持する。
 
-一方、Preflight自体はすべてのruntime operational checkを事前実行しているわけではない。API graphとArtifact/model/provider GateはPreflightで検証し、SSH接続・Host Key・Remote filesystem/runtime・ComfyUI/Scene Prompt capability等の一部はExecution開始後の各phaseで検証する。
+一方、Preflight自体はすべてのruntime operational checkを事前実行しているわけではない。API graphとArtifact/model/provider GateはPreflightで検証し、SSH接続・Host Key・Remote filesystem/runtime・ComfyUI standard-node capability等の一部はExecution開始後の各phaseで検証する。
 
 ## 8. 状態定義
 
@@ -366,13 +366,13 @@ Projectが`READY`になる最低条件:
 
 Local target:
 
-- Scene Prompt continuous runが完了。
+- standard image sequenceが完了。
 - expected Local artifactを確認済み。
 
 Remote target:
 
 - Remote model staging完了。
-- Scene Prompt continuous run完了。
+- standard image sequence完了。
 - expected Remote artifactを確認済み。
 - package / SHA-256生成済み。
 - R2 upload成功。

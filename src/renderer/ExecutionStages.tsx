@@ -81,7 +81,6 @@ function appSettingsInput(s: AppSettingsStatus): AppSettings {
     comfyUiApiEndpoint: s.comfyUiApiEndpoint,
     projectRoot: s.projectRoot,
     artifactRoot: s.artifactRoot,
-    remoteCustomNodes: s.remoteCustomNodes,
     catalogPath: s.catalogPath,
     r2Bucket: s.r2Bucket,
     r2ModelPrefix: s.r2ModelPrefix,
@@ -476,7 +475,6 @@ const EXECUTION_PHASES: ExecutionPhase[] = [
   'REMOTE_COMFYUI_CHECKING_OUT',
   'REMOTE_COMFYUI_REQUIREMENTS_INSTALLING',
   'REMOTE_COMFYUI_MANAGER_CONFIGURING',
-  'REMOTE_CUSTOM_NODES_SYNCING',
   'REMOTE_COMFYUI_RESTARTING',
   'REMOTE_ENVIRONMENT_READY',
   'REMOTE_MODELS_CHECKING',
@@ -571,7 +569,6 @@ function modelStatus(run: ExecutionRun) {
       'REMOTE_COMFYUI_CHECKING_OUT',
       'REMOTE_COMFYUI_REQUIREMENTS_INSTALLING',
       'REMOTE_COMFYUI_MANAGER_CONFIGURING',
-      'REMOTE_CUSTOM_NODES_SYNCING',
       'REMOTE_COMFYUI_RESTARTING',
     ].includes(run.phase)
   )

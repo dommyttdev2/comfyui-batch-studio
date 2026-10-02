@@ -36,7 +36,7 @@ const { pathToFileURL } = require('node:url');
     comfyUiPort: 18188,
   };
   assert.equal(
-    controlPlane.remoteWorkerPayload(endpoint, 'run_scene_sequence', {
+    controlPlane.remoteWorkerPayload(endpoint, 'run_image_sequence', {
       comfyEndpoint: 'http://127.0.0.1:8188',
     }).comfyEndpoint,
     'http://127.0.0.1:18188',

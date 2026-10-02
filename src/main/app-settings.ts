@@ -1,13 +1,11 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import workflowCustomNodes from '../shared/workflow-custom-nodes.json' with { type: 'json' };
 import type {
   AppSettings,
   AppSettingsSaveInput,
   AppSettingsStatus,
   AssistantPaneProvider,
-  RemoteCustomNodeRepository,
 } from '../shared/types.js';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
 import { listLocalModelFiles } from './model-file-sources.js';
@@ -72,7 +70,6 @@ interface StoredAppSettingsV6 {
   comfyUiApiEndpoint: string;
   projectRoot: string;
   artifactRoot: string;
-  remoteCustomNodes: RemoteCustomNodeRepository[];
   catalogPath: string;
   r2Bucket: string;
   r2ModelPrefix: string;
@@ -87,7 +84,6 @@ interface StoredAppSettingsV7 {
   comfyUiApiEndpoint: string;
   projectRoot: string;
   artifactRoot: string;
-  remoteCustomNodes: RemoteCustomNodeRepository[];
   catalogPath: string;
   r2Bucket: string;
   r2ModelPrefix: string;
@@ -113,9 +109,6 @@ type StoredAppSettings =
   | StoredAppSettingsV7
   | StoredAppSettingsV8;
 type NormalizedAppSettings = Required<AppSettings>;
-function defaultRemoteCustomNodes(): RemoteCustomNodeRepository[] {
-  return normalizeRemoteCustomNodes(workflowCustomNodes.repositories);
-}
 const EMPTY: NormalizedAppSettings = {
   assistantProvider: 'grok',
   comfyUiInstallPath: '',
@@ -123,7 +116,6 @@ const EMPTY: NormalizedAppSettings = {
   comfyUiApiEndpoint: 'http://127.0.0.1:8188',
   projectRoot: '',
   artifactRoot: '',
-  remoteCustomNodes: defaultRemoteCustomNodes(),
   catalogPath: '',
   r2Bucket: '',
   r2ModelPrefix: '',
@@ -186,63 +178,6 @@ function decryptSecret(value: string | undefined) {
   } catch {
     return '';
   }
-}
-function normalizeGithubRepository(value: unknown) {
-  const raw = text(value).replace(/\.git$/i, '');
-  if (!raw) throw new Error('custom_node のGitHubリポジトリを入力してください。');
-  let repository = raw;
-  if (/^https?:\/\//i.test(raw)) {
-    let url: URL;
-    try {
-      url = new URL(raw);
-    } catch {
-      throw new Error('custom_node のGitHubリポジトリURLが不正です。');
-    }
-    if (url.protocol !== 'https:' || url.hostname.toLowerCase() !== 'github.com')
-      throw new Error(
-        'custom_node は github.com のHTTPS URLまたは owner/repo 形式で指定してください。',
-      );
-    repository = url.pathname.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '');
-  }
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository))
-    throw new Error('custom_node は owner/repo 形式で指定してください。');
-  return repository;
-}
-function normalizeRemoteCustomNodes(value: unknown): RemoteCustomNodeRepository[] {
-  if (value === undefined || value === null) return [];
-  if (!Array.isArray(value)) throw new Error('Remote custom_nodes の設定が不正です。');
-  if (value.length > 100) throw new Error('Remote custom_nodes は100件以内で設定してください。');
-  const seen = new Set<string>(),
-    destinations = new Set<string>();
-  return value.map((item, index) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item))
-      throw new Error(`Remote custom_nodes #${index + 1} の設定が不正です。`);
-    const repository = normalizeGithubRepository((item as any).repository),
-      ref = text((item as any).ref);
-    const key = repository.toLowerCase();
-    if (seen.has(key))
-      throw new Error(`Remote custom_nodes に重複したリポジトリがあります: ${repository}`);
-    seen.add(key);
-    const destination = repository.split('/')[1].toLowerCase();
-    if (destinations.has(destination))
-      throw new Error(`Remote custom_nodes の配置先名が重複します: ${repository}`);
-    destinations.add(destination);
-    return ref ? { repository, ref } : { repository };
-  });
-}
-function migrateRemoteCustomNodes(value: unknown): RemoteCustomNodeRepository[] {
-  const existing = normalizeRemoteCustomNodes(value);
-  const defaults = defaultRemoteCustomNodes();
-  const existingByRepository = new Map(
-    existing.map((node) => [node.repository.toLowerCase(), node] as const),
-  );
-  const defaultKeys = new Set(defaults.map((node) => node.repository.toLowerCase()));
-  return [
-    ...defaults.map(
-      (node) => existingByRepository.get(node.repository.toLowerCase()) ?? { ...node },
-    ),
-    ...existing.filter((node) => !defaultKeys.has(node.repository.toLowerCase())),
-  ];
 }
 function normalize(raw: StoredAppSettings | null): NormalizedAppSettings {
   if (raw?.schemaVersion === 1)
@@ -311,7 +246,6 @@ function normalize(raw: StoredAppSettings | null): NormalizedAppSettings {
       comfyUiApiEndpoint: endpoint(raw.comfyUiApiEndpoint),
       projectRoot: text(raw.projectRoot),
       artifactRoot: text(raw.artifactRoot),
-      remoteCustomNodes: migrateRemoteCustomNodes(raw.remoteCustomNodes),
       catalogPath: text(raw.catalogPath),
       r2Bucket: text(raw.r2Bucket),
       r2ModelPrefix: text(raw.r2ModelPrefix).replace(/^\/+|\/+$/g, ''),
@@ -330,7 +264,6 @@ function normalize(raw: StoredAppSettings | null): NormalizedAppSettings {
       comfyUiApiEndpoint: endpoint(raw.comfyUiApiEndpoint),
       projectRoot: text(raw.projectRoot),
       artifactRoot: text(raw.artifactRoot),
-      remoteCustomNodes: normalizeRemoteCustomNodes(raw.remoteCustomNodes),
       catalogPath: text(raw.catalogPath),
       r2Bucket: text(raw.r2Bucket),
       r2ModelPrefix: text(raw.r2ModelPrefix).replace(/^\/+|\/+$/g, ''),
@@ -450,7 +383,6 @@ export class AppSettingsStore {
       comfyUiApiEndpoint: endpoint(input?.comfyUiApiEndpoint),
       projectRoot,
       artifactRoot,
-      remoteCustomNodes: normalizeRemoteCustomNodes(input?.remoteCustomNodes),
       catalogPath: text(input?.catalogPath),
       r2Bucket: text(input?.r2Bucket),
       r2ModelPrefix: text(input?.r2ModelPrefix).replace(/^\/+|\/+$/g, ''),

@@ -1,5 +1,7 @@
 # Implementation Phases
 
+> Phase 1–18の記録は当時の実装履歴です。画像実行に関する旧custom-node設計は#284で廃止しました。現行の正本は[標準画像実行契約](../architecture/standard-image-execution.md)です。
+
 Status: Active implementation record
 
 この文書は実装順序を管理する。要件の正本ではない。要件変更時は `requirements/requirements.md` を先に更新し、この文書は依存関係に合わせて調整する。

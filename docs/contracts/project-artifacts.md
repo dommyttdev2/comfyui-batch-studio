@@ -448,7 +448,7 @@ Workflow 内部形式を含まず、主に次を持つ。
 
 人間向けの確認・編集は `prompt_plan.json` から構築した Batch Studio の Prompt Plan Web UI で行う。Markdown など別の人間可読 Artifact を正本として並行管理しない。
 
-Schema v2では最終Prompt文字列を正本として保存しない。Model Family quality preset、`models.json.trainedWords`、category compile order、exact dedupeはBatch Studio Prompt Compilerが所有し、構造化tagからScenePrompter / SceneMatrix向け文字列を決定論的に生成する。既存Schema v1は従来文字列を変更せずCompileする。
+Schema v2では最終Prompt文字列を正本として保存しない。Model Family quality preset、`models.json.trainedWords`、category compile order、exact dedupeはBatch Studio Prompt Compilerが所有し、構造化tagからCLIPTextEncode向け文字列を決定論的に生成する。既存Schema v1は従来文字列を変更せずCompileする。
 
 ## 8. Legacy prompt_tree.md
 
@@ -491,15 +491,13 @@ LoRA_{project-destination-folder}.json
 `project.id` はWorkflow filenameには使用せず、Branchごとの生成物保存先とleaf output identityに使用する。
 
 ```text
-save path  = BatchStudio/{project.id}/{branch.id}
-row_id     = leaf.id
-path_label = leaf.id
-name       = leaf.id
+filename_prefix = BatchStudio/{project.id}/{run.id}/{branch.id}/{leaf.id}
+binding         = _meta.batchStudio {contract: 1, branchId, leafId}
 ```
 
-`leaf.name` はBatch Studio UI上の人間向け表示名として保持する。ComfyUI Matrix側は `leaf.id` を使用し、日本語等の表示名を最終画像file nameへ持ち込まない。
+`leaf.name` はBatch Studio UI上の人間向け表示名として保持する。SaveImage identityには `leaf.id` を使用し、日本語等の表示名を最終画像file nameへ持ち込まない。
 
-実ファイルのextension・numeric sequence・timestamp・collision suffix等はSceneSaveImage custom nodeの責務とし、Batch Studioが再実装しない。
+実ファイル名のsequenceは標準SaveImageが付加する。画像の取得はHistoryのfilename/subfolderを正本とし、Batch StudioがRun配下のpath containmentとSHA-256を検証する。
 
 既存プロジェクトの旧命名は読み取り対象になり得るが、新規Compiler outputは上記命名へ統一する。
 

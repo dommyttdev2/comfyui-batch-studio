@@ -1,4 +1,3 @@
-const assert = require('node:assert/strict');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -7,7 +6,7 @@ const read = (p) => fs.readFileSync(path.join(repo, p), 'utf8');
 const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const appSettings = read('src/main/app-settings.ts');
-const workflowCustomNodes = JSON.parse(read('src/shared/workflow-custom-nodes.json'));
+
 const artifactService = read('src/main/artifact-service.ts');
 const environmentSettings = read('src/renderer/EnvironmentSettings.tsx');
 const app = read('src/renderer/App.tsx');
@@ -15,31 +14,13 @@ const projectStages = read('src/renderer/ProjectStages.tsx');
 const main = readMainProcessSource(repo);
 
 matchCode(appSettings, /interface StoredAppSettingsV7/, '環境設定schema v7を持つ');
-matchCode(
+doesNotMatchCode(
   appSettings,
-  /workflow-custom-nodes\.json/,
-  'Workflow依存custom_nodesはJSON定義を正本として読み込む',
-);
-assert.equal(workflowCustomNodes.schemaVersion, 1, 'Workflow custom_nodes定義のschemaを固定する');
-assert.equal(
-  workflowCustomNodes.repositories.length,
-  2,
-  'Batch Studioが完全依存する2件のcustom_nodesをJSONで定義する',
-);
-for (const node of workflowCustomNodes.repositories)
-  assert.match(
-    node.repository,
-    /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/,
-    'repositoryはowner/repo形式にする',
-  );
-matchCode(
-  appSettings,
-  /migrateRemoteCustomNodes\(raw\.remoteCustomNodes\)/,
-  'schema v6以前の設定へ既定Workflow依存を移行時に補完する',
+  /remoteCustomNodes|workflow-custom-nodes/,
+  'custom node dependencies must be absent',
 );
 matchCode(appSettings, /BATCH_STUDIO_GITHUB_PAT/, 'GitHub PATの環境変数fallbackを持つ');
 matchCode(appSettings, /safeStorage/, 'GitHub PATをOSの暗号化ストレージへ保存する');
-matchCode(appSettings, /remoteCustomNodes/, 'Remote custom_nodes設定を永続化する');
 matchCode(appSettings, /projectRoot:string/, 'Project rootを永続化する');
 matchCode(appSettings, /artifactRoot:string/, '成果物配置rootを永続化する');
 matchCode(appSettings, /BATCH_STUDIO_PROJECT_ROOT/, 'Project rootをruntime設定へ反映する');
@@ -71,17 +52,7 @@ matchCode(
   /chooseRoot\('artifactRoot'\)/,
   '成果物配置rootをフォルダ選択できる',
 );
-matchCode(
-  environmentSettings,
-  /Workflow依存 custom_nodes/,
-  '環境設定でRemote custom_nodesを編集できる',
-);
-matchCode(environmentSettings, /Clone URL/, '各custom_nodeにGitHub clone URLを表示する');
-matchCode(
-  environmentSettings,
-  /https:\/\/github\.com\/\$\{nameWithOwner\}\.git/,
-  'clone URLはowner/repositoryから導出する',
-);
+
 matchCode(environmentSettings, /GitHub PAT/, '環境設定でGitHub PATを設定できる');
 
 matchCode(
