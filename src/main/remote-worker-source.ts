@@ -5,7 +5,6 @@ VERSION="12"
 import fcntl
 CHUNK_SIZE=8*1024*1024
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".webp"}
-REPO_RE=re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 class WorkerError(Exception):
  def __init__(self,code,message=None):
@@ -310,64 +309,6 @@ def update_comfyui(comfy_root,token):
  requirements=comfyui_install_requirements(comfy_root)
  manager=comfyui_configure_manager(comfy_root)
  return {"tag":check["tag"],"commit":fetched["commit"],"changed":checkout["changed"],"requirementsInstalled":requirements["requirementsInstalled"],"managerEnabled":manager["managerEnabled"]}
-
-def normalize_origin(value):
- raw=str(value or "").strip().replace("\\\\","/")
- if raw.startswith("git@github.com:"):raw=raw.split(":",1)[1]
- elif raw.startswith("ssh://git@github.com/"):raw=raw.split("github.com/",1)[1]
- elif "github.com/" in raw:raw=raw.split("github.com/",1)[1]
- raw=raw.rstrip("/");raw=raw[:-4] if raw.lower().endswith(".git") else raw
- return raw
-
-def custom_node_commit(dest,ref,env):
- run_cmd(["git","fetch","origin","--prune","--tags"],cwd=dest,env=env,error_code="CUSTOM_NODE_FETCH_FAILED")
- if ref:
-  candidates=[f"refs/remotes/origin/{ref}^{{commit}}",f"refs/tags/{ref}^{{commit}}",f"{ref}^{{commit}}"]
-  commit=""
-  for candidate in candidates:
-   result=run_cmd(["git","rev-parse","--verify",candidate],cwd=dest,allow_failure=True)
-   if result and result.returncode==0:commit=result.stdout.strip();break
-  if not commit:
-   fetched=run_cmd(["git","fetch","origin",ref],cwd=dest,env=env,allow_failure=True)
-   if fetched and fetched.returncode==0:commit=run_cmd(["git","rev-parse","FETCH_HEAD"],cwd=dest,error_code="CUSTOM_NODE_REF_NOT_FOUND").stdout.strip()
-  if not commit:raise WorkerError("CUSTOM_NODE_REF_NOT_FOUND",f"custom_node ref was not found: {ref}")
- else:
-  run_cmd(["git","remote","set-head","origin","--auto"],cwd=dest,env=env,allow_failure=True)
-  head=run_cmd(["git","symbolic-ref","refs/remotes/origin/HEAD"],cwd=dest,allow_failure=True)
-  if head and head.returncode==0:commit=run_cmd(["git","rev-parse",head.stdout.strip()],cwd=dest,error_code="CUSTOM_NODE_FETCH_FAILED").stdout.strip()
-  else:commit=run_cmd(["git","rev-parse","HEAD"],cwd=dest,error_code="CUSTOM_NODE_FETCH_FAILED").stdout.strip()
- run_cmd(["git","checkout","--detach",commit],cwd=dest,error_code="CUSTOM_NODE_CHECKOUT_FAILED")
- return commit
-
-def sync_custom_nodes(comfy_root,token,nodes):
- if not isinstance(nodes,list):raise WorkerError("CUSTOM_NODE_CONFIG_INVALID")
- cli_env=github_cli_env(token);git_env=github_git_env(token);custom_root=os.path.join(comfy_root,"custom_nodes");os.makedirs(custom_root,exist_ok=True)
- results=[]
- for item in nodes:
-  repository=str((item or {}).get("repository") or "").strip();ref=str((item or {}).get("ref") or "").strip()
-  if not REPO_RE.match(repository):raise WorkerError("CUSTOM_NODE_REPOSITORY_INVALID",repository)
-  name=repository.split("/",1)[1];dest=os.path.join(custom_root,name);cloned=False
-  if os.path.exists(dest):
-   if not os.path.isdir(os.path.join(dest,".git")):raise WorkerError("CUSTOM_NODE_DESTINATION_CONFLICT",name)
-   dirty=run_cmd(["git","status","--porcelain","--untracked-files=no"],cwd=dest,error_code="CUSTOM_NODE_GIT_STATUS_FAILED").stdout.strip()
-   if dirty:raise WorkerError("CUSTOM_NODE_GIT_DIRTY",f"{name} has tracked local changes; automatic repository replacement was stopped.")
-   identity=run_cmd(["gh","repo","view","--json","nameWithOwner","--jq",".nameWithOwner"],cwd=dest,env=cli_env,error_code="CUSTOM_NODE_IDENTITY_LOOKUP_FAILED").stdout.strip()
-   if identity.lower()!=repository.lower():
-    backup_root=os.path.join(comfy_root,".batch-studio","bootstrap","custom-node-backups");os.makedirs(backup_root,exist_ok=True)
-    stamp=time.strftime("%Y%m%d-%H%M%S",time.gmtime());safe_identity=re.sub(r"[^A-Za-z0-9_.-]+","__",identity or "unknown")
-    backup=os.path.join(backup_root,f"{stamp}-{name}-{safe_identity}");suffix=1
-    while os.path.exists(backup):
-     backup=os.path.join(backup_root,f"{stamp}-{name}-{safe_identity}-{suffix}");suffix+=1
-    shutil.move(dest,backup)
-    run_cmd(["gh","repo","clone",repository,dest],env=cli_env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
-  else:
-   run_cmd(["gh","repo","clone",repository,dest],env=cli_env,error_code="CUSTOM_NODE_CLONE_FAILED");cloned=True
-  commit=custom_node_commit(dest,ref,git_env)
-  req=os.path.join(dest,"requirements.txt")
-  marker="custom-node-"+repository.replace("/","__")+".sha256"
-  installed=install_requirements(comfy_root,[req],marker)
-  results.append({"repository":repository,"ref":ref or None,"commit":commit,"cloned":cloned,"requirementsInstalled":installed})
- return {"count":len(results),"nodes":results}
 
 def restart_comfyui():
  if not shutil.which("supervisorctl"):raise WorkerError("SUPERVISORCTL_MISSING","supervisorctl is required to restart ComfyUI after bootstrap.")
@@ -852,9 +793,6 @@ def handle(req,root,model_root,comfy_root):
  if op=="comfyui_configure_manager":
   if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
   return comfyui_configure_manager(comfy_root)
- if op=="sync_custom_nodes":
-  if not comfy_root:raise WorkerError("COMFYUI_ROOT_NOT_CONFIGURED")
-  return sync_custom_nodes(comfy_root,req.get("githubToken"),req.get("nodes") or [])
  if op=="restart_comfyui": return restart_comfyui()
  if op=="model_environment":
   if not model_root: raise WorkerError("MODEL_ROOT_NOT_CONFIGURED")

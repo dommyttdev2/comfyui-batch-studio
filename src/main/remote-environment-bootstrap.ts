@@ -1,10 +1,8 @@
-import type { RemoteCustomNodeRepository } from '../shared/types.js';
 import { getExecutionRun, mutateExecutionRun } from './execution-run.js';
 import type { RemoteControlPlane } from './remote-control-plane.js';
 
 export interface RemoteBootstrapConfig {
   githubToken: string;
-  customNodes: RemoteCustomNodeRepository[];
 }
 
 function responseRecord(value: unknown) {
@@ -90,15 +88,6 @@ export class RemoteEnvironmentBootstrap {
 
     await this.assertRunActive(root, runId);
     await mutateExecutionRun(root, runId, (run) => {
-      run.phase = 'REMOTE_CUSTOM_NODES_SYNCING';
-    });
-    const customNodes = await this.remote.requestWorker(root, runId, 'sync_custom_nodes', {
-      githubToken,
-      nodes: config.customNodes,
-    });
-
-    await this.assertRunActive(root, runId);
-    await mutateExecutionRun(root, runId, (run) => {
       run.phase = 'REMOTE_COMFYUI_RESTARTING';
     });
     const restart = await this.remote.requestWorker(root, runId, 'restart_comfyui');
@@ -117,7 +106,7 @@ export class RemoteEnvironmentBootstrap {
         requirements: requirements.response,
         manager: manager.response,
       },
-      customNodes: customNodes.response,
+
       restart: restart.response,
     };
   }

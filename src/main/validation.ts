@@ -53,13 +53,6 @@ function isUri(v: unknown) {
     return false;
   }
 }
-function uniqueNumbers(v: unknown) {
-  return (
-    Array.isArray(v) &&
-    v.every((x) => Number.isInteger(x) && x >= 0) &&
-    new Set(v).size === v.length
-  );
-}
 export function parseModels(text: string): ModelsArtifact | null {
   try {
     return JSON.parse(text) as ModelsArtifact;

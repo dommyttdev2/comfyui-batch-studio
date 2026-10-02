@@ -52,10 +52,6 @@ export interface ProjectBriefInput {
 }
 export type ExecutionTarget = 'local' | 'remote';
 export type CloudInstanceProviderId = 'vastai';
-export interface RemoteCustomNodeRepository {
-  repository: string;
-  ref?: string;
-}
 export interface AppSettings {
   comfyUiInstallPath: string;
   assistantProvider?: 'grok' | 'codex';
@@ -63,7 +59,6 @@ export interface AppSettings {
   comfyUiApiEndpoint?: string;
   projectRoot?: string;
   artifactRoot?: string;
-  remoteCustomNodes?: RemoteCustomNodeRepository[];
   catalogPath?: string;
   r2Bucket?: string;
   r2ModelPrefix?: string;
@@ -850,7 +845,6 @@ export type ExecutionPhase =
   | 'REMOTE_COMFYUI_CHECKING_OUT'
   | 'REMOTE_COMFYUI_REQUIREMENTS_INSTALLING'
   | 'REMOTE_COMFYUI_MANAGER_CONFIGURING'
-  | 'REMOTE_CUSTOM_NODES_SYNCING'
   | 'REMOTE_COMFYUI_RESTARTING'
   | 'REMOTE_ENVIRONMENT_READY'
   | 'REMOTE_MODELS_CHECKING'

@@ -1060,7 +1060,6 @@ const REMOTE_PRE_GENERATION_PHASES = new Set([
   'REMOTE_COMFYUI_CHECKING_OUT',
   'REMOTE_COMFYUI_REQUIREMENTS_INSTALLING',
   'REMOTE_COMFYUI_MANAGER_CONFIGURING',
-  'REMOTE_CUSTOM_NODES_SYNCING',
   'REMOTE_COMFYUI_RESTARTING',
   'REMOTE_ENVIRONMENT_READY',
   'REMOTE_MODELS_CHECKING',
@@ -1073,13 +1072,11 @@ function isRemotePreGenerationPhase(phase: string) {
 }
 async function prepareRemoteExecution(root: string, runId: string) {
   try {
-    const settings = await settingsStore().status(),
-      githubToken = await settingsStore().githubPat();
+    const githubToken = await settingsStore().githubPat();
     await remoteLifecycle().prepare(root, runId);
     await remoteExecutor().connect(root, runId);
     await remoteBootstrap().prepare(root, runId, {
       githubToken,
-      customNodes: settings.remoteCustomNodes,
     });
     await remoteStager().stage(root, runId);
     await remoteSceneExecutor().start(root, runId);
@@ -1113,7 +1110,6 @@ async function prepareRemoteExecution(root: string, runId: string) {
         'REMOTE_COMFYUI_CHECKING_OUT',
         'REMOTE_COMFYUI_REQUIREMENTS_INSTALLING',
         'REMOTE_COMFYUI_MANAGER_CONFIGURING',
-        'REMOTE_CUSTOM_NODES_SYNCING',
         'REMOTE_COMFYUI_RESTARTING',
         'REMOTE_ENVIRONMENT_READY',
       ].includes(r.phase);
@@ -2026,7 +2022,7 @@ async function remoteTargetIssuesFor(root: string): Promise<ValidationIssue[]> {
       severity: 'error',
       code: 'REMOTE_GITHUB_PAT_REQUIRED',
       message:
-        'リモート環境のComfyUI更新とcustom_nodes同期に使用するGitHub PATを環境設定または BATCH_STUDIO_GITHUB_PAT / GH_TOKEN で設定してください。',
+        'リモート環境のComfyUI更新に使用するGitHub PATを環境設定または BATCH_STUDIO_GITHUB_PAT / GH_TOKEN で設定してください。',
     });
   if (!settings.configured)
     issues.push({

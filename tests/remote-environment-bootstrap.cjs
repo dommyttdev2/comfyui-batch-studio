@@ -83,10 +83,6 @@ const writeJson = (file, value) => {
       completedAt: null,
     });
     const token = 'github_pat_SUPER_SECRET_TEST_TOKEN';
-    const nodes = [
-      { repository: 'toshiki-takedomi/comfyui-batch-orchestrator' },
-      { repository: 'norqis/ComfyUI-Scene-Prompt-Tools', ref: 'main' },
-    ];
     const calls = [];
     const remote = {
       requestWorker: async (_root, _run, op, payload = {}) => {
@@ -104,7 +100,7 @@ const writeJson = (file, value) => {
       },
     };
     const bootstrap = new RemoteEnvironmentBootstrap(remote);
-    await bootstrap.prepare(project, runId, { githubToken: token, customNodes: nodes });
+    await bootstrap.prepare(project, runId, { githubToken: token });
     assert.deepEqual(
       calls.map((x) => x.op),
       [
@@ -115,7 +111,6 @@ const writeJson = (file, value) => {
         'comfyui_release_checkout',
         'comfyui_install_requirements',
         'comfyui_configure_manager',
-        'sync_custom_nodes',
         'restart_comfyui',
       ],
     );
@@ -129,7 +124,6 @@ const writeJson = (file, value) => {
         'REMOTE_COMFYUI_CHECKING_OUT',
         'REMOTE_COMFYUI_REQUIREMENTS_INSTALLING',
         'REMOTE_COMFYUI_MANAGER_CONFIGURING',
-        'REMOTE_CUSTOM_NODES_SYNCING',
         'REMOTE_COMFYUI_RESTARTING',
       ],
     );
@@ -137,7 +131,6 @@ const writeJson = (file, value) => {
     assert.equal(calls[2].payload.githubToken, token);
     assert.equal(calls[3].payload.tag, 'v9.9.9');
     assert.equal(calls[4].payload.commit, '2222222222222222222222222222222222222222');
-    assert.deepEqual(calls[7].payload.nodes, nodes);
     const persisted = fs.readFileSync(
       path.join(project, 'execution_runs', runId + '.json'),
       'utf8',
@@ -204,39 +197,10 @@ const writeJson = (file, value) => {
       /gh","auth","login/,
       'worker must not start interactive gh auth login',
     );
-    assert.match(
-      worker.REMOTE_WORKER_FILE,
-      /gh","repo","clone/,
-      'worker must clone configured custom nodes with gh',
-    );
-    assert.match(
-      worker.REMOTE_WORKER_FILE,
-      /gh","repo","view","--json","nameWithOwner"/,
-      'existing custom-node repository identity must be resolved through gh',
-    );
-    assert.doesNotMatch(
-      worker.REMOTE_WORKER_FILE,
-      /git","config","--get","remote\.origin\.url"/,
-      'existing custom-node identity must not depend on raw git origin URL parsing',
-    );
-    assert.match(
-      worker.REMOTE_WORKER_FILE,
-      /custom-node-backups/,
-      'mismatched clean custom-node repositories must be archived before replacement',
-    );
-    assert.match(
-      worker.REMOTE_WORKER_FILE,
-      /shutil\.move\(dest,backup\)/,
-      'mismatched clean custom-node repositories must be moved aside, not deleted',
-    );
-    assert.match(
-      worker.REMOTE_WORKER_FILE,
-      /automatic repository replacement was stopped/,
-      'tracked local changes must still block automatic replacement',
-    );
+    assert.doesNotMatch(worker.REMOTE_WORKER_FILE, /sync_custom_nodes|custom_node_commit/);
     assert.equal(
       worker.REMOTE_WORKER_VERSION,
-      '11',
+      '12',
       'worker version must advance when remote worker behavior changes',
     );
     assert.match(

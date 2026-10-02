@@ -1,4 +1,4 @@
-import { createHash, randomInt, randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -9,7 +9,7 @@ import {
   markGenerationStarted,
 } from '../shared/execution-progress.js';
 import { readJson } from './fs-utils.js';
-import type { ApiGraph, ApiGraphNode } from './workflow-api.js';
+import type { ApiGraph } from './workflow-api.js';
 import { ComfyUiClient } from './comfyui-client.js';
 import { enumerateImageTasks, graphToWorkflow } from './image-tasks.js';
 import {
@@ -22,7 +22,6 @@ import {
 
 type LocalExecutionSettings = { endpoint: string; installPath: string };
 type SettingsProvider = () => Promise<LocalExecutionSettings>;
-type BranchBinding = { branchId: string; leafIds: string[]; expandNodeId: string };
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const LOCAL_FILE_SCOPE = 'local-generated-file';
 const LOCAL_OUTPUT_COLLECTION_FAILED = 'LOCAL_OUTPUT_COLLECTION_FAILED';
@@ -149,45 +148,6 @@ async function recordPromptOutputs(
   return recorded.size;
 }
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-function clone<T>(value: T): T {
-  return structuredClone(value);
-}
-function linkId(value: unknown) {
-  return Array.isArray(value) && value.length === 2 && typeof value[0] === 'string'
-    ? value[0]
-    : null;
-}
-function ancestors(graph: ApiGraph, nodeId: string) {
-  const seen = new Set<string>(),
-    pending = [nodeId];
-  while (pending.length) {
-    const id = pending.pop()!;
-    if (seen.has(id) || !graph[id]) continue;
-    seen.add(id);
-    for (const value of Object.values(graph[id].inputs ?? {})) {
-      const linked = linkId(value);
-      if (linked) pending.push(linked);
-    }
-  }
-  return seen;
-}
-function descendants(graph: ApiGraph, nodeId: string) {
-  const targets = new Map<string, string[]>();
-  for (const [id, node] of Object.entries(graph))
-    for (const value of Object.values(node.inputs ?? {})) {
-      const linked = linkId(value);
-      if (linked) targets.set(linked, [...(targets.get(linked) ?? []), id]);
-    }
-  const seen = new Set<string>(),
-    pending = [nodeId];
-  while (pending.length) {
-    const id = pending.pop()!;
-    if (seen.has(id) || !graph[id]) continue;
-    seen.add(id);
-    pending.push(...(targets.get(id) ?? []));
-  }
-  return seen;
-}
 function errorOf(
   run: ExecutionRun,
   code: string,
@@ -462,7 +422,7 @@ export class LocalExecutionService {
     await mutateExecutionRun(root, runId, (r) => {
       r.phase = 'LOCAL_CAPABILITY_CHECKING';
     });
-    const { api: graph, ui: workflow } = await readExecutionWorkflow(root, run);
+    const { api: graph } = await readExecutionWorkflow(root, run);
     const info = await comfy.objectInfo(),
       required = new Set(Object.values(graph).map((node) => node.class_type));
     const missing = [...required].filter((name) => !info?.[name]);
