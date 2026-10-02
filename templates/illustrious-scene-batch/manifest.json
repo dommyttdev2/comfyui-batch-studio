@@ -1,43 +1,9 @@
 {
-  "schemaVersion": 1,
-  "manifestVersion": "2.0.0",
+  "schemaVersion": 2,
+  "manifestVersion": "3.0.0",
   "template": {
     "id": "illustrious-scene-batch",
-    "version": "2.0.0",
-    "sha256": "ad448dde77926f84b6a0caabb76cbad90f0ecf3eff87e9736137d6590173dffb"
-  },
-  "common": {
-    "roles": {
-      "checkpoint": {"nodeId": 1},
-      "rootLoraStack": {"nodeId": 2},
-      "planCommonPrompt": {"nodeId": 135},
-      "promptOutput": {"nodeId": 135}
-    }
-  },
-  "branchPrototype": {
-    "nodeIds": [3,4,5,6,7,8,9,10,11,12,13,14],
-    "groupIds": [2],
-    "roles": {
-      "loraStack": {"nodeId": 3},
-      "promptIngress": {"nodeId": 4},
-      "mainMatrix": {"nodeId": 4},
-      "fixedMatrix": {"nodeId": 5},
-      "prompter": {"nodeId": 6},
-      "counter": {"nodeId": 7},
-      "latent": {"nodeId": 8},
-      "expand": {"nodeId": 9},
-      "positiveEncode": {"nodeId": 10},
-      "negativeEncode": {"nodeId": 11},
-      "sampler": {"nodeId": 12},
-      "vaeDecode": {"nodeId": 13},
-      "save": {"nodeId": 14}
-    },
-    "boundaries": [
-      {"id":"model","source":{"role":"rootLoraStack","slot":0},"target":{"role":"loraStack","slot":0}},
-      {"id":"clip","source":{"role":"rootLoraStack","slot":1},"target":{"role":"loraStack","slot":1}},
-      {"id":"vae","source":{"role":"checkpoint","slot":2},"target":{"role":"vaeDecode","slot":1}},
-      {"id":"prompt","source":{"role":"promptOutput","slot":0},"target":{"role":"mainMatrix","slot":0}}
-    ],
-    "layout": {"offset":{"x":0,"y":460}}
+    "version": "3.0.0",
+    "sha256": "c6a56c45c7b2906c7e8b887a1a8c91bcf7195088a471708064b41e320dda3211"
   }
 }

@@ -164,40 +164,71 @@ function byTitle(graph, prefix) {
       );
     }
 
-    const rootStack = Object.values(api).find(
-      (node) => node.class_type === 'AnimaLoraStack' && node._meta?.title === 'Root LoRA Stack',
-    );
-    assert.equal(
-      JSON.parse(rootStack.inputs.lora_stack_data).loras[0].name,
-      'character.safetensors',
-    );
-    const branchA = byTitle(api, 'LoRA - branch-a -');
-    const branchB = byTitle(api, 'LoRA - branch-b -');
-    assert.equal(JSON.parse(branchA.inputs.lora_stack_data).loras.length, 1);
-    assert.equal(JSON.parse(branchB.inputs.lora_stack_data).loras.length, 0);
-
-    const matrixA = byTitle(api, 'Prompt - branch-a -');
-    const rows = JSON.parse(matrixA.inputs.matrix_json).sets;
+    const { enumerateImageTasks, standardNodeTypes, graphToWorkflow } =
+      await load('image-tasks.js');
+    assert.ok(Object.values(api).every((node) => standardNodeTypes.has(node.class_type)));
+    const tasks = enumerateImageTasks(api, {
+      snapshot: {
+        plan: {
+          branches: plan.branches.map((b) => ({
+            branchId: b.id,
+            leafIds: b.leaves.map((l) => l.id),
+          })),
+        },
+      },
+    });
     assert.deepEqual(
-      rows.map((row) => [row.row_id, row.path_label, row.name]),
-      [
-        ['leaf-a1', 'leaf-a1', 'leaf-a1'],
-        ['leaf-a2', 'leaf-a2', 'leaf-a2'],
-      ],
+      tasks.map((t) => t.leafId),
+      ['leaf-a1', 'leaf-a2', 'leaf-b1'],
+    );
+    const stack = Object.values(tasks[0].graph).filter((n) => n.class_type === 'LoraLoader');
+    assert.equal(stack.length, 2);
+    assert.deepEqual(
+      stack.map((n) => n.inputs.strength_model),
+      [0.6, 0.7],
+    );
+    assert.deepEqual(
+      stack.map((n) => n.inputs.strength_clip),
+      [0.6, 0.8],
     );
     assert.equal(
-      byTitle(api, 'Save - branch-a -').inputs.path,
-      `BatchStudio/${family}-api-project/branch-a`,
+      Object.values(tasks[2].graph).filter((n) => n.class_type === 'LoraLoader').length,
+      1,
     );
-    assert.equal(
-      byTitle(api, 'Save - branch-b -').inputs.path,
-      `BatchStudio/${family}-api-project/branch-b`,
+    const text = Object.values(tasks[0].graph).find((n) => n._meta?.title.startsWith('Positive'));
+    assert.equal(text.inputs.text, 'masterpiece, 1girl, looking_at_viewer');
+    for (const task of tasks) {
+      assert.equal(Object.values(task.graph).filter((n) => n.class_type === 'SaveImage').length, 1);
+      assert.equal(Object.values(task.graph).filter((n) => n.class_type === 'KSampler').length, 1);
+      const latent = Object.values(task.graph).find((n) => n.class_type.includes('LatentImage'));
+      assert.equal(latent.inputs.batch_size, 1);
+      assert.equal(
+        latent.class_type,
+        family === 'anima' ? 'EmptySD3LatentImage' : 'EmptyLatentImage',
+      );
+      assert.deepEqual(validateApiGraphStructure(task.graph), []);
+      const editor = graphToWorkflow(task.graph);
+      const { buildApiGraph } = await load('workflow-api.js');
+      const rebuilt = buildApiGraph(editor);
+      for (const id of Object.keys(task.graph))
+        assert.deepEqual(rebuilt[id].inputs, task.graph[id].inputs);
+    }
+    const duplicate = structuredClone(api);
+    duplicate[999] = structuredClone(duplicate[tasks[0].saveNodeId]);
+    assert.throws(
+      () =>
+        enumerateImageTasks(duplicate, {
+          snapshot: {
+            plan: {
+              branches: plan.branches.map((b) => ({
+                branchId: b.id,
+                leafIds: b.leaves.map((l) => l.id),
+              })),
+            },
+          },
+        }),
+      /BINDING/,
     );
-    for (const expand of Object.values(api).filter(
-      (node) => node.class_type === 'ScenePrompterExpand',
-    ))
-      assert.equal(expand.inputs.model_mode, family === 'anima' ? 'Anima' : 'Illustrious');
-
     const meta = JSON.parse(fs.readFileSync(path.join(root, 'project_meta.json'), 'utf8'));
     assert.equal(meta.workflowBuild.apiOutputPath, path.basename(first.apiOutputPath));
     assert.equal(meta.workflowBuild.outputs.ui.sha256, first.uiSha256);

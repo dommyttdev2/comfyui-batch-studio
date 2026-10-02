@@ -104,10 +104,6 @@ async function project(family) {
     illustrious.nodes.some((n) => n.type === 'UNETLoader'),
     false,
   );
-  assert.equal(
-    illustrious.nodes.find((n) => n.type === 'ScenePrompterExpand')?.widgets_values?.[5],
-    'Illustrious',
-  );
 
   const animaRoot = await project('anima');
   const animaResult = await compileWorkflow(animaRoot);
@@ -117,7 +113,7 @@ async function project(family) {
   const vae = anima.nodes.find((n) => n.type === 'VAELoader');
   const latent = anima.nodes.find((n) => n.type === 'EmptySD3LatentImage');
   const sampler = anima.nodes.find((n) => n.type === 'KSampler');
-  const expand = anima.nodes.find((n) => n.type === 'ScenePrompterExpand');
+
   assert.deepEqual(unet?.widgets_values, ['anima.safetensors', 'default']);
   assert.deepEqual(clip?.widgets_values, [
     'qwen_3_06b_base.safetensors',
@@ -126,7 +122,7 @@ async function project(family) {
   ]);
   assert.deepEqual(vae?.widgets_values, ['qwen_image_vae.safetensors']);
   assert.deepEqual(latent?.widgets_values, [896, 1344, 1]);
-  assert.equal(expand?.widgets_values?.[5], 'Anima');
+
   assert.equal(
     anima.nodes.some((n) => n.type === 'CheckpointLoaderSimple'),
     false,
@@ -136,11 +132,6 @@ async function project(family) {
     latentLink?.[1],
     latent?.id,
     'Anima KSampler latent must come from EmptySD3LatentImage',
-  );
-  assert.notEqual(
-    latentLink?.[1],
-    expand?.id,
-    'Anima must not feed ScenePrompterExpand 4-channel latent into KSampler',
   );
 
   console.log('Illustrious/Anima workflow template selection tests passed.');

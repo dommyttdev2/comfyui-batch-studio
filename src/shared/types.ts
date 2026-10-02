@@ -786,21 +786,9 @@ export interface GrokTask {
   attachments: Array<{ name: string; path: string; purpose: string; exists: boolean }>;
 }
 export interface WorkflowManifest {
-  schemaVersion: 1;
+  schemaVersion: 2;
   manifestVersion: string;
   template: { id: string; version: string; sha256: string };
-  common: { roles: Record<string, { nodeId: number }> };
-  branchPrototype: {
-    nodeIds: number[];
-    groupIds: number[];
-    roles: Record<string, { nodeId: number }>;
-    boundaries: Array<{
-      id: string;
-      source: { role: string; slot: number };
-      target: { role: string; slot: number };
-    }>;
-    layout: { offset: { x: number; y: number } };
-  };
 }
 export interface CompileResult {
   outputPath: string;
