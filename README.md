@@ -59,6 +59,12 @@ npm run dev
 
 `npm run dev` は Renderer の Vite dev server、Electron Main Process の TypeScript watch、Electron 本体をまとめて起動します。
 
+### Windows で最新リリースへ更新
+
+アプリを終了して `update.bat` を実行してください。Git と Windows PowerShell を使用し、GitHub の最新正式リリース（Draft / Pre-release を除外）のタグを公式リポジトリから取得して、そのコミットへ切り替えます。更新後は `run.bat` を実行して依存関係の更新・ビルド・起動を行ってください。
+
+更新後はタグのコミットを直接参照する detached HEAD になります。以降も `update.bat` で最新リリースへ更新できます。未コミットの追跡ファイルの変更がある場合や、未追跡ファイルが切り替え先と衝突する場合は停止します。変更は事前に commit または stash してください。リリース情報・タグの取得に失敗した場合は更新せず、エラーを表示します。
+
 ## 環境変数
 
 環境変数は **Electron を起動する前**に設定してください。
