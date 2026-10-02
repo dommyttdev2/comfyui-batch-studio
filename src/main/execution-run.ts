@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { enumerateImageTasks, graphToWorkflow } from './image-tasks.js';
+import { randomUUID, randomInt } from 'node:crypto';
 import { constants } from 'node:fs';
 import { copyFile, readFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -348,6 +349,19 @@ async function captureSnapshot(
   if (!plan) throw new Error('Execution cannot start: prompt_plan.json is missing.');
   const target = meta?.settings.executionTarget === 'remote' ? 'remote' : 'local';
   const promptPlanSha256 = hashCanonicalJson(plan);
+  enumerateImageTasks(
+    api as ApiGraph,
+    {
+      snapshot: {
+        plan: {
+          branches: plan.branches.map((branch) => ({
+            branchId: branch.id,
+            leafIds: branch.leaves.map((leaf) => leaf.id),
+          })),
+        },
+      },
+    } as any,
+  );
   const planSnapshot = {
     sha256: promptPlanSha256,
     branches: plan.branches.map((branch) => ({
@@ -420,6 +434,10 @@ function requireRunOwnedSnapshot(run: ExecutionRun) {
 export async function readExecutionWorkflow(root: string, run: ExecutionRun) {
   requireRunOwnedSnapshot(run);
   const { workflow } = run.snapshot;
+  if (!workflow.sourceWorkflowIdentity || !workflow.immutable)
+    throw new Error(
+      'STANDARD_RUN_REQUIRED: 旧Runは再開できません。Workflowを再生成し、新Runを作成してください。',
+    );
   const ui = await readJson<unknown>(path.join(root, workflow.uiPath));
   const api = await readJson<unknown>(path.join(root, workflow.apiPath));
   if (!ui || !api)
@@ -449,6 +467,7 @@ export async function readExecutionWorkflow(root: string, run: ExecutionRun) {
         'EXECUTION_SNAPSHOT_HASH_MISMATCH: saved Run Prompt Plan or model identity is absent or modified.',
       );
   }
+  enumerateImageTasks(api as ApiGraph, run);
   return { ui, api: api as ApiGraph };
 }
 
@@ -479,16 +498,26 @@ async function persistRunSnapshot(
     throw new Error(
       'EXECUTION_SNAPSHOT_SOURCE_CHANGED: Workflow, Prompt Plan or models changed while the Run was being created.',
     );
+  const seededApi = structuredClone(api) as ApiGraph;
+  for (const node of Object.values(seededApi))
+    if (node.class_type === 'KSampler') node.inputs.seed = randomInt(0, 2 ** 48 - 1);
+  const seededUi = graphToWorkflow(seededApi);
+  const seededUiSha = hashCanonicalJson(seededUi),
+    seededApiSha = hashCanonicalJson(seededApi);
   const dir = path.join(root, RUNS_DIR, runId, 'snapshot');
   try {
-    await writeJsonAtomic(path.join(root, paths.uiPath), ui);
-    await writeJsonAtomic(path.join(root, paths.apiPath), api);
+    await writeJsonAtomic(path.join(root, paths.uiPath), seededUi);
+    await writeJsonAtomic(path.join(root, paths.apiPath), seededApi);
     await writeJsonAtomic(path.join(root, paths.planPath), plan);
     await writeJsonAtomic(path.join(root, paths.modelsPath), models);
     const next: ExecutionRunSnapshot = {
       ...snapshot,
       workflow: {
         ...snapshot.workflow,
+        sourceWorkflowIdentity: snapshot.workflow.workflowIdentity,
+        uiSha256: seededUiSha,
+        apiSha256: seededApiSha,
+        workflowIdentity: hashCanonicalJson({ uiSha256: seededUiSha, apiSha256: seededApiSha }),
         uiPath: paths.uiPath,
         apiPath: paths.apiPath,
         immutable: { planPath: paths.planPath, modelsPath: paths.modelsPath },
@@ -508,8 +537,8 @@ async function persistRunSnapshot(
 function sameSnapshot(a: ExecutionRunSnapshot, b: ExecutionRunSnapshot) {
   return (
     a.runIdentity === b.runIdentity &&
-    a.workflow.workflowIdentity === b.workflow.workflowIdentity &&
-    a.workflow.apiSha256 === b.workflow.apiSha256 &&
+    (a.workflow.sourceWorkflowIdentity ?? a.workflow.workflowIdentity) ===
+      (b.workflow.sourceWorkflowIdentity ?? b.workflow.workflowIdentity) &&
     a.workflow.modelsSha256 === b.workflow.modelsSha256 &&
     a.plan.sha256 === b.plan.sha256
   );

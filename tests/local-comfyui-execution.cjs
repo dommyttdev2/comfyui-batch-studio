@@ -29,60 +29,11 @@ const waitFor = async (fn, timeout = 5000) => {
   throw new Error('timed out');
 };
 
-function graphFor(projectId) {
-  const matrix = (id, leaves) => ({
-    class_type: 'SceneMatrix',
-    inputs: {
-      matrix_json: JSON.stringify({
-        version: 1,
-        sets: leaves.map((row_id) => ({ row_id, enabled: true })),
-      }),
-      run_handle: '',
-    },
-    _meta: { title: 'Prompt' },
-  });
-  return {
-    1: matrix(1, ['a1', 'a2']),
-    2: {
-      class_type: 'ScenePrompterExpand',
-      inputs: {
-        scene_prompt: ['1', 0],
-        current_index: 0,
-        run_id: '',
-        seed_base: 0,
-        prefix: 'a',
-        model_mode: 'Illustrious',
-      },
-    },
-    3: {
-      class_type: 'SceneSaveImage',
-      inputs: {
-        images: ['2', 0],
-        path: `BatchStudio/${projectId}/branch-a`,
-        metadata_mode: 'none',
-      },
-    },
-    4: matrix(4, ['b1']),
-    5: {
-      class_type: 'ScenePrompterExpand',
-      inputs: {
-        scene_prompt: ['4', 0],
-        current_index: 0,
-        run_id: '',
-        seed_base: 0,
-        prefix: 'b',
-        model_mode: 'Illustrious',
-      },
-    },
-    6: {
-      class_type: 'SceneSaveImage',
-      inputs: {
-        images: ['5', 0],
-        path: `BatchStudio/${projectId}/branch-b`,
-        metadata_mode: 'none',
-      },
-    },
-  };
+function graphFor() {
+  return require('./standard-graph-fixture.cjs')([
+    { branchId: 'branch-a', leafIds: ['a1', 'a2'] },
+    { branchId: 'branch-b', leafIds: ['b1'] },
+  ]);
 }
 async function makeProject(execution, hashCanonicalJson, projectId = 'local-api-project') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-local-project-')),
@@ -186,32 +137,21 @@ function startServer(install, options = {}) {
     };
     if (req.url === '/system_stats') return json(200, { system: { ok: true } });
     if (req.url === '/object_info')
-      return json(200, { SceneMatrix: {}, ScenePrompterExpand: {}, SceneSaveImage: {} });
-    if (req.url === '/scene_prompt/runs/prepare') {
-      calls.prepares.push(body);
-      const node = body.api_graph.output[String(body.expand_node_id)],
-        matrix = body.api_graph.output[String(node.inputs.scene_prompt[0])],
-        total = JSON.parse(matrix.inputs.matrix_json).sets.length;
-      return json(200, {
-        run_handle: `handle-${body.expand_node_id}-${calls.prepares.length}`,
-        total_batches: total,
-        total_images: total,
-        presets: [],
-        preset_graphs: {},
-      });
-    }
+      return json(
+        200,
+        Object.fromEntries(Object.values(graphFor()).map((node) => [node.class_type, {}])),
+      );
     if (req.url === '/prompt') {
       const graph = body.prompt,
-        expand = Object.entries(graph).find(([, n]) => n.class_type === 'ScenePrompterExpand'),
-        saveEntry = Object.entries(graph).find(([, n]) => n.class_type === 'SceneSaveImage'),
+        sampler = Object.values(graph).find((n) => n.class_type === 'KSampler'),
+        saveEntry = Object.entries(graph).find(([, n]) => n.class_type === 'SaveImage'),
         save = saveEntry[1],
         promptId = `prompt-${calls.prompts.length + 1}`;
       const record = {
         promptId,
-        expandId: expand[0],
-        index: expand[1].inputs.current_index,
-        path: save.inputs.path,
-        runHandle: expand[1].inputs.run_handle,
+        leafId: save._meta.batchStudio.leafId,
+        seed: sampler.inputs.seed,
+        path: save.inputs.filename_prefix,
       };
       calls.prompts.push(record);
       if (body.extra_data?.batch_studio_submission_id)
@@ -220,12 +160,14 @@ function startServer(install, options = {}) {
       history.set(promptId, 'pending');
       outputs.set(promptId, {
         [saveEntry[0]]: {
-          images: [{ filename: `${promptId}.png`, subfolder: save.inputs.path, type: 'output' }],
+          images: [
+            { filename: `${promptId}.png`, subfolder: save.inputs.filename_prefix, type: 'output' },
+          ],
         },
       });
       const target = path.join(
         options.actualOutputRoot ?? path.join(install, 'output'),
-        String(save.inputs.path),
+        String(save.inputs.filename_prefix),
       );
       fs.mkdirSync(target, { recursive: true });
       fs.writeFileSync(path.join(target, `${promptId}.png`), 'png');
@@ -238,21 +180,6 @@ function startServer(install, options = {}) {
         return;
       }
       return json(200, { prompt_id: promptId, number: calls.prompts.length, node_errors: {} });
-    }
-    if (req.url === '/scene_prompt/runs/claim') {
-      calls.claims.push(body);
-      const previous = claimedHandles.get(body.run_handle);
-      if (previous && previous !== body.prompt_id) return json(200, { claimed: false });
-      claimedHandles.set(body.run_handle, body.prompt_id);
-      return json(200, { claimed: true });
-    }
-    if (req.url === '/scene_prompt/runs/finalize') {
-      calls.finalizes.push(body);
-      return json(200, { state: 'finalized' });
-    }
-    if (req.url === '/scene_prompt/runs/release') {
-      calls.releases.push(body);
-      return json(200, { released: true });
     }
     if (req.url?.startsWith('/view?')) {
       const url = new URL(req.url, 'http://localhost');
@@ -343,26 +270,12 @@ function startServer(install, options = {}) {
 (async () => {
   const execution = await load('execution-run.js'),
     { hashCanonicalJson } = await load('workflow-api.js'),
-    { LocalExecutionService, enumerateSceneBranches, sliceSceneBranchGraph, verifyLocalOutputs } =
-      await load('local-execution.js');
+    { LocalExecutionService, verifyLocalOutputs } = await load('local-execution.js');
   {
     const { root, install, run, ready } = await makeProject(execution, hashCanonicalJson),
       mock = await startServer(install);
     try {
       const api = JSON.parse(fs.readFileSync(path.join(root, 'LoRA_project.api.json'), 'utf8'));
-      assert.deepEqual(
-        enumerateSceneBranches(api, run).map((x) => [x.branchId, x.expandNodeId]),
-        [
-          ['branch-a', '2'],
-          ['branch-b', '5'],
-        ],
-      );
-      assert.equal(
-        Object.values(sliceSceneBranchGraph(api, '2')).filter(
-          (n) => n.class_type === 'ScenePrompterExpand',
-        ).length,
-        1,
-      );
       const service = new LocalExecutionService(async () => ({
         endpoint: mock.endpoint,
         installPath: install,
@@ -378,24 +291,17 @@ function startServer(install, options = {}) {
         return current?.lifecycle === 'COMPLETED' ? current : null;
       });
       assert.deepEqual(
-        mock.calls.prompts.map((x) => [x.expandId, x.index]),
-        [
-          ['2', 0],
-          ['2', 1],
-          ['5', 0],
-        ],
-        'branches and indexes must be FIFO/sequential',
+        mock.calls.prompts.map((x) => x.leafId),
+        ['a1', 'a2', 'b1'],
       );
-      assert.deepEqual(
-        mock.calls.claims.map((x) => x.prompt_id),
-        ['prompt-1', 'prompt-3'],
-        'each prepared run_handle is claimed only by its first prompt',
+      assert.ok(mock.calls.prompts.every((x) => Number.isSafeInteger(x.seed) && x.seed > 0));
+      assert.equal(
+        mock.calls.prepares.length +
+          mock.calls.claims.length +
+          mock.calls.finalizes.length +
+          mock.calls.releases.length,
+        0,
       );
-      assert.deepEqual(
-        mock.calls.finalizes.map((x) => x.prompt_id),
-        ['prompt-2', 'prompt-3'],
-      );
-      assert.equal(mock.calls.releases.length, 2);
       assert.equal(done.progress.overall.completed, 3);
       assert.equal(done.promptIds.length, 3);
       assert.ok(
@@ -437,10 +343,6 @@ function startServer(install, options = {}) {
       );
       assert.equal((await verifyLocalOutputs(install, nextDone)).count, 3);
       assert.equal((await verifyLocalOutputs(install, done)).count, 3);
-      assert.ok(
-        mock.calls.prompts.every((x) => String(x.runHandle).startsWith('handle-')),
-        'prepared run_handle must be injected before submit',
-      );
       assert.equal(
         done.evidence.some((x) => x.kind === 'LOCAL_FILE_VERIFIED'),
         true,
@@ -562,8 +464,8 @@ function startServer(install, options = {}) {
       });
       assert.equal(done.progress.overall.completed, 3);
       assert.deepEqual(
-        mock.calls.prompts.map((x) => x.index),
-        [0, 1, 0],
+        mock.calls.prompts.map((x) => x.leafId),
+        ['a1', 'a2', 'b1'],
       );
     } finally {
       mock.server.close();
@@ -591,11 +493,7 @@ function startServer(install, options = {}) {
       }, 8000);
       assert.match(failed.error.message, /COMFYUI_PROMPT_LOST/);
       assert.equal(mock.calls.prompts.length, 1, 'lost prompt must not be resubmitted');
-      assert.equal(
-        mock.calls.releases.length,
-        1,
-        'lost prompt must release the Scene Prompt handle',
-      );
+      assert.equal(mock.calls.releases.length, 0);
     } finally {
       mock.server.close();
     }
@@ -639,8 +537,11 @@ function startServer(install, options = {}) {
       ),
       mock = await startServer(install, { holdFirst: true });
     try {
-      const graph = graphFor(run.projectId);
-      graph[3].inputs.path = `BatchStudio/${run.projectId}/${run.runId}/branch-a`;
+      const { enumerateImageTasks } = await load('image-tasks.js');
+      const pinned = await execution.readExecutionWorkflow(root, run);
+      const graph = enumerateImageTasks(pinned.api, run)[0].graph;
+      Object.values(graph).find((n) => n.class_type === 'SaveImage').inputs.filename_prefix =
+        `BatchStudio/${run.projectId}/${run.runId}/branch-a`;
       const submitted = await fetch(mock.endpoint + '/prompt', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
