@@ -188,59 +188,6 @@ function descendants(graph: ApiGraph, nodeId: string) {
   }
   return seen;
 }
-function matrixLeafIds(node: ApiGraphNode | undefined) {
-  if (node?.class_type !== 'SceneMatrix') return null;
-  try {
-    const parsed = JSON.parse(String(node.inputs.matrix_json ?? '')),
-      sets = Array.isArray(parsed?.sets) ? parsed.sets : [];
-    return sets
-      .filter((row: any) => row?.enabled !== false)
-      .map((row: any) => String(row?.row_id ?? ''));
-  } catch {
-    return null;
-  }
-}
-export function enumerateSceneBranches(graph: ApiGraph, run: ExecutionRun): BranchBinding[] {
-  const expandIds = Object.entries(graph)
-    .filter(([, node]) => node.class_type === 'ScenePrompterExpand')
-    .map(([id]) => id);
-  return run.snapshot.plan.branches.map((branch) => {
-    const matches = expandIds.filter((expandId) => {
-      const up = ancestors(graph, expandId);
-      return [...up].some((id) => {
-        const leafIds = matrixLeafIds(graph[id]);
-        return leafIds != null && JSON.stringify(leafIds) === JSON.stringify(branch.leafIds);
-      });
-    });
-    if (matches.length !== 1)
-      throw new Error(
-        `Branch ${branch.branchId} must map to exactly one ScenePrompterExpand (found ${matches.length}).`,
-      );
-    return { branchId: branch.branchId, leafIds: branch.leafIds, expandNodeId: matches[0] };
-  });
-}
-export function sliceSceneBranchGraph(graph: ApiGraph, expandNodeId: string): ApiGraph {
-  if (!graph[expandNodeId]) throw new Error(`ScenePrompterExpand ${expandNodeId} was not found.`);
-  const down = descendants(graph, expandNodeId),
-    keep = ancestors(graph, [...down][0] ?? expandNodeId);
-  for (const id of down) keep.add(id);
-  for (const id of [...down]) for (const ancestor of ancestors(graph, id)) keep.add(ancestor);
-  for (const id of keep)
-    if (id !== expandNodeId && graph[id]?.class_type === 'ScenePrompterExpand')
-      throw new Error('A branch slice contains multiple ScenePrompterExpand nodes.');
-  return Object.fromEntries(
-    [...keep].sort((a, b) => Number(a) - Number(b)).map((id) => [id, clone(graph[id])]),
-  );
-}
-function applyExpandState(graph: ApiGraph, expandNodeId: string, runId: string, index: number) {
-  const node = graph[expandNodeId];
-  if (!node || node.class_type !== 'ScenePrompterExpand')
-    throw new Error('ScenePrompterExpand is missing from branch graph.');
-  node.inputs.current_index = index;
-  node.inputs.run_id = runId;
-  node.inputs.seed_base = randomInt(0, 0x7fffffff);
-  (node.inputs as any).seed_base_literal = false;
-}
 function errorOf(
   run: ExecutionRun,
   code: string,

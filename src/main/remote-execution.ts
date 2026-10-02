@@ -9,7 +9,7 @@ import {
   markGenerationStarted,
 } from '../shared/execution-progress.js';
 import { exists, readJson } from './fs-utils.js';
-import { enumerateSceneBranches, sliceSceneBranchGraph } from './local-execution.js';
+import { enumerateImageTasks, graphToWorkflow } from './image-tasks.js';
 import {
   getExecutionRun,
   readExecutionWorkflow,
@@ -273,7 +273,7 @@ export class RemoteExecutionService {
     this.workers.set(runId, task);
     return task;
   }
-  // Reattach to the existing sequence without issuing run_scene_sequence, which could
+  // Reattach to the existing sequence without issuing run_image_sequence, which could
   // submit an already accepted prompt again after a Main Process crash.
   recover(root: string, runId: string): Promise<void> {
     const existing = this.workers.get(runId);
@@ -415,7 +415,7 @@ export class RemoteExecutionService {
     if (task) await task.catch(() => {});
   }
   async stopScheduling(root: string, runId: string) {
-    await this.remote.requestWorker(root, runId, 'stop_scene_sequence');
+    await this.remote.requestWorker(root, runId, 'stop_image_sequence');
     return true;
   }
   async forceInterrupt(root: string, runId: string) {
@@ -456,12 +456,16 @@ export class RemoteExecutionService {
       return false;
     }
     const { api: graph, ui: workflow } = await readExecutionWorkflow(root, run);
-    const bindings = enumerateSceneBranches(graph, run);
-    const branches = bindings.map((binding) => ({
-      branchId: binding.branchId,
-      leafIds: binding.leafIds,
-      expandNodeId: binding.expandNodeId,
-      graph: sliceSceneBranchGraph(graph, binding.expandNodeId),
+    const tasks = enumerateImageTasks(graph, run);
+    const branches = run.snapshot.plan.branches.map((branch) => ({
+      ...branch,
+      tasks: tasks
+        .filter((task) => task.branchId === branch.branchId)
+        .map((task) => ({
+          leafId: task.leafId,
+          graph: task.graph,
+          workflow: graphToWorkflow(task.graph),
+        })),
     }));
     const outputPrefix = `BatchStudio/${safeProjectPart(run.projectId)}/${runId}`;
     await mutateExecutionRun(root, runId, (current) => {
@@ -488,7 +492,7 @@ export class RemoteExecutionService {
         await this.remote.requestWorker(
           root,
           runId,
-          'run_scene_sequence',
+          'run_image_sequence',
           {
             runId,
             projectId: run.projectId,

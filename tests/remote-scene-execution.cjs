@@ -35,47 +35,36 @@ const callWorker = (workerPath, runDir, req) =>
     );
     child.stdin.end(JSON.stringify(req) + '\n');
   });
-const graph = () => ({
-  1: {
-    class_type: 'SceneMatrix',
-    inputs: {
-      matrix_json: JSON.stringify({
-        version: 1,
-        sets: [
-          { row_id: 'a1', enabled: true },
-          { row_id: 'a2', enabled: true },
-        ],
-      }),
-      run_handle: '',
-    },
-  },
-  2: {
-    class_type: 'ScenePrompterExpand',
-    inputs: {
-      scene_prompt: ['1', 0],
-      current_index: 0,
-      run_id: '',
-      seed_base: 0,
-      prefix: 'a',
-      model_mode: 'Illustrious',
-    },
-  },
-  3: {
-    class_type: 'SceneSaveImage',
-    inputs: { images: ['2', 0], path: 'BatchStudio/test/branch-a', metadata_mode: 'none' },
-  },
-});
-const payload = (endpoint, runId = 'remote-run') => ({
-  requestId: 'run-' + runId,
-  op: 'run_scene_sequence',
-  runId,
-  projectId: 'test',
-  outputPrefix: 'BatchStudio/test',
-  comfyEndpoint: endpoint,
-  workflow: { nodes: [], links: [] },
-  branches: [{ branchId: 'branch-a', leafIds: ['a1', 'a2'], expandNodeId: '2', graph: graph() }],
-});
-
+let imageTasks;
+const payload = (endpoint, runId = 'remote-run') => {
+  const api = require('./standard-graph-fixture.cjs')([
+    { branchId: 'branch-a', leafIds: ['a1', 'a2'] },
+  ]);
+  for (const node of Object.values(api))
+    if (node.class_type === 'KSampler') node.inputs.seed = 12345;
+  const tasks = imageTasks.enumerateImageTasks(api, {
+    snapshot: { plan: { branches: [{ branchId: 'branch-a', leafIds: ['a1', 'a2'] }] } },
+  });
+  return {
+    requestId: 'run-' + runId,
+    op: 'run_image_sequence',
+    runId,
+    projectId: 'test',
+    outputPrefix: 'BatchStudio/test',
+    comfyEndpoint: endpoint,
+    branches: [
+      {
+        branchId: 'branch-a',
+        leafIds: ['a1', 'a2'],
+        tasks: tasks.map((t) => ({
+          leafId: t.leafId,
+          graph: t.graph,
+          workflow: imageTasks.graphToWorkflow(t.graph),
+        })),
+      },
+    ],
+  };
+};
 function startMock() {
   const calls = {
     prompts: [],
@@ -89,6 +78,7 @@ function startMock() {
   };
   const history = new Map([['recovered-1', 'success']]);
   const submissionIds = new Map();
+  const outputReferences = new Map();
   const running = new Set();
   const pending = new Set(['unrelated-pending']);
   const server = http.createServer(async (req, res) => {
@@ -102,34 +92,31 @@ function startMock() {
     };
     if (req.url === '/system_stats') return json(200, { ok: true });
     if (req.url === '/object_info')
-      return json(200, { SceneMatrix: {}, ScenePrompterExpand: {}, SceneSaveImage: {} });
-    if (req.url === '/scene_prompt/runs/prepare') {
-      calls.prepares++;
-      return json(200, {
-        run_handle: 'handle-' + calls.prepares,
-        total_batches: 2,
-        total_images: 2,
-      });
-    }
-    if (req.url === '/scene_prompt/runs/claim') {
-      calls.claims.push(body);
-      return json(200, { claimed: true });
-    }
-    if (req.url === '/scene_prompt/runs/finalize') {
-      calls.finalizes.push(body);
-      return json(200, { state: 'finalized' });
-    }
-    if (req.url === '/scene_prompt/runs/release') {
-      calls.releases.push(body);
-      return json(200, { released: true });
-    }
+      return json(
+        200,
+        Object.fromEntries([...imageTasks.standardNodeTypes].map((type) => [type, {}])),
+      );
     if (req.url === '/prompt') {
-      const expand = body.prompt['2'],
+      const save = Object.values(body.prompt).find((n) => n.class_type === 'SaveImage'),
         id = 'prompt-' + (calls.prompts.length + 1);
       calls.prompts.push({
         id,
-        index: expand.inputs.current_index,
-        runHandle: expand.inputs.run_handle,
+        leafId: save._meta.batchStudio.leafId,
+        seed: Object.values(body.prompt).find((n) => n.class_type === 'KSampler').inputs.seed,
+      });
+      const saveId = Object.entries(body.prompt).find(
+        ([, node]) => node.class_type === 'SaveImage',
+      )[0];
+      outputReferences.set(id, {
+        [saveId]: {
+          images: [
+            {
+              filename: id + '.png',
+              subfolder: save.inputs.filename_prefix.split('/').slice(0, -1).join('/'),
+              type: 'output',
+            },
+          ],
+        },
       });
       if (body.extra_data?.batch_studio_submission_id)
         submissionIds.set(id, body.extra_data.batch_studio_submission_id);
@@ -159,7 +146,18 @@ function startMock() {
       const id = decodeURIComponent(req.url.slice('/history/'.length)),
         state = history.get(id);
       if (!state) return json(200, {});
-      return json(200, { [id]: { status: { status_str: state, completed: state === 'success' } } });
+      return json(200, {
+        [id]: {
+          status: { status_str: state, completed: state === 'success' },
+          outputs: outputReferences.get(id) ?? {
+            7: {
+              images: [
+                { filename: id + '.png', subfolder: 'BatchStudio/test/branch-a', type: 'output' },
+              ],
+            },
+          },
+        },
+      });
     }
     if (req.url === '/queue')
       return json(200, {
@@ -188,6 +186,7 @@ function startMock() {
 }
 
 (async () => {
+  imageTasks = await load('image-tasks.js');
   const { REMOTE_WORKER_FILE } = await load('remote-worker-source.js');
   const workerPath = path.join(runtime, 'worker.py');
   fs.writeFileSync(workerPath, REMOTE_WORKER_FILE);
@@ -200,14 +199,14 @@ function startMock() {
     let response = result.lines.at(-1).result;
     assert.equal(response.state.status, 'completed');
     assert.deepEqual(
-      mock.calls.prompts.map((x) => x.index),
-      [0, 1],
+      mock.calls.prompts.map((x) => x.leafId),
+      ['a1', 'a2'],
       'worker must submit FIFO after terminal completion',
     );
-    assert.equal(mock.calls.claims.length, 1, 'run handle is claimed by the first prompt only');
-    assert.equal(mock.calls.finalizes.length, 1);
-    assert.equal(mock.calls.releases.length, 1);
-    assert.ok(mock.calls.prompts.every((x) => String(x.runHandle).startsWith('handle-')));
+    assert.equal(mock.calls.claims.length, 0);
+    assert.equal(mock.calls.finalizes.length, 0);
+    assert.equal(mock.calls.releases.length, 0);
+    assert.ok(mock.calls.prompts.every((x) => x.seed === 12345));
     assert.equal(response.state.artifact.outputPrefix, 'BatchStudio/test');
 
     const reconnectDir = path.join(runtime, 'reconnect');
@@ -215,7 +214,8 @@ function startMock() {
     fs.writeFileSync(
       path.join(reconnectDir, 'state.json'),
       JSON.stringify({
-        version: 1,
+        version: 2,
+        taskInputs: payload(mock.endpoint).branches,
         runId: 'reconnect-run',
         status: 'running',
         workerPid: 0,
@@ -241,14 +241,15 @@ function startMock() {
       1,
       'reconnect must reconcile recovered prompt instead of resubmitting it',
     );
-    assert.equal(mock.calls.prompts.at(-1).index, 1);
+    assert.equal(mock.calls.prompts.at(-1).leafId, 'a2');
 
     const stopDir = path.join(runtime, 'stop');
     fs.mkdirSync(stopDir);
     fs.writeFileSync(
       path.join(stopDir, 'state.json'),
       JSON.stringify({
-        version: 1,
+        version: 2,
+        taskInputs: payload(mock.endpoint).branches,
         runId: 'stop-run',
         status: 'running',
         workerPid: 0,
@@ -264,7 +265,7 @@ function startMock() {
     );
     result = await callWorker(workerPath, stopDir, {
       requestId: 'stop',
-      op: 'stop_scene_sequence',
+      op: 'stop_image_sequence',
     });
     assert.equal(result.code, 0);
     const stopBefore = mock.calls.prompts.length;
@@ -293,8 +294,8 @@ function startMock() {
     response = result.lines.at(-1).result;
     assert.equal(response.state.status, 'completed');
     assert.deepEqual(
-      mock.calls.prompts.slice(stopBefore).map((x) => x.index),
-      [0, 1],
+      mock.calls.prompts.slice(stopBefore).map((x) => x.leafId),
+      ['a1', 'a2'],
       'explicit Resume must execute all remaining leaves after Stop Scheduling',
     );
     assert.equal(
@@ -333,8 +334,8 @@ function startMock() {
     assert.equal(response.state.status, 'completed');
     assert.equal(response.state.overallCompleted, 2);
     assert.deepEqual(
-      mock.calls.prompts.slice(partialBefore).map((x) => x.index),
-      [1],
+      mock.calls.prompts.slice(partialBefore).map((x) => x.leafId),
+      ['a2'],
       'previously completed leaves must never be submitted again',
     );
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(partialDir, 'control.json'), 'utf8')), {
@@ -372,8 +373,8 @@ function startMock() {
       response = result.lines.at(-1).result;
       assert.equal(response.state.status, 'completed');
       assert.deepEqual(
-        mock.calls.prompts.slice(recoveredBefore).map((x) => x.index),
-        [1],
+        mock.calls.prompts.slice(recoveredBefore).map((x) => x.leafId),
+        ['a2'],
       );
     }
 
@@ -411,14 +412,15 @@ function startMock() {
     assert.equal(response.state.status, 'failed');
     assert.equal(response.state.error.code, 'REMOTE_PROMPT_LOST');
     assert.equal(mock.calls.prompts.length - callsBeforeLost, 1);
-    assert.equal(mock.calls.releases.length - releasesBeforeLost, 1);
+    assert.equal(mock.calls.releases.length - releasesBeforeLost, 0);
 
     const interruptDir = path.join(runtime, 'interrupt');
     fs.mkdirSync(interruptDir);
     fs.writeFileSync(
       path.join(interruptDir, 'state.json'),
       JSON.stringify({
-        version: 1,
+        version: 2,
+        taskInputs: payload(mock.endpoint).branches,
         runId: 'interrupt-run',
         status: 'running',
         workerPid: 0,
@@ -479,7 +481,7 @@ function startMock() {
       [
         '-c',
         'import fcntl,sys,time;f=open(sys.argv[1],"a+");fcntl.flock(f,fcntl.LOCK_EX);print("ready",flush=True);time.sleep(10)',
-        path.join(orphanDir, 'scene-sequence.lock'),
+        path.join(orphanDir, 'image-sequence.lock'),
       ],
       { stdio: ['ignore', 'pipe', 'pipe'] },
     );
@@ -553,7 +555,7 @@ function startMock() {
     assert.equal(result.lines.at(-1).result.state.status, 'failed');
     assert.equal(result.lines.at(-1).result.state.error.code, 'REMOTE_PROMPT_ACK_UNCERTAIN');
     assert.equal(mock.calls.prompts.length, beforeUnknown, 'unknown ACK must not be retried');
-    console.log('Remote Scene Prompt execution tests passed.');
+    console.log('Remote standard image execution tests passed.');
   } finally {
     mock.server.close();
   }
