@@ -1,7 +1,7 @@
 {
   "date": "2026-10-06",
   "commit": "2d2656d2673209a3330d792520e958296a473b08",
-  "method": "Regex full-text inventory; actual preload invoke/event direction; exclusive ownership and explicit IPC sets. Reachability includes type imports and is not a deletion proof.",
+  "method": "Regex full-text inventory; text hashes normalize CRLF to LF, binary hashes use exact bytes; actual preload invoke/event direction; exclusive ownership and explicit IPC sets. Reachability includes type imports and is not a deletion proof.",
   "policy": {
     "backwardCompatibility": false,
     "legacyDataMigration": false,
@@ -440,7 +440,7 @@
     {
       "file": "run.bat",
       "lines": 130,
-      "sha256": "bfa3d0f302b67e8032cf9d1678478f1a389953b7afdeb70b9634f96e8defdd2c",
+      "sha256": "1adc87e143fbd92c48c289f1d08b34ca78386770111d926490be84041fc999a3",
       "workPackage": "W11",
       "phase": "P8",
       "gate": "G11",
@@ -12811,7 +12811,7 @@
   "documents": [
     {
       "file": "docs/README.md",
-      "sha256": "7fb9fe50dac343286ff86b18dc2c6850c332a33d55cc6a8ac8db4b62736ce9df",
+      "sha256": "a1af027e0d15675d71f93b22a8806226fe30c852247b540766e142141b3ebb24",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
