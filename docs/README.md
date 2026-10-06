@@ -39,6 +39,8 @@ docs/
    └─ decision-log.md
 ```
 
+Docker DesktopでのLinuxローカル検証は [実行手順](operations/docker-local-tests.md) を参照する。
+
 ## 3. 各文書の責務
 
 | 文書 | 正本とする内容 |

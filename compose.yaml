@@ -1,0 +1,11 @@
+services:
+  test:
+    build:
+      context: .
+      target: local-test
+    init: true
+    shm_size: 1gb
+    environment:
+      CI: "true"
+    # Source and Linux dependencies are copied into the image. A Windows bind
+    # mount would reintroduce host filesystem and symlink restrictions.
