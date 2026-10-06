@@ -439,7 +439,12 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
       await beginHeld('during-transfer');
       fs.writeFileSync(source, Buffer.alloc(20, 0x43));
       releaseHeld('during-transfer');
-      await poll(async () => (await state('during-transfer')).status === 'failed');
+      // Failed state is saved before asynchronous multipart cleanup completes.
+      await poll(
+        async () =>
+          (await state('during-transfer')).status === 'failed' &&
+          calls.aborts.includes('during-transfer'),
+      );
       assert.equal(calls.completes.includes('during-transfer'), false);
       assert.equal(calls.aborts.includes('during-transfer'), true);
       assert.match((await state('during-transfer')).error, /R2_UPLOAD_SOURCE_CHANGED/);
@@ -458,7 +463,10 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
       await beginHeld('shrink');
       fs.truncateSync(source, 11);
       releaseHeld('shrink');
-      await poll(async () => (await state('shrink')).status === 'failed');
+      // Failed state is saved before asynchronous multipart cleanup completes.
+      await poll(
+        async () => (await state('shrink')).status === 'failed' && calls.aborts.includes('shrink'),
+      );
       assert.equal(calls.completes.includes('shrink'), false);
       assert.equal(calls.aborts.includes('shrink'), true);
       assert.ok(
