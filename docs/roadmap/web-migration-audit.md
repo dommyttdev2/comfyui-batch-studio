@@ -525,7 +525,7 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [tests/codex-snapshot-race.cjs](../../tests/codex-snapshot-race.cjs) | standalone | 挙動検証へ置換/補完 | G04 | P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復 (G12) |
 | [tests/codex-turn-status.cjs](../../tests/codex-turn-status.cjs) | standalone | 挙動検証へ置換/補完 | G04 | P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復 (G12) |
 | [tests/compiler-lora-mode.cjs](../../tests/compiler-lora-mode.cjs) | npm-test | 契約維持・server buildへ適合 | G05 | P8までに新test実行経路へ接続 (G12) |
-| [tests/core-policy.cjs](../../tests/core-policy.cjs) | core-local | 契約維持・server buildへ適合 | G02 | P1からcore単独回帰に接続済み。P2以降も必須 (G12) |
+| [tests/core-policy.cjs](../../tests/core-policy.cjs) | core-local | 契約維持・server buildへ適合 | G03, G06, G09, G10 | P1からcore単独回帰に接続済み。P2以降も必須 (G12) |
 | [tests/execution-coordinator.cjs](../../tests/execution-coordinator.cjs) | npm-test | 契約維持・server buildへ適合 | G06 | P8までに新test実行経路へ接続 (G12) |
 | [tests/execution-run.cjs](../../tests/execution-run.cjs) | npm-test | 挙動検証へ置換/補完 | G06 | P8までに新test実行経路へ接続 (G12) |
 | [tests/execution-safe-exit.cjs](../../tests/execution-safe-exit.cjs) | npm-test | 挙動検証へ置換/補完 | G06 | P8までに新test実行経路へ接続 (G12) |

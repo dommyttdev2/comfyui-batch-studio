@@ -12734,7 +12734,10 @@
       "treatment": "契約維持・server buildへ適合",
       "targetGate": "G12",
       "featureGates": [
-        "G02"
+        "G03",
+        "G06",
+        "G09",
+        "G10"
       ],
       "requiredAction": "P1からcore単独回帰に接続済み。P2以降も必須"
     },
