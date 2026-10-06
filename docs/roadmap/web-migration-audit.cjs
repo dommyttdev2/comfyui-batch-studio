@@ -6,7 +6,9 @@ const root = path.resolve(__dirname, '../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const walk = (dir) => fs.readdirSync(path.join(root, dir), { withFileTypes: true })
   .flatMap((entry) => entry.isDirectory() ? walk(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`]).sort();
-const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex');
+// Normalize text line endings; binary asset hashes preserve exact bytes.
+const hash = (file) => crypto.createHash('sha256').update(/\.(psd|png)$/i.test(file)
+  ? fs.readFileSync(path.join(root, file)) : read(file).replace(/\r\n/g, '\n')).digest('hex');
 const list = (text) => text.split(/\s+/).filter(Boolean);
 const packages = {
   W01: { name: '通信契約・認可境界', phase: 'P2', gate: 'G01' },
@@ -197,7 +199,7 @@ const resources = walk('thumbnail/psd-templates').filter((f) => /\.(psd|png)$/.t
 const documents = [...walk('docs').filter((f) => f.endsWith('.md') && !f.startsWith('docs/releases/') && !f.startsWith('docs/roadmap/web-migration-')),
   'README.md', 'AGENTS.md', 'thumbnail/psd-templates/README.md'].map((file) => ({ file, sha256: hash(file), workPackage: 'W11', gate: 'G11',
     treatment: file === 'AGENTS.md' ? '既存rule遵守・変更不要' : file.startsWith('docs/decisions/') ? '過去判断を保持し新判断を追記' : '移行完了時に該当仕様を更新' }));
-const inventory = { date: '2026-10-06', commit: prior.commit, method: 'Regex full-text inventory; actual preload invoke/event direction; exclusive ownership and explicit IPC sets. Reachability includes type imports and is not a deletion proof.',
+const inventory = { date: '2026-10-06', commit: prior.commit, method: 'Regex full-text inventory; text hashes normalize CRLF to LF, binary hashes use exact bytes; actual preload invoke/event direction; exclusive ownership and explicit IPC sets. Reachability includes type imports and is not a deletion proof.',
   policy: { backwardCompatibility: false, legacyDataMigration: false, fallback: false, initialization: 'new dataDir and explicit current-schema settings', failure: 'explicit error; no automatic alternate route' },
   preExistingChanges: prior.preExistingChanges, scope: { codeRoots: scanRoots, rootFiles, resourceRoot: 'thumbnail/psd-templates',
     exclusions: ['node_modules', 'generated dist', '.git/.codex/.agents/.aws', '*.log', 'release evidence/history', 'generated planning evidence (this tool and its outputs)'] },
