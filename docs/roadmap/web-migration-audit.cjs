@@ -38,7 +38,18 @@ const groups = {
   W10: list('main app-settings civitai-config r2-config vastai-config'),
   W14: list('codex-app-server codex-artifact-turn codex-chat-state codex-file-artifact codex-model-selection codex-thread-history codex-turn-monitor grok-artifact-adapter grok-auto-artifact-watcher grok-chat-state grok-navigation-queue grok-navigation'),
 };
+const coreOwners = {
+  'contracts': 'W01', 'artifact-policy': 'W03', 'execution-policy': 'W06', 'confirmation-policy': 'W10', 'image-policy': 'W09',
+  'project-ports': 'W03', 'project-access': 'W03', 'project-use-cases': 'W03', 'execution-use-cases': 'W06',
+  'agent-use-cases': 'W04', 'confirmation-use-cases': 'W10', 'platform-ports': 'W10', 'platform-use-cases': 'W10', 'core': 'W10',
+};
 function owner(file) {
+  if (/^src\/(domain|application)\//.test(file)) {
+    const assigned = coreOwners[path.basename(file, '.ts')];
+    if (!assigned) throw new Error('Core owner missing: ' + file);
+    return assigned;
+  }
+  if (file === 'scripts/check-core-boundaries.cjs') return 'W12';
   if (file.startsWith('tests/') || file === 'scripts/verify-comfyui-api.mjs') return 'W12';
   if (file.startsWith('templates/') || file.startsWith('schemas/') || file === 'src/shared/marketplace-image-targets.json') return 'W13';
   if (file.startsWith('scripts/') || file.startsWith('.github/') || !file.startsWith('src/')) return 'W11';
@@ -97,7 +108,7 @@ const rows = files.map((file) => {
   const imports = [...source.matchAll(/(?:from\s*|require\s*\(\s*|import\s*\(\s*|import\s*)['"]([^'"]+)['"]/g)].map((m) => m[1]);
   const workPackage = owner(file);
   return {
-    file, lines: lines.length, sha256: hash(file), workPackage, phase: packages[workPackage].phase, gate: packages[workPackage].gate,
+    file, lines: lines.length, sha256: hash(file), workPackage, layer: file.startsWith('src/domain/') ? 'domain' : file.startsWith('src/application/') ? 'application' : 'existing-reference', phase: /^src\/(domain|application)\//.test(file) ? 'P1' : packages[workPackage].phase, gate: packages[workPackage].gate,
     desktopRemovalPhase: file.startsWith('src/preload/') || file.startsWith('src/main/ipc-registration') || file === 'src/shared/ipc.ts' || file === 'src/main/main.ts' || workPackage === 'W14' ? 'P9' : null,
     electronDependencyRemovalPhase: imports.includes('electron') && !['W01', 'W14'].includes(workPackage) && file !== 'src/main/main.ts' ? packages[workPackage].phase : null,
     imports: [...new Set(imports)],
@@ -178,10 +189,10 @@ const pkg = JSON.parse(read('package.json'));
 const ci = walk('.github').map(read).join('\n');
 const supports = new Set(list('main-process-source.cjs source-match.cjs standard-graph-fixture.cjs'));
 const testCoverage = rows.filter((r) => r.file.startsWith('tests/')).map((r) => {
-  const registration = supports.has(path.basename(r.file)) ? 'support' : pkg.scripts.test.includes(r.file) ? 'npm-test'
+  const registration = supports.has(path.basename(r.file)) || r.file.startsWith('tests/core-support/') ? 'support' : pkg.scripts.test.includes(r.file) ? 'npm-test' : (pkg.scripts['test:core'] || '').includes(r.file) ? 'core-local'
     : read('.github/workflows/ci.yml').includes(r.file) ? 'CI-only' : ci.includes(r.file) ? 'CI-conditional' : 'standalone';
   const name = path.basename(r.file);
-  const featurePackages = supports.has(name) ? ['W12'] : name === 'run.cjs' ? ['W03', 'W05']
+  const featurePackages = name === 'core-policy.cjs' ? ['W03', 'W06', 'W09', 'W10'] : name === 'business-core.cjs' ? ['W01', 'W03', 'W04', 'W06', 'W09', 'W10'] : supports.has(name) || r.file.startsWith('tests/core-support/') ? ['W12'] : name === 'run.cjs' ? ['W03', 'W05']
     : /service-integrations/.test(name) ? ['W07', 'W08', 'W10'] : /ipc-|marketplace-write-guard/.test(name) ? ['W01']
     : /agent|codex|grok|assistant/.test(name) ? ['W04'] : /r2-/.test(name) ? ['W08']
     : /civitai|vastai/.test(name) ? ['W07'] : /remote|execution|local-comfy/.test(name) ? ['W06']
@@ -192,7 +203,7 @@ const testCoverage = rows.filter((r) => r.file.startsWith('tests/')).map((r) => 
     : r.imports.includes('electron') ? 'server/browser検証へ置換' : r.imports.includes('./source-match.cjs') || r.imports.includes('./main-process-source.cjs') ? '挙動検証へ置換/補完' : '契約維持・server buildへ適合',
     targetGate: 'G12', featureGates: featurePackages.map((id) => packages[id].gate),
     requiredAction: registration === 'standalone' ? 'P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復'
-      : registration === 'CI-conditional' ? '条件付きperformance CIを維持/置換し発火pathも更新' : 'P8までに新test実行経路へ接続' };
+      : registration === 'core-local' ? 'P1からcore単独回帰に接続済み。P2以降も必須' : registration === 'CI-conditional' ? '条件付きperformance CIを維持/置換し発火pathも更新' : 'P8までに新test実行経路へ接続' };
 });
 const resources = walk('thumbnail/psd-templates').filter((f) => /\.(psd|png)$/.test(f)).map((file) => ({ file, sha256: hash(file), bytes: fs.statSync(path.join(root, file)).size,
   role: file.endsWith('.psd') ? 'runtime-PSD' : 'reference-preview', workPackage: 'W13', phase: 'P8', gate: 'G13' }));
