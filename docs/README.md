@@ -6,6 +6,8 @@
 
 一つの巨大な設計書へ UI、データ、外部連携、Grok 契約、Workflow 内部構造を集約しない。変更理由と変更単位が異なる内容は分離し、同じ事実を複数文書へ重複記載しない。
 
+リリースノートは [GitHub Releases](https://github.com/dommyttdev2/comfyui-batch-studio/releases) を正本とし、`docs/` には保存しない。
+
 ## 2. ドキュメント構成
 
 ```text
