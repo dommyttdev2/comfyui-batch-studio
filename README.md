@@ -67,7 +67,7 @@ Docker DesktopのLinux containersで、型チェック・回帰test・build・El
 docker compose run --build --rm test
 ```
 
-Windowsのnode_modulesや作業folderをmountせず、Linux container内で検証します。Windows専用updater testは別途Windowsで実行してください。[実行範囲と個別testの手順](docs/operations/docker-local-tests.md)を参照してください。
+Windowsのnode_modulesや作業folderをmountせず、Linux container内で検証します。Windows専用updater testは削除済みです。Windowsの更新操作を変更した場合は実環境で確認してください。[実行範囲と個別testの手順](docs/operations/docker-local-tests.md)を参照してください。
 
 ### Windows で最新リリースへ更新
 

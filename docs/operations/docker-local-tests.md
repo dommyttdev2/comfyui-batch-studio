@@ -39,7 +39,7 @@ Composeのcommand指定でtest実行内容を明示的に選ぶ。全検証の�
 ## 検証範囲
 
 - Windowsで失敗した`fcntl`依存のRemote Worker testとsymlink検証をLinuxで実行できる。
-- `tests/update-release.cjs`は既存のWindows専用testであり、Linuxでは明示的にskipする。Windows PowerShell updaterを検証するときはWindowsで`node tests/update-release.cjs`を実行する。
+- Windows専用の`tests/update-release.cjs`は削除し、`npm test`から登録を外した。Windows updaterの実装と利用方法は変更していない。更新操作を変更した場合はWindows実環境で確認する。CLIのcross-platform testは維持する。
 - 実CLI認証、実ComfyUI生成、Vast.ai課金、実R2転送、GUIの手動操作はこのtest imageの検証範囲外。実credentialや既存Projectをimageへ持ち込まない。
 - ホストの`.git`、node_modules、build出力、log、release evidence、`.env`、`.aws`、エージェント設定は`.dockerignore`でcontextから除外する。
 - コンテナはnodeユーザーでtestを実行する。Electron画像testの`--no-sandbox`は既存CIと同じヘッドレス検証設定であり、公開Web実行用の設定ではない。
@@ -50,3 +50,5 @@ Composeのcommand指定でtest実行内容を明示的に選ぶ。全検証の�
 検証対象はmain `d58e4f7`から分岐したDocker変更。WindowsホストのDocker Desktop 4.76.0 / Linux engine 29.5.2で`docker compose -p batch-studio-docker-pr --progress quiet run --build --rm test`が終了コード0で完了した。format/lint、typecheck、Linux対象の登録回帰test、build、CPU画像benchmark、Electron画像test（2048px/3584px）が成功。Windows専用updater testは既存条件で1件skipした。既存lint warning、ag-psdのutil外部化warning、D-Bus診断出力は残るが、失敗の隠蔽や追加skipはない。
 
 参考: [Docker Compose run](https://docs.docker.com/reference/cli/docker/compose/run/)、[build contextとdockerignore](https://docs.docker.com/build/concepts/context/#dockerignore-files)。
+
+Windows専用test削除後、`docker compose -p batch-studio-windows-test-pr --progress quiet run --build --rm test`も終了コード0で完了した。format/lint、typecheck、登録回帰test、build、CPU benchmark、Electron 2048px/3584px画像検証が成功。Windows専用testの登録とfileがなくなり、当該skipも発生しない。
