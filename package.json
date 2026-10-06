@@ -26,7 +26,9 @@
     "prebuild:electron": "node scripts/check-running-batch-studio.cjs",
     "prestart": "node scripts/check-running-batch-studio.cjs",
     "ipc:generate": "node scripts/generate-preload-ipc.cjs",
-    "ipc:check": "node scripts/generate-preload-ipc.cjs --check"
+    "ipc:check": "node scripts/generate-preload-ipc.cjs --check",
+    "build:core": "node scripts/check-core-boundaries.cjs && tsc -p tsconfig.core.json",
+    "test:core": "npm run build:core && node tests/core-policy.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
