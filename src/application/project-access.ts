@@ -10,6 +10,7 @@ import { assertRunState, assertProjectWritable } from '../domain/execution-polic
 import type { Clock, ProjectState } from './project-ports.js';
 export function assertCurrentProject(project: ProjectState, projectId: string): void {
   if (
+    !project ||
     project.schema !== 'web-project/1' ||
     project.id !== projectId ||
     !Number.isSafeInteger(project.revision) ||
