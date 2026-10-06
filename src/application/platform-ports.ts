@@ -12,7 +12,7 @@ export interface ImageCodec {
   ): Promise<Uint8Array>;
 }
 export interface ResourceStore {
-  read(resourceId: string): Promise<Uint8Array>;
+  read(projectId: string, resourceId: string): Promise<Uint8Array>;
 }
 export interface ArtifactRepository {
   read(projectId: string, key: ArtifactKey): Promise<string>;

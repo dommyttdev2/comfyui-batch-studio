@@ -45,7 +45,7 @@ Docker DesktopでのLinuxローカル検証は [実行手順](operations/docker-
 
 ## 3. 各文書の責務
 
-Web移行の範囲・禁止方針・作業分割は[移行計画](roadmap/web-migration-plan.md)、全ファイル・IPCの処置は[調査索引](roadmap/web-migration-audit.md)を参照する。これらは刷新branchの計画であり、現行仕様を置き換えるものではない。
+Web移行の範囲・禁止方針・作業分割は[移行計画](roadmap/web-migration-plan.md)、全ファイル・IPCの処置は[調査索引](roadmap/web-migration-audit.md)を参照する。P1の契約・層分離と検証は[業務coreの境界と受入](roadmap/web-migration-core-design.md)を参照する。これらは刷新branchの計画であり、現行仕様を置き換えるものではない。
 
 | 文書 | 正本とする内容 |
 | --- | --- |

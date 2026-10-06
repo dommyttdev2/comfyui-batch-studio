@@ -402,7 +402,7 @@
     {
       "file": "package.json",
       "lines": 56,
-      "sha256": "1952fd3bee6bcf99e9d4e714e9486a54bb708178f246725ab46d213adf34dc38",
+      "sha256": "117112218a4fccb415689b10d2b8bdcbfa4faa6263835266d712e365396de7c4",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -797,9 +797,116 @@
       "entryReachable": false
     },
     {
+      "file": "src/application/agent-use-cases.ts",
+      "lines": 117,
+      "sha256": "b804f0b9332864460c1656f63bc45ae0c3c83e5230a58ce04a60838a1af4d72a",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/contracts.js",
+        "../domain/artifact-policy.js"
+      ],
+      "exports": [
+        "AgentStage",
+        "AgentProvider",
+        "AgentScope",
+        "AgentJob",
+        "AgentPort",
+        "AgentUseCases"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/application/confirmation-use-cases.ts",
+      "lines": 95,
+      "sha256": "e58822ad0121b7bd9bd29147fd38a1c8724ebed941f35f612f040c1441566629",
+      "workPackage": "W10",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/contracts.js",
+        "../domain/confirmation-policy.js",
+        "./project-ports.js"
+      ],
+      "exports": [
+        "ConfirmedJob",
+        "ConfirmationPort",
+        "ConfirmationUseCases"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/application/core.ts",
+      "lines": 30,
+      "sha256": "f4ea0d56194a1ab695912f18cd50c7ff1cc127d2f7624019b6e4876df4f9b26f",
+      "workPackage": "W10",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./platform-use-cases.js",
+        "./platform-ports.js",
+        "./project-use-cases.js",
+        "./execution-use-cases.js",
+        "./agent-use-cases.js",
+        "./confirmation-use-cases.js",
+        "./project-ports.js"
+      ],
+      "exports": [
+        "CorePorts",
+        "createBusinessCore"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/application/execution-use-cases.ts",
+      "lines": 86,
+      "sha256": "6e440bbb425dd583cd50e9d907c348de2aea567f8d05d3115b4734d8be434a3c",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/contracts.js",
+        "../domain/execution-policy.js"
+      ],
+      "exports": [
+        "ExecutionPort",
+        "ExecutionUseCases"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "src/application/platform-ports.ts",
       "lines": 23,
-      "sha256": "0bfa3b353694a478b9ffcb89b07710c8a15b46219462404c9cc6be9222450f0c",
+      "sha256": "a203d27520e6026468b0c8ee4126c3acb13118c35306388600b0f5f5f14e3ee0",
       "workPackage": "W10",
       "layer": "application",
       "phase": "P1",
@@ -829,9 +936,33 @@
       "entryReachable": false
     },
     {
+      "file": "src/application/platform-use-cases.ts",
+      "lines": 40,
+      "sha256": "06ce4118536fb8d42d57f9ea1632a3c4cab6dbe58ae15496fd914ee290e35bd8",
+      "workPackage": "W10",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/contracts.js",
+        "../domain/image-policy.js",
+        "./platform-ports.js"
+      ],
+      "exports": [
+        "PlatformUseCases"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "src/application/project-access.ts",
-      "lines": 84,
-      "sha256": "e9b8f4e2bb5e4c9e1c09d210aabf186f32bf447809ee752a4de9a4e6de1404f1",
+      "lines": 85,
+      "sha256": "7662dc9181101a8f2a2b1a812c99271c157bf6ce2d025b6d33d52fa7de689fbf",
       "workPackage": "W03",
       "layer": "application",
       "phase": "P1",
@@ -879,6 +1010,32 @@
         "IdSource",
         "ArtifactValidator",
         "event"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/application/project-use-cases.ts",
+      "lines": 161,
+      "sha256": "ebaa6c87763e376269dd2c5d149e4dbd787d16e69cc27ba3be2ee330d2b8b793",
+      "workPackage": "W03",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G03",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/contracts.js",
+        "../domain/artifact-policy.js",
+        "../domain/execution-policy.js",
+        "./project-access.js",
+        "./project-ports.js"
+      ],
+      "exports": [
+        "ProjectUseCases"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -7094,6 +7251,41 @@
       "entryReachable": false
     },
     {
+      "file": "tests/business-core.cjs",
+      "lines": 640,
+      "sha256": "3d62e04107b7e87a464aad8d2fc65db487c88312a9b050fd8b2697b6d03dde0a",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": "P8",
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:fs",
+        "node:os",
+        "node:path",
+        "node:url",
+        "../scripts/check-core-boundaries.cjs",
+        "./core-support/memory-ports.cjs",
+        "../../main/main.js",
+        "electron",
+        "../application/core.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 130,
+          "text": "\"import type { X } from 'electron';\","
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "tests/caption-stage.cjs",
       "lines": 123,
       "sha256": "5526f1fa43b0637f5b83809eb3cd813ed8ce535bc7a1d513507fc7b2aac64987",
@@ -7453,6 +7645,24 @@
         "node:url",
         "node:path"
       ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/core-support/memory-ports.cjs",
+      "lines": 179,
+      "sha256": "8439c6fe82e353631c3211f947c74decbe4614c0008c7746e84e13562e092ed5",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
       "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -12639,6 +12849,21 @@
       "requiredAction": "P8までに新test実行経路へ接続"
     },
     {
+      "file": "tests/business-core.cjs",
+      "registration": "core-local",
+      "treatment": "server/browser検証へ置換",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G03",
+        "G04",
+        "G06",
+        "G09",
+        "G10"
+      ],
+      "requiredAction": "P1からcore単独回帰に接続済み。P2以降も必須"
+    },
+    {
       "file": "tests/caption-stage.cjs",
       "registration": "npm-test",
       "treatment": "挙動検証へ置換/補完",
@@ -12740,6 +12965,16 @@
         "G10"
       ],
       "requiredAction": "P1からcore単独回帰に接続済み。P2以降も必須"
+    },
+    {
+      "file": "tests/core-support/memory-ports.cjs",
+      "registration": "support",
+      "treatment": "harness/fixture移植",
+      "targetGate": "G12",
+      "featureGates": [
+        "G12"
+      ],
+      "requiredAction": "P8までに新test実行経路へ接続"
     },
     {
       "file": "tests/execution-coordinator.cjs",
@@ -13392,7 +13627,7 @@
   "documents": [
     {
       "file": "docs/README.md",
-      "sha256": "a1af027e0d15675d71f93b22a8806226fe30c852247b540766e142141b3ebb24",
+      "sha256": "2ca4e4f7624ec73e117d8496aa04dabbd78820f7c65cd6cd6b54d23d002574bd",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -13609,9 +13844,9 @@
     }
   ],
   "counts": {
-    "files": 283,
-    "source": 172,
-    "tests": 74,
+    "files": 291,
+    "source": 178,
+    "tests": 76,
     "scripts": 9,
     "ipc": 171,
     "resources": 8,
@@ -13619,16 +13854,16 @@
     "ownership": {
       "W01": 12,
       "W02": 27,
-      "W03": 12,
-      "W04": 22,
+      "W03": 13,
+      "W04": 23,
       "W05": 19,
-      "W06": 18,
+      "W06": 19,
       "W07": 8,
       "W08": 6,
       "W09": 25,
-      "W10": 10,
+      "W10": 13,
       "W11": 25,
-      "W12": 76,
+      "W12": 78,
       "W13": 11,
       "W14": 12
     },
@@ -13649,10 +13884,10 @@
     "testRegistration": {
       "CI-conditional": 2,
       "CI-only": 2,
-      "core-local": 1,
+      "core-local": 2,
       "npm-test": 61,
       "standalone": 5,
-      "support": 3
+      "support": 4
     }
   }
 }

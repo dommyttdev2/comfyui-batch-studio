@@ -4,7 +4,7 @@ Status: Planning evidence / 再照合: 2026-10-06
 
 [移行計画](web-migration-plan.md)のW01–W14とG01–G14を正本とする。後方互換性なし・旧データマイグレーションなし・fallback禁止を全項目へ適用する。新dataDir/現行schema/明示設定で開始し、対応外・失敗はerrorとする。各code fileとIPCは主担当を一つだけ持つ。phaseは主実装受入段階。desktopRemovalPhase=P9は旧sourceの残存確認・撤去段階であり、互換adapterを提供する期間ではない。依存・横断条件は計画側を参照する。
 
-基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全283コード・設定（src 172、tests 74、scripts 9）、8 binary asset、31仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
+基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全291コード・設定（src 178、tests 76、scripts 9）、8 binary asset、31仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
 
 [機械可読索引](web-migration-inventory.json)にhash・import・根拠行・分類・test実行経路を保存する。[再照合ツール](web-migration-audit.cjs)は`node docs/roadmap/web-migration-audit.cjs --check`で検証し、`--write`で再生成する。現索引との差分、未分類file/IPC、主担当重複、IPC方向/handler不整合は失敗する。新file/IPCの処置をレビューしてから再生成する。
 
@@ -22,16 +22,16 @@ Status: Planning evidence / 再照合: 2026-10-06
 | --- | ---: | --- | --- |
 | W01 通信契約・認可境界 | 12 | P2 | G01 |
 | W02 Web shell・共通UI状態 | 27 | P3 | G02 |
-| W03 Project・Artifact永続化 | 12 | P3 | G03 |
-| W04 AI会話・工程task | 22 | P4 | G04 |
+| W03 Project・Artifact永続化 | 13 | P3 | G03 |
+| W04 AI会話・工程task | 23 | P4 | G04 |
 | W05 モデル解決・Compiler・Preflight | 19 | P5 | G05 |
-| W06 生成runtime・SSH・復旧 | 18 | P6 | G06 |
+| W06 生成runtime・SSH・復旧 | 19 | P6 | G06 |
 | W07 Civitai catalog・Vast.ai操作 | 8 | P5 | G07 |
 | W08 R2転送・object管理 | 6 | P5 | G08 |
 | W09 画像・Caption・成果物・Picker | 25 | P7 | G09 |
-| W10 起動・OS・Secret基盤 | 10 | P5 | G10 |
+| W10 起動・OS・Secret基盤 | 13 | P5 | G10 |
 | W11 build・起動配布・更新 | 25 | P8 | G11 |
-| W12 検証・test harness | 76 | P8 | G12 |
+| W12 検証・test harness | 78 | P8 | G12 |
 | W13 schema・runtime resource | 11 | P8 | G13 |
 | W14 旧実装整理 | 12 | P9 | G14 |
 
@@ -67,9 +67,15 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [scripts/make_psd_text_editable.cjs](../../scripts/make_psd_text_editable.cjs) | 112 | W11 / P8 / G11 | 生成/検証ツール維持、新resource配置を確認 |
 | [scripts/update-release.ps1](../../scripts/update-release.ps1) | 116 | W11 / P8 / G11 | 新版停止/更新/起動/health。schema移行・旧版自動切戻しなし |
 | [scripts/verify-comfyui-api.mjs](../../scripts/verify-comfyui-api.mjs) | 162 | W12 / P8 / G12 | 生成/検証ツール維持、新resource配置を確認 |
+| [src/application/agent-use-cases.ts](../../src/application/agent-use-cases.ts) | 117 | W04 / P1 / G04 | 配布設定をWeb/server構成へ適合 |
+| [src/application/confirmation-use-cases.ts](../../src/application/confirmation-use-cases.ts) | 95 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
+| [src/application/core.ts](../../src/application/core.ts) | 30 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
+| [src/application/execution-use-cases.ts](../../src/application/execution-use-cases.ts) | 86 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
 | [src/application/platform-ports.ts](../../src/application/platform-ports.ts) | 23 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
-| [src/application/project-access.ts](../../src/application/project-access.ts) | 84 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/application/platform-use-cases.ts](../../src/application/platform-use-cases.ts) | 40 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
+| [src/application/project-access.ts](../../src/application/project-access.ts) | 85 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
 | [src/application/project-ports.ts](../../src/application/project-ports.ts) | 62 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/application/project-use-cases.ts](../../src/application/project-use-cases.ts) | 161 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
 | [src/domain/artifact-policy.ts](../../src/domain/artifact-policy.ts) | 36 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
 | [src/domain/confirmation-policy.ts](../../src/domain/confirmation-policy.ts) | 47 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
 | [src/domain/contracts.ts](../../src/domain/contracts.ts) | 80 | W01 / P1 / G01 | 配布設定をWeb/server構成へ適合 |
@@ -252,6 +258,7 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [tests/assistant-pane.cjs](../../tests/assistant-pane.cjs) | 331 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/assistant-provider.cjs](../../tests/assistant-provider.cjs) | 291 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/atomic-image-output.cjs](../../tests/atomic-image-output.cjs) | 148 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
+| [tests/business-core.cjs](../../tests/business-core.cjs) | 640 | W12 / P8 / G12; Electron依存置換 P8 | 配布設定をWeb/server構成へ適合 |
 | [tests/caption-stage.cjs](../../tests/caption-stage.cjs) | 123 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/caption-stale.cjs](../../tests/caption-stale.cjs) | 232 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/civitai-catalog.cjs](../../tests/civitai-catalog.cjs) | 503 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
@@ -262,6 +269,7 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [tests/codex-turn-status.cjs](../../tests/codex-turn-status.cjs) | 353 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/compiler-lora-mode.cjs](../../tests/compiler-lora-mode.cjs) | 110 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/core-policy.cjs](../../tests/core-policy.cjs) | 68 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/core-support/memory-ports.cjs](../../tests/core-support/memory-ports.cjs) | 179 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/execution-coordinator.cjs](../../tests/execution-coordinator.cjs) | 95 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/execution-run.cjs](../../tests/execution-run.cjs) | 551 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/execution-safe-exit.cjs](../../tests/execution-safe-exit.cjs) | 105 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
@@ -516,6 +524,7 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [tests/assistant-pane.cjs](../../tests/assistant-pane.cjs) | standalone | 挙動検証へ置換/補完 | G04 | P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復 (G12) |
 | [tests/assistant-provider.cjs](../../tests/assistant-provider.cjs) | npm-test | 挙動検証へ置換/補完 | G04 | P8までに新test実行経路へ接続 (G12) |
 | [tests/atomic-image-output.cjs](../../tests/atomic-image-output.cjs) | npm-test | 契約維持・server buildへ適合 | G09 | P8までに新test実行経路へ接続 (G12) |
+| [tests/business-core.cjs](../../tests/business-core.cjs) | core-local | server/browser検証へ置換 | G01, G03, G04, G06, G09, G10 | P1からcore単独回帰に接続済み。P2以降も必須 (G12) |
 | [tests/caption-stage.cjs](../../tests/caption-stage.cjs) | npm-test | 挙動検証へ置換/補完 | G09 | P8までに新test実行経路へ接続 (G12) |
 | [tests/caption-stale.cjs](../../tests/caption-stale.cjs) | npm-test | 契約維持・server buildへ適合 | G09 | P8までに新test実行経路へ接続 (G12) |
 | [tests/civitai-catalog.cjs](../../tests/civitai-catalog.cjs) | npm-test | 契約維持・server buildへ適合 | G07 | P8までに新test実行経路へ接続 (G12) |
@@ -526,6 +535,7 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [tests/codex-turn-status.cjs](../../tests/codex-turn-status.cjs) | standalone | 挙動検証へ置換/補完 | G04 | P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復 (G12) |
 | [tests/compiler-lora-mode.cjs](../../tests/compiler-lora-mode.cjs) | npm-test | 契約維持・server buildへ適合 | G05 | P8までに新test実行経路へ接続 (G12) |
 | [tests/core-policy.cjs](../../tests/core-policy.cjs) | core-local | 契約維持・server buildへ適合 | G03, G06, G09, G10 | P1からcore単独回帰に接続済み。P2以降も必須 (G12) |
+| [tests/core-support/memory-ports.cjs](../../tests/core-support/memory-ports.cjs) | support | harness/fixture移植 | G12 | P8までに新test実行経路へ接続 (G12) |
 | [tests/execution-coordinator.cjs](../../tests/execution-coordinator.cjs) | npm-test | 契約維持・server buildへ適合 | G06 | P8までに新test実行経路へ接続 (G12) |
 | [tests/execution-run.cjs](../../tests/execution-run.cjs) | npm-test | 挙動検証へ置換/補完 | G06 | P8までに新test実行経路へ接続 (G12) |
 | [tests/execution-safe-exit.cjs](../../tests/execution-safe-exit.cjs) | npm-test | 挙動検証へ置換/補完 | G06 | P8までに新test実行経路へ接続 (G12) |

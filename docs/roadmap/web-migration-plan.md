@@ -392,4 +392,4 @@ mainの必要な業務修正は同期専用Issue/PRで新契約へ適合する�
 - GitHubのbranch rules照会は非公開repositoryのプラン制約でHTTP 403になり、required checkの有無はAPIでは確認できなかった。PR #301はチェック待ちなしでmerge可能だった。保護設定の変更は行っていない。
 - 旧調査とCLI修正は元の作業ツリーに保持されている。旧P1原型はユーザー指示により破棄した。P1は計画と新契約の確定後に改めて実装する。
 - Docker/Linux検証環境はv0.82.0に含まれる既存基盤として使用する。過去の別作業ツリーの検証成功を、新baselineの実装受入へ流用しない。
-- P0の索引再照合、未接続testの採否、UI/画像/Run/AIの受入checklistを[開始基準と受入チェックリスト](web-migration-baseline-checklist.md)へ整理した。P1実装とWeb機能受入は未着手。
+- P0の索引再照合、未接続testの採否、UI/画像/Run/AIの受入checklistを[開始基準と受入チェックリスト](web-migration-baseline-checklist.md)へ整理した。P1の層分離・core単独検証は[業務coreの境界と受入](web-migration-core-design.md)へ記録した。Web機能受入は各後続phaseで行う。
