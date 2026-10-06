@@ -59,6 +59,16 @@ npm run dev
 
 `npm run dev` は Renderer の Vite dev server、Electron Main Process の TypeScript watch、Electron 本体をまとめて起動します。
 
+### Docker Desktopでローカル検証
+
+Docker DesktopのLinux containersで、型チェック・回帰test・build・Electron画像memory検証を実行できます。
+
+```powershell
+docker compose run --build --rm test
+```
+
+Windowsのnode_modulesや作業folderをmountせず、Linux container内で検証します。Windows専用updater testは別途Windowsで実行してください。[実行範囲と個別testの手順](docs/operations/docker-local-tests.md)を参照してください。
+
 ### Windows で最新リリースへ更新
 
 アプリを終了して `update.bat` を実行してください。Git と Windows PowerShell を使用し、GitHub の最新正式リリース（Draft / Pre-release を除外）のタグを公式リポジトリから取得して、そのコミットへ切り替えます。更新後は `run.bat` を実行して依存関係の更新・ビルド・起動を行ってください。
