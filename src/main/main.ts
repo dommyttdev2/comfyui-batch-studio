@@ -20,6 +20,7 @@ import {
   planPersistedRecovery,
   planRunStop,
 } from '../domain/execution-policy.js';
+import type { RemoteTargetFacts } from '../domain/remote-target-policy.js';
 import { IPC } from '../shared/ipc.js';
 import type {
   AgentEvent,
@@ -1953,106 +1954,45 @@ async function r2LookupFor(root: string) {
   return async (fileName: string) =>
     Boolean(await r2Index().resolveModelKey(bucket, fileName, prefix));
 }
-async function remoteTargetIssuesFor(root: string): Promise<ValidationIssue[]> {
+async function remoteTargetFactsFor(root: string): Promise<RemoteTargetFacts> {
   const meta = await readProjectMeta(root),
-    provider = meta?.settings.remoteProvider,
-    instanceId = meta?.settings.remoteInstanceId;
-  if (provider !== 'vastai' || !Number.isInteger(instanceId) || Number(instanceId) < 1)
-    return [
-      {
-        severity: 'error',
-        code: 'REMOTE_INSTANCE_REQUIRED',
-        message: 'リモート実行にはVast.ai Instanceを選択してください。',
-      },
-    ];
-  const issues: ValidationIssue[] = [],
     settings = await vastStore().status(),
     appSettings = await settingsStore().status();
-  if (!appSettings.remoteComfyUiInstallPath)
-    issues.push({
-      severity: 'error',
-      code: 'REMOTE_COMFYUI_INSTALL_PATH_REQUIRED',
-      message:
-        'リモート実行には環境設定でRemote ComfyUIのインストール先ディレクトリを指定してください。',
-    });
-  if (!appSettings.githubPatConfigured)
-    issues.push({
-      severity: 'error',
-      code: 'REMOTE_GITHUB_PAT_REQUIRED',
-      message:
-        'リモート環境のComfyUI更新に使用するGitHub PATを環境設定または BATCH_STUDIO_GITHUB_PAT / GH_TOKEN で設定してください。',
-    });
-  if (!settings.configured)
-    issues.push({
-      severity: 'error',
-      code: 'VASTAI_NOT_CONFIGURED',
-      message: 'サービス連携でVast.ai API Keyを設定してください。',
-    });
-  if (!settings.sshPrivateKeyPath)
-    issues.push({
-      severity: 'error',
-      code: 'VASTAI_SSH_KEY_REQUIRED',
-      message: 'サービス連携でVast.ai用SSH秘密鍵を指定してください。',
-    });
-  else if (!settings.sshPrivateKeyExists)
-    issues.push({
-      severity: 'error',
-      code: 'VASTAI_SSH_KEY_MISSING',
-      message: `Vast.ai用SSH秘密鍵が見つかりません: ${settings.sshPrivateKeyPath}`,
-    });
-  if (!settings.sshPublicKeyPath)
-    issues.push({
-      severity: 'error',
-      code: 'VASTAI_SSH_PUBLIC_KEY_REQUIRED',
-      message: 'サービス連携でVast.ai用SSH公開鍵を指定してください。',
-    });
-  else if (!settings.sshPublicKeyExists)
-    issues.push({
-      severity: 'error',
-      code: 'VASTAI_SSH_PUBLIC_KEY_MISSING',
-      message: `Vast.ai用SSH公開鍵が見つかりません: ${settings.sshPublicKeyPath}`,
-    });
-  else if (settings.sshPrivateKeyExists && !settings.sshKeyPairValid)
-    issues.push({
-      severity: 'error',
-      code: 'VASTAI_SSH_KEY_PAIR_MISMATCH',
-      message: '設定されたSSH秘密鍵とSSH公開鍵が同じキーペアではありません。',
-    });
-  if (!settings.configured) return issues;
-  try {
-    const instance = await vastClient().getInstance(Number(instanceId));
-    if (instance.status === 'error' || instance.status === 'offline')
-      issues.push({
-        severity: 'error',
-        code: 'VASTAI_INSTANCE_UNAVAILABLE',
-        message: `Vast.ai Instance ${instance.id} は ${instance.status} 状態です。${instance.statusMessage ? ` ${instance.statusMessage}` : ''}`,
-      });
-    else if (instance.status === 'running' && (!instance.sshHost || !instance.sshPort))
-      issues.push({
-        severity: 'error',
-        code: 'VASTAI_SSH_ENDPOINT_MISSING',
-        message: `Vast.ai Instance ${instance.id} はrunningですが公開SSH接続先を取得できません。`,
-      });
-    else if (['starting', 'stopping', 'scheduling', 'unknown'].includes(instance.status))
-      issues.push({
-        severity: 'warning',
-        code: 'VASTAI_INSTANCE_TRANSITIONING',
-        message: `Vast.ai Instance ${instance.id} は現在 ${instance.status} 状態です。実行開始時に状態を再確認します。`,
-      });
-  } catch (error) {
-    issues.push({
-      severity: 'error',
-      code: 'VASTAI_INSTANCE_LOOKUP_FAILED',
-      message: `Vast.ai Instanceを確認できません: ${error instanceof Error ? error.message : String(error)}`,
-    });
+  const instanceId = meta?.settings.remoteInstanceId;
+  let instance: RemoteTargetFacts['instance'] = null,
+    lookupError: string | null = null;
+  if (
+    settings.configured &&
+    meta?.settings.remoteProvider === 'vastai' &&
+    Number.isInteger(instanceId) &&
+    Number(instanceId) > 0
+  ) {
+    try {
+      instance = await vastClient().getInstance(Number(instanceId));
+    } catch (error) {
+      lookupError = error instanceof Error ? error.message : String(error);
+    }
   }
-  return issues;
+  return {
+    provider: meta?.settings.remoteProvider,
+    instanceId,
+    configured: settings.configured,
+    installPath: appSettings.remoteComfyUiInstallPath,
+    githubPatConfigured: appSettings.githubPatConfigured,
+    sshPrivateKeyPath: settings.sshPrivateKeyPath,
+    sshPrivateKeyExists: settings.sshPrivateKeyExists,
+    sshPublicKeyPath: settings.sshPublicKeyPath,
+    sshPublicKeyExists: settings.sshPublicKeyExists,
+    sshKeyPairValid: settings.sshKeyPairValid,
+    instance,
+    lookupError,
+  };
 }
 
 async function executionPreflight(root: string) {
   const settings = await settingsStore().status();
   return runPreflight(root, await r2LookupFor(root), settings.modelsPath, () =>
-    remoteTargetIssuesFor(root),
+    remoteTargetFactsFor(root),
   );
 }
 

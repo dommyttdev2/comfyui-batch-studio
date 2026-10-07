@@ -1,26 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { SFTPWrapper } from 'ssh2';
-import type { VerifiedSshSession } from './ssh-client.js';
+import type { WorkerEvent, WorkerEventHandler } from '../domain/remote-worker-contract.js';
+import { RemoteWorkerRequestError } from '../domain/remote-worker-contract.js';
 import { REMOTE_WORKER_FILE, REMOTE_WORKER_VERSION } from './remote-worker-source.js';
+import type { VerifiedSshSession } from './ssh-client.js';
 
-export type WorkerEvent =
-  | { type: 'progress'; stage: string; [key: string]: unknown }
-  | {
-      type: 'response';
-      requestId: string;
-      result?: unknown;
-      error?: { code: string; message: string };
-    };
-export type WorkerEventHandler = (event: WorkerEvent) => void | Promise<void>;
-export class RemoteWorkerRequestError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'RemoteWorkerRequestError';
-  }
-}
+export type { WorkerEvent, WorkerEventHandler } from '../domain/remote-worker-contract.js';
+export { RemoteWorkerRequestError } from '../domain/remote-worker-contract.js';
+
 const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const q = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
 function sftpWrite(sftp: SFTPWrapper, target: string, data: Buffer) {

@@ -545,7 +545,10 @@ const modelFile = (ref, fileName) => ({ ref, fileName, reason: 'user selected' }
     'draft-only prompt fallback fields must survive provenance refresh',
   );
   const grokStagesSource = fs.readFileSync(path.join(repo, 'src/renderer/GrokStages.tsx'), 'utf8');
-  const grokContextSource = fs.readFileSync(path.join(repo, 'src/main/grok-context.ts'), 'utf8');
+  const grokContextSource =
+    fs.readFileSync(path.join(repo, 'src/main/grok-context.ts'), 'utf8') +
+    fs.readFileSync(path.resolve(__dirname, '../src/application/agent-task-planning.ts'), 'utf8') +
+    fs.readFileSync(path.resolve(__dirname, '../src/domain/agent-task-policy.ts'), 'utf8');
   assert.doesNotMatch(
     grokStagesSource,
     /project\.saveBrief\(project\.rootPath/,

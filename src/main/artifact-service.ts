@@ -1,14 +1,25 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import type { PromptFallback } from '../domain/artifact-types.js';
+import {
+  mergeLoraImport,
+  missing,
+  promptFallbacks,
+  promptFallbacksValid,
+  rejectedModelsImport,
+  splitModelDraft,
+  validateLoraImportPayload,
+  validateModelDraft,
+} from '../domain/model-draft-policy.js';
 import type {
   ArtifactKey,
   ArtifactReadResult,
   ImportResult,
   MissingRequirement,
   ModelsArtifact,
-  PromptPlanArtifact,
   ProjectBriefInput,
+  PromptPlanArtifact,
   ValidationResult,
 } from '../shared/types.js';
 import {
@@ -20,6 +31,10 @@ import {
   writeJsonAtomic,
   writeTextAtomic,
 } from './fs-utils.js';
+import { loadCatalog, validateModelsAgainstCatalog } from './model-catalog.js';
+import { modelGenerationInputsChanged, resetModelDownstream } from './model-downstream-reset.js';
+import { initializeProjectMeta } from './project-meta.js';
+import { projectTransactionCheckpoint, withProjectTransaction } from './project-transaction.js';
 import {
   parseModels,
   parsePromptPlan,
@@ -27,10 +42,7 @@ import {
   validateProjectBrief,
   validatePromptPlan,
 } from './validation.js';
-import { loadCatalog, validateModelsAgainstCatalog } from './model-catalog.js';
-import { modelGenerationInputsChanged, resetModelDownstream } from './model-downstream-reset.js';
-import { initializeProjectMeta } from './project-meta.js';
-import { projectTransactionCheckpoint, withProjectTransaction } from './project-transaction.js';
+
 const FILES: Partial<Record<ArtifactKey, string>> = {
   projectBrief: 'project_brief.json',
   story: 'story.md',
@@ -50,12 +62,6 @@ type GrokResponseStage =
   | 'models-fix'
   | 'prompt-plan'
   | 'prompt-plan-fix';
-type PromptFallback = {
-  requirement: string;
-  positiveTags: string[];
-  negativeTags: string[];
-  reason: string;
-};
 type ModelsDraftSource = { schemaVersion: 1; stage: 'models' | 'models-fix' };
 export const internalDir = (root: string) => path.join(root, '._batch_studio');
 export function draftPath(root: string, key: ArtifactKey) {
@@ -103,71 +109,6 @@ function promptPlanJsonParseMessage(content: string): string {
 }
 function storyCandidate(raw: string) {
   return fence(raw, 'markdown') ?? fence(raw, 'md') ?? fence(raw) ?? raw.trim();
-}
-function missing(parsed: any): MissingRequirement[] {
-  return Array.isArray(parsed?.missingRequirements)
-    ? parsed.missingRequirements.filter(
-        (x: any) =>
-          x &&
-          typeof x.role === 'string' &&
-          typeof x.requirement === 'string' &&
-          typeof x.reason === 'string',
-      )
-    : [];
-}
-function fallbackTags(value: unknown) {
-  if (Array.isArray(value))
-    return value
-      .filter((tag): tag is string => typeof tag === 'string')
-      .map((tag) => tag.trim())
-      .filter(Boolean);
-  if (typeof value === 'string')
-    return value
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter(Boolean);
-  return [];
-}
-function normalizePromptFallback(x: any): PromptFallback | null {
-  if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
-  const allowed = new Set([
-    'requirement',
-    'positiveTags',
-    'negativeTags',
-    'positive',
-    'negative',
-    'reason',
-  ]);
-  if (Object.keys(x).some((key) => !allowed.has(key))) return null;
-  if (typeof x.requirement !== 'string' || !x.requirement.trim()) return null;
-  if (typeof x.reason !== 'string' || !x.reason.trim()) return null;
-  const positiveTags = fallbackTags(x.positiveTags ?? x.positive);
-  const negativeTags = fallbackTags(x.negativeTags ?? x.negative);
-  if (!positiveTags.length && !negativeTags.length) return null;
-  if ([...positiveTags, ...negativeTags].some((tag) => /[\r\n,]/.test(tag) || !tag.trim()))
-    return null;
-  return {
-    requirement: x.requirement.trim(),
-    positiveTags,
-    negativeTags,
-    reason: x.reason.trim(),
-  };
-}
-function validPromptFallback(x: any) {
-  return normalizePromptFallback(x) != null;
-}
-function promptFallbacks(parsed: any): PromptFallback[] {
-  return Array.isArray(parsed?.promptFallbacks)
-    ? parsed.promptFallbacks
-        .map(normalizePromptFallback)
-        .filter((value: PromptFallback | null): value is PromptFallback => value != null)
-    : [];
-}
-function promptFallbacksValid(parsed: any) {
-  return (
-    !Object.prototype.hasOwnProperty.call(parsed ?? {}, 'promptFallbacks') ||
-    (Array.isArray(parsed.promptFallbacks) && parsed.promptFallbacks.every(validPromptFallback))
-  );
 }
 function grokResponseStage(key: GrokImportKey, isFix: boolean): GrokResponseStage {
   if (key === 'story') return isFix ? 'story-fix' : 'story-finalize';
@@ -226,52 +167,8 @@ async function validateContent(
           },
         ],
       };
-    const raw: any = p;
-    const hasMissing = Object.prototype.hasOwnProperty.call(raw, 'missingRequirements');
-    const hasFallbacks = Object.prototype.hasOwnProperty.call(raw, 'promptFallbacks');
-    const unresolved = missing(raw);
-    const schemaCandidate = structuredClone(raw);
-    delete schemaCandidate.missingRequirements;
-    delete schemaCandidate.promptFallbacks;
-    const base = validateModels(schemaCandidate);
-    if (hasFallbacks && !promptFallbacksValid(raw))
-      base.issues.push({
-        severity: 'error',
-        code: 'PROMPT_FALLBACKS_FORMAT',
-        message:
-          'promptFallbacksの形式が不正です。requirement/reasonは必須で、positiveTags/negativeTagsの少なくとも一方が必要です。',
-      });
-    if (hasMissing) {
-      if (
-        !Array.isArray(raw.missingRequirements) ||
-        raw.missingRequirements.some(
-          (x: any) =>
-            !x ||
-            typeof x.role !== 'string' ||
-            typeof x.requirement !== 'string' ||
-            typeof x.reason !== 'string',
-        )
-      )
-        base.issues.push({
-          severity: 'error',
-          code: 'MISSING_REQUIREMENTS_FORMAT',
-          message: 'missingRequirementsの形式が不正です。',
-        });
-      else if (unresolved.length)
-        base.issues.push({
-          severity: 'error',
-          code: 'MISSING_REQUIREMENTS',
-          message: `未解決の不足モデルが${unresolved.length}件あります。`,
-        });
-      else
-        base.issues.push({
-          severity: 'error',
-          code: 'DRAFT_ONLY_FIELD',
-          message:
-            'missingRequirementsは確定models.jsonに保存できません。空の場合は削除してください。',
-        });
-    }
-    base.valid = !base.issues.some((x) => x.severity === 'error');
+    const schemaCandidate = splitModelDraft(p).models,
+      base = validateModelDraft(p);
     return base.valid ? validateModelsAgainstCatalog(root, schemaCandidate, base) : base;
   }
   if (key === 'promptPlan') {
@@ -396,19 +293,6 @@ export async function saveDraft(
   await writeTextAtomic(draftPath(root, key), content.endsWith('\n') ? content : content + '\n');
   return readArtifact(root, key, 'draft');
 }
-function rejectedModelsImport(
-  extracted: string,
-  code: string,
-  message: string,
-  miss: MissingRequirement[] = [],
-): ImportResult {
-  return {
-    extracted,
-    validation: { valid: false, issues: [{ severity: 'error', code, message }] },
-    summary: {},
-    missingRequirements: miss,
-  };
-}
 export async function importGrok(
   root: string,
   key: 'story' | 'models' | 'promptPlan',
@@ -431,45 +315,8 @@ export async function importGrok(
       );
     }
     miss = missing(payload);
-    const allowed = new Set(['schemaVersion', 'loras', 'promptFallbacks', 'missingRequirements']);
-    const unknown = Object.keys(payload ?? {}).filter((k) => !allowed.has(k));
-    const forbidden = [
-      'checkpoint',
-      'diffusionModel',
-      'textEncoder',
-      'clip',
-      'vae',
-      'modelFamily',
-    ].filter((k) => Object.prototype.hasOwnProperty.call(payload ?? {}, k));
-    if (forbidden.length)
-      return rejectedModelsImport(
-        extracted,
-        'GROK_BASE_MODEL_OVERRIDE',
-        `Grokはユーザー選択済み基盤モデルを変更できません: ${forbidden.join(', ')}`,
-        miss,
-      );
-    if (unknown.length)
-      return rejectedModelsImport(
-        extracted,
-        'GROK_MODELS_SHAPE',
-        `LoRA選定ファイルに未定義fieldがあります: ${unknown.join(', ')}`,
-        miss,
-      );
-    if (payload?.schemaVersion !== 1 || !Array.isArray(payload?.loras))
-      return rejectedModelsImport(
-        extracted,
-        'GROK_MODELS_SHAPE',
-        'LoRA選定ファイルは schemaVersion: 1 と loras 配列が必要です。',
-        miss,
-      );
-    if (!promptFallbacksValid(payload))
-      return rejectedModelsImport(
-        extracted,
-        'PROMPT_FALLBACKS_FORMAT',
-        'promptFallbacksは requirement / positiveTags / negativeTags / reason を持ち、positiveTags / negativeTags の少なくとも一方を指定してください。',
-        miss,
-      );
-    const fallbacks = promptFallbacks(payload);
+    const rejected = validateLoraImportPayload(payload, extracted);
+    if (rejected) return rejected;
     const baseText =
       (await readText(draftPath(root, 'models'))) ??
       (await readText(confirmedPath(root, 'models')));
@@ -481,11 +328,7 @@ export async function importGrok(
         '先にModel系統とユーザー選択モデルを保存してください。',
         miss,
       );
-    const merged: any = { ...base, loras: payload.loras };
-    delete merged.promptFallbacks;
-    delete merged.missingRequirements;
-    if (fallbacks.length) merged.promptFallbacks = fallbacks;
-    if (miss.length) merged.missingRequirements = miss;
+    const merged = mergeLoraImport(base, payload, false);
     extracted = JSON.stringify(merged, null, 2);
   }
   // A failed LoRA re-selection must not replace the current models draft,

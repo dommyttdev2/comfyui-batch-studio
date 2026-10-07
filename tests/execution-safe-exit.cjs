@@ -8,7 +8,7 @@ const read = (name) => fs.readFileSync(path.join(repo, name), 'utf8');
 const main = readMainProcessSource(repo);
 const app = read('src/renderer/App.tsx');
 const execution = read('src/renderer/ExecutionStages.tsx');
-const run = read('src/main/execution-run.ts');
+const run = read('src/main/execution-run.ts') + read('src/domain/execution-workflow-policy.ts');
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
 const ipcAccess = read('src/main/ipc-access.ts');

@@ -1,6 +1,7 @@
 import path from 'node:path';
-import { readJson, writeJsonAtomic } from './fs-utils.js';
+import { validateAgentModelSelection } from '../domain/agent-state-policy.js';
 import type { AgentModelSelection, AgentProvider, GrokContextStage } from '../shared/types.js';
+import { readJson, writeJsonAtomic } from './fs-utils.js';
 
 interface ModelSelectionState {
   schemaVersion: 1;
@@ -53,13 +54,7 @@ export class AgentModelSelectionStore {
     provider: AgentProvider,
     value: AgentModelSelection,
   ): Promise<void> {
-    if (value.model !== null && (!value.model.trim() || value.model.length > 256))
-      throw new Error('Invalid agent model selection.');
-    if (
-      value.reasoningEffort != null &&
-      (!value.reasoningEffort.trim() || value.reasoningEffort.length > 64)
-    )
-      throw new Error('Invalid reasoning effort.');
+    validateAgentModelSelection(value);
     this.writes = this.writes
       .catch(() => {})
       .then(async () => {

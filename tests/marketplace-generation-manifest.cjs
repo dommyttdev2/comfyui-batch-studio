@@ -148,11 +148,19 @@ execFileSync(
   assert.notEqual(replaced.sha256, source.sha256);
   assert.throws(() => validate(state, targets, replaced), stale);
 
-  const service = fs.readFileSync(path.join(repo, 'src/main/marketplace-image-service.ts'), 'utf8');
+  const service =
+    fs.readFileSync(path.join(repo, 'src/main/marketplace-image-service.ts'), 'utf8') +
+    fs.readFileSync(
+      path.resolve(__dirname, '../src/application/marketplace-generation.ts'),
+      'utf8',
+    );
   assert.match(service, /validateMarketplaceGeneration\(manifest, state, targets, source\)/);
-  assert.match(service, /verifiedMarketplaceOutput\(/);
-  assert.match(service, /storedZip\(entries\)/);
-  assert.match(service, /writeJsonAtomic\(generationManifestPath\(outputDirectory\), manifest\)/);
+  assert.match(service, /assertMarketplaceOutput\(/);
+  assert.match(service, /io\.encodeZip\(entries\)/);
+  assert.match(
+    service + fs.readFileSync(path.join(repo, 'src/application/marketplace-generation.ts'), 'utf8'),
+    /io\.writeManifest\(outputDirectory, manifest\)/,
+  );
   const tracked = path.join(root, 'tracked-old.png');
   const original = Buffer.from('generated-output');
   fs.writeFileSync(tracked, original);

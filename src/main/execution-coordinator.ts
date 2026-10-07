@@ -1,11 +1,9 @@
 import path from 'node:path';
-
-export type ExecutionRef = { projectRoot: string; runId: string };
-
-function refKey(ref: ExecutionRef) {
-  return `${path.resolve(ref.projectRoot)}\0${ref.runId}`;
-}
-
+import {
+  ExecutionCoordinator as Coordinator,
+  type ExecutionRef,
+  ExecutionResourceLockManager as Locks,
+} from '../application/execution-coordinator.js';
 export function normalizeComfyUiEndpoint(endpoint: string) {
   const value = endpoint.trim();
   if (!value) throw new Error('Local ComfyUI API endpoint is required.');
@@ -20,112 +18,54 @@ export function normalizeComfyUiEndpoint(endpoint: string) {
   }
 }
 
-export class ExecutionResourceLockManager {
-  private readonly resources = new Map<string, ExecutionRef>();
-  private readonly refs = new Map<string, Set<string>>();
+export type { ExecutionRef } from '../application/execution-coordinator.js';
 
-  private acquire(resource: string, ref: ExecutionRef) {
-    const existing = this.resources.get(resource);
-    if (existing && refKey(existing) !== refKey(ref))
-      throw new Error(`Execution resource is already in use by Run ${existing.runId}: ${resource}`);
-    this.resources.set(resource, ref);
-    const key = refKey(ref);
-    const owned = this.refs.get(key) ?? new Set<string>();
-    owned.add(resource);
-    this.refs.set(key, owned);
+const canonical = (ref: ExecutionRef) => ({ ...ref, projectRoot: path.resolve(ref.projectRoot) });
+export class ExecutionResourceLockManager extends Locks {
+  constructor() {
+    super(normalizeComfyUiEndpoint);
   }
-
-  acquireLocal(endpoint: string, ref: ExecutionRef) {
-    this.acquire(`local:${normalizeComfyUiEndpoint(endpoint)}`, ref);
+  override acquireLocal(endpoint: string, ref: ExecutionRef) {
+    return super.acquireLocal(endpoint, canonical(ref));
   }
-
-  acquireRemote(provider: string, instanceId: number, ref: ExecutionRef) {
-    if (!provider.trim() || !Number.isInteger(instanceId) || instanceId < 1)
-      throw new Error('Invalid Remote execution resource.');
-    this.acquire(`remote:${provider.trim().toLowerCase()}:${instanceId}`, ref);
+  override acquireRemote(provider: string, instanceId: number, ref: ExecutionRef) {
+    return super.acquireRemote(provider, instanceId, canonical(ref));
   }
-
-  release(ref: ExecutionRef) {
-    const key = refKey(ref);
-    for (const resource of this.refs.get(key) ?? []) {
-      const owner = this.resources.get(resource);
-      if (owner && refKey(owner) === key) this.resources.delete(resource);
-    }
-    this.refs.delete(key);
+  override release(ref: ExecutionRef) {
+    return super.release(canonical(ref));
   }
 }
-
-export class ExecutionCoordinator {
-  private readonly active = new Map<string, Promise<void>>();
-  private readonly retained = new Set<string>();
-
-  constructor(private readonly locks = new ExecutionResourceLockManager()) {}
-
-  hasActiveRuns() {
-    return this.active.size > 0;
+export class ExecutionCoordinator extends Coordinator {
+  constructor(locks = new ExecutionResourceLockManager()) {
+    super(locks);
   }
-
-  hasActive(ref: ExecutionRef) {
-    return this.active.has(refKey(ref));
+  override hasActive(ref: ExecutionRef) {
+    return super.hasActive(canonical(ref));
   }
-
-  // Retain an uncertain Run's resource across a failed recovery: the old
-  // ComfyUI process may still own an unobserved accepted Prompt.
-  retain(ref: ExecutionRef) {
-    const key = refKey(ref);
-    if (!this.active.has(key) && !this.retained.has(key))
-      throw new Error('A resource must be acquired before its reservation can be retained.');
-    this.retained.add(key);
+  override retain(ref: ExecutionRef) {
+    return super.retain(canonical(ref));
   }
-
-  reserveLocal(ref: ExecutionRef, endpoint: string) {
-    this.reserve(ref, () => this.locks.acquireLocal(endpoint, ref));
+  override reserveLocal(ref: ExecutionRef, endpoint: string) {
+    return super.reserveLocal(canonical(ref), endpoint);
   }
-
-  reserveRemote(ref: ExecutionRef, provider: string, instanceId: number) {
-    this.reserve(ref, () => this.locks.acquireRemote(provider, instanceId, ref));
+  override reserveRemote(ref: ExecutionRef, provider: string, instanceId: number) {
+    return super.reserveRemote(canonical(ref), provider, instanceId);
   }
-
-  private reserve(ref: ExecutionRef, acquire: () => void) {
-    const key = refKey(ref);
-    if (this.active.has(key) || this.retained.has(key)) return;
-    acquire();
-    this.retained.add(key);
+  override releaseReservation(ref: ExecutionRef) {
+    return super.releaseReservation(canonical(ref));
   }
-
-  releaseReservation(ref: ExecutionRef) {
-    const key = refKey(ref);
-    if (!this.retained.delete(key)) return;
-    if (!this.active.has(key)) this.locks.release(ref);
+  override waitForSettled(ref: ExecutionRef) {
+    return super.waitForSettled(canonical(ref));
   }
-
-  async waitForSettled(ref: ExecutionRef) {
-    const task = this.active.get(refKey(ref));
-    if (task) await task.catch(() => {});
+  override startLocal(ref: ExecutionRef, endpoint: string, work: () => Promise<void>) {
+    return super.startLocal(canonical(ref), endpoint, work);
   }
-
-  startLocal(ref: ExecutionRef, endpoint: string, work: () => Promise<void>) {
-    return this.start(ref, () => this.locks.acquireLocal(endpoint, ref), work);
-  }
-
-  startRemote(ref: ExecutionRef, provider: string, instanceId: number, work: () => Promise<void>) {
-    return this.start(ref, () => this.locks.acquireRemote(provider, instanceId, ref), work);
-  }
-
-  private start(ref: ExecutionRef, acquire: () => void, work: () => Promise<void>) {
-    const key = refKey(ref);
-    const existing = this.active.get(key);
-    if (existing) return existing;
-    // A persisted uncertain owner may have been reserved before reattachment.
-    if (!this.retained.has(key)) acquire();
-    else this.retained.delete(key);
-    const task = Promise.resolve()
-      .then(work)
-      .finally(() => {
-        if (!this.retained.has(key)) this.locks.release(ref);
-        this.active.delete(key);
-      });
-    this.active.set(key, task);
-    return task;
+  override startRemote(
+    ref: ExecutionRef,
+    provider: string,
+    instanceId: number,
+    work: () => Promise<void>,
+  ) {
+    return super.startRemote(canonical(ref), provider, instanceId, work);
   }
 }

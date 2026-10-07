@@ -16,7 +16,7 @@ const vastPanel = read('src/renderer/integrations/VastAiIntegrationPanel.tsx');
 const serviceCss = read('src/renderer/service-integrations.css');
 const execution = read('src/renderer/ExecutionStages.tsx');
 const config = read('src/main/vastai-config.ts');
-const main = readMainProcessSource(repo);
+const main = readMainProcessSource(repo) + read('src/domain/remote-target-policy.ts');
 const standalone = read('src/renderer/StandaloneToolApp.tsx');
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
@@ -259,11 +259,11 @@ matchCode(
   /stored\?\.schemaVersion===2\|\|stored\?\.schemaVersion===3\|\|stored\?\.schemaVersion===4\?text\(stored\.sshPublicKeyPath\):''/,
   'schema v2-v4で保存したSSH公開鍵をstatusで再読込する',
 );
-matchCode(preflight, /remoteTargetCheck/, 'PreflightがRemote target検証hookを持つ');
-matchCode(main, /remoteTargetIssuesFor/, 'Main ProcessがVast.ai Remote targetを検証する');
+matchCode(preflight, /remoteTarget/, 'PreflightがRemote target検証hookを持つ');
+matchCode(main, /remoteTargetFactsFor/, 'Main ProcessがVast.ai Remote targetの観測情報を取得する');
 matchCode(
   main,
-  /runPreflight\(root,await r2LookupFor\(root\),settings\.modelsPath,\(\)=>remoteTargetIssuesFor\(root\)\)/,
+  /runPreflight\(root,await r2LookupFor\(root\),settings\.modelsPath,\(\)=>remoteTargetFactsFor\(root\),?\)/,
   'PREFLIGHT_RUNからRemote target検証を実配線する',
 );
 matchCode(main, /VASTAI_SSH_KEY_MISSING/);

@@ -26,7 +26,7 @@ matchCode(
 );
 matchCode(
   artifactService,
-  /const merged:any=\{\.\.\.base,loras:payload\.loras\}/,
+  /mergeLoraImport\(base,payload,false\)/,
   'each import must replace the prior selection rather than append to it',
 );
 matchCode(

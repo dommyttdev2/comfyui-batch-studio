@@ -11,7 +11,6 @@ export interface ExecutionCreationPorts {
   exclusive<T>(work: () => Promise<T>): Promise<T>;
   current(): Promise<ExecutionRun | null>;
   capture(preflight: PreflightResult): Promise<ExecutionRunSnapshot>;
-  preflight(): Promise<PreflightResult>;
   persistSnapshot(runId: string, snapshot: ExecutionRunSnapshot): Promise<ExecutionRunSnapshot>;
   removeSnapshot(runId: string): Promise<void>;
   write(run: ExecutionRun): Promise<void>;
@@ -27,6 +26,9 @@ function terminalLifecycle(lifecycle: ExecutionRunLifecycle) {
 }
 export function sameSnapshot(a: ExecutionRunSnapshot, b: ExecutionRunSnapshot) {
   return (
+    a.projectId === b.projectId &&
+    a.target === b.target &&
+    JSON.stringify(a.remote) === JSON.stringify(b.remote) &&
     a.runIdentity === b.runIdentity &&
     (a.workflow.sourceWorkflowIdentity ?? a.workflow.workflowIdentity) ===
       (b.workflow.sourceWorkflowIdentity ?? b.workflow.workflowIdentity) &&
@@ -34,10 +36,16 @@ export function sameSnapshot(a: ExecutionRunSnapshot, b: ExecutionRunSnapshot) {
     a.plan.sha256 === b.plan.sha256
   );
 }
-export async function createExecutionRun(ports: ExecutionCreationPorts): Promise<ExecutionRun> {
-  return ports.exclusive(() => createReservedRun(ports));
+export async function createExecutionRun(
+  ports: ExecutionCreationPorts,
+  assess: () => Promise<PreflightResult>,
+): Promise<ExecutionRun> {
+  return ports.exclusive(() => createReservedRun(ports, assess));
 }
-async function createReservedRun(ports: ExecutionCreationPorts): Promise<ExecutionRun> {
+async function createReservedRun(
+  ports: ExecutionCreationPorts,
+  assess: () => Promise<PreflightResult>,
+): Promise<ExecutionRun> {
   const current = await ports.current();
   if (current?.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED')
     throw new Error(
@@ -54,12 +62,14 @@ async function createReservedRun(ports: ExecutionCreationPorts): Promise<Executi
     warnings: [],
     sections: [],
   });
-  const preflight = await ports.preflight();
+  const preflight = await assess();
   if (preflight.state !== 'READY')
     throw new Error(
       `Execution cannot start: Preflight is BLOCKED: ${preflight.blocking.map((item) => item.message).join(' / ')}`,
     );
   const snapshot = await ports.capture(preflight);
+  if ('executionTarget' in preflight && snapshot.target !== preflight.executionTarget)
+    throw new Error('Execution target differs from assessed Preflight.');
   if (!sameSnapshot(before, snapshot))
     throw new Error(
       'Execution cannot start: Workflow/API graph or Prompt Plan changed during Preflight.',

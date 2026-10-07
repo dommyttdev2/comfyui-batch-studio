@@ -7,11 +7,14 @@ const repo = path.resolve(__dirname, '..');
 const ui = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8');
 const app = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8');
 const stage = fs.readFileSync(path.join(repo, 'src', 'renderer', 'FinalArtifactStage.tsx'), 'utf8');
-const service = fs.readFileSync(
-  path.join(repo, 'src', 'main', 'final-artifact-service.ts'),
-  'utf8',
-);
-const caption = fs.readFileSync(path.join(repo, 'src', 'main', 'caption-service.ts'), 'utf8');
+const service =
+  fs.readFileSync(path.join(repo, 'src', 'main', 'final-artifact-service.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/final-artifact-policy.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/model-draft-policy.ts'), 'utf8');
+const caption =
+  fs.readFileSync(path.join(repo, 'src', 'main', 'caption-service.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/caption-build-policy.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/caption-import-policy.ts'), 'utf8');
 const main = readMainProcessSource(repo);
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
 const types = ['shared/types.ts', 'domain/artifact-types.ts']

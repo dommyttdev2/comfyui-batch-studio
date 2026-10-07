@@ -62,7 +62,13 @@ async function setup() {
     },
     BusinessError,
   );
-  const app = new ProjectUseCases(projects, catalogs, { now: () => 1 }, { next: () => 'id' });
+  const app = new ProjectUseCases(
+    projects,
+    catalogs,
+    { now: () => 1 },
+    { next: () => 'id' },
+    { text: (value) => require('node:crypto').createHash('sha256').update(value).digest('hex') },
+  );
   const command = () => ({
     projectId: 'p',
     leaseId: 'l',
@@ -268,7 +274,7 @@ async function creationFixture() {
 }
 test('Run creation owns the lock and persists the verified snapshot before the active pointer', async () => {
   const f = await creationFixture();
-  const run = await f.createExecutionRun(f.ports);
+  const run = await f.createExecutionRun(f.ports, f.ports.preflight);
   assert.equal(run.progress.overall.total, 1);
   assert.equal(run.progress.branches[0].total, 1);
   assert.equal(f.count(), 3);
@@ -277,14 +283,17 @@ test('Run creation owns the lock and persists the verified snapshot before the a
 test('a blocked Preflight cannot create a Run or snapshot', async () => {
   const f = await creationFixture();
   f.ports.preflight = async () => ({ state: 'BLOCKED', blocking: [{ message: 'blocked' }] });
-  await assert.rejects(f.createExecutionRun(f.ports), /BLOCKED/);
+  await assert.rejects(f.createExecutionRun(f.ports, f.ports.preflight), /BLOCKED/);
   assert.deepEqual(f.calls, ['lock', 'unlock']);
 });
 test('changes during Preflight reject Run creation before snapshot copying', async () => {
   const f = await creationFixture();
   let n = 0;
   f.ports.capture = async () => ({ ...structuredClone(f.snapshot), runIdentity: String(n++) });
-  await assert.rejects(f.createExecutionRun(f.ports), /changed during Preflight/);
+  await assert.rejects(
+    f.createExecutionRun(f.ports, f.ports.preflight),
+    /changed during Preflight/,
+  );
   assert.deepEqual(f.calls, ['lock', 'unlock']);
 });
 test('changes during copying remove the provisional snapshot without publishing a Run', async () => {
@@ -295,7 +304,7 @@ test('changes during copying remove the provisional snapshot without publishing 
     if (++n === 3) value.workflow.modelsSha256 = 'changed';
     return value;
   };
-  await assert.rejects(f.createExecutionRun(f.ports), /SOURCE_CHANGED/);
+  await assert.rejects(f.createExecutionRun(f.ports, f.ports.preflight), /SOURCE_CHANGED/);
   assert.deepEqual(f.calls, ['lock', 'snapshot', 'remove', 'unlock']);
 });
 async function preflightFixture() {
@@ -336,14 +345,68 @@ async function preflightFixture() {
     'workflow.api.json': api,
   };
   const ports = {
-    project: async () => project,
+    project: async () => ({
+      schema: 'web-project/1',
+      id: 'p',
+      revision: 0,
+      lease: null,
+      runs: [],
+      drafts: {},
+      targetImageCount: project.targetImageCount,
+      artifacts: {
+        story: {
+          key: 'story',
+          content: 'Story',
+          status: 'confirmed',
+          validation: { valid: true, issues: [] },
+        },
+        models: {
+          key: 'models',
+          content: JSON.stringify(documents['models.json']),
+          status: project.artifacts.find((a) => a.key === 'models')?.state ?? 'confirmed',
+          validation: { valid: true, issues: [] },
+        },
+        promptPlan: {
+          key: 'promptPlan',
+          content: JSON.stringify(documents['prompt_plan.json']),
+          status: 'confirmed',
+          validation: { valid: true, issues: [] },
+        },
+        workflow: {
+          key: 'workflow',
+          status: 'confirmed',
+          validation: { valid: true, issues: [] },
+          content: JSON.stringify({
+            schema: 'workflow/1',
+            ui: documents['workflow.json'],
+            api: documents['workflow.api.json'],
+            uiSha256: project.meta.workflowBuild.outputs.ui.sha256,
+            apiSha256: project.meta.workflowBuild.outputs.api.sha256,
+            workflowIdentity: project.meta.workflowBuild.workflowIdentity,
+            modelsSha256: project.meta.workflowBuild.modelsSha256,
+            promptPlanSha256: hash(documents['prompt_plan.json']),
+          }),
+        },
+      },
+    }),
     exists: async (name) => name === 'story.md' || Object.hasOwn(documents, name),
     json: async (name) => documents[name] ?? null,
     catalog: async () => f.catalogs.value,
     availability: async () => ({
       executionTarget: 'local',
-      rows: [],
-      validation: { valid: true, issues: [] },
+      rows: Object.values(f.models)
+        .filter((s) => s && typeof s === 'object' && s.ref)
+        .concat(f.models.loras)
+        .map((s) => ({
+          ref: s.ref,
+          fileName: s.fileName,
+          kind: s.ref.startsWith('checkpoint.') ? 'checkpoint' : 'lora',
+          local: true,
+          r2: false,
+          state: 'available',
+        })),
+      localModelsRoot: '/models',
+      localRootExists: true,
     }),
     hash,
   };
@@ -409,7 +472,7 @@ test('malformed typed artifact fields produce validation errors rather than esca
 
 async function recoveryFixture() {
   const f = await creationFixture();
-  let stored = await f.createExecutionRun(f.ports);
+  let stored = await f.createExecutionRun(f.ports, f.ports.preflight);
   const calls = [];
   const { recoverExecutionRun } = await load('application/execution-recovery.js');
   const ports = {
@@ -569,4 +632,487 @@ test('Preflight and downstream invalidation agree on explanation-only model edit
   f.documents['models.json'].checkpoint.trainedWords.push('changed_trigger');
   const changed = await f.assessPreflight(f.ports);
   assert.ok(changed.blocking.some((i) => i.code === 'WORKFLOW_MODEL_STALE'));
+});
+
+test('current Preflight rejects legacy schemas and incomplete placement observations', async () => {
+  const f = await preflightFixture();
+  f.documents['models.json'].schemaVersion = 4;
+  let result = await f.assessPreflight(f.ports);
+  assert.equal(result.state, 'BLOCKED');
+  assert.ok(result.blocking.some((i) => i.code === 'MODELS_CURRENT_SCHEMA_REQUIRED'));
+  f.documents['models.json'].schemaVersion = 5;
+  f.documents['prompt_plan.json'].schemaVersion = 1;
+  result = await f.assessPreflight(f.ports);
+  assert.ok(result.blocking.some((i) => i.code === 'PROMPT_PLAN_CURRENT_SCHEMA_REQUIRED'));
+  f.documents['prompt_plan.json'].schemaVersion = 2;
+  f.ports.availability = async () => ({
+    rows: [],
+    executionTarget: 'local',
+    localModelsRoot: '/models',
+    localRootExists: true,
+  });
+  result = await f.assessPreflight(f.ports);
+  assert.ok(result.blocking.some((i) => i.code === 'MODEL_PLACEMENT_EVIDENCE_REQUIRED'));
+});
+test('remote requirements are computed from facts, not a supplied validation verdict', async () => {
+  const { assessRemoteTarget } = await load('domain/remote-target-policy.js');
+  const facts = {
+    provider: 'vastai',
+    instanceId: 1,
+    configured: true,
+    installPath: '/comfy',
+    githubPatConfigured: true,
+    sshPrivateKeyPath: 'key',
+    sshPrivateKeyExists: true,
+    sshPublicKeyPath: 'pub',
+    sshPublicKeyExists: true,
+    sshKeyPairValid: true,
+    instance: { id: 1, status: 'running', sshHost: 'host', sshPort: 22 },
+    lookupError: null,
+  };
+  assert.deepEqual(assessRemoteTarget(facts), []);
+  facts.sshKeyPairValid = false;
+  assert.ok(assessRemoteTarget(facts).some((i) => i.code === 'VASTAI_SSH_KEY_PAIR_MISMATCH'));
+  facts.instance.status = 'offline';
+  assert.ok(assessRemoteTarget(facts).some((i) => i.code === 'VASTAI_INSTANCE_UNAVAILABLE'));
+});
+test('LoRA supplemental tags are preserved and invalidate downstream when only tags change', async () => {
+  const f = await setup();
+  const base = {
+    key: 'models',
+    content: JSON.stringify(f.models),
+    status: 'confirmed',
+    validation: { valid: true, issues: [] },
+  };
+  f.projects.state.artifacts.models = base;
+  f.projects.state.artifacts.workflow = {
+    key: 'workflow',
+    content: 'graph',
+    status: 'confirmed',
+    validation: { valid: true, issues: [] },
+  };
+  const payload = {
+    schemaVersion: 1,
+    loras: f.models.loras,
+    promptFallbacks: [
+      {
+        requirement: 'lighting',
+        positiveTags: ['soft_light'],
+        negativeTags: [],
+        reason: 'No matching LoRA',
+      },
+    ],
+  };
+  await f.app.importLoras(actor, { ...f.command(), payload });
+  await f.app.confirm(actor, { ...f.command(), key: 'models' });
+  assert.equal(
+    f.projects.state.artifacts.models.modelPromptFallbacks[0].positiveTags[0],
+    'soft_light',
+  );
+  assert.equal(JSON.parse(f.projects.state.artifacts.models.content).promptFallbacks, undefined);
+  assert.equal(f.projects.state.artifacts.workflow.status, 'stale');
+  f.projects.state.artifacts.workflow.status = 'confirmed';
+  await f.app.beginEdit(actor, { ...f.command(), key: 'models' });
+  const value = JSON.parse(f.projects.state.drafts.models.content);
+  value.promptFallbacks[0].reason = 'Explanation only';
+  await f.app.saveDraft(actor, { ...f.command(), key: 'models', content: JSON.stringify(value) });
+  await f.app.confirm(actor, { ...f.command(), key: 'models' });
+  assert.equal(f.projects.state.artifacts.workflow.status, 'confirmed');
+  const before = structuredClone(f.projects.state);
+  await assert.rejects(
+    f.app.importLoras(actor, {
+      ...f.command(),
+      payload: {
+        ...payload,
+        missingRequirements: [{ role: 'character', requirement: 'x', reason: 'unresolved' }],
+      },
+    }),
+  );
+  assert.deepEqual(f.projects.state, before);
+});
+test('caption fingerprints exclude Pixiv titles and detect output loss and changed inputs', async () => {
+  const { assessCaptionBuild, captionContentHash, captionRenderInputHash } = await load(
+    'domain/caption-build-policy.js',
+  );
+  const { renderCaption } = await load('domain/caption-policy.js');
+  const content = {
+    schemaVersion: 2,
+    title: { ja: '作品', en: 'Work' },
+    pixivTitle: { ja: '投稿', en: 'Post' },
+    description: { ja: ['説明'], en: ['Description'] },
+  };
+  const hash = (s) => require('node:crypto').createHash('sha256').update(s).digest('hex');
+  const actualCaption = renderCaption(content, 1, false);
+  const facts = {
+    sourceDirectory: 'asset:final',
+    sourceExists: true,
+    imageCount: 1,
+    content,
+    validation: { valid: true, issues: [] },
+    actualCaption,
+    copyrightedCharacter: false,
+    build: {
+      sourceDirectory: 'asset:final',
+      imageCount: 1,
+      contentSha256: captionContentHash(content, hash),
+      renderInputSha256: captionRenderInputHash(content, 1, 'asset:final', false, hash),
+      outputSha256: hash(actualCaption),
+    },
+  };
+  assert.equal(assessCaptionBuild(facts, hash).state, 'generated');
+  content.pixivTitle.ja = '変更';
+  assert.equal(assessCaptionBuild(facts, hash).stale, false);
+  assert.equal(assessCaptionBuild({ ...facts, actualCaption: null }, hash).stale, true);
+  assert.equal(assessCaptionBuild({ ...facts, imageCount: 2 }, hash).stale, true);
+});
+test('marketplace output verification rejects source, crop and produced-byte changes', async () => {
+  const p = await load('domain/marketplace-generation-policy.js');
+  const targets = [{ id: 't', service: 'site', fileName: 'image', width: 10, height: 10 }];
+  const source = { path: 'asset:source', size: 1, mtimeMs: 2, sha256: 'a'.repeat(64) },
+    state = {
+      sourceImagePath: 'asset:source',
+      sourceType: 'final-artifact',
+      format: 'png',
+      targets: { t: { crop: null } },
+    };
+  const expected = {
+    targetId: 't',
+    relativePath: 'site/image.png',
+    size: 3,
+    sha256: 'b'.repeat(64),
+  };
+  const manifest = {
+    schemaVersion: 1,
+    generationId: '12345678-1234-4234-8234-123456789012',
+    format: 'png',
+    inputSignature: p.marketplaceInputSignature(state, targets),
+    source,
+    outputs: [expected],
+  };
+  p.validateMarketplaceGeneration(manifest, state, targets, source);
+  p.assertMarketplaceOutput(expected, targets[0], 'png', { size: 3, sha256: expected.sha256 });
+  assert.throws(() =>
+    p.validateMarketplaceGeneration(
+      manifest,
+      { ...state, targets: { t: { crop: { x: 0, y: 0, width: 4, height: 4 } } } },
+      targets,
+      source,
+    ),
+  );
+  assert.throws(() =>
+    p.validateMarketplaceGeneration(manifest, state, targets, {
+      ...source,
+      sha256: 'c'.repeat(64),
+    }),
+  );
+  assert.throws(() =>
+    p.assertMarketplaceOutput(expected, targets[0], 'png', { size: 3, sha256: 'c'.repeat(64) }),
+  );
+});
+
+test('atomic agent import preserves valid drafts on rejection and deduplicates successful replay', async () => {
+  const f = await setup();
+  f.projects.state.artifacts.models = {
+    key: 'models',
+    content: JSON.stringify(f.models),
+    status: 'confirmed',
+    validation: { valid: true, issues: [] },
+  };
+  const command = {
+    ...f.command(),
+    provider: 'codex',
+    stage: 'models',
+    sourceId: 'job:one',
+    raw: JSON.stringify({ schemaVersion: 1, loras: f.models.loras }),
+  };
+  await f.app.importAgentArtifact(actor, command);
+  const saved = structuredClone(f.projects.state);
+  await f.app.importAgentArtifact(actor, command);
+  assert.deepEqual(f.projects.state, saved);
+  await assert.rejects(
+    f.app.importAgentArtifact(actor, {
+      ...command,
+      ...f.command(),
+      sourceId: 'job:two',
+      raw: JSON.stringify({ schemaVersion: 1, loras: [], checkpoint: {} }),
+    }),
+  );
+  assert.deepEqual(f.projects.state, saved);
+  await assert.rejects(f.app.importAgentArtifact({ ...actor, permissions: ['read'] }, command));
+  assert.deepEqual(f.projects.state, saved);
+});
+test('LoRA fix reset restores initial selection and tags while preserving user base models', async () => {
+  const f = await setup();
+  f.projects.state.artifacts.models = {
+    key: 'models',
+    content: JSON.stringify(f.models),
+    status: 'confirmed',
+    validation: { valid: true, issues: [] },
+  };
+  const initial = {
+    schemaVersion: 1,
+    loras: f.models.loras,
+    promptFallbacks: [
+      { requirement: 'x', positiveTags: ['tag'], negativeTags: [], reason: 'no LoRA' },
+    ],
+  };
+  await f.app.importLoras(actor, { ...f.command(), payload: initial, stage: 'models' });
+  await f.app.confirm(actor, { ...f.command(), key: 'models' });
+  await f.app.importLoras(actor, {
+    ...f.command(),
+    payload: { schemaVersion: 1, loras: [] },
+    stage: 'models-fix',
+  });
+  await f.app.confirm(actor, { ...f.command(), key: 'models' });
+  await f.app.resetStage(actor, { ...f.command(), scope: 'models-fix' });
+  assert.deepEqual(JSON.parse(f.projects.state.artifacts.models.content), f.models);
+  assert.equal(f.projects.state.artifacts.models.modelPromptFallbacks[0].positiveTags[0], 'tag');
+  assert.equal(f.projects.state.modelSelectionHistory.fix, undefined);
+  await f.app.resetStage(actor, { ...f.command(), scope: 'models' });
+  assert.equal(JSON.parse(f.projects.state.artifacts.models.content).loras.length, 0);
+  assert.equal(f.projects.state.modelSelectionHistory.initial, undefined);
+});
+test('Caption output reads canonical project input and committed build, with revision and failure guards', async () => {
+  const f = await setup();
+  const { OutputUseCases } = await load('application/output-use-cases.js');
+  const hash = (value) => require('node:crypto').createHash('sha256').update(value).digest('hex');
+  const content = {
+    schemaVersion: 2,
+    title: { ja: '作品', en: 'Work' },
+    pixivTitle: { ja: '投稿', en: 'Post' },
+    description: { ja: ['説明'], en: ['Description'] },
+  };
+  await f.app.importCaption(actor, { ...f.command(), raw: JSON.stringify(content) });
+  const facts = {
+    sourceDirectory: 'asset:final',
+    sourceExists: true,
+    imageCount: 1,
+    content: { ...content, title: { ja: '別の内容', en: 'Wrong' } },
+    build: null,
+    actualCaption: null,
+    copyrightedCharacter: false,
+  };
+  const outputs = new OutputUseCases(
+    f.projects,
+    { caption: async () => facts },
+    { text: hash },
+    { now: () => 1 },
+  );
+  await outputs.generateCaption(actor, f.command());
+  assert.match(f.projects.state.captionOutput.text, /作品/);
+  assert.doesNotMatch(f.projects.state.captionOutput.text, /別の内容/);
+  assert.equal((await outputs.captionStatus(actor, { projectId: 'p' })).state, 'generated');
+  await f.app.editPixivTitle(actor, { ...f.command(), title: { ja: '変更', en: 'Changed' } });
+  assert.equal((await outputs.captionStatus(actor, { projectId: 'p' })).stale, false);
+  const saved = structuredClone(f.projects.state);
+  facts.imageCount = 0;
+  await assert.rejects(outputs.generateCaption(actor, f.command()));
+  assert.deepEqual(f.projects.state, saved);
+});
+test('portable ISO and JST archive timestamps match calendar boundaries', async () => {
+  const { formatIsoUtc, executionArchiveTimestampJst } = await load('domain/time-policy.js');
+  for (const date of [
+    '2000-02-29T23:59:59.999Z',
+    '2024-12-31T23:59:59.001Z',
+    '2026-10-08T00:00:00.000Z',
+  ])
+    assert.equal(formatIsoUtc(Date.parse(date)), date);
+  assert.equal(executionArchiveTimestampJst('2024-12-31T23:59:59.000Z'), '20250101_085959');
+});
+
+test('AI stage task reserves before planning and failed input validation cannot launch', async () => {
+  const f = await setup();
+  const { AgentTaskUseCases } = await load('application/agent-task-use-cases.js');
+  const events = [];
+  const runtime = {
+    reserve: async () => {
+      events.push('reserve');
+      return { job: { id: 'j', status: 'reserved' }, acquired: true };
+    },
+    fail: async () => events.push('fail'),
+    available: async () => {
+      events.push('available');
+      return true;
+    },
+    launch: async () => {
+      events.push('launch');
+      return { id: 'j', status: 'running' };
+    },
+  };
+  const tasks = new AgentTaskUseCases(
+    f.projects,
+    {
+      read: async () => {
+        events.push('catalog');
+        return f.catalogs.value;
+      },
+    },
+    runtime,
+  );
+  await assert.rejects(tasks.start(actor, { projectId: 'p', stage: 'models', provider: 'codex' }));
+  assert.deepEqual(events, ['reserve', 'catalog', 'fail']);
+  f.projects.state.artifacts.story = {
+    key: 'story',
+    status: 'confirmed',
+    content: 'Story',
+    validation: { valid: true, issues: [] },
+  };
+  f.projects.state.artifacts.models = {
+    key: 'models',
+    status: 'confirmed',
+    content: JSON.stringify(f.models),
+    validation: { valid: true, issues: [] },
+  };
+  events.length = 0;
+  await tasks.start(actor, { projectId: 'p', stage: 'models', provider: 'codex' });
+  assert.deepEqual(events, ['reserve', 'catalog', 'available', 'launch']);
+});
+test('new Run creation rejects execution destination changes during Preflight', async () => {
+  const f = await creationFixture();
+  let count = 0;
+  f.ports.capture = async () => ({
+    ...structuredClone(f.snapshot),
+    remote: { provider: 'vastai', instanceId: ++count },
+  });
+  await assert.rejects(
+    f.createExecutionRun(f.ports, f.ports.preflight),
+    /changed during Preflight/,
+  );
+  assert.deepEqual(f.calls, ['lock', 'unlock']);
+});
+test('Local output verification owns count and authenticated byte fingerprint rules', async () => {
+  const { verifyGeneratedLocalOutputs } = await load('application/local-output-verification.js');
+  const hash = (v) => JSON.stringify(v),
+    run = { snapshot: { runIdentity: 'r' }, progress: { overall: { total: 1 } }, evidence: [] };
+  const data = { relativePath: 'branch/a.png', size: 3, sha256: 'a' };
+  run.evidence.push({
+    id: 'e',
+    kind: 'CUSTOM',
+    scope: 'local-generated-file',
+    runIdentity: 'r',
+    data,
+    fingerprint: hash({ runIdentity: 'r', kind: 'CUSTOM', scope: 'local-generated-file', data }),
+  });
+  const actual = { isFile: true, size: 3, sha256: 'a' };
+  assert.equal((await verifyGeneratedLocalOutputs(run, hash, async () => actual)).count, 1);
+  await assert.rejects(
+    verifyGeneratedLocalOutputs(run, hash, async () => ({ ...actual, sha256: 'changed' })),
+    /modified/,
+  );
+  run.evidence[0].data.relativePath = 'foreign';
+  await assert.rejects(
+    verifyGeneratedLocalOutputs(run, hash, async () => actual),
+    /expected 1/,
+  );
+});
+test('Marketplace generation commits only unchanged inputs, then cleans tracked prior outputs', async () => {
+  const { generateMarketplaceOutputs } = await load('application/marketplace-generation.js');
+  const { createDefaultMarketplaceImageState } = await load('domain/marketplace-editor-policy.js');
+  const target = {
+      id: 't',
+      service: 'site',
+      fileName: 'image',
+      width: 10,
+      height: 10,
+      label: 'Image',
+    },
+    state = createDefaultMarketplaceImageState([target]);
+  state.sourceImagePath = 'asset:source';
+  state.targets.t.crop = { x: 0, y: 0, width: 20, height: 20 };
+  const source = { path: 'asset:source', size: 3, mtimeMs: 1, sha256: 'a' },
+    events = [];
+  let changed = false;
+  const io = {
+    targets: async () => [target],
+    writeState: async () => {},
+    readState: async () => state,
+    loadSource: async () => ({
+      resolved: 'asset:source',
+      image: {},
+      size: { width: 20, height: 20 },
+    }),
+    fingerprint: async () => ({ ...source, sha256: changed ? 'changed' : 'a' }),
+    outputDirectory: async () => 'asset:output',
+    join: (...p) => p.join('/'),
+    readManifest: async () => null,
+    removeManifest: async () => events.push('invalidate'),
+    writeManifest: async () => events.push('commit'),
+    encode: async () => new Uint8Array([1, 2, 3]),
+    writeImage: async () => events.push('write'),
+    hashBytes: () => 'b',
+    nextId: () => 'generation',
+    now: () => 'now',
+    cleanupTrackedOutput: async () => {
+      events.push('cleanup');
+      return null;
+    },
+  };
+  await generateMarketplaceOutputs(io, 'p', state);
+  assert.deepEqual(events, ['invalidate', 'write', 'commit']);
+  events.length = 0;
+  io.encode = async () => {
+    changed = true;
+    return new Uint8Array([1]);
+  };
+  await assert.rejects(generateMarketplaceOutputs(io, 'p', state));
+  assert.deepEqual(events, []);
+});
+
+test('Thumbnail output commits its manifest before deleting an unchanged previous format', async () => {
+  const { exportThumbnailOutput } = await load('application/thumbnail-output-generation.js');
+  const { trackedOutputMatches, sameObservedFile } = await load('domain/output-tracking-policy.js');
+  const events = [],
+    manifest = {
+      schemaVersion: 1,
+      outputs: { 1: { fileName: 'thumbnail-01.jpg', size: 3, sha256: 'old' } },
+    };
+  const io = {
+    directory: async () => 'asset:output',
+    join: (...p) => p.join('/'),
+    exclusive: async (_p, work) => work(),
+    readManifest: async () => manifest,
+    writeManifest: async () => events.push('commit'),
+    writeImage: async () => events.push('write'),
+    hash: () => 'new',
+    cleanup: async () => {
+      events.push('cleanup');
+      return null;
+    },
+  };
+  await exportThumbnailOutput(io, 'p', 1, 'png', new Uint8Array([1, 2, 3]));
+  assert.deepEqual(events, ['write', 'commit', 'cleanup']);
+  assert.equal(manifest.outputs[1].fileName, 'thumbnail-01.png');
+  assert.equal(
+    trackedOutputMatches({ size: 3, sha256: 'a' }, { isFile: true, size: 3, sha256: 'changed' }),
+    false,
+  );
+  const observed = { isFile: true, size: 3, dev: 1, ino: 2, mtimeMs: 1, ctimeMs: 1 };
+  assert.equal(sameObservedFile(observed, { ...observed, ino: 3 }), false);
+});
+test('Prompt Plan patch task uses the exact stored base text without CLI-specific paths', async () => {
+  const f = await setup();
+  const { AgentTaskUseCases } = await load('application/agent-task-use-cases.js');
+  const hash = (s) => require('node:crypto').createHash('sha256').update(s).digest('hex');
+  f.projects.state.artifacts.models = {
+    key: 'models',
+    content: JSON.stringify(f.models),
+    status: 'confirmed',
+    validation: { valid: true, issues: [] },
+  };
+  const raw = JSON.stringify(f.plan, null, 2);
+  f.projects.state.artifacts.promptPlan = {
+    key: 'promptPlan',
+    content: raw,
+    status: 'confirmed',
+    validation: { valid: true, issues: [] },
+  };
+  const tasks = new AgentTaskUseCases(f.projects, f.catalogs, {}, { text: hash });
+  const plan = await tasks.prepare(actor, {
+    projectId: 'p',
+    stage: 'prompt-plan-patch',
+    provider: 'codex',
+  });
+  assert.ok(plan.prompt.includes(hash(raw)));
+  assert.doesNotMatch(plan.prompt, /input\/1-|Codex Pane/);
+  assert.equal(plan.attachments[0].resourceId, 'prompt-plan');
 });

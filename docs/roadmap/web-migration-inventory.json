@@ -797,9 +797,9 @@
       "entryReachable": false
     },
     {
-      "file": "src/application/agent-use-cases.ts",
-      "lines": 117,
-      "sha256": "566115c39d1b0753bc66281e86081b04087b6cb3d55442aaa7ee54e241afb618",
+      "file": "src/application/agent-preferences-use-cases.ts",
+      "lines": 88,
+      "sha256": "4090659537f9b595e0bfad9cd14f53d056ccb51560ef6cd1b1cbf2d06d09adcf",
       "workPackage": "W04",
       "layer": "application",
       "phase": "P1",
@@ -807,6 +807,92 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/agent-state-policy.js",
+        "../domain/contracts.js",
+        "./agent-use-cases.js",
+        "./project-access.js",
+        "./project-ports.js"
+      ],
+      "exports": [
+        "AgentPreferencesUseCases"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/application/agent-task-planning.ts",
+      "lines": 204,
+      "sha256": "c239f11dd341658b0064290cd21dc50ffa29ccaf83775ce4ceecd8c60b858445",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-task-policy.js",
+        "../domain/artifact-types.js",
+        "../domain/artifact-validation.js"
+      ],
+      "exports": [
+        "TaskStage",
+        "AgentTaskPlan",
+        "AgentTaskInputs",
+        "buildAgentTask"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/agent-task-use-cases.ts",
+      "lines": 205,
+      "sha256": "ad73310b1a4ffe67c62641f57a46280fffdcf0a2572a48de76c8ed146fbfa5c0",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-artifact-policy.js",
+        "../domain/agent-state-policy.js",
+        "../domain/artifact-types.js",
+        "../domain/canonical-artifact.js",
+        "../domain/contracts.js",
+        "../domain/text-policy.js",
+        "./agent-task-planning.js",
+        "./agent-use-cases.js",
+        "./project-access.js",
+        "./project-ports.js",
+        "./workflow-use-cases.js"
+      ],
+      "exports": [
+        "AgentTaskUseCases"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/application/agent-use-cases.ts",
+      "lines": 158,
+      "sha256": "a7ff2f84ab8673057858c02310cbb2bb40b88fe58ffdb86bea0e4ca49eb30f06",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-state-policy.js",
         "../domain/artifact-policy.js",
         "../domain/contracts.js"
       ],
@@ -852,8 +938,8 @@
     },
     {
       "file": "src/application/core.ts",
-      "lines": 40,
-      "sha256": "2e28f4acfc068b676afa91f8fed5533151409e253971f8358b67fa3cc07ff5c4",
+      "lines": 56,
+      "sha256": "50217163494bc3f381d981c817f8929e08bfa72cb88276e2bca84008d7a3955b",
       "workPackage": "W10",
       "layer": "application",
       "phase": "P1",
@@ -861,9 +947,12 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "./agent-preferences-use-cases.js",
+        "./agent-task-use-cases.js",
         "./agent-use-cases.js",
         "./confirmation-use-cases.js",
         "./execution-use-cases.js",
+        "./output-use-cases.js",
         "./platform-ports.js",
         "./platform-use-cases.js",
         "./project-ports.js",
@@ -881,9 +970,31 @@
       "entryReachable": false
     },
     {
+      "file": "src/application/execution-coordinator.ts",
+      "lines": 122,
+      "sha256": "22c80a918978b6ad2d4bce59622947cc4d80a15b8cfdf9e0337c7b373c17492c",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "ExecutionRef",
+        "ExecutionResourceLockManager",
+        "ExecutionCoordinator"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/execution-creation.ts",
-      "lines": 139,
-      "sha256": "6691559107aa31c79bd8a4a767d064355b72a04f370256cabc59bc53e519b95f",
+      "lines": 149,
+      "sha256": "2480825e5de46022c86a7556ed8b5190aa6eb4218bc5d8ef74ec9ba45d8cb0d8",
       "workPackage": "W06",
       "layer": "application",
       "phase": "P1",
@@ -934,9 +1045,35 @@
       "entryReachable": false
     },
     {
+      "file": "src/application/execution-resumption.ts",
+      "lines": 102,
+      "sha256": "34fd46b7ccc21ef0de79e5b04d176e4e5ba9641bbbad57a5f9222ab7cd1d90ed",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/execution-evidence.js",
+        "../domain/execution-resume.js",
+        "./execution-creation.js"
+      ],
+      "exports": [
+        "ResumptionPorts",
+        "resumeReservedExecution"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/execution-use-cases.ts",
-      "lines": 108,
-      "sha256": "0d43cf48e99693865cb7325e3a35ed2259a13ba8869502bf2aee95f04107d1bb",
+      "lines": 145,
+      "sha256": "a44a4a114821da22915db94995580683b3b2d36b82f0cb1dad35db8f901dd8a7",
       "workPackage": "W06",
       "layer": "application",
       "phase": "P1",
@@ -947,11 +1084,137 @@
         "../domain/contracts.js",
         "../domain/execution-policy.js",
         "./execution-creation.js",
-        "./execution-recovery.js"
+        "./execution-recovery.js",
+        "./execution-resumption.js",
+        "./preflight.js"
       ],
       "exports": [
         "ExecutionPort",
         "ExecutionUseCases"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/application/local-execution-runtime.ts",
+      "lines": 576,
+      "sha256": "91544eb145b2d4c6a238193523364fe5492162549f65e08c9e86cf8077eaefb8",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/execution-progress.js",
+        "../domain/image-tasks.js",
+        "../domain/local-output-policy.js",
+        "../domain/workflow-graph.js",
+        "./local-output-verification.js"
+      ],
+      "exports": [
+        "LOCAL_OUTPUT_COLLECTION_FAILED",
+        "SettingsProvider",
+        "LocalComfyPort",
+        "LocalRuntimeIO",
+        "LocalOutputCollectionError",
+        "LocalExecutionRuntime",
+        "createLocalExecutionRuntime"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/local-output-verification.ts",
+      "lines": 35,
+      "sha256": "2582de2f21525b057286edbbc08c61497e40cb1673ee3efb1ae0a4a2deaf25f4",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/execution-evidence.js",
+        "../domain/local-output-policy.js"
+      ],
+      "exports": [
+        "verifyGeneratedLocalOutputs"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/marketplace-generation.ts",
+      "lines": 258,
+      "sha256": "db1d948261cc5d0b16a5f54df48d76ec96bc42e416c5e1bb9ebac35ba1233a31",
+      "workPackage": "W09",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/image-size-policy.js",
+        "../domain/marketplace-editor-policy.js",
+        "../domain/marketplace-generation-policy.js",
+        "../domain/output-tracking-policy.js"
+      ],
+      "exports": [
+        "MarketplaceGenerationIO",
+        "generateMarketplaceOutputs",
+        "CustomMarketplaceIO",
+        "generateCustomMarketplaceOutput",
+        "MarketplacePackageIO",
+        "packageMarketplaceOutputs"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/output-use-cases.ts",
+      "lines": 214,
+      "sha256": "85dee3a076cb8df83be96034096d24545509fed81b728edc28a7a1212e496ff8",
+      "workPackage": "W09",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/canonical-artifact.js",
+        "../domain/caption-build-policy.js",
+        "../domain/caption-policy.js",
+        "../domain/contracts.js",
+        "../domain/final-artifact-policy.js",
+        "../domain/marketplace-editor-policy.js",
+        "../domain/marketplace-generation-policy.js",
+        "../domain/thumbnail-editor-policy.js",
+        "../domain/time-policy.js",
+        "../domain/workflow-graph.js",
+        "./project-access.js",
+        "./project-ports.js",
+        "./workflow-use-cases.js"
+      ],
+      "exports": [
+        "OutputFactsPort",
+        "OutputUseCases"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -1016,8 +1279,8 @@
     },
     {
       "file": "src/application/preflight.ts",
-      "lines": 193,
-      "sha256": "d7cfd73f310e391377dde75020250873a25a86f821c7cbfc72c4eb402aabce15",
+      "lines": 178,
+      "sha256": "53e5009665bcc189437c4f3c718cb017f6f1566da7dd589849394d3a9dfead67",
       "workPackage": "W05",
       "layer": "application",
       "phase": "P1",
@@ -1026,12 +1289,17 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "../domain/artifact-types.js",
-        "../domain/artifact-validation.js",
-        "../domain/catalog-validation.js",
+        "../domain/availability-policy.js",
+        "../domain/canonical-artifact.js",
         "../domain/model-impact.js",
-        "../domain/workflow-graph.js"
+        "../domain/model-placement.js",
+        "../domain/remote-target-policy.js",
+        "../domain/workflow-graph.js",
+        "./project-access.js",
+        "./project-ports.js"
       ],
       "exports": [
+        "AvailabilityFacts",
         "PreflightPorts",
         "assessPreflight"
       ],
@@ -1039,12 +1307,12 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": true
+      "entryReachable": false
     },
     {
       "file": "src/application/project-access.ts",
-      "lines": 85,
-      "sha256": "a12d134a7930a7138471b2f4d1d4691a3a8494aca98d4b61bb0e7dd446e8078d",
+      "lines": 93,
+      "sha256": "8617f946d4d81c1362b40633b05e76fe64d7e419d02a8b973f11e05e80b1200e",
       "workPackage": "W03",
       "layer": "application",
       "phase": "P1",
@@ -1055,6 +1323,7 @@
         "../domain/artifact-policy.js",
         "../domain/contracts.js",
         "../domain/execution-policy.js",
+        "../domain/model-draft-policy.js",
         "./project-ports.js"
       ],
       "exports": [
@@ -1070,8 +1339,8 @@
     },
     {
       "file": "src/application/project-ports.ts",
-      "lines": 57,
-      "sha256": "a4808d2af66890cd63c3ab7d0f7a4ed4f70039a5e59a87c69717d81e138aad7f",
+      "lines": 75,
+      "sha256": "d4eda41ab13d9110fb8da0faa635920358c5e4b363ee950982a234ad694b403b",
       "workPackage": "W03",
       "layer": "application",
       "phase": "P1",
@@ -1079,6 +1348,7 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/agent-state-policy.js",
         "../domain/artifact-policy.js",
         "../domain/artifact-types.js",
         "../domain/contracts.js",
@@ -1102,8 +1372,8 @@
     },
     {
       "file": "src/application/project-use-cases.ts",
-      "lines": 244,
-      "sha256": "b721e67de03934b5628fffcfeade085dc5ffd7e7f0a1652683eaade4ae5108b3",
+      "lines": 560,
+      "sha256": "20a25421326007848d914098b573a7dc4d721b1e69990ff2473c151dc276a423",
       "workPackage": "W03",
       "layer": "application",
       "phase": "P1",
@@ -1111,14 +1381,21 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/agent-artifact-policy.js",
         "../domain/artifact-policy.js",
         "../domain/artifact-types.js",
         "../domain/canonical-artifact.js",
+        "../domain/caption-import-policy.js",
         "../domain/contracts.js",
         "../domain/execution-policy.js",
+        "../domain/model-draft-policy.js",
         "../domain/model-editing.js",
+        "../domain/model-reset-policy.js",
+        "../domain/prompt-plan-patch-policy.js",
+        "../domain/text-policy.js",
         "./project-access.js",
-        "./project-ports.js"
+        "./project-ports.js",
+        "./workflow-use-cases.js"
       ],
       "exports": [
         "ProjectUseCases"
@@ -1130,9 +1407,120 @@
       "entryReachable": false
     },
     {
+      "file": "src/application/remote-execution-runtime.ts",
+      "lines": 1061,
+      "sha256": "1f5411e1f115a579b8502c906709e81cf323adcf0970f80aeca145a8e9b8aa86",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/execution-evidence.js",
+        "../domain/execution-progress.js",
+        "../domain/image-tasks.js",
+        "../domain/remote-progress-policy.js",
+        "../domain/remote-worker-contract.js",
+        "../domain/time-policy.js",
+        "../domain/workflow-graph.js"
+      ],
+      "exports": [
+        "RemoteWorkerPort",
+        "RemoteArtifactStore",
+        "RemoteRuntimeIO",
+        "RemoteExecutionRuntime",
+        "createRemoteExecutionRuntime"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/remote-instance-lifecycle.ts",
+      "lines": 293,
+      "sha256": "fa1423f8f191b92a5f66db1648f2250d12bd53574169d2ed9014c24b27c245be",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js"
+      ],
+      "exports": [
+        "LifecycleClient",
+        "RemoteLifecyclePorts",
+        "LifecycleOptions",
+        "RemoteInstanceLifecycleService"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/resource-preflight.ts",
+      "lines": 214,
+      "sha256": "e816db4412fe54486c79cc8c3c4dec2e3459a5e568f4bf5f35a862578547d458",
+      "workPackage": "W05",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G05",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/artifact-validation.js",
+        "../domain/availability-policy.js",
+        "../domain/catalog-validation.js",
+        "../domain/model-impact.js",
+        "../domain/remote-target-policy.js",
+        "../domain/workflow-graph.js"
+      ],
+      "exports": [
+        "PreflightPorts",
+        "assessResourcePreflight"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/thumbnail-output-generation.ts",
+      "lines": 60,
+      "sha256": "5175d58addf8c47f28a294f77b11de9adfcb1ef6404c530d609520175e8b15e4",
+      "workPackage": "W09",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/output-tracking-policy.js"
+      ],
+      "exports": [
+        "ThumbnailOutputIO",
+        "exportThumbnailOutput",
+        "deleteThumbnailOutput"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/workflow-use-cases.ts",
-      "lines": 116,
-      "sha256": "7636bbbdb785b48362928fed5b6534e3d1915ce694f2038769f0f2b829b4981e",
+      "lines": 118,
+      "sha256": "60a3b354675079806c3ddc2d8c7c5de50591d9d703ba7083ccd1948c61b1acfc",
       "workPackage": "W05",
       "layer": "application",
       "phase": "P1",
@@ -1164,9 +1552,92 @@
       "entryReachable": false
     },
     {
+      "file": "src/domain/agent-artifact-policy.ts",
+      "lines": 42,
+      "sha256": "42e459eb512f90e8da078ee4a7f1dff0c40a35cb3d6a0f21043bf69d9a6961eb",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "MAX_ARTIFACT_BYTES",
+        "MAX_REFERENCE_BYTES",
+        "ArtifactStage",
+        "expectedArtifact",
+        "artifactFileContent"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/agent-state-policy.ts",
+      "lines": 61,
+      "sha256": "e8cb16275ebca8588e74efa9642a2b85c6503c87117f15fb3bae1b42f5136405",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "AgentStageSessions",
+        "copySessions",
+        "validSessionId",
+        "rememberAgentSession",
+        "activateAgentSession",
+        "AgentModelSelection",
+        "validateAgentModelSelection"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/agent-task-policy.ts",
+      "lines": 365,
+      "sha256": "788fdd40dc05d49ec2265d46cc88b8d7b6dee57eb53db896fa75c1caa8c4decf",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "common",
+        "artifactFileOutputRules",
+        "storyDiscussionShape",
+        "storyShape",
+        "loraFallbackDecisionRules",
+        "loraCheckpointPriorityRules",
+        "lorasShape",
+        "planShape",
+        "captionShape",
+        "danbooruTagRules",
+        "dialectRule",
+        "promptPlanPatchInstructions"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/artifact-policy.ts",
-      "lines": 36,
-      "sha256": "43328f31f450bf9ccc7d10fc307f830cacae7c7e6860b185c9fa81a284fa0667",
+      "lines": 38,
+      "sha256": "7c670d782f59ed0eade6419ccc20e2ea89310f54461c2b29f709306ed77839e5",
       "workPackage": "W03",
       "layer": "domain",
       "phase": "P1",
@@ -1174,6 +1645,7 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "./artifact-types.js",
         "./contracts.js"
       ],
       "exports": [
@@ -1191,8 +1663,8 @@
     },
     {
       "file": "src/domain/artifact-types.ts",
-      "lines": 612,
-      "sha256": "0a469c191e456584059f32502716d4b70f6ebd4ed9a7b876d19045294f6afb44",
+      "lines": 783,
+      "sha256": "89cd64353e510edcbe5b21be5eecaa52b05b4c15100b601bc20438e25a42a6b9",
       "workPackage": "W03",
       "layer": "domain",
       "phase": "P1",
@@ -1267,7 +1739,28 @@
         "ArtifactState",
         "ProjectMeta",
         "ProjectSettings",
-        "AvailabilityResult"
+        "AvailabilityResult",
+        "MissingRequirement",
+        "ThumbnailPattern",
+        "ThumbnailSlotKey",
+        "ThumbnailSlotState",
+        "ThumbnailTextState",
+        "ThumbnailDocument",
+        "ThumbnailEditorState",
+        "MarketplaceOutputFormat",
+        "MarketplaceEditorMode",
+        "MarketplaceImageTarget",
+        "MarketplaceCropRect",
+        "MarketplaceTargetState",
+        "MarketplaceCustomState",
+        "MarketplaceSourceType",
+        "MarketplaceImageEditorState",
+        "CaptionBuildInfo",
+        "CaptionStatus",
+        "FinalArtifactStatus",
+        "PromptFallback",
+        "VastAiInstance",
+        "ImportResult"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -1326,9 +1819,30 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/brief-impact-policy.ts",
+      "lines": 9,
+      "sha256": "6c5e84a0063f8caec54dd46022b2808389e5d045ef94c7ff0bfd5a889839d14a",
+      "workPackage": "W03",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G03",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "storyBriefInputs",
+        "sameStoryBriefInputs"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/canonical-artifact.ts",
-      "lines": 75,
-      "sha256": "1bded65ea32541ef012b43a090d5857de687580afa04f436d5b2b851a8d1e509",
+      "lines": 86,
+      "sha256": "227df2dc46519a1c6a1031059edf4f8370f0281548650790c8f625bd0c318717",
       "workPackage": "W03",
       "layer": "domain",
       "phase": "P1",
@@ -1338,9 +1852,11 @@
       "imports": [
         "./artifact-types.js",
         "./artifact-validation.js",
+        "./brief-impact-policy.js",
         "./caption-policy.js",
         "./catalog-validation.js",
         "./contracts.js",
+        "./model-draft-policy.js",
         "./model-impact.js"
       ],
       "exports": [
@@ -1353,6 +1869,58 @@
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
+    },
+    {
+      "file": "src/domain/caption-build-policy.ts",
+      "lines": 110,
+      "sha256": "8cbf36570c83fa23ec8d2f1b9da972bf2db492a68f8403cd8808a5fb15fffa3e",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./caption-policy.js"
+      ],
+      "exports": [
+        "captionBodyContent",
+        "captionContentHash",
+        "captionRenderInputHash",
+        "CaptionBuildFacts",
+        "assessCaptionBuild",
+        "assertCaptionBuildable"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/caption-import-policy.ts",
+      "lines": 76,
+      "sha256": "51556817c39caae2b170c088853524e765879e7f38659776bef7fa4eaac5e0a7",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./caption-policy.js"
+      ],
+      "exports": [
+        "updatePixivTitle",
+        "importCaptionResponse"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
     },
     {
       "file": "src/domain/caption-policy.ts",
@@ -1481,6 +2049,54 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/execution-finalization-policy.ts",
+      "lines": 39,
+      "sha256": "73aa614e17ea57d743f34b35c92ada77fc0deac02da95e4abc9eea48c1bf433d",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./execution-evidence.js"
+      ],
+      "exports": [
+        "resumeFinalization"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/execution-mutation-policy.ts",
+      "lines": 82,
+      "sha256": "230c69b3f1015a799b730153c02dbae54e354ecebf18402a861bfaa7eca252d4",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "abandonRunForRemoteReplacement",
+        "discardRun",
+        "requestStopSchedulingPolicy",
+        "requestForceInterruptPolicy"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/execution-policy.ts",
       "lines": 162,
       "sha256": "96b7a704bfef4e6519eda27b8e833fe6a8d98a43cfda2fa2247addecc26b7172",
@@ -1508,6 +2124,33 @@
         "isRemotePreparationPhase",
         "PersistedRecovery",
         "planPersistedRecovery"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/execution-progress.ts",
+      "lines": 71,
+      "sha256": "2f736ba2664d0aff344f8ab2b402c029f008d076816ce01cdef18bf6d3f4589b",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "GENERATION_TIMING_WINDOW",
+        "markGenerationStarted",
+        "markGenerationCompleted",
+        "clearCurrentGenerationTiming",
+        "generationAverageMs",
+        "estimatedGenerationRemainingMs"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -1558,6 +2201,104 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/execution-snapshot-capture.ts",
+      "lines": 122,
+      "sha256": "4cfac51d537ca16161ab85d9ace8b580858c72f4165e4377729a85c36a66f088",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./image-tasks.js",
+        "./model-impact.js",
+        "./workflow-graph.js"
+      ],
+      "exports": [
+        "ExecutionSnapshotFacts",
+        "captureExecutionSnapshot"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/execution-snapshot-policy.ts",
+      "lines": 37,
+      "sha256": "662f76356227ca5b9ebc066f5eb433e80a6f8f4bbeee945a11276050fbb9c260",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./image-tasks.js",
+        "./workflow-graph.js"
+      ],
+      "exports": [
+        "seedExecutionSnapshot"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/execution-workflow-policy.ts",
+      "lines": 47,
+      "sha256": "f0c1992d04ecbe84b564fbfe6e66f3ea05ce3cddcc43be0fa1a155234818034c",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./image-tasks.js",
+        "./model-impact.js",
+        "./workflow-graph.js"
+      ],
+      "exports": [
+        "verifyExecutionWorkflow"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/final-artifact-policy.ts",
+      "lines": 25,
+      "sha256": "d9842ca3ff027a04a5cfaaeb815f9972cbe07168d45134c07f9f100e9967ea03",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "FINAL_ARTIFACT_IMAGE_EXTENSIONS",
+        "assessFinalArtifact"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/image-pixels.ts",
       "lines": 171,
       "sha256": "8abea0026db6e4cea497a303f02ab1778b728a105eddb1bb4d5b279926f19434",
@@ -1581,8 +2322,8 @@
     },
     {
       "file": "src/domain/image-policy.ts",
-      "lines": 31,
-      "sha256": "fe652b661d2fcb1e824066f4b85edc08dd3751a0c580d1310d0e89514d4be99b",
+      "lines": 34,
+      "sha256": "1aac40a3eb4f69ddf18b17869656849425da8b662090d998081b187a9e3f3d53",
       "workPackage": "W09",
       "layer": "domain",
       "phase": "P1",
@@ -1590,10 +2331,10 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
-        "./contracts.js"
+        "./contracts.js",
+        "./image-size-policy.js"
       ],
       "exports": [
-        "MAX_IMAGE_WORKING_BYTES",
         "RenderSize",
         "assertRenderSize"
       ],
@@ -1602,6 +2343,29 @@
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
+    },
+    {
+      "file": "src/domain/image-size-policy.ts",
+      "lines": 70,
+      "sha256": "c29795d010a4e79410af546eee030ab3dee2cc47002227f948f166809906b2fd",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "MAX_IMAGE_WORKING_BYTES",
+        "assertInputDimensions",
+        "assertOutputDimensions",
+        "assertRenderBudget"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
     },
     {
       "file": "src/domain/image-tasks.ts",
@@ -1625,6 +2389,144 @@
         "buildImageGraph",
         "enumerateImageTasks",
         "graphToWorkflow"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/local-output-policy.ts",
+      "lines": 41,
+      "sha256": "fed6d9318fa03d326811c234bf14e4f56b45018601a1bc1ed3926a365004b59e",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./workflow-graph.js"
+      ],
+      "exports": [
+        "LOCAL_FILE_SCOPE",
+        "localRunOutputRelative",
+        "isolateBranchSavePaths",
+        "promptOutputReferences"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/marketplace-crop-policy.ts",
+      "lines": 50,
+      "sha256": "a0b90f2dac1c335c23c7c48de577c1719c1b51f0e5504892283150206d5d7dfb",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "fitCrop",
+        "clampCrop",
+        "normalizeCrop"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/marketplace-editor-policy.ts",
+      "lines": 170,
+      "sha256": "4d4a7630c3d8d3deab36ce8ad66dfbff94cd4c465b5c2bac6842c6ac724484e4",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "finite",
+        "validateMarketplaceTargets",
+        "createDefaultMarketplaceImageState",
+        "normalizeMarketplaceImageState",
+        "clampCrop",
+        "validMarketplaceState"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/marketplace-generation-policy.ts",
+      "lines": 99,
+      "sha256": "4916fc81374db85e4489138df124a2c7663dba53eaa8d886aa3fa99d638204af",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "MarketplaceSourceFingerprint",
+        "MarketplaceGeneratedOutput",
+        "MarketplaceGenerationManifest",
+        "marketplaceInputSignature",
+        "MARKETPLACE_REGENERATION_REQUIRED",
+        "validateMarketplaceGeneration",
+        "assertMarketplaceOutput"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/model-draft-policy.ts",
+      "lines": 214,
+      "sha256": "21c095e6df8843e37f0e5ae5ebfbd0e85e38fa2b09945afa67b734107eefeb6e",
+      "workPackage": "W03",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G03",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./artifact-validation.js"
+      ],
+      "exports": [
+        "missing",
+        "fallbackTags",
+        "normalizePromptFallback",
+        "validPromptFallback",
+        "promptFallbacks",
+        "promptFallbacksValid",
+        "splitModelDraft",
+        "validateModelDraft",
+        "mergeLoraImport",
+        "rejectedModelsImport",
+        "validateLoraImportPayload"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -1733,6 +2635,32 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/model-reset-policy.ts",
+      "lines": 42,
+      "sha256": "b1886c5451aaf87f9e28c11fde1b48969e40f264dd80849800d83205bf97f589",
+      "workPackage": "W03",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G03",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./model-draft-policy.js"
+      ],
+      "exports": [
+        "ModelResetScope",
+        "cleanBase",
+        "modelResetPlan",
+        "restoreModelSelection"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/model-selection.ts",
       "lines": 82,
       "sha256": "436905b530ff9ab864d47844fc2e84c8be8eda24143742f065aa96cdd4dd07c8",
@@ -1785,6 +2713,57 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/output-tracking-policy.ts",
+      "lines": 48,
+      "sha256": "82fbc2d7f360877585ae2dc247d44101d212abda0ea83429d485ce3315a908c6",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "TrackedOutput",
+        "FileObservation",
+        "CHANGED_OUTPUT_WARNING",
+        "trackedOutputMatches",
+        "sameObservedFile",
+        "ThumbnailOutputRecord",
+        "ThumbnailOutputManifest",
+        "thumbnailOutputName",
+        "mayCleanThumbnail"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/prompt-plan-patch-policy.ts",
+      "lines": 212,
+      "sha256": "d4ae0a3857c97ef59a591b47ec58a1b68629801518f1dfe1ab3c862cea7001e0",
+      "workPackage": "W03",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G03",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./artifact-validation.js"
+      ],
+      "exports": [
+        "applyPromptPlanDifference"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/prompt-policy.ts",
       "lines": 251,
       "sha256": "e3addc3d76c5a504fa77bc616d5dc9671e4bffef3ca324420147329a664feeb7",
@@ -1815,6 +2794,110 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/r2-storage-policy.ts",
+      "lines": 92,
+      "sha256": "60cb9762d4cd3cdcc8ce81b5a790ffb133162f34c2450968ff55c8c32b363c49",
+      "workPackage": "W08",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G08",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./text-policy.js"
+      ],
+      "exports": [
+        "MAX_R2_OBJECT_KEY_BYTES",
+        "MAX_BATCH_TEMPLATE_OBJECTS",
+        "MAX_BATCH_TEMPLATES_PER_BUCKET",
+        "MAX_BATCH_TEMPLATE_NAME_LENGTH",
+        "MAX_R2_PRESIGNED_EXPIRES_IN",
+        "NormalizedTemplateObject",
+        "objectName",
+        "normalizeR2ObjectKey",
+        "normalizeR2PutObjectKey",
+        "normalizeR2PresignedExpiresIn",
+        "normalizeR2PutContentType",
+        "normalizeBatchTemplateName",
+        "normalizeBatchTemplateObjects"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/remote-progress-policy.ts",
+      "lines": 125,
+      "sha256": "b26ef24e5aa35bf792ab7a6f0fae2dc83176e267c7b8c6faa3de5e8dd0e45b97",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./execution-progress.js"
+      ],
+      "exports": [
+        "RemoteSequenceState",
+        "applyRemoteProgressEvent",
+        "applyRemoteState"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/remote-target-policy.ts",
+      "lines": 118,
+      "sha256": "10332d1014d636d63989f64037eff2d7ef728943e96a7789f237efc989f28c06",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "RemoteTargetFacts",
+        "assessRemoteTarget"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/remote-worker-contract.ts",
+      "lines": 19,
+      "sha256": "7685fff46669ea88441daa9db40f323d66013b128c254f0ba09fb99743b1ba7d",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "WorkerEvent",
+        "WorkerEventHandler",
+        "RemoteWorkerRequestError"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/template-policy.ts",
       "lines": 4,
       "sha256": "bf5ea7b64f621d499525b339bbb06e9955d7e6d999b647c180e7f857d425940d",
@@ -1827,6 +2910,135 @@
       "imports": [],
       "exports": [
         "normalizeWorkflowTemplateText"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/text-policy.ts",
+      "lines": 9,
+      "sha256": "f3c8ae84600d35792f262c41ffc7855d55aafd4e9d2f46ed75f34e86bb68b85f",
+      "workPackage": "W10",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "utf8Size"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/thumbnail-editor-policy.ts",
+      "lines": 181,
+      "sha256": "73e05228b926af4b16f4e771ac16695227fc3f5323136fecaff258f48d340506",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "PATTERNS",
+        "createThumbnailDocument",
+        "createDefaultThumbnailState",
+        "normalizeThumbnailState",
+        "validThumbnailState"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/thumbnail-layout-policy.ts",
+      "lines": 117,
+      "sha256": "8e83e4ed03cb250f7e5c84c476e6cb481dc5697c662f86021771b8757f4f5dbb",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "WIDTH",
+        "HEIGHT",
+        "LINE_WIDTH",
+        "LEFT_TOP_X",
+        "LEFT_BOTTOM_X",
+        "RIGHT_TOP_X",
+        "RIGHT_BOTTOM_X",
+        "SIDE_SPLIT_OUTER_Y",
+        "SIDE_SPLIT_INNER_Y",
+        "LEFT_MID_X",
+        "RIGHT_MID_X",
+        "Point",
+        "slotsFor",
+        "polygonFor",
+        "polygonBounds",
+        "pointInPolygon",
+        "thumbnailSlotPlacement"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/thumbnail-render-policy.ts",
+      "lines": 192,
+      "sha256": "820d89ec03c1b26375e0db2fa5580b6ada89be650b67e9d1c1ce2800f7312000",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./thumbnail-layout-policy.js"
+      ],
+      "exports": [
+        "ThumbnailDrawingPort",
+        "drawThumbnail"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/time-policy.ts",
+      "lines": 29,
+      "sha256": "83c692e797a2c577beaf095e59d342bb0724c70bb6b0543e1c4cee3b806c128a",
+      "workPackage": "W10",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "formatIsoUtc",
+        "executionArchiveTimestampJst"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -1888,8 +3100,8 @@
     },
     {
       "file": "src/main/agent-artifact-import.ts",
-      "lines": 178,
-      "sha256": "3d4d950f55397234da1e5423eae5a23a7519dd1df3194e65920303346aa55c06",
+      "lines": 153,
+      "sha256": "43b507a0b9f798bea081ba348008c19706b574b1cdfe986e33573b588ca1e834",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -1902,12 +3114,11 @@
         "../shared/types.js",
         "./artifact-service.js",
         "./caption-service.js",
+        "./fs-utils.js",
         "./prompt-plan-patch.js",
-        "./fs-utils.js"
+        "../domain/agent-artifact-policy.js"
       ],
       "exports": [
-        "expectedArtifact",
-        "artifactFileContent",
         "latestAutoArtifact",
         "importAutoArtifact"
       ],
@@ -2025,8 +3236,8 @@
     },
     {
       "file": "src/main/agent-model-selection.ts",
-      "lines": 78,
-      "sha256": "8c979a0c05a5008bc7bc566e66febad821dc2b476e6c0354c7753ce7abe44038",
+      "lines": 73,
+      "sha256": "5d54a7f8689ce0cd579a72350a798aa214a9fff179a9ade8d5311a5e1e53ff8f",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -2035,8 +3246,9 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:path",
-        "./fs-utils.js",
-        "../shared/types.js"
+        "../domain/agent-state-policy.js",
+        "../shared/types.js",
+        "./fs-utils.js"
       ],
       "exports": [
         "AgentModelSelectionStore"
@@ -2049,8 +3261,8 @@
     },
     {
       "file": "src/main/agent-session-state.ts",
-      "lines": 133,
-      "sha256": "94699326f818b101e144c1e95e6220ce4f250fe16c9ff631e8fb9e9ec898f467",
+      "lines": 114,
+      "sha256": "e506a39d186d376f8b74da37e8a102e37faaed815d53692dc3a277e845098078",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -2059,11 +3271,11 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:path",
-        "./fs-utils.js",
-        "../shared/types.js"
+        "../domain/agent-state-policy.js",
+        "../shared/types.js",
+        "./fs-utils.js"
       ],
       "exports": [
-        "AgentStageSessions",
         "AgentSessionStateStore"
       ],
       "bridgeCalls": [],
@@ -2173,8 +3385,8 @@
     },
     {
       "file": "src/main/artifact-service.ts",
-      "lines": 639,
-      "sha256": "977814516677c19c89d435da98c7f09a3faf57aa7703cfa435e3fb0c8782b769",
+      "lines": 482,
+      "sha256": "d376badcaea6ced9b560579d233a04a2ca641d15bad91a0c0b960cd82402d10f",
       "workPackage": "W03",
       "layer": "existing-reference",
       "phase": "P3",
@@ -2185,13 +3397,15 @@
         "node:crypto",
         "node:fs/promises",
         "node:path",
+        "../domain/artifact-types.js",
+        "../domain/model-draft-policy.js",
         "../shared/types.js",
         "./fs-utils.js",
-        "./validation.js",
         "./model-catalog.js",
         "./model-downstream-reset.js",
         "./project-meta.js",
-        "./project-transaction.js"
+        "./project-transaction.js",
+        "./validation.js"
       ],
       "exports": [
         "internalDir",
@@ -2210,7 +3424,7 @@
       "registeredChannels": [],
       "risks": [
         {
-          "line": 600,
+          "line": 443,
           "text": "const artifactRoot = (process.env.BATCH_STUDIO_ARTIFACT_ROOT ?? '').trim(),"
         }
       ],
@@ -2310,8 +3524,8 @@
     },
     {
       "file": "src/main/caption-service.ts",
-      "lines": 290,
-      "sha256": "48e601eeb7d68198c25b750969a173350ea81d910acd87420db1e6ba5cade484",
+      "lines": 190,
+      "sha256": "380316df0aa6e66a070e80812be6c49664a76ae1849263fcedb033d11c00f468",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -2322,6 +3536,8 @@
         "node:crypto",
         "node:fs/promises",
         "node:path",
+        "../domain/caption-build-policy.js",
+        "../domain/caption-import-policy.js",
         "../shared/types.js",
         "./final-artifact-service.js",
         "./fs-utils.js",
@@ -2704,8 +3920,8 @@
     },
     {
       "file": "src/main/codex-cli-task-runner.ts",
-      "lines": 313,
-      "sha256": "5991546801af2797d0e8831e172938b3aa8d36cf0258a325f65818a3aae4d66c",
+      "lines": 283,
+      "sha256": "862bc44a0400586cabc0eef04dfef6d3615c4ef65fcf7782de3b1602f1e49e96",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -2715,13 +3931,14 @@
       "imports": [
         "node:fs/promises",
         "node:path",
+        "../domain/agent-task-policy.js",
         "../shared/types.js",
-        "./agent-cli-adapter.js",
         "./agent-artifact-import.js",
+        "./agent-cli-adapter.js",
         "./agent-session-state.js",
         "./agent-workspace.js",
-        "./grok-context.js",
         "./codex-cli-adapter.js",
+        "./grok-context.js",
         "./prompt-plan-patch.js"
       ],
       "exports": [
@@ -2893,8 +4110,8 @@
     },
     {
       "file": "src/main/execution-coordinator.ts",
-      "lines": 132,
-      "sha256": "dea7992acdd6c77a7d587f949113582174e52819bc2d7e093b1a2941aab74c65",
+      "lines": 72,
+      "sha256": "3ae953ba9ccff073abca74382df6f480dc3019a0df7a684010b7967bf0f891c2",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -2902,10 +4119,10 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
-        "node:path"
+        "node:path",
+        "../application/execution-coordinator.js"
       ],
       "exports": [
-        "ExecutionRef",
         "normalizeComfyUiEndpoint",
         "ExecutionResourceLockManager",
         "ExecutionCoordinator"
@@ -2918,15 +4135,17 @@
     },
     {
       "file": "src/main/execution-output.ts",
-      "lines": 8,
-      "sha256": "36642b0f5cf87ae35e099f3548d8ffb14db0235e0014a856ebd0bf7cac3868ea",
+      "lines": 5,
+      "sha256": "023a31fbacddc52a0beac894e6516663ce9eca0e8fb24faf5a7351a9048a09ed",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
-      "imports": [],
+      "imports": [
+        "../domain/time-policy.js"
+      ],
       "exports": [
         "executionArchiveTimestampJst"
       ],
@@ -2934,12 +4153,12 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "Node処理再利用、dataDir/権限/排他/復旧との接合を検証",
-      "entryReachable": true
+      "entryReachable": false
     },
     {
       "file": "src/main/execution-run.ts",
-      "lines": 790,
-      "sha256": "db47cd85fd33da5d37a05314f490689f10a832e8a74ff02b280d30e581c2b154",
+      "lines": 554,
+      "sha256": "bc82abc64f04efa4a227ad25e3bc9834ae8c04ed662e6f8469099a509b5e35be",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -2952,9 +4171,15 @@
         "node:fs/promises",
         "node:path",
         "../application/execution-creation.js",
+        "../application/execution-resumption.js",
         "../domain/execution-evidence.js",
+        "../domain/execution-finalization-policy.js",
+        "../domain/execution-mutation-policy.js",
         "../domain/execution-record-policy.js",
         "../domain/execution-resume.js",
+        "../domain/execution-snapshot-capture.js",
+        "../domain/execution-snapshot-policy.js",
+        "../domain/execution-workflow-policy.js",
         "../shared/types.js",
         "./fs-utils.js",
         "./image-tasks.js",
@@ -3027,8 +4252,8 @@
     },
     {
       "file": "src/main/final-artifact-service.ts",
-      "lines": 48,
-      "sha256": "d3a6e3997f781558a367661c4e49be86e81e3041babe1452fae8e8ce89a0dc4e",
+      "lines": 40,
+      "sha256": "352f2966c10a52a3f5b743b64246b22907019e712c41f9aeb06982ee877c3f5d",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -3038,11 +4263,11 @@
       "imports": [
         "node:fs/promises",
         "node:path",
+        "../domain/final-artifact-policy.js",
         "../shared/types.js",
         "./project-meta.js"
       ],
       "exports": [
-        "FINAL_ARTIFACT_IMAGE_EXTENSIONS",
         "getFinalArtifactStatus"
       ],
       "bridgeCalls": [],
@@ -3275,8 +4500,8 @@
     },
     {
       "file": "src/main/grok-context.ts",
-      "lines": 457,
-      "sha256": "63f4b1ffbf4e982dea95e287b2175108e0a12768ccbc314a61dfa82ee6e104c4",
+      "lines": 43,
+      "sha256": "e104d117c425ce018aa6d744589dddcce1983eb50083d2ba2b56d816a9aae8ee",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -3285,13 +4510,13 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:path",
+        "../application/agent-task-planning.js",
         "../shared/types.js",
         "./fs-utils.js",
         "./model-catalog.js",
-        "./validation.js"
+        "../domain/agent-task-policy.js"
       ],
       "exports": [
-        "artifactFileOutputRules",
         "buildGrokTask"
       ],
       "bridgeCalls": [],
@@ -4034,8 +5259,8 @@
     },
     {
       "file": "src/main/local-execution.ts",
-      "lines": 633,
-      "sha256": "d252fa02d831e61d3aeeef099b5b1e0cc7199824fbec765a37ddb594e5abb45b",
+      "lines": 159,
+      "sha256": "64288e6e262f839d32dd51a394548e86519908b0933e80644cb3dd4c531ece7f",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -4047,13 +5272,16 @@
         "node:fs",
         "node:fs/promises",
         "node:path",
-        "../shared/types.js",
+        "../application/local-execution-runtime.js",
+        "../application/local-output-verification.js",
+        "../domain/local-output-policy.js",
         "../shared/execution-progress.js",
-        "./fs-utils.js",
-        "./workflow-api.js",
+        "../shared/types.js",
         "./comfyui-client.js",
+        "./execution-run.js",
+        "./fs-utils.js",
         "./image-tasks.js",
-        "./execution-run.js"
+        "./workflow-api.js"
       ],
       "exports": [
         "verifyLocalOutputs",
@@ -4067,8 +5295,8 @@
     },
     {
       "file": "src/main/main.ts",
-      "lines": 2360,
-      "sha256": "61a7c32e0772c6358e1ba0b74424ec0873286d430579a70cdfd566dcfe73cd2e",
+      "lines": 2300,
+      "sha256": "ece5503ccdc2b7277367756c5f3e42ee8f80966c600c3cbe0184ae048e3f23a7",
       "workPackage": "W10",
       "layer": "existing-reference",
       "phase": "P5",
@@ -4082,6 +5310,7 @@
         "node:url",
         "electron",
         "../domain/execution-policy.js",
+        "../domain/remote-target-policy.js",
         "../shared/ipc.js",
         "../shared/types.js",
         "./agent-artifact-import.js",
@@ -4153,215 +5382,215 @@
           "text": "} from 'electron';"
         },
         {
-          "line": 311,
+          "line": 312,
           "text": "if (state.localView.webContents.id === contents.id)"
         },
         {
-          "line": 313,
+          "line": 314,
           "text": "if (state.assistantView.webContents.id === contents.id)"
         },
         {
-          "line": 321,
+          "line": 322,
           "text": "if (state.view.webContents.id !== contents.id) continue;"
         },
         {
-          "line": 368,
+          "line": 369,
           "text": "state.localView.webContents.id === contents.id ||"
         },
         {
-          "line": 369,
+          "line": 370,
           "text": "state.assistantView.webContents.id === contents.id"
         },
         {
-          "line": 415,
+          "line": 416,
           "text": "const dev = process.env.VITE_DEV_SERVER_URL;"
         },
         {
-          "line": 420,
+          "line": 421,
           "text": "await v.webContents.loadURL(url.toString());"
         },
         {
-          "line": 422,
+          "line": 423,
           "text": "await v.webContents.loadFile("
         },
         {
-          "line": 513,
+          "line": 514,
           "text": "await dialog.showMessageBox(window, {"
         },
         {
-          "line": 526,
+          "line": 527,
           "text": "if (picker.opener.id === localView.webContents.id) picker.window.close();"
         },
         {
-          "line": 529,
+          "line": 530,
           "text": "if (picker.opener.id === localView.webContents.id) picker.window.close();"
-        },
-        {
-          "line": 531,
-          "text": "localView.webContents.close();"
         },
         {
           "line": 532,
+          "text": "localView.webContents.close();"
+        },
+        {
+          "line": 533,
           "text": "assistantView.webContents.close();"
         },
         {
-          "line": 539,
+          "line": 540,
           "text": "localView.webContents.once('did-finish-load', () => {"
         },
         {
-          "line": 540,
+          "line": 541,
           "text": "localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');"
         },
         {
-          "line": 578,
+          "line": 579,
           "text": "view.webContents.close();"
         },
         {
-          "line": 646,
+          "line": 647,
           "text": "contentsId = view.webContents.id;"
         },
         {
-          "line": 650,
+          "line": 651,
           "text": "logThumbnailPickerPerformance(app.getPath('userData'), sessionId, 'window_opened', {"
         },
         {
-          "line": 653,
+          "line": 654,
           "text": "view.webContents.on('did-finish-load', () => {"
         },
         {
-          "line": 654,
+          "line": 655,
           "text": "logThumbnailPickerPerformance(app.getPath('userData'), sessionId, 'renderer_loaded', {"
         },
         {
-          "line": 671,
+          "line": 672,
           "text": "if (!view.webContents.isDestroyed()) view.webContents.close();"
         },
         {
-          "line": 672,
+          "line": 673,
           "text": "logThumbnailPickerPerformance(app.getPath('userData'), sessionId, 'window_closed', {"
         },
         {
-          "line": 740,
+          "line": 741,
           "text": "contentsId = view.webContents.id;"
         },
         {
-          "line": 757,
+          "line": 758,
           "text": "if (!view.webContents.isDestroyed()) view.webContents.close();"
         },
         {
-          "line": 772,
+          "line": 773,
           "text": "const result = await dialog.showMessageBox({"
         },
         {
-          "line": 804,
+          "line": 805,
           "text": "state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'open', project);"
         },
         {
-          "line": 821,
+          "line": 822,
           "text": "target.state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');"
         },
         {
-          "line": 827,
+          "line": 828,
           "text": "const selected = await dialog.showOpenDialog({"
         },
         {
-          "line": 839,
+          "line": 840,
           "text": "state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, command);"
         },
         {
-          "line": 844,
+          "line": 845,
           "text": "const err = await shell.openPath(state.projectRoot);"
         },
         {
-          "line": 846,
+          "line": 847,
           "text": "await dialog.showMessageBox({"
         },
         {
-          "line": 871,
+          "line": 872,
           "text": "await dialog.showMessageBox({"
         },
         {
-          "line": 1363,
+          "line": 1364,
           "text": "if (!state || state.localView.webContents.isDestroyed()) return true;"
         },
         {
-          "line": 1372,
+          "line": 1373,
           "text": "senderId: state.localView.webContents.id,"
         },
         {
-          "line": 1379,
+          "line": 1380,
           "text": "state.localView.webContents.send(IPC.EDITOR_FLUSH_REQUEST, id, root);"
         },
         {
-          "line": 1382,
+          "line": 1383,
           "text": "const answer = await dialog.showMessageBox(owner, {"
         },
         {
-          "line": 1403,
+          "line": 1404,
           "text": "const result = await dialog.showMessageBox(owner, {"
         },
         {
-          "line": 1470,
+          "line": 1471,
           "text": "const answer = await dialog.showMessageBox(owner, {"
         },
         {
-          "line": 1722,
+          "line": 1723,
           "text": "if (!(process.env.BATCH_STUDIO_CATALOG_PATH ?? '').trim())"
         },
         {
-          "line": 1723,
+          "line": 1724,
           "text": "process.env.BATCH_STUDIO_CATALOG_PATH = catalogService().catalogPath;"
         },
         {
-          "line": 1726,
+          "line": 1727,
           "text": "const next = new CivitaiCatalogService(path.join(app.getPath('userData'), 'civitai'));"
         },
         {
-          "line": 1763,
+          "line": 1764,
           "text": "state.assistantView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, context);"
         },
         {
-          "line": 1824,
+          "line": 1825,
           "text": "state.localView.webContents.send(IPC.AGENT_EVENT, envelope);"
         },
         {
-          "line": 1831,
+          "line": 1832,
           "text": "state.assistantView.webContents.send(IPC.AGENT_EVENT, envelope);"
         },
         {
-          "line": 1910,
+          "line": 1911,
           "text": "state.localView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);"
         },
         {
-          "line": 1911,
+          "line": 1912,
           "text": "state.assistantView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);"
         },
         {
-          "line": 1942,
+          "line": 1943,
           "text": "globalBucket = (process.env.BATCH_STUDIO_R2_BUCKET ?? '').trim(),"
         },
         {
-          "line": 1943,
+          "line": 1944,
           "text": "globalPrefix = (process.env.BATCH_STUDIO_R2_MODEL_PREFIX ?? '').trim(),"
         },
         {
-          "line": 2246,
+          "line": 2186,
           "text": "await dialog.showMessageBox({"
         },
         {
-          "line": 2268,
+          "line": 2208,
           "text": "const userData = app.getPath('userData');"
         },
         {
-          "line": 2276,
+          "line": 2216,
           "text": "if (apiKey) process.env.CIVIT_API_KEY = apiKey;"
         },
         {
-          "line": 2279,
+          "line": 2219,
           "text": "if (vastKey) process.env[VASTAI_ENVIRONMENT_VARIABLE] = vastKey;"
         },
         {
-          "line": 2283,
+          "line": 2223,
           "text": "const result = await dialog.showMessageBox({"
         }
       ],
@@ -4370,8 +5599,8 @@
     },
     {
       "file": "src/main/marketplace-generation-manifest.ts",
-      "lines": 128,
-      "sha256": "934e257e106b2232a030006474823b4fd4a41938541be6ec98180323013c6001",
+      "lines": 93,
+      "sha256": "552ab0cec3565ef2116987486a2f5924f9006eb1299785a9e9a48748e818d455",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -4383,17 +5612,14 @@
         "node:fs",
         "node:fs/promises",
         "node:path",
-        "../shared/types.js"
+        "../shared/types.js",
+        "../domain/marketplace-generation-policy.js"
       ],
       "exports": [
-        "MarketplaceSourceFingerprint",
-        "MarketplaceGeneratedOutput",
-        "MarketplaceGenerationManifest",
         "sha256Bytes",
         "sha256File",
         "fingerprintMarketplaceSource",
         "marketplaceInputSignature",
-        "MARKETPLACE_REGENERATION_REQUIRED",
         "validateMarketplaceGeneration",
         "verifiedMarketplaceOutput"
       ],
@@ -4405,8 +5631,8 @@
     },
     {
       "file": "src/main/marketplace-image-service.ts",
-      "lines": 737,
-      "sha256": "1279c2ba9e2381801d60e0e5930d80de20f3c13c633dffaa519f2892e77d7736",
+      "lines": 463,
+      "sha256": "9107a59bf2326c4f5fd1a5441f7bec93385f9658f8b5705390663d1e92e08960",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -4419,17 +5645,19 @@
         "node:path",
         "node:url",
         "electron",
+        "../application/marketplace-generation.js",
+        "../domain/marketplace-editor-policy.js",
         "../shared/image-size-limits.js",
-        "./image-dimensions.js",
         "../shared/types.js",
-        "./fs-utils.js",
         "./final-artifact-image-service.js",
-        "./thumbnail-service.js",
-        "./project-meta.js",
-        "./tracked-output-cleanup.js",
-        "./thumbnail-image-cache.js",
+        "./fs-utils.js",
+        "./image-dimensions.js",
+        "./image-pipeline.js",
         "./marketplace-generation-manifest.js",
-        "./image-pipeline.js"
+        "./project-meta.js",
+        "./thumbnail-image-cache.js",
+        "./thumbnail-service.js",
+        "./tracked-output-cleanup.js"
       ],
       "exports": [
         "getMarketplaceImageTargets",
@@ -4453,14 +5681,14 @@
       "risks": [
         {
           "line": 5,
-          "text": "import { nativeImage } from 'electron';"
+          "text": "import { type NativeImage, nativeImage } from 'electron';"
         },
         {
-          "line": 274,
+          "line": 152,
           "text": "saveRevision: normalized.saveRevision ?? Math.max(lastRevision + 1, Date.now() * 1000),"
         },
         {
-          "line": 311,
+          "line": 167,
           "text": "const image = nativeImage.createFromBuffer(bytes);"
         }
       ],
@@ -4504,8 +5732,8 @@
     },
     {
       "file": "src/main/model-downstream-reset.ts",
-      "lines": 256,
-      "sha256": "6980d525be44da8f2a4f2a4460f75bb2381925e52620ef3e25ef2a15b0094d71",
+      "lines": 249,
+      "sha256": "c5b036c3470cd3d06234b8d8bd0ddd579b38918cec777e2004fb6132d599ae11",
       "workPackage": "W03",
       "layer": "existing-reference",
       "phase": "P3",
@@ -4516,6 +5744,7 @@
         "node:crypto",
         "node:fs/promises",
         "node:path",
+        "../domain/model-reset-policy.js",
         "../shared/types.js",
         "./fs-utils.js",
         "./project-meta.js",
@@ -4601,8 +5830,8 @@
     },
     {
       "file": "src/main/preflight.ts",
-      "lines": 25,
-      "sha256": "b7a35a8a94644e042765b70e137b50cedf4f60c65187d6887bd392dc881062a6",
+      "lines": 34,
+      "sha256": "aa02ba7854b8cd2c4479c43f372f35fa25e166d1570ce2749d4e6c1d9e69f7f3",
       "workPackage": "W05",
       "layer": "existing-reference",
       "phase": "P5",
@@ -4611,7 +5840,8 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:path",
-        "../application/preflight.js",
+        "../application/resource-preflight.js",
+        "../domain/remote-target-policy.js",
         "../shared/types.js",
         "./availability.js",
         "./fs-utils.js",
@@ -4659,8 +5889,8 @@
     },
     {
       "file": "src/main/project-scan.ts",
-      "lines": 190,
-      "sha256": "ce66a87045db3f677dbf0b7570d82cfc0a74819ff61df38f28e5693f95ac29c8",
+      "lines": 184,
+      "sha256": "6c7a675e7921cd8c514bd196d8897bfcf33b28fe145ee422b51ec89b247561e8",
       "workPackage": "W03",
       "layer": "existing-reference",
       "phase": "P3",
@@ -4671,11 +5901,12 @@
         "node:crypto",
         "node:fs/promises",
         "node:path",
+        "../domain/brief-impact-policy.js",
         "../shared/types.js",
+        "./artifact-service.js",
         "./fs-utils.js",
         "./project-meta.js",
         "./project-transaction.js",
-        "./artifact-service.js",
         "./workflow-api.js",
         "./workflow-template-integrity.js",
         "./workflow-template-paths.js"
@@ -4723,8 +5954,8 @@
     },
     {
       "file": "src/main/prompt-plan-patch.ts",
-      "lines": 235,
-      "sha256": "970bd2e29f72ea0a2e49ab198df51f64a4c03fef554bc9e42be8e7baf26b9aa2",
+      "lines": 73,
+      "sha256": "ae37a4f7baa165353c7c9dcd8dc1dee3001e9b2d0fa45b7bb7023774c2124d7e",
       "workPackage": "W03",
       "layer": "existing-reference",
       "phase": "P3",
@@ -4733,6 +5964,7 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:crypto",
+        "../domain/prompt-plan-patch-policy.js",
         "../shared/types.js",
         "./artifact-service.js",
         "./fs-utils.js",
@@ -4928,8 +6160,8 @@
     },
     {
       "file": "src/main/remote-execution.ts",
-      "lines": 1077,
-      "sha256": "88518259fb8b3e5e1d0f6fa105b6ee188924cf6330b37529d11c36cc80b8a14c",
+      "lines": 92,
+      "sha256": "dbd3b6db5e76c6303829865941814e9d1f0d817d7d97fd3a78f4e130a873f6eb",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -4941,17 +6173,13 @@
         "node:fs",
         "node:fs/promises",
         "node:path",
-        "../shared/types.js",
-        "../shared/execution-progress.js",
-        "./fs-utils.js",
-        "./image-tasks.js",
+        "../application/remote-execution-runtime.js",
         "./execution-run.js",
+        "./fs-utils.js",
         "./project-meta.js",
         "./r2-manager.js",
-        "./remote-worker.js",
-        "./workflow-api.js",
         "./remote-control-plane.js",
-        "./execution-output.js"
+        "./workflow-api.js"
       ],
       "exports": [
         "RemoteExecutionService"
@@ -4960,15 +6188,7 @@
       "registeredChannels": [],
       "risks": [
         {
-          "line": 804,
-          "text": "(process.env.BATCH_STUDIO_R2_BUCKET ?? '').trim() ||"
-        },
-        {
-          "line": 998,
-          "text": "(process.env.BATCH_STUDIO_R2_BUCKET ?? '').trim() ||"
-        },
-        {
-          "line": 1027,
+          "line": 40,
           "text": "(process.env.BATCH_STUDIO_R2_BUCKET ?? '').trim() ||"
         }
       ],
@@ -4977,8 +6197,8 @@
     },
     {
       "file": "src/main/remote-instance-lifecycle.ts",
-      "lines": 283,
-      "sha256": "41042636bd82fb34cafc8450156dcdf69090dd22b876189a957a87a3b8fb04ee",
+      "lines": 21,
+      "sha256": "3e25637fcb70e64a45375c0d6897926d485d5afaa5064328b4d232876686479e",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -4986,9 +6206,8 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
-        "../shared/types.js",
-        "./execution-run.js",
-        "./vastai-client.js"
+        "../application/remote-instance-lifecycle.js",
+        "./execution-run.js"
       ],
       "exports": [
         "RemoteInstanceLifecycleService"
@@ -5061,8 +6280,8 @@
     },
     {
       "file": "src/main/remote-worker.ts",
-      "lines": 119,
-      "sha256": "9a331f557322b689bfc21a2138e79edcf72cd5310660cfffb4b731e12a945284",
+      "lines": 106,
+      "sha256": "294143f4ba1066d1bf5a75326288db0ad0997738fadb53a7b69c8dc146d8f5d6",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -5072,13 +6291,11 @@
       "imports": [
         "node:crypto",
         "ssh2",
-        "./ssh-client.js",
-        "./remote-worker-source.js"
+        "../domain/remote-worker-contract.js",
+        "./remote-worker-source.js",
+        "./ssh-client.js"
       ],
       "exports": [
-        "WorkerEvent",
-        "WorkerEventHandler",
-        "RemoteWorkerRequestError",
         "RemoteWorkerClient"
       ],
       "bridgeCalls": [],
@@ -5262,8 +6479,8 @@
     },
     {
       "file": "src/main/thumbnail-service.ts",
-      "lines": 512,
-      "sha256": "dff9203828d8ad5b947d4d45e05456bf6ee8ccbc7db157ba8acad8d09a120cf2",
+      "lines": 333,
+      "sha256": "1e7a369a3dfc3c8f156ee47b2c4f72002abf1e2ace939b14540ee7b12efcb864",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -5274,20 +6491,20 @@
         "node:child_process",
         "node:crypto",
         "node:fs/promises",
-        "electron",
         "node:path",
+        "electron",
+        "../application/thumbnail-output-generation.js",
+        "../domain/output-tracking-policy.js",
+        "../domain/thumbnail-editor-policy.js",
         "../shared/types.js",
+        "./atomic-image-output.js",
+        "./final-artifact-image-service.js",
         "./fs-utils.js",
         "./project-meta.js",
-        "./atomic-image-output.js",
-        "./tracked-output-cleanup.js",
-        "./final-artifact-image-service.js"
+        "./tracked-output-cleanup.js"
       ],
       "exports": [
         "listThumbnailFonts",
-        "createThumbnailDocument",
-        "createDefaultThumbnailState",
-        "normalizeThumbnailState",
         "loadThumbnailState",
         "restoreThumbnailState",
         "initializeCorruptThumbnailState",
@@ -5310,31 +6527,31 @@
           "text": "import { execFile } from 'node:child_process';"
         },
         {
-          "line": 4,
+          "line": 5,
           "text": "import { nativeImage } from 'electron';"
         },
         {
-          "line": 52,
+          "line": 44,
           "text": "const powershell = path.join("
         },
         {
-          "line": 53,
+          "line": 45,
           "text": "process.env.SystemRoot || 'C:\\\\Windows',"
         },
         {
-          "line": 57,
+          "line": 49,
           "text": "'powershell.exe',"
         },
         {
-          "line": 61,
+          "line": 53,
           "text": "powershell,"
         },
         {
-          "line": 330,
+          "line": 179,
           "text": "saveRevision: normalized.saveRevision ?? Math.max(lastRevision + 1, Date.now() * 1000),"
         },
         {
-          "line": 489,
+          "line": 324,
           "text": "const image = nativeImage.createFromBuffer(content);"
         }
       ],
@@ -5343,8 +6560,8 @@
     },
     {
       "file": "src/main/tracked-output-cleanup.ts",
-      "lines": 33,
-      "sha256": "911e4b75aca9f2ef08bd3778fb3f714a53552d54081792f6f27da663151e59af",
+      "lines": 38,
+      "sha256": "742c462067b41a8fb8a97a1379a344d5cc9d0f5e72e0be5feea1f62ed683f14a",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -5353,7 +6570,8 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:crypto",
-        "node:fs/promises"
+        "node:fs/promises",
+        "../domain/output-tracking-policy.js"
       ],
       "exports": [
         "cleanupTrackedOutput"
@@ -6074,8 +7292,8 @@
     },
     {
       "file": "src/renderer/MarketplaceImageStage.tsx",
-      "lines": 1157,
-      "sha256": "5a8a418b11c76c35e3965145c89ebcbfe4a831137c1cfdbd04a90931ada8a58e",
+      "lines": 1109,
+      "sha256": "4ad984a0ba8c156539e5d9c73706b1901342cd70b401db2a859a3087565f8e64",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -6084,11 +7302,12 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "react",
-        "../shared/types",
-        "../shared/marketplace-picker-generation",
+        "../domain/marketplace-crop-policy",
         "../shared/image-size-limits",
-        "./use-editor-autosave",
+        "../shared/marketplace-picker-generation",
+        "../shared/types",
         "./ui",
+        "./use-editor-autosave",
         "./marketplace-image-stage.css"
       ],
       "exports": [
@@ -6467,8 +7686,8 @@
     },
     {
       "file": "src/renderer/ThumbnailStage.tsx",
-      "lines": 1380,
-      "sha256": "e3e82951aef593fa4f9502d394d8cee7aed8b4c7e95dd86c14bcc7acd227bb71",
+      "lines": 1190,
+      "sha256": "c68f580308343e7fb9aa8de7bcee40894437c91e872bc189ca63239d982c9460",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -6476,12 +7695,14 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
-        "react",
         "ag-psd",
+        "react",
+        "../domain/thumbnail-layout-policy",
+        "../domain/thumbnail-render-policy",
         "../shared/types",
-        "./use-editor-autosave",
         "./thumbnail-image-memory-cache",
         "./ui",
+        "./use-editor-autosave",
         "./thumbnail-stage.css"
       ],
       "exports": [
@@ -7104,8 +8325,8 @@
     },
     {
       "file": "src/shared/execution-progress.ts",
-      "lines": 73,
-      "sha256": "d1ad4d240969ca80a0376ab9aefa61d70f4b75c841809652e2cffc69fcf05957",
+      "lines": 26,
+      "sha256": "2381a3204902ca633dbb2cafd06ee023bcc8a25c1bffc8254afba5fd5794dc3e",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -7113,14 +8334,12 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/execution-progress.js",
         "./types.js"
       ],
       "exports": [
-        "GENERATION_TIMING_WINDOW",
         "markGenerationStarted",
         "markGenerationCompleted",
-        "clearCurrentGenerationTiming",
-        "generationAverageMs",
         "estimatedGenerationRemainingMs"
       ],
       "bridgeCalls": [],
@@ -7131,21 +8350,18 @@
     },
     {
       "file": "src/shared/image-size-limits.ts",
-      "lines": 70,
-      "sha256": "c29795d010a4e79410af546eee030ab3dee2cc47002227f948f166809906b2fd",
+      "lines": 7,
+      "sha256": "f2c4eb481211abce09d35b50d273ed27b0dc0428a56b5ee11baa3b24e157e661",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
-      "imports": [],
-      "exports": [
-        "MAX_IMAGE_WORKING_BYTES",
-        "assertInputDimensions",
-        "assertOutputDimensions",
-        "assertRenderBudget"
+      "imports": [
+        "../domain/image-size-policy.js"
       ],
+      "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
@@ -7319,30 +8535,18 @@
     },
     {
       "file": "src/shared/r2-manager-utils.ts",
-      "lines": 91,
-      "sha256": "5bfe9dcb71854e95a1ab690960b140730346ebddd9bf5fda8cd16df279471c96",
+      "lines": 2,
+      "sha256": "a005e1eb849e1fba4a5c555945f3cc2398d73b8b1975689723dc227eda6635ba",
       "workPackage": "W08",
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G08",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
-      "imports": [],
-      "exports": [
-        "MAX_R2_OBJECT_KEY_BYTES",
-        "MAX_BATCH_TEMPLATE_OBJECTS",
-        "MAX_BATCH_TEMPLATES_PER_BUCKET",
-        "MAX_BATCH_TEMPLATE_NAME_LENGTH",
-        "MAX_R2_PRESIGNED_EXPIRES_IN",
-        "NormalizedTemplateObject",
-        "objectName",
-        "normalizeR2ObjectKey",
-        "normalizeR2PutObjectKey",
-        "normalizeR2PresignedExpiresIn",
-        "normalizeR2PutContentType",
-        "normalizeBatchTemplateName",
-        "normalizeBatchTemplateObjects"
+      "imports": [
+        "../domain/r2-storage-policy.js"
       ],
+      "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
@@ -7351,8 +8555,8 @@
     },
     {
       "file": "src/shared/types.ts",
-      "lines": 1276,
-      "sha256": "a30ce0a8bc2182116edf1890e53123c00d577186c0f1d2260b32f36321882942",
+      "lines": 1167,
+      "sha256": "092e85c553c89c0d12451d3788b610b1308fad9f6256eabf4bd430ba1d0f3a30",
       "workPackage": "W01",
       "layer": "existing-reference",
       "phase": "P2",
@@ -7370,8 +8574,6 @@
         "LocalModelDirectory",
         "AppSettingsStatus",
         "ArtifactReadResult",
-        "MissingRequirement",
-        "ImportResult",
         "GrokLoraSelectionStage",
         "GrokLoraSelectionHistoryEntry",
         "LoraFileAvailability",
@@ -7388,17 +8590,10 @@
         "VastAiOffer",
         "VastAiOfferSearchResult",
         "VastAiRentRequest",
-        "VastAiInstance",
         "VastAiSshEndpoint",
         "CatalogSelectionEntry",
         "CatalogSelectionTemplate",
         "CatalogSelectionTemplateInput",
-        "ThumbnailPattern",
-        "ThumbnailSlotKey",
-        "ThumbnailSlotState",
-        "ThumbnailTextState",
-        "ThumbnailDocument",
-        "ThumbnailEditorState",
         "FinalArtifactImageItem",
         "FinalArtifactImageSource",
         "ThumbnailImageItem",
@@ -7408,21 +8603,10 @@
         "ThumbnailPickerSelection",
         "ThumbnailTemplateSource",
         "ThumbnailExportResult",
-        "MarketplaceOutputFormat",
-        "MarketplaceEditorMode",
-        "MarketplaceImageTarget",
-        "MarketplaceCropRect",
-        "MarketplaceTargetState",
-        "MarketplaceCustomState",
-        "MarketplaceSourceType",
-        "MarketplaceImageEditorState",
         "MarketplaceGenerationResult",
         "MarketplacePickerSession",
         "MarketplacePickerContext",
         "MarketplacePickerSelection",
-        "FinalArtifactStatus",
-        "CaptionBuildInfo",
-        "CaptionStatus",
         "GrokTask",
         "CompileResult",
         "R2ConnectionInput",
@@ -7479,11 +8663,11 @@
       "registeredChannels": [],
       "risks": [
         {
-          "line": 1235,
+          "line": 1126,
           "text": "setDividerScreenX: (screenX: number) => Promise<AssistantPaneState>;"
         },
         {
-          "line": 1271,
+          "line": 1162,
           "text": "setDividerScreenX: (screenX: number) => Promise<GrokPaneState>;"
         }
       ],
@@ -7848,8 +9032,8 @@
     },
     {
       "file": "tests/business-core.cjs",
-      "lines": 655,
-      "sha256": "790db250262746cd8195a5c537bff18943a28282672a1a84a952e65a81307254",
+      "lines": 714,
+      "sha256": "070d9c34f9e666776a4cb7cf378d92272c2fcb5bbbdb0e2be2f61cec88f932e9",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -7874,7 +9058,7 @@
       "registeredChannels": [],
       "risks": [
         {
-          "line": 127,
+          "line": 135,
           "text": "\"import type { X } from 'electron';\","
         }
       ],
@@ -7883,8 +9067,8 @@
     },
     {
       "file": "tests/caption-stage.cjs",
-      "lines": 125,
-      "sha256": "40c417d782116272eba1417cbf8d99661f9433055e0c8eb68e8886fad7cef350",
+      "lines": 131,
+      "sha256": "f3348ae6d3e7af994dc458c38848604f163c93e892945e1cee93576b54fbdba8",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -7907,8 +9091,8 @@
     },
     {
       "file": "tests/caption-stale.cjs",
-      "lines": 232,
-      "sha256": "01d3adb89c03d5f4c4ab0e1a9a554dd7f68bd0d0213d888024e3ad3835142e41",
+      "lines": 251,
+      "sha256": "62c41fe18b3df352ac823f93f7a639076a5015d554b347aa0027e28002a1bc1a",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -8227,8 +9411,8 @@
     },
     {
       "file": "tests/core-artifacts.cjs",
-      "lines": 573,
-      "sha256": "9493973b5fdd399c58892f602ea0e78eced5355f360b3ca5af9a253b7d805adb",
+      "lines": 1119,
+      "sha256": "604340bc8640cae15f5d61a9ab564405b936f13e72776a40c446d15012fefd27",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -8276,6 +9460,30 @@
       "entryReachable": false
     },
     {
+      "file": "tests/core-preflight-fixture.cjs",
+      "lines": 136,
+      "sha256": "8bb39a89db92b0cabbf3659e3af4699193d976908ff08cce22efeab2c3b0cfa4",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:fs",
+        "node:path",
+        "node:url",
+        "node:crypto",
+        "./core-support/artifact-fixtures.cjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "tests/core-support/artifact-fixtures.cjs",
       "lines": 76,
       "sha256": "81bdbb6b905434a8a846c3f2f9e9509e4f800a9600ca02f75dd1dc6e85b121d8",
@@ -8295,15 +9503,17 @@
     },
     {
       "file": "tests/core-support/memory-ports.cjs",
-      "lines": 231,
-      "sha256": "f3da0d970bfafd914d1932158f43bf9c9154f92076baa49f2b487e0206545d60",
+      "lines": 225,
+      "sha256": "b820ed940a52fdbca61c27ce8f541457778b86cd633a186308199a8e6978e34e",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
-      "imports": [],
+      "imports": [
+        "../core-preflight-fixture.cjs"
+      ],
       "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -8384,7 +9594,7 @@
     {
       "file": "tests/execution-safe-exit.cjs",
       "lines": 105,
-      "sha256": "36b0c53a89db6934abb98c36cc7fcb1986336a4b5aa0d30e1e249cb1a01c6a42",
+      "sha256": "3bc02666b0c82283c288296c3b5beade3319957d9cc150816accc977aee11906",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -8411,8 +9621,8 @@
     },
     {
       "file": "tests/final-artifact-stage.cjs",
-      "lines": 168,
-      "sha256": "15eeb6eb9fd91324b8a98491e60618d7ac442a6936593e2e2ae5d3ef2ce6379d",
+      "lines": 171,
+      "sha256": "86b5d48a630f21e265422c6e59295e1e422e9a2b69353d6fe76f050cf36812d1",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -8606,7 +9816,7 @@
     {
       "file": "tests/grok-lora-selection-summary.cjs",
       "lines": 110,
-      "sha256": "85eb7aec95f5e1569b27c31608a2ba20725bd7b99b301706453a292b10c5d36b",
+      "sha256": "7dd9803ae693bf53bdc45858ba6e93c4c5484be7c135ea00a413117b5655b95d",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -8628,8 +9838,8 @@
     },
     {
       "file": "tests/grok-output-contract.cjs",
-      "lines": 269,
-      "sha256": "aa31dc90cc44930ec1ae2a44134f387957d328774ca5c4ab48677694f1dcd3d5",
+      "lines": 272,
+      "sha256": "783048063271f6f4932e524832a27ec428a99e5548a9b58194a5b7b439d5127f",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -8958,8 +10168,8 @@
     },
     {
       "file": "tests/marketplace-generation-manifest.cjs",
-      "lines": 172,
-      "sha256": "c48a7ca43bf95fb69061dccd6b48fc38b23768d62bb7aa841423f5e9ddd90fa8",
+      "lines": 180,
+      "sha256": "20d4d83f40f2d6849533319abad55d32610f9af7a9292b38f90ba722503dd9c5",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -8992,8 +10202,8 @@
     },
     {
       "file": "tests/marketplace-image-stage.cjs",
-      "lines": 300,
-      "sha256": "1bbe0134ae78e9c55a83bac97989d5409abc890493199264e615a68c76cf0c08",
+      "lines": 301,
+      "sha256": "348987ab764b3dc3f63b1ade397f5de4c26a32e0c526fae722a5e95c8d7acfe3",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9213,8 +10423,8 @@
     },
     {
       "file": "tests/model-selection.cjs",
-      "lines": 564,
-      "sha256": "67ec043f908b6c03e24e3ddd35c5cc0b921243314ade0e1da93a7ae37fdceecf",
+      "lines": 567,
+      "sha256": "637e06ddd5a0fd2a693b375a61f8e1ed354437e18571a4322e0c683384a9b2cd",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9274,8 +10484,8 @@
     },
     {
       "file": "tests/navigation.cjs",
-      "lines": 582,
-      "sha256": "0272b9429a461e4da0ef00e696a1497bc0ee0811f32f48112faf243434292ad8",
+      "lines": 583,
+      "sha256": "1bfe22d25d12eaf729ffb02381eb0958f056b5968623dff785cd4cd957776bd5",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9301,7 +10511,7 @@
           "text": "const { execFileSync } = require('node:child_process');"
         },
         {
-          "line": 374,
+          "line": 375,
           "text": "[tscBin, '-p', path.join(repo, 'tsconfig.electron.json'), '--outDir', runtime],"
         }
       ],
@@ -9645,8 +10855,8 @@
     },
     {
       "file": "tests/remote-artifact-retrieval.cjs",
-      "lines": 433,
-      "sha256": "499189eba825928f7749c20cd48022339ebad634fcf3953c20091f8bf1b330d3",
+      "lines": 438,
+      "sha256": "1c5ab0c84ac919fee7ac68282d30bb21fc915f547054481246e7938a68580980",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9856,8 +11066,8 @@
     },
     {
       "file": "tests/run.cjs",
-      "lines": 569,
-      "sha256": "8af5fc386c9e6ff3b8a25c8046d802c3d9b03e56c469d3aefe209b572b75a7f0",
+      "lines": 581,
+      "sha256": "a65f8969022e52f4fc47ff1e39e9624af1928aa523cf75431552e5088388a453",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9892,7 +11102,7 @@
     {
       "file": "tests/service-integrations-ui.cjs",
       "lines": 289,
-      "sha256": "54309924cb37b00c5aa7bedb2bbb21e84b3ddb8116b6b054ce0c458f99410366",
+      "sha256": "03eea0b9b0c4291a98e193eaab723ef8b23b3d69ccf31ace2062efe908e088d0",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10010,8 +11220,8 @@
     },
     {
       "file": "tests/thumbnail-stage.cjs",
-      "lines": 528,
-      "sha256": "4000a143f97a96c306c7e526fea713e77b12640a77ca6260b610e6ea61df88cd",
+      "lines": 541,
+      "sha256": "a2d55d824317c8bbcb268c61e85810645b1e7e613b159aaa8feb76b4758b2d4e",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10526,19 +11736,19 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 540
+          "line": 541
         },
         {
           "file": "src/main/main.ts",
-          "line": 804
+          "line": 805
         },
         {
           "file": "src/main/main.ts",
-          "line": 821
+          "line": 822
         },
         {
           "file": "src/main/main.ts",
-          "line": 839
+          "line": 840
         }
       ],
       "confirmation": false,
@@ -10556,7 +11766,7 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 1379
+          "line": 1380
         }
       ],
       "confirmation": false,
@@ -12230,7 +13440,7 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 670
+          "line": 671
         }
       ],
       "confirmation": false,
@@ -12608,7 +13818,7 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 756
+          "line": 757
         }
       ],
       "confirmation": false,
@@ -13152,7 +14362,7 @@
         },
         {
           "file": "src/main/main.ts",
-          "line": 1763
+          "line": 1764
         }
       ],
       "confirmation": false,
@@ -13386,11 +14596,11 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 1824
+          "line": 1825
         },
         {
           "file": "src/main/main.ts",
-          "line": 1831
+          "line": 1832
         }
       ],
       "confirmation": false,
@@ -13408,11 +14618,11 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 1910
+          "line": 1911
         },
         {
           "file": "src/main/main.ts",
-          "line": 1911
+          "line": 1912
         }
       ],
       "confirmation": false,
@@ -13620,6 +14830,16 @@
         "G10"
       ],
       "requiredAction": "P1からcore単独回帰に接続済み。P2以降も必須"
+    },
+    {
+      "file": "tests/core-preflight-fixture.cjs",
+      "registration": "standalone",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G02"
+      ],
+      "requiredAction": "P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復"
     },
     {
       "file": "tests/core-support/artifact-fixtures.cjs",
@@ -14509,9 +15729,9 @@
     }
   ],
   "counts": {
-    "files": 318,
-    "source": 203,
-    "tests": 78,
+    "files": 363,
+    "source": 247,
+    "tests": 79,
     "scripts": 9,
     "ipc": 171,
     "resources": 8,
@@ -14519,16 +15739,16 @@
     "ownership": {
       "W01": 12,
       "W02": 27,
-      "W03": 22,
-      "W04": 23,
-      "W05": 27,
-      "W06": 25,
+      "W03": 26,
+      "W04": 29,
+      "W05": 28,
+      "W06": 41,
       "W07": 8,
-      "W08": 6,
-      "W09": 27,
-      "W10": 13,
+      "W08": 7,
+      "W09": 41,
+      "W10": 15,
       "W11": 25,
-      "W12": 80,
+      "W12": 81,
       "W13": 11,
       "W14": 12
     },
@@ -14551,7 +15771,7 @@
       "CI-only": 2,
       "core-local": 3,
       "npm-test": 61,
-      "standalone": 5,
+      "standalone": 6,
       "support": 5
     }
   }

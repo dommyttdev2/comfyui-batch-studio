@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
+import { cleanBase, restoreModelSelection } from '../domain/model-reset-policy.js';
 import type { ModelsArtifact } from '../shared/types.js';
 import { exists, readJson, writeJsonAtomic } from './fs-utils.js';
 import { updateProjectMeta } from './project-meta.js';
@@ -155,13 +156,6 @@ async function latestInitialPayload(root: string) {
   }
   return null;
 }
-function cleanBase(models: any) {
-  const base = structuredClone(models);
-  base.loras = [];
-  delete base.promptFallbacks;
-  delete base.missingRequirements;
-  return base as ModelsArtifact;
-}
 async function resetPromptAndWorkflow(ctx: ResetContext) {
   await archivePromptPlan(ctx);
   await archiveWorkflow(ctx);
@@ -214,12 +208,11 @@ async function manualResetUnlocked(root: string, scope: ManualResetScope) {
     const initial = await latestInitialPayload(root);
     if (!initial) throw new Error('初回のGrok LoRA選定履歴がないため再選定前へ戻せません。');
     await archiveModelState(ctx, { initialHistory: false, fixHistory: true, fallbacks: true });
-    const restored: any = { ...cleanBase(current), loras: initial.loras };
+    const restoration = restoreModelSelection(current, initial, 'models-fix', false),
+      restored = restoration.models;
     await writeJsonAtomic(path.join(ctx.root, 'models.json'), restored);
     await projectTransactionCheckpoint('models:restored');
-    const initialFallbacks = Array.isArray(initial.promptFallbacks)
-      ? initial.promptFallbacks.map(normalizedFallback)
-      : [];
+    const initialFallbacks = restoration.fallbacks;
     if (initialFallbacks.length)
       await writeJsonAtomic(path.join(ctx.internal, 'model_prompt_fallbacks.json'), {
         schemaVersion: 2,

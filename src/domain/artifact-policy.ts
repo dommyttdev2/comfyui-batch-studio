@@ -1,9 +1,11 @@
+import type { PromptFallback } from './artifact-types.js';
 import { type ArtifactKey, BusinessError, type Validation } from './contracts.js';
 export interface Artifact {
   key: ArtifactKey;
   content: string;
   status: 'draft' | 'confirmed' | 'stale';
   validation: Validation;
+  modelPromptFallbacks?: PromptFallback[];
 }
 export const downstream: Record<ArtifactKey, readonly ArtifactKey[]> = {
   brief: ['story', 'models', 'promptPlan', 'workflow', 'thumbnail', 'marketplace', 'caption'],

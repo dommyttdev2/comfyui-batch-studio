@@ -3,9 +3,20 @@ import { constants } from 'node:fs';
 import { copyFile, readdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { createExecutionRun, sameSnapshot } from '../application/execution-creation.js';
+import { resumeReservedExecution } from '../application/execution-resumption.js';
 import { validatedExecutionEvidence as validateEvidence } from '../domain/execution-evidence.js';
+import { resumeFinalization } from '../domain/execution-finalization-policy.js';
+import {
+  abandonRunForRemoteReplacement,
+  discardRun,
+  requestForceInterruptPolicy,
+  requestStopSchedulingPolicy,
+} from '../domain/execution-mutation-policy.js';
 import { assertPersistSafe } from '../domain/execution-record-policy.js';
 import { resumePhase } from '../domain/execution-resume.js';
+import { captureExecutionSnapshot } from '../domain/execution-snapshot-capture.js';
+import { seedExecutionSnapshot } from '../domain/execution-snapshot-policy.js';
+import { verifyExecutionWorkflow } from '../domain/execution-workflow-policy.js';
 import type {
   ExecutionEvidence,
   ExecutionEvidenceKind,
@@ -54,12 +65,6 @@ function assertRunId(runId: string) {
 }
 function clone<T>(value: T): T {
   return structuredClone(value);
-}
-function terminalLifecycle(lifecycle: ExecutionRunLifecycle) {
-  return lifecycle === 'FAILED' || lifecycle === 'COMPLETED' || lifecycle === 'DISCARDED';
-}
-function resumableLifecycle(lifecycle: ExecutionRunLifecycle) {
-  return lifecycle === 'PAUSED' || lifecycle === 'INTERRUPTED' || lifecycle === 'FAILED';
 }
 
 async function withProjectLock<T>(root: string, fn: () => Promise<T>): Promise<T> {
@@ -285,95 +290,41 @@ async function captureSnapshot(
 ): Promise<ExecutionRunSnapshot> {
   const meta = await readProjectMeta(root),
     build = meta?.workflowBuild as any;
-  const uiPath = String(build?.outputs?.ui?.path ?? build?.outputPath ?? '');
-  const apiPath = String(build?.outputs?.api?.path ?? build?.apiOutputPath ?? '');
-  const expectedUiSha = String(build?.outputs?.ui?.sha256 ?? '');
-  const expectedApiSha = String(build?.outputs?.api?.sha256 ?? '');
-  const expectedIdentity = String(build?.workflowIdentity ?? '');
-  const expectedModelsSha = String(build?.modelsSha256 ?? '');
-  if (!uiPath || !apiPath || !expectedUiSha || !expectedApiSha || !expectedIdentity)
-    throw new Error('Execution cannot start: Workflow/API graph provenance is missing.');
-  const ui = await readJson<unknown>(path.join(root, uiPath)),
-    api = await readJson<unknown>(path.join(root, apiPath));
-  if (!ui || !api) throw new Error('Execution cannot start: Workflow/API graph file is missing.');
-  const apiIssues = validateApiGraphStructure(api).filter((issue) => issue.severity === 'error');
-  if (apiIssues.length)
-    throw new Error(
-      `Execution cannot start: API graph is invalid: ${apiIssues.map((issue) => issue.message).join(' / ')}`,
-    );
-  const uiSha256 = hashCanonicalJson(ui),
-    apiSha256 = hashCanonicalJson(api),
-    workflowIdentity = hashCanonicalJson({ uiSha256, apiSha256 });
-  if (
-    uiSha256 !== expectedUiSha ||
-    apiSha256 !== expectedApiSha ||
-    workflowIdentity !== expectedIdentity
-  )
-    throw new Error('Execution cannot start/resume: Workflow/API graph is stale.');
-  const models = await readJson<unknown>(path.join(root, 'models.json'));
-  if (
-    !models ||
-    !expectedModelsSha ||
-    hashWorkflowModelInputs(models as ModelsArtifact) !== expectedModelsSha
-  )
-    throw new Error('Execution cannot start/resume: WORKFLOW_MODEL_STALE (models.json changed).');
-  const brief = await readJson<any>(path.join(root, 'project_brief.json'));
-  if (!brief?.project?.id) throw new Error('Execution cannot start: project.id is missing.');
-  const plan = await readJson<PromptPlanArtifact>(path.join(root, 'prompt_plan.json'));
-  if (!plan) throw new Error('Execution cannot start: prompt_plan.json is missing.');
+  const uiPath = String(build?.outputs?.ui?.path ?? build?.outputPath ?? ''),
+    apiPath = String(build?.outputs?.api?.path ?? build?.apiOutputPath ?? '');
+  const [ui, api, models, plan, brief] = await Promise.all([
+    readJson<unknown>(path.join(root, uiPath)),
+    readJson<unknown>(path.join(root, apiPath)),
+    readJson<ModelsArtifact>(path.join(root, 'models.json')),
+    readJson<PromptPlanArtifact>(path.join(root, 'prompt_plan.json')),
+    readJson<any>(path.join(root, 'project_brief.json')),
+  ]);
   const target = meta?.settings.executionTarget === 'remote' ? 'remote' : 'local';
-  const promptPlanSha256 = hashCanonicalJson(plan);
-  enumerateImageTasks(
-    api as ApiGraph,
+  return captureExecutionSnapshot(
     {
-      snapshot: {
-        plan: {
-          branches: plan.branches.map((branch) => ({
-            branchId: branch.id,
-            leafIds: branch.leaves.map((leaf) => leaf.id),
-          })),
-        },
-      },
-    } as any,
-  );
-  const planSnapshot = {
-    sha256: promptPlanSha256,
-    branches: plan.branches.map((branch) => ({
-      branchId: branch.id,
-      leafIds: branch.leaves.map((leaf) => leaf.id),
-    })),
-  };
-  const remote =
-    target === 'remote'
-      ? {
-          provider: meta?.settings.remoteProvider ?? null,
-          instanceId: meta?.settings.remoteInstanceId ?? null,
-        }
-      : null;
-  const runIdentity = hashCanonicalJson({
-    projectId: brief.project.id,
-    target,
-    workflowIdentity,
-    apiSha256,
-    promptPlanSha256,
-    modelsSha256: expectedModelsSha,
-  });
-  return {
-    projectId: String(brief.project.id),
-    target,
-    remote,
-    preflight: clone(preflight),
-    workflow: {
+      projectId: String(brief?.project?.id ?? ''),
+      target,
+      remote:
+        target === 'remote'
+          ? {
+              provider: meta?.settings.remoteProvider ?? null,
+              instanceId: meta?.settings.remoteInstanceId ?? null,
+            }
+          : null,
       uiPath,
       apiPath,
-      uiSha256,
-      apiSha256,
-      workflowIdentity,
-      modelsSha256: expectedModelsSha,
+      expectedUiSha: String(build?.outputs?.ui?.sha256 ?? ''),
+      expectedApiSha: String(build?.outputs?.api?.sha256 ?? ''),
+      expectedIdentity: String(build?.workflowIdentity ?? ''),
+      expectedModelsSha: String(build?.modelsSha256 ?? ''),
+      ui,
+      api,
+      models,
+      plan,
     },
-    plan: planSnapshot,
-    runIdentity,
-  };
+    preflight,
+    hashCanonicalJson,
+  );
 }
 
 function runSnapshotPaths(runId: string) {
@@ -406,42 +357,14 @@ function requireRunOwnedSnapshot(run: ExecutionRun) {
 // Only the standard contract with an immutable, seeded snapshot can execute.
 export async function readExecutionWorkflow(root: string, run: ExecutionRun) {
   requireRunOwnedSnapshot(run);
-  const { workflow } = run.snapshot;
-  if (!workflow.sourceWorkflowIdentity || !workflow.immutable)
-    throw new Error(
-      'STANDARD_RUN_REQUIRED: 旧Runは再開できません。Workflowを再生成し、新Runを作成してください。',
-    );
-  const ui = await readJson<unknown>(path.join(root, workflow.uiPath));
-  const api = await readJson<unknown>(path.join(root, workflow.apiPath));
-  if (!ui || !api)
-    throw new Error(
-      'EXECUTION_SNAPSHOT_MISSING: saved Run workflow is absent; project files cannot replace it.',
-    );
-  const uiSha256 = hashCanonicalJson(ui),
-    apiSha256 = hashCanonicalJson(api);
-  if (
-    uiSha256 !== workflow.uiSha256 ||
-    apiSha256 !== workflow.apiSha256 ||
-    hashCanonicalJson({ uiSha256, apiSha256 }) !== workflow.workflowIdentity
-  )
-    throw new Error(
-      `EXECUTION_SNAPSHOT_HASH_MISMATCH: saved Run workflow was modified. UI expected=${workflow.uiSha256} actual=${uiSha256}; API expected=${workflow.apiSha256} actual=${apiSha256}; identity expected=${workflow.workflowIdentity} actual=${hashCanonicalJson({ uiSha256, apiSha256 })}. The original Run snapshot must be restored; never rewrite expected hashes.`,
-    );
-  if (workflow.immutable) {
-    const plan = await readJson<unknown>(path.join(root, workflow.immutable.planPath));
-    const models = await readJson<unknown>(path.join(root, workflow.immutable.modelsPath));
-    if (
-      !plan ||
-      !models ||
-      hashCanonicalJson(plan) !== run.snapshot.plan.sha256 ||
-      hashWorkflowModelInputs(models as ModelsArtifact) !== workflow.modelsSha256
-    )
-      throw new Error(
-        'EXECUTION_SNAPSHOT_HASH_MISMATCH: saved Run Prompt Plan or model identity is absent or modified.',
-      );
-  }
-  enumerateImageTasks(api as ApiGraph, run);
-  return { ui, api: api as ApiGraph };
+  const workflow = run.snapshot.workflow;
+  const [ui, api, plan, models] = await Promise.all([
+    readJson<unknown>(path.join(root, workflow.uiPath)),
+    readJson<unknown>(path.join(root, workflow.apiPath)),
+    workflow.immutable ? readJson<unknown>(path.join(root, workflow.immutable.planPath)) : null,
+    workflow.immutable ? readJson<unknown>(path.join(root, workflow.immutable.modelsPath)) : null,
+  ]);
+  return verifyExecutionWorkflow(run, { ui, api, plan, models }, hashCanonicalJson);
 }
 
 // Capture the validated graph and its semantic inputs into a Run-owned
@@ -471,31 +394,20 @@ async function persistRunSnapshot(
     throw new Error(
       'EXECUTION_SNAPSHOT_SOURCE_CHANGED: Workflow, Prompt Plan or models changed while the Run was being created.',
     );
-  const seededApi = structuredClone(api) as ApiGraph;
-  for (const node of Object.values(seededApi))
-    if (node.class_type === 'KSampler') node.inputs.seed = randomInt(0, 2 ** 48 - 1);
-  const seededUi = graphToWorkflow(seededApi);
-  const seededUiSha = hashCanonicalJson(seededUi),
-    seededApiSha = hashCanonicalJson(seededApi);
+  const seeded = seedExecutionSnapshot(
+    api,
+    snapshot,
+    paths,
+    () => randomInt(0, 2 ** 48 - 1),
+    hashCanonicalJson,
+  );
   const dir = path.join(root, RUNS_DIR, runId, 'snapshot');
   try {
-    await writeJsonAtomic(path.join(root, paths.uiPath), seededUi);
-    await writeJsonAtomic(path.join(root, paths.apiPath), seededApi);
+    await writeJsonAtomic(path.join(root, paths.uiPath), seeded.ui);
+    await writeJsonAtomic(path.join(root, paths.apiPath), seeded.api);
     await writeJsonAtomic(path.join(root, paths.planPath), plan);
     await writeJsonAtomic(path.join(root, paths.modelsPath), models);
-    const next: ExecutionRunSnapshot = {
-      ...snapshot,
-      workflow: {
-        ...snapshot.workflow,
-        sourceWorkflowIdentity: snapshot.workflow.workflowIdentity,
-        uiSha256: seededUiSha,
-        apiSha256: seededApiSha,
-        workflowIdentity: hashCanonicalJson({ uiSha256: seededUiSha, apiSha256: seededApiSha }),
-        uiPath: paths.uiPath,
-        apiPath: paths.apiPath,
-        immutable: { planPath: paths.planPath, modelsPath: paths.modelsPath },
-      },
-    };
+    const next = seeded.snapshot;
     await readExecutionWorkflow(root, {
       runId,
       snapshot: next,
@@ -524,19 +436,21 @@ export async function startExecutionRun(
   root: string,
   preflightProvider: PreflightProvider,
 ): Promise<ExecutionRun> {
-  return createExecutionRun({
-    exclusive: (work) => withProjectLock(root, work),
-    current: () => getCurrentExecutionRun(root),
-    capture: (preflight) => captureSnapshot(root, preflight),
-    preflight: preflightProvider,
-    persistSnapshot: (runId, snapshot) => persistRunSnapshot(root, runId, snapshot),
-    removeSnapshot: (runId) =>
-      rm(path.join(root, RUNS_DIR, runId), { recursive: true, force: true }),
-    write: (run) => writeRun(root, run),
-    setCurrent: (runId) => writeCurrent(root, runId),
-    now: () => new Date().toISOString(),
-    nextId: randomUUID,
-  });
+  return createExecutionRun(
+    {
+      exclusive: (work) => withProjectLock(root, work),
+      current: () => getCurrentExecutionRun(root),
+      capture: (preflight) => captureSnapshot(root, preflight),
+      persistSnapshot: (runId, snapshot) => persistRunSnapshot(root, runId, snapshot),
+      removeSnapshot: (runId) =>
+        rm(path.join(root, RUNS_DIR, runId), { recursive: true, force: true }),
+      write: (run) => writeRun(root, run),
+      setCurrent: (runId) => writeCurrent(root, runId),
+      now: () => new Date().toISOString(),
+      nextId: randomUUID,
+    },
+    preflightProvider,
+  );
 }
 
 export async function mutateExecutionRun(
@@ -582,85 +496,25 @@ export async function abandonExecutionRunForRemoteReplacement(
   runId: string,
   replacementInstanceId: number,
 ): Promise<ExecutionRun> {
-  if (!Number.isInteger(replacementInstanceId) || replacementInstanceId < 1)
-    throw new Error('Invalid replacement Vast.ai Instance ID.');
-  return mutateExecutionRun(root, runId, (run) => {
-    if (
-      run.executionTarget !== 'remote' ||
-      run.remote?.provider !== 'vastai' ||
-      !Number.isInteger(run.remote.instanceId) ||
-      Number(run.remote.instanceId) < 1
-    )
-      throw new Error('Execution Run is not a Vast.ai Remote Run.');
-    if (Number(run.remote.instanceId) === replacementInstanceId)
-      throw new Error('Replacement Instance must differ from the current Run Instance.');
-    if (terminalLifecycle(run.lifecycle))
-      throw new Error(`Execution Run ${runId} is already terminal.`);
-    const at = new Date().toISOString();
-    const e = {
-      code: 'REMOTE_INSTANCE_REPLACED',
-      message: `Execution Run was superseded by Vast.ai Instance ${replacementInstanceId}; original Instance ${run.remote.instanceId} is preserved in this Run history.`,
-      phase: run.phase,
-      at,
-      retryable: false,
-    };
-    run.error = e;
-    run.errorHistory.push(e);
-    run.lifecycle = 'FAILED';
-    run.controls.scheduling = 'STOPPED';
-    run.controls.interrupt = 'IDLE';
-    run.controls.stopSchedulingRequestedAt = null;
-    run.controls.forceInterruptRequestedAt = null;
-    run.current.promptId = null;
-  });
+  return mutateExecutionRun(root, runId, (run) =>
+    abandonRunForRemoteReplacement(run, replacementInstanceId, new Date().toISOString()),
+  );
 }
 
 export async function discardExecutionRun(root: string, runId: string): Promise<ExecutionRun> {
-  return mutateExecutionRun(root, runId, (run) => {
-    if (run.lifecycle === 'DISCARDED') return;
-    const at = new Date().toISOString();
-    const e = {
-      code: 'EXECUTION_RUN_DISCARDED',
-      message:
-        'Execution Run was discarded. Locally generated and collected artifacts are preserved.',
-      phase: run.phase,
-      at,
-      retryable: false,
-    };
-    run.error = e;
-    run.errorHistory.push(e);
-    run.lifecycle = 'DISCARDED';
-    run.controls.scheduling = 'STOPPED';
-    run.controls.interrupt = 'INTERRUPTED';
-    run.controls.stopSchedulingRequestedAt = null;
-    run.controls.forceInterruptRequestedAt = null;
-    run.current = { branchId: null, leafId: null, promptId: null };
-    if (run.progress.generationTiming) {
-      run.progress.generationTiming.currentPromptId = null;
-      run.progress.generationTiming.currentStartedAt = null;
-    }
-    run.completedAt = at;
-  });
+  return mutateExecutionRun(root, runId, (run) => discardRun(run, new Date().toISOString()));
 }
 
 export async function requestStopScheduling(root: string, runId: string): Promise<ExecutionRun> {
-  return mutateExecutionRun(root, runId, (run) => {
-    if (run.lifecycle !== 'RUNNING') throw new Error(`Execution Run ${runId} is not running.`);
-    if (run.controls.scheduling === 'ACTIVE') {
-      run.controls.scheduling = 'STOP_REQUESTED';
-      run.controls.stopSchedulingRequestedAt = new Date().toISOString();
-    }
-  });
+  return mutateExecutionRun(root, runId, (run) =>
+    requestStopSchedulingPolicy(run, new Date().toISOString()),
+  );
 }
 
 export async function requestForceInterrupt(root: string, runId: string): Promise<ExecutionRun> {
-  return mutateExecutionRun(root, runId, (run) => {
-    if (run.lifecycle !== 'RUNNING') throw new Error(`Execution Run ${runId} is not running.`);
-    if (run.controls.interrupt === 'IDLE') {
-      run.controls.interrupt = 'FORCE_REQUESTED';
-      run.controls.forceInterruptRequestedAt = new Date().toISOString();
-    }
-  });
+  return mutateExecutionRun(root, runId, (run) =>
+    requestForceInterruptPolicy(run, new Date().toISOString()),
+  );
 }
 
 export async function resumeExecutionRunFinalization(
@@ -670,37 +524,7 @@ export async function resumeExecutionRunFinalization(
   return withProjectLock(root, async () => {
     const run = await getExecutionRun(root, runId);
     if (!run) throw new Error(`Execution Run ${runId} was not found.`);
-    if (
-      run.lifecycle !== 'FAILED' ||
-      run.executionTarget !== 'remote' ||
-      run.remote?.provider !== 'vastai' ||
-      run.error?.code !== 'REMOTE_INSTANCE_FINALIZE_FAILED' ||
-      run.remoteLifecycle?.finalizedAt
-    )
-      throw new Error('This Execution Run has no pending Vast.ai stop finalization to retry.');
-    const verified = validatedExecutionEvidence(run);
-    const kinds = new Set(verified.valid.map((item) => item.kind));
-    if (!kinds.has('LOCAL_FILE_VERIFIED') || !kinds.has('CLEANUP_COMPLETED'))
-      throw new Error(
-        'Cannot retry only finalization before artifacts were delivered and cleaned.',
-      );
-    const now = new Date().toISOString();
-    const next: ExecutionRun = {
-      ...run,
-      lifecycle: 'RUNNING',
-      phase: 'CLOUD_INSTANCE_FINALIZING',
-      controls: { ...run.controls, scheduling: 'STOPPED' },
-      error: null,
-      completedAt: null,
-      resume: {
-        attempts: run.resume.attempts + 1,
-        lastAttemptAt: now,
-        lastValidatedEvidenceIds: verified.valid.map((item) => item.id),
-        lastIgnoredEvidenceIds: verified.invalid,
-        lastDecisionPhase: 'CLOUD_INSTANCE_FINALIZING',
-      },
-      updatedAt: now,
-    };
+    const next = resumeFinalization(run, new Date().toISOString(), hashCanonicalJson);
     await writeRun(root, next);
     await writeCurrent(root, runId);
     return next;
@@ -712,78 +536,18 @@ export async function resumeExecutionRun(
   runId: string,
   preflightProvider: PreflightProvider,
 ): Promise<ExecutionRun> {
-  return withProjectLock(root, async () => {
-    const run = await getExecutionRun(root, runId);
-    if (!run) throw new Error(`Execution Run ${runId} was not found.`);
-    if (!resumableLifecycle(run.lifecycle))
-      throw new Error(`Execution Run ${runId} is not resumable from ${run.lifecycle}.`);
-    if (
-      run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ||
-      run.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED'
-    )
-      throw new Error(
-        'Execution Run recovery is uncertain or output collection failed. Reconcile the exact accepted Prompt before resuming; automatic re-submission is disabled.',
-      );
-    const placeholder: PreflightResult = {
-      state: 'READY',
-      plannedImages: run.snapshot.preflight.plannedImages,
-      targetImages: run.snapshot.preflight.targetImages,
-      blocking: [],
-      warnings: [],
-      sections: [],
-    };
-    await readExecutionWorkflow(root, run);
-    const before = await captureSnapshot(root, placeholder);
-    if (!sameSnapshot(run.snapshot, before))
-      throw new Error(
-        'Execution cannot resume: Project inputs no longer match this immutable Run. The old graph is preserved but the changed model/preflight environment cannot be used for automatic Resume.',
-      );
-    const preflight = await preflightProvider();
-    if (preflight.state !== 'READY')
-      throw new Error(
-        `Execution cannot resume: Preflight is BLOCKED: ${preflight.blocking.map((item) => item.message).join(' / ')}`,
-      );
-    const after = await captureSnapshot(root, preflight);
-    if (!sameSnapshot(run.snapshot, after))
-      throw new Error(
-        'Execution cannot resume: Workflow/API graph or Prompt Plan changed during validation.',
-      );
-    const checked = validatedExecutionEvidence(run),
-      decision = resumePhase(run, checked.valid),
-      now = new Date().toISOString();
-    const next: ExecutionRun = {
-      ...run,
-      lifecycle: decision.lifecycle,
-      phase: decision.phase,
-      controls: {
-        scheduling: 'ACTIVE',
-        interrupt: 'IDLE',
-        stopSchedulingRequestedAt: null,
-        forceInterruptRequestedAt: null,
-      },
-      progress: {
-        ...run.progress,
-        generationTiming: {
-          currentPromptId: null,
-          currentStartedAt: null,
-          recentDurationsMs: [...(run.progress.generationTiming?.recentDurationsMs ?? [])].slice(
-            -5,
-          ),
-        },
-      },
-      error: null,
-      resume: {
-        attempts: run.resume.attempts + 1,
-        lastAttemptAt: now,
-        lastValidatedEvidenceIds: checked.valid.map((item) => item.id),
-        lastIgnoredEvidenceIds: checked.invalid,
-        lastDecisionPhase: decision.phase,
-      },
-      updatedAt: now,
-      completedAt: decision.lifecycle === 'COMPLETED' ? (run.completedAt ?? now) : null,
-    };
-    await writeRun(root, next);
-    await writeCurrent(root, runId);
-    return next;
-  });
+  return resumeReservedExecution(
+    {
+      exclusive: (work) => withProjectLock(root, work),
+      load: () => getExecutionRun(root, runId),
+      verifyWorkflow: (run) => readExecutionWorkflow(root, run).then(() => {}),
+      capture: (result) => captureSnapshot(root, result),
+      write: (run) => writeRun(root, run),
+      setCurrent: (id) => writeCurrent(root, id),
+      now: () => new Date().toISOString(),
+      hash: hashCanonicalJson,
+    },
+    runId,
+    preflightProvider,
+  );
 }

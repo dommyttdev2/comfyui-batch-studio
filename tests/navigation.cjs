@@ -19,18 +19,19 @@ const executionSource = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'ExecutionStages.tsx'),
   'utf8',
 );
-const remoteExecutionSource = fs.readFileSync(
-  path.join(repo, 'src', 'main', 'remote-execution.ts'),
-  'utf8',
-);
-const localExecutionSource = fs.readFileSync(
-  path.join(repo, 'src', 'main', 'local-execution.ts'),
-  'utf8',
-);
-const progressSource = fs.readFileSync(
-  path.join(repo, 'src', 'shared', 'execution-progress.ts'),
-  'utf8',
-);
+const remoteExecutionSource =
+  fs.readFileSync(path.join(repo, 'src', 'main', 'remote-execution.ts'), 'utf8') +
+  fs.readFileSync(
+    path.resolve(__dirname, '../src/application/remote-execution-runtime.ts'),
+    'utf8',
+  ) +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/remote-progress-policy.ts'), 'utf8');
+const localExecutionSource =
+  fs.readFileSync(path.join(repo, 'src', 'main', 'local-execution.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/application/local-execution-runtime.ts'), 'utf8');
+const progressSource =
+  fs.readFileSync(path.join(repo, 'src', 'shared', 'execution-progress.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/execution-progress.ts'), 'utf8');
 const mainSource = readMainProcessSource(repo);
 matchCode(
   uiSource,
@@ -303,22 +304,22 @@ matchCode(
 );
 matchCode(
   remoteExecutionSource,
-  /markGenerationStarted\(run,promptId\)/,
+  /markGenerationStarted\(run,promptId,at\.ticks,at\.iso\)/,
   'Remote generation timing must start from streamed prompt submission',
 );
 matchCode(
   remoteExecutionSource,
-  /markGenerationCompleted\(run\)/,
+  /markGenerationCompleted\(run,at\.ticks\)/,
   'Remote generation timing must finish on prompt success',
 );
 matchCode(
   localExecutionSource,
-  /markGenerationStarted\(r,lastPromptId\)/,
+  /markGenerationStarted\(r,lastPromptId,io\.now\(\)\.ticks,io\.now\(\)\.iso\)/,
   'Local generation timing must start when a prompt is submitted',
 );
 matchCode(
   localExecutionSource,
-  /markGenerationCompleted\(r\)/,
+  /markGenerationCompleted\(r,io\.now\(\)\.ticks\)/,
   'Local generation timing must finish on prompt success',
 );
 matchCode(

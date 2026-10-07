@@ -82,7 +82,9 @@ export class WorkflowUseCases {
       const hash = (value: unknown) => this.digest.text(JSON.stringify(canonical(value)));
       const uiSha256 = hash(generated.ui),
         apiSha256 = hash(generated.api);
-      const modelInputs = JSON.parse(modelGenerationInputs(models));
+      const modelInputs = JSON.parse(
+        modelGenerationInputs(models, modelArtifact.modelPromptFallbacks ?? []),
+      );
       const build = {
         schema: 'workflow/1',
         ...generated,

@@ -2,7 +2,10 @@ const assert = require('node:assert/strict');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
-const src = fs.readFileSync(path.resolve(__dirname, '../src/main/grok-context.ts'), 'utf8');
+const src =
+  fs.readFileSync(path.resolve(__dirname, '../src/main/grok-context.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/application/agent-task-planning.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/agent-task-policy.ts'), 'utf8');
 for (const heading of [
   '## 作品コンセプト',
   '## 登場人物',

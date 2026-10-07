@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { promptPlanPatchInstructions } from '../domain/agent-task-policy.js';
 import type {
   AgentEvent,
   AgentModelSelection,
@@ -8,10 +9,12 @@ import type {
   GrokContextStage,
   GrokTask,
 } from '../shared/types.js';
-import type { AgentCliAdapter } from './agent-cli-adapter.js';
 import { expectedArtifact, importAutoArtifact } from './agent-artifact-import.js';
+import type { AgentCliAdapter } from './agent-cli-adapter.js';
 import { AgentSessionStateStore } from './agent-session-state.js';
 import {
+  type AgentConversationWorkspace,
+  type AgentWorkspace,
   agentWorkspaceOutputInstruction,
   prepareAgentConversationWorkspace,
   prepareAgentWorkspace,
@@ -19,11 +22,9 @@ import {
   rememberAgentWorkspace,
   removeAgentConversationWorkspace,
   removeAgentWorkspace,
-  type AgentConversationWorkspace,
-  type AgentWorkspace,
 } from './agent-workspace.js';
-import { artifactFileOutputRules, buildGrokTask } from './grok-context.js';
 import { AgentTurnCancelledError } from './codex-cli-adapter.js';
+import { artifactFileOutputRules, buildGrokTask } from './grok-context.js';
 import { promptPlanPatchBase } from './prompt-plan-patch.js';
 
 type TaskBuilder = (root: string, stage: GrokTask['stage'], extra: string) => Promise<GrokTask>;
@@ -78,38 +79,7 @@ async function buildDefaultCodexTask(
 ): Promise<GrokTask> {
   if (stage === 'prompt-plan-patch') {
     const baseline = await promptPlanPatchBase(root);
-    const prompt = `## Task
-あなたはComfyUI Batch StudioのPrompt Plan Schema v2を修正します。
-これは相談や全文再生成ではなく、この会話で合意した変更を、現在の既存計画へ部分適用するための差分生成依頼です。
-作業ディレクトリの input/1-prompt_plan.json を読み込み、該当Branch/Leafを実際に確認してください。入力ファイルは変更しません。
-現在のファイル本文のSHA-256（UTF-8のバイト列）: ${baseline.baseSha256}
-現在の計画: ${baseline.branches} Branch / ${baseline.leaves} Leaf。
-この会話の修正対象以外のBranch/Leaf、ID、枚数、モデル設定、タグを絶対に変更しないでください。
-
-## 差分JSON形式（厳守）
-{
-  "schemaVersion": 1,
-  "baseSha256": "${baseline.baseSha256}",
-  "operations": [
-    {
-      "scope": "branch",
-      "branchId": "既存Branch ID（例: b19）",
-      "path": "prompt.triggerWords",
-      "before": [{"modelRef": "実際の既存ref", "words": ["修正前の値"]}],
-      "after": [{"modelRef": "実際の既存ref", "words": ["修正後の値"]}]
-    }
-  ]
-}
-- 上記のbefore/afterは構造例であり、実際の元ファイルから対象配列の全要素を正確に転記してください。推測で記載しないでください。
-- 操作対象は、commonならscope=commonでpath=triggerWords、positive.category、positive.camera.pov/angle/framing/gaze/focus、negative.category、Branch/Leafならscope=branch/leafでpathの先頭にprompt.を付けた同じ形式です。
-- BranchにはbranchId、LeafにはbranchIdとleafIdを指定します。共通Scopeにはどちらも指定しません。
-- beforeとafterはどちらも対象の配列全体を入れ、beforeは現在のファイル内容と完全一致させてください。変更対象外の要素は維持してください。
-- この差分はBatch Studioが基準ハッシュとbeforeを照合して原子的に下書きへ適用し、計画全件を検証します。
-- JSONは上記3つのroot fieldのみ、operationはscope/branchId/leafId/path/before/afterのみを使用してください。
-- 同じscope・Branch・Leaf・pathへの変更は1操作に統合してください。操作数は100件以下です。
-- 修正する既存配列が見つからない、または配列の全値を正確に読めない場合、差分を作成したと主張せず理由を示してください。
-- 原本全体や修正案だけの会話は出力しません。次の出力契約に従い、差分JSONをファイルに書き込んでください。
-${extra ? `\n## 追加の修正条件\n${extra}` : ''}`;
+    const prompt = promptPlanPatchInstructions(baseline, extra, 'input/1-prompt_plan.json');
     return {
       stage,
       title: 'Prompt Planを部分修正',

@@ -2,13 +2,16 @@ import type {
   ModelCatalog,
   ModelsArtifact,
   ProjectBriefInput,
+  PromptFallback,
   PromptPlanArtifact,
   ValidationResult,
 } from './artifact-types.js';
 import { validateModels, validateProjectBrief, validatePromptPlan } from './artifact-validation.js';
+import { sameStoryBriefInputs } from './brief-impact-policy.js';
 import { validateCaptionContent } from './caption-policy.js';
 import { validateModelsWithCatalog } from './catalog-validation.js';
 import type { ArtifactKey, Validation } from './contracts.js';
+import { splitModelDraft, validateModelDraft } from './model-draft-policy.js';
 import { modelGenerationInputsChanged } from './model-impact.js';
 export function parseArtifact(content: string): unknown {
   try {
@@ -40,8 +43,9 @@ export function validateCanonicalArtifact(
       case 'models': {
         if (version !== 5) return reject('MODELS_CURRENT_SCHEMA_REQUIRED');
         const selected = value as ModelsArtifact;
-        result = validateModels(selected);
-        if (result.valid) result = validateModelsWithCatalog(catalog, selected, result);
+        result = validateModelDraft(selected);
+        if (result.valid)
+          result = validateModelsWithCatalog(catalog, splitModelDraft(selected).models, result);
         break;
       }
       case 'promptPlan':
@@ -65,10 +69,17 @@ export function changesGenerationInputs(
   key: ArtifactKey,
   previous: string | undefined,
   next: string,
+  previousFallbacks: PromptFallback[] = [],
+  nextFallbacks: PromptFallback[] = [],
 ): boolean {
   if (previous === undefined) return true;
+  if (key === 'brief') return !sameStoryBriefInputs(parseArtifact(previous), parseArtifact(next));
   if (key !== 'models') return previous !== next;
   const before = parseArtifact(previous) as ModelsArtifact | null;
   const after = parseArtifact(next) as ModelsArtifact | null;
-  return !before || !after || modelGenerationInputsChanged(before, [], after, []);
+  return (
+    !before ||
+    !after ||
+    modelGenerationInputsChanged(before, previousFallbacks, after, nextFallbacks)
+  );
 }

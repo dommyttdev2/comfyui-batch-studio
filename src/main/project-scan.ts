@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { sameStoryBriefInputs } from '../domain/brief-impact-policy.js';
 import type {
   ArtifactKey,
   ArtifactState,
@@ -8,13 +9,14 @@ import type {
   ProjectBriefInput,
   ProjectSummary,
 } from '../shared/types.js';
+import { readArtifact } from './artifact-service.js';
 import { exists, readJson, readText } from './fs-utils.js';
 import { readProjectMeta } from './project-meta.js';
 import { withProjectMutationLock } from './project-transaction.js';
-import { readArtifact } from './artifact-service.js';
 import { hashWorkflowModelInputs } from './workflow-api.js';
 import { hashWorkflowTemplate } from './workflow-template-integrity.js';
 import { resolveWorkflowTemplatePaths } from './workflow-template-paths.js';
+
 const defs: Array<[ArtifactKey, string, string]> = [
   ['projectBrief', '基本設定', 'project_brief.json'],
   ['story', 'ストーリー', 'story.md'],
@@ -30,14 +32,6 @@ async function mtime(p: string) {
 }
 function sha256(text: string) {
   return createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex');
-}
-function storyBriefInputs(value: any) {
-  const copy = structuredClone(value ?? {});
-  if (copy?.generation && typeof copy.generation === 'object') delete copy.generation.modelFamily;
-  return copy;
-}
-function sameStoryBriefInputs(a: any, b: any) {
-  return JSON.stringify(storyBriefInputs(a)) === JSON.stringify(storyBriefInputs(b));
 }
 function historyTimestamp(name: string) {
   const match = name.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z-/);

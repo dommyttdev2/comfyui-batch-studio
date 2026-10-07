@@ -24,10 +24,11 @@ const sharedPicker = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'ImagePickerGrid.tsx'),
   'utf8',
 );
-const service = fs.readFileSync(
-  path.join(repo, 'src', 'main', 'marketplace-image-service.ts'),
-  'utf8',
-);
+const service =
+  fs.readFileSync(path.join(repo, 'src', 'main', 'marketplace-image-service.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/marketplace-editor-policy.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/marketplace-crop-policy.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/application/marketplace-generation.ts'), 'utf8');
 const autosave = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'use-editor-autosave.ts'),
   'utf8',
@@ -68,17 +69,17 @@ matchCode(stage, /サムネイルから画像を選択/, 'stage must allow expor
 matchCode(service, /assertExportedThumbnail/, 'marketplace must validate thumbnail input scope');
 matchCode(
   service,
-  /marketplaceOutputDirectory\(root\)/,
+  /io\.outputDirectory\(root\)/,
   'marketplace output must resolve artifact directory',
 );
 matchCode(
   service,
-  /generationManifestPath\(outputDirectory\)/,
+  /io\.readManifest\(outputDirectory\)/,
   'generation manifest must move together with marketplace images',
 );
 matchCode(
   service,
-  /const outputDirectory = await marketplaceOutputDirectory\(root\)/,
+  /const outputDirectory = await io\.outputDirectory\(root\)/,
   'ZIP must resolve current artifact directory',
 );
 
@@ -289,7 +290,7 @@ matchCode(
 
 matchCode(
   service,
-  /writeJsonAtomic\(generationManifestPath\(outputDirectory\), manifest\)[\s\S]*cleanupTrackedOutput/,
+  /io\.writeManifest\(outputDirectory,manifest\)[\s\S]*cleanupTrackedOutput/,
   'marketplace old-format cleanup must follow the new commit marker',
 );
 matchCode(

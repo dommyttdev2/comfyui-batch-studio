@@ -1,6 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import {
+  assertCaptionBuildable,
+  assessCaptionBuild,
+  captionContentHash,
+  captionRenderInputHash,
+} from '../domain/caption-build-policy.js';
+import { importCaptionResponse, updatePixivTitle } from '../domain/caption-import-policy.js';
 import type {
   CaptionBuildInfo,
   CaptionContent,
@@ -31,45 +38,6 @@ function outputPath(root: string) {
 
 function sha256(value: string) {
   return createHash('sha256').update(Buffer.from(value, 'utf8')).digest('hex');
-}
-
-function captionBodyContent(content: CaptionContent): CaptionContent {
-  if (content.schemaVersion === 1) return content;
-  // v2 Pixiv titles are independent of caption.txt and its build fingerprints.
-  const { pixivTitle: _pixivTitle, ...body } = content;
-  return { ...body, schemaVersion: 1 };
-}
-
-function contentHash(content: CaptionContent) {
-  return sha256(JSON.stringify(captionBodyContent(content)));
-}
-
-// Increment when fixed text, formatting, or localization in renderCaption changes.
-const CAPTION_TEMPLATE_VERSION = 2;
-
-function renderInputHash(
-  content: CaptionContent,
-  imageCount: number,
-  sourceDirectory: string,
-  copyrightedCharacter: boolean,
-) {
-  return sha256(
-    JSON.stringify({
-      templateVersion: CAPTION_TEMPLATE_VERSION,
-      content: captionBodyContent(content),
-      imageCount,
-      sourceDirectory: path.resolve(sourceDirectory),
-      copyrightedCharacter,
-    }),
-  );
-}
-
-function jsonCandidate(raw: string) {
-  const fence = raw.match(/```json\s*\n([\s\S]*?)```/i);
-  if (fence?.[1]) return fence[1].trim();
-  const first = raw.indexOf('{');
-  const last = raw.lastIndexOf('}');
-  return first >= 0 && last > first ? raw.slice(first, last + 1).trim() : raw.trim();
 }
 
 import {
@@ -118,44 +86,24 @@ export async function getCaptionStatus(root: string): Promise<CaptionStatus> {
     path.join(root, 'project_brief.json'),
   );
   const copyrightedCharacter = brief?.subject?.copyrightedCharacter === true;
-  const preview =
-    draft.content && sourceExists && imageCount > 0
-      ? renderCaption(draft.content, imageCount, copyrightedCharacter)
-      : null;
-  const expectedInputHash =
-    draft.content && sourceDirectory
-      ? renderInputHash(draft.content, imageCount, sourceDirectory, copyrightedCharacter)
-      : null;
-  // Old metadata lacks versioned inputs/output hashes and must be regenerated.
-  // A missing caption.txt after an earlier build is stale rather than a fresh ready state.
-  const stale =
-    Boolean(build) || captionExists
-      ? !build ||
-        !captionExists ||
-        !sourceDirectory ||
-        build.sourceDirectory !== sourceDirectory ||
-        build.imageCount !== imageCount ||
-        !draft.content ||
-        build.contentSha256 !== contentHash(draft.content) ||
-        !build.renderInputSha256 ||
-        build.renderInputSha256 !== expectedInputHash ||
-        !build.outputSha256 ||
-        build.outputSha256 !== sha256(actualCaption ?? '') ||
-        preview !== actualCaption
-      : false;
-
-  let state: CaptionStatus['state'];
-  if (!sourceDirectory) state = 'unconfigured';
-  else if (!sourceExists) state = 'source-missing';
-  else if (
-    !draft.content &&
-    draft.validation.issues.some((issue) => issue.code === 'CAPTION_CONTENT_MISSING')
-  )
-    state = 'missing-content';
-  else if (!draft.validation.valid) state = 'invalid-content';
-  else if (stale) state = 'stale';
-  else if (!captionExists) state = 'ready';
-  else state = 'generated';
+  const { state, stale, preview } = assessCaptionBuild(
+    {
+      sourceDirectory: sourceDirectory ? path.resolve(sourceDirectory) : null,
+      sourceExists,
+      imageCount,
+      content: draft.content,
+      validation: draft.validation,
+      actualCaption,
+      build: build
+        ? {
+            ...build,
+            sourceDirectory: build.sourceDirectory ? path.resolve(build.sourceDirectory) : '',
+          }
+        : null,
+      copyrightedCharacter,
+    },
+    sha256,
+  );
 
   return {
     state,
@@ -190,98 +138,50 @@ export async function importCaptionGrok(
   options: { automatic?: boolean; provider?: 'grok' | 'codex' } = {},
 ): Promise<ImportResult> {
   await saveRawResponse(root, raw, options.provider ?? 'grok');
-  const extracted = jsonCandidate(raw);
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(extracted);
-  } catch {
-    return {
-      extracted,
-      validation: {
-        valid: false,
-        issues: [
-          {
-            severity: 'error',
-            code: 'CAPTION_CONTENT_PARSE',
-            message: 'Grokの caption_content.json をJSONとして解析できません。',
-          },
-        ],
-      },
-      summary: {},
-      missingRequirements: [],
-    };
-  }
-  const validation = validateCaptionContent(parsed);
-  // Invalid manual or automatic imports must not replace a previously valid draft.
-  if (validation.valid) await writeJsonAtomic(draftPath(root), parsed);
-  const summary: ImportResult['summary'] = {};
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    const value = parsed as Partial<CaptionContent>;
-    summary.titleJa = value.title?.ja ?? null;
-    summary.titleEn = value.title?.en ?? null;
-    summary.pixivTitleJa = value.pixivTitle?.ja ?? null;
-    summary.pixivTitleEn = value.pixivTitle?.en ?? null;
-    summary.descriptionJa = Array.isArray(value.description?.ja) ? value.description.ja.length : 0;
-    summary.descriptionEn = Array.isArray(value.description?.en) ? value.description.en.length : 0;
-    summary.contentsJa = Array.isArray(value.contents?.ja) ? value.contents.ja.length : 0;
-    summary.contentsEn = Array.isArray(value.contents?.en) ? value.contents.en.length : 0;
-  }
-  return {
-    extracted: JSON.stringify(parsed, null, 2),
-    validation,
-    summary,
-    missingRequirements: [],
-  };
+  const result = importCaptionResponse(raw);
+  if (result.validation.valid) await writeJsonAtomic(draftPath(root), JSON.parse(result.extracted));
+  return result;
 }
 
 export async function savePixivTitle(root: string, value: unknown): Promise<CaptionStatus> {
   const draft = await readDraft(root);
   if (!draft.content) throw new Error('有効な caption_content.json の下書きがありません。');
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new Error('日本語と英語のPixiv用タイトルを指定してください。');
-  const incoming = value as Record<string, unknown>;
-  const title = {
-    ja: typeof incoming.ja === 'string' ? incoming.ja.trim() : incoming.ja,
-    en: typeof incoming.en === 'string' ? incoming.en.trim() : incoming.en,
-  };
-  const issues = validatePixivTitle(title);
-  if (issues.length) throw new Error(issues.map((issue) => issue.message).join(' / '));
-
-  const next: CaptionContent = {
-    ...draft.content,
-    schemaVersion: 2,
-    pixivTitle: title as { ja: string; en: string },
-  };
-  const validation = validateCaptionContent(next);
-  if (!validation.valid)
-    throw new Error(validation.issues.map((issue) => issue.message).join(' / '));
+  const next = updatePixivTitle(draft.content, value);
   await writeJsonAtomic(draftPath(root), next);
   return getCaptionStatus(root);
 }
 
 export async function generateCaption(root: string): Promise<CaptionStatus> {
   const status = await getCaptionStatus(root);
-  if (!status.sourceDirectory) throw new Error('最終成果物ディレクトリを指定してください。');
-  if (!status.sourceExists) throw new Error('指定された最終成果物ディレクトリが見つかりません。');
-  if (!status.content || !status.contentValidation.valid)
-    throw new Error('有効な caption_content.json をGrokから取り込んでください。');
-  if (status.imageCount < 1) throw new Error('最終成果物ディレクトリに対象画像がありません。');
-  if (!status.preview) throw new Error('caption.txt の生成内容を構築できません。');
+  assertCaptionBuildable(
+    {
+      sourceDirectory: status.sourceDirectory,
+      sourceExists: status.sourceExists,
+      content: status.content,
+      validation: status.contentValidation,
+      imageCount: status.imageCount,
+      actualCaption: null,
+      build: null,
+      copyrightedCharacter: false,
+    },
+    status.preview,
+  );
 
-  await writeTextAtomic(status.captionPath, status.preview);
+  await writeTextAtomic(status.captionPath, status.preview!);
   const brief = await readJson<ProjectBriefInput>(path.join(root, 'project_brief.json'));
   const build: CaptionBuildInfo = {
     schemaVersion: 1,
-    sourceDirectory: status.sourceDirectory,
+    sourceDirectory: status.sourceDirectory!,
     imageCount: status.imageCount,
-    contentSha256: contentHash(status.content),
-    renderInputSha256: renderInputHash(
-      status.content,
+    contentSha256: captionContentHash(status.content!, sha256),
+    renderInputSha256: captionRenderInputHash(
+      status.content!,
       status.imageCount,
-      status.sourceDirectory,
+      path.resolve(status.sourceDirectory!),
       brief?.subject?.copyrightedCharacter === true,
+      sha256,
     ),
-    outputSha256: sha256(status.preview),
+    outputSha256: sha256(status.preview!),
     generatedAt: new Date().toISOString(),
   };
   await writeJsonAtomic(buildPath(root), build);

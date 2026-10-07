@@ -7,6 +7,7 @@ import {
   requireRevision,
 } from '../domain/contracts.js';
 import { assertProjectWritable, assertRunState } from '../domain/execution-policy.js';
+import { promptFallbacksValid } from '../domain/model-draft-policy.js';
 import type { Clock, ProjectState } from './project-ports.js';
 export function assertCurrentProject(project: ProjectState, projectId: string): void {
   if (
@@ -44,6 +45,13 @@ export function assertCurrentProject(project: ProjectState, projectId: string): 
     )
       throw new BusinessError('INVALID_INPUT', 'Current Artifact state is required.');
   }
+  for (const artifact of Object.values(project.artifacts))
+    if (
+      artifact?.modelPromptFallbacks !== undefined &&
+      (artifact.key !== 'models' ||
+        !promptFallbacksValid({ promptFallbacks: artifact.modelPromptFallbacks }))
+    )
+      throw new BusinessError('INVALID_INPUT', 'Invalid stored supplemental model tags.');
   if (
     project.lease !== null &&
     (!project.lease ||

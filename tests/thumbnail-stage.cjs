@@ -4,9 +4,14 @@ const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
 const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
-const ui = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8');
+const ui =
+  fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/thumbnail-render-policy.ts'), 'utf8');
 const app = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8');
-const stage = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ThumbnailStage.tsx'), 'utf8');
+const stage =
+  fs.readFileSync(path.join(repo, 'src', 'renderer', 'ThumbnailStage.tsx'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/thumbnail-render-policy.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/thumbnail-layout-policy.ts'), 'utf8');
 const picker = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'ThumbnailPickerWindow.tsx'),
   'utf8',
@@ -27,7 +32,15 @@ const thumbnailCss = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'thumbnail-stage.css'),
   'utf8',
 );
-const service = fs.readFileSync(path.join(repo, 'src', 'main', 'thumbnail-service.ts'), 'utf8');
+const service =
+  fs.readFileSync(path.join(repo, 'src', 'main', 'thumbnail-service.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/thumbnail-editor-policy.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/thumbnail-layout-policy.ts'), 'utf8') +
+  fs.readFileSync(
+    path.resolve(__dirname, '../src/application/thumbnail-output-generation.ts'),
+    'utf8',
+  ) +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/output-tracking-policy.ts'), 'utf8');
 const autosave = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'use-editor-autosave.ts'),
   'utf8',
@@ -522,6 +535,6 @@ matchCode(
 );
 matchCode(
   service,
-  /writeJsonAtomic\(manifestPath, manifest\)[\s\S]*cleanupTrackedOutput/,
+  /io\.writeManifest\(projectId,manifest\)[\s\S]*io\.cleanup/,
   'old thumbnail cleanup must follow successful new output tracking',
 );

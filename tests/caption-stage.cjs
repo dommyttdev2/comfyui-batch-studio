@@ -2,10 +2,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
 
-const service = ['../src/main/caption-service.ts', '../src/domain/caption-policy.ts']
-  .map((p) => fs.readFileSync(path.resolve(__dirname, p), 'utf8'))
-  .join('\n');
-const grok = fs.readFileSync(path.resolve(__dirname, '../src/main/grok-context.ts'), 'utf8');
+const service =
+  ['../src/main/caption-service.ts', '../src/domain/caption-policy.ts']
+    .map((p) => fs.readFileSync(path.resolve(__dirname, p), 'utf8'))
+    .join('\n') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/caption-build-policy.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/caption-import-policy.ts'), 'utf8');
+const grok =
+  fs.readFileSync(path.resolve(__dirname, '../src/main/grok-context.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/application/agent-task-planning.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/agent-task-policy.ts'), 'utf8');
 const ui = fs.readFileSync(path.resolve(__dirname, '../src/renderer/ui.tsx'), 'utf8');
 const stage = fs.readFileSync(path.resolve(__dirname, '../src/renderer/CaptionStage.tsx'), 'utf8');
 
@@ -31,7 +37,7 @@ matchCode(
 );
 matchCode(
   service,
-  /build\.contentSha256 !== contentHash\(draft\.content\)/,
+  /build\.contentSha256 !== captionContentHash\(content, sha256\)/,
   'caption status must become stale when Grok semantic content changes',
 );
 matchCode(

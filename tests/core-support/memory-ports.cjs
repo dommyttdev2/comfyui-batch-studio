@@ -133,14 +133,8 @@ class MemoryExecution {
       exclusive: (work) => this.withRunLock(project, 'new', work),
       current: async () => null,
       capture: async () => copy(snapshot),
-      preflight: async () => ({
-        state: 'READY',
-        plannedImages: 1,
-        targetImages: 1,
-        blocking: [],
-        warnings: [],
-        sections: [],
-      }),
+      preflightInputs: async () =>
+        (await require('../core-preflight-fixture.cjs').preflightFixture(project)).ports,
       persistSnapshot: async (id, value) => value,
       removeSnapshot: async () => {},
       setCurrent: async () => {},
