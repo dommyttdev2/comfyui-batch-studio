@@ -1,15 +1,15 @@
 import {
-  authorize,
-  BusinessError,
-  requireId,
-  type ActorContext,
-  type Command,
-} from '../domain/contracts.js';
-import {
   assertConfirmation,
   type Confirmation,
   type ConfirmedOperation,
 } from '../domain/confirmation-policy.js';
+import {
+  type ActorContext,
+  authorize,
+  BusinessError,
+  type Command,
+  requireId,
+} from '../domain/contracts.js';
 import type { Clock, IdSource } from './project-ports.js';
 export interface ConfirmedJob {
   id: string;

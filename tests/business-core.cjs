@@ -64,12 +64,7 @@ async function fixture() {
   const agents = new MemoryAgent(BusinessError),
     execution = new MemoryExecution(run),
     confirmations = new MemoryConfirmations(BusinessError);
-  const validator = {
-    validate: async (key, content) => ({
-      valid: content !== 'invalid',
-      issues: content === 'invalid' ? [{ code: 'INVALID', message: 'Rejected' }] : [],
-    }),
-  };
+  const catalogs = { read: async () => null };
   const secrets = {
     calls: 0,
     read: async () => {
@@ -92,8 +87,10 @@ async function fixture() {
     },
   };
   const core = createBusinessCore({
+    templates: { read: async () => null },
+    digest: { text: (value) => value },
     projects,
-    validator,
+    catalogs,
     clock,
     ids: { next: () => 'id-' + ++counter },
     agents,
@@ -110,7 +107,7 @@ async function fixture() {
     execution,
     confirmations,
     clock,
-    validator,
+    catalogs,
     secrets,
     resources,
     images,
@@ -234,7 +231,7 @@ test('another browser can view but cannot acquire a live edit lease; expired lea
   assert.equal(state.revision, 1);
 });
 test('confirm revalidates content and invalidates downstream artifacts', async () => {
-  const { core, projects, validator } = await fixture();
+  const { core, projects } = await fixture();
   await core.projects.saveDraft(actor, { ...mutation, key: 'story', content: 'story' });
   projects.state.artifacts.promptPlan = {
     key: 'promptPlan',
@@ -242,12 +239,12 @@ test('confirm revalidates content and invalidates downstream artifacts', async (
     status: 'confirmed',
     validation: { valid: true, issues: [] },
   };
-  validator.validate = async () => ({ valid: false, issues: [] });
+  projects.state.drafts.story.content = '';
   await rejects(
     core.projects.confirm(actor, { ...mutation, expectedRevision: 1, key: 'story' }),
     'INVALID_ARTIFACT',
   );
-  validator.validate = async () => ({ valid: true, issues: [] });
+  projects.state.drafts.story.content = 'story';
   const state = await core.projects.confirm(actor, {
     ...mutation,
     expectedRevision: 1,
@@ -259,7 +256,7 @@ test('confirm revalidates content and invalidates downstream artifacts', async (
 test('missing or invalid drafts cannot be confirmed and reset makes dependants stale', async () => {
   const { core, projects } = await fixture();
   await rejects(core.projects.confirm(actor, { ...mutation, key: 'story' }), 'INVALID_ARTIFACT');
-  await core.projects.saveDraft(actor, { ...mutation, key: 'story', content: 'invalid' });
+  await core.projects.saveDraft(actor, { ...mutation, key: 'story', content: '' });
   await rejects(
     core.projects.confirm(actor, { ...mutation, expectedRevision: 1, key: 'story' }),
     'INVALID_ARTIFACT',
@@ -592,7 +589,7 @@ test('saving an invalid draft preserves the confirmed artifact until explicit va
   const state = await core.projects.saveDraft(actor, {
     ...mutation,
     key: 'story',
-    content: 'invalid',
+    content: '',
   });
   assert.equal(state.artifacts.story.content, 'confirmed story');
   assert.equal(state.artifacts.story.status, 'confirmed');
@@ -636,4 +633,22 @@ test('Run ownership is checked again after waiting before remote finalization', 
     'FORBIDDEN',
   );
   assert.equal(execution.calls.includes('finalize'), false);
+});
+
+test('authorized execution start runs the real creation policy before launching the worker', async () => {
+  const { core, execution } = await fixture();
+  const result = await core.execution.start(actor, { projectId: 'p1' });
+  assert.equal(result.id, 'new-run');
+  assert.equal(result.lifecycle, 'RUNNING');
+  assert.deepEqual(execution.calls, ['launch']);
+});
+
+test('core recovery uses persisted submission intent rather than delegating its decision', async () => {
+  const { core, execution } = await fixture();
+  await core.execution.start(actor, { projectId: 'p1' });
+  execution.rawRun.phase = 'EXECUTING';
+  execution.rawRun.submission = { status: 'prepared' };
+  const result = await core.execution.recover(actor, { projectId: 'p1', runId: 'new-run' });
+  assert.equal(result.lifecycle, 'PAUSED');
+  assert.ok(!execution.calls.includes('recover-submitted'));
 });

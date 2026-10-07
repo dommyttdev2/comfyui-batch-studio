@@ -1,26 +1,30 @@
-import { enumerateImageTasks, graphToWorkflow } from './image-tasks.js';
-import { randomUUID, randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { copyFile, readFile, readdir, rm } from 'node:fs/promises';
+import { copyFile, readdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { createExecutionRun, sameSnapshot } from '../application/execution-creation.js';
+import { validatedExecutionEvidence as validateEvidence } from '../domain/execution-evidence.js';
+import { assertPersistSafe } from '../domain/execution-record-policy.js';
+import { resumePhase } from '../domain/execution-resume.js';
 import type {
   ExecutionEvidence,
   ExecutionEvidenceKind,
-  ModelsArtifact,
   ExecutionPhase,
   ExecutionRun,
   ExecutionRunLifecycle,
   ExecutionRunSnapshot,
+  ModelsArtifact,
   PreflightResult,
   PromptPlanArtifact,
 } from '../shared/types.js';
 import { readJson, restoreJsonFromBackup, writeJsonAtomic } from './fs-utils.js';
+import { enumerateImageTasks, graphToWorkflow } from './image-tasks.js';
 import { readProjectMeta } from './project-meta.js';
 import {
+  type ApiGraph,
   hashCanonicalJson,
   hashWorkflowModelInputs,
   validateApiGraphStructure,
-  type ApiGraph,
 } from './workflow-api.js';
 
 const RUNS_DIR = 'execution_runs';
@@ -51,9 +55,6 @@ function assertRunId(runId: string) {
 function clone<T>(value: T): T {
   return structuredClone(value);
 }
-function initialPhase(target: 'local' | 'remote'): ExecutionPhase {
-  return target === 'remote' ? 'CLOUD_INSTANCE_RESOLVING' : 'LOCAL_COMFYUI_CONNECTING';
-}
 function terminalLifecycle(lifecycle: ExecutionRunLifecycle) {
   return lifecycle === 'FAILED' || lifecycle === 'COMPLETED' || lifecycle === 'DISCARDED';
 }
@@ -76,33 +77,6 @@ async function withProjectLock<T>(root: string, fn: () => Promise<T>): Promise<T
   } finally {
     release();
     if (runLocks.get(key) === tail) runLocks.delete(key);
-  }
-}
-
-function assertPersistSafe(value: unknown, keyPath = 'run') {
-  if (typeof value === 'string') {
-    if (
-      /-----BEGIN [^-]*PRIVATE KEY-----/i.test(value) ||
-      /[?&](?:X-Amz-(?:Credential|Signature|Security-Token)|AWSAccessKeyId|Signature|sig|token)=/i.test(
-        value,
-      )
-    )
-      throw new Error(`Execution Run contains sensitive value at ${keyPath}`);
-    return;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((item, index) => assertPersistSafe(item, `${keyPath}[${index}]`));
-    return;
-  }
-  if (!value || typeof value !== 'object') return;
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    if (
-      /api.?key|secret|credential|private.?key|authorization|presigned.?url|signed.?url|cloudflare.?token/i.test(
-        key,
-      )
-    )
-      throw new Error(`Execution Run contains forbidden field: ${keyPath}.${key}`);
-    assertPersistSafe(item, `${keyPath}.${key}`);
   }
 }
 
@@ -533,16 +507,6 @@ async function persistRunSnapshot(
   }
 }
 
-function sameSnapshot(a: ExecutionRunSnapshot, b: ExecutionRunSnapshot) {
-  return (
-    a.runIdentity === b.runIdentity &&
-    (a.workflow.sourceWorkflowIdentity ?? a.workflow.workflowIdentity) ===
-      (b.workflow.sourceWorkflowIdentity ?? b.workflow.workflowIdentity) &&
-    a.workflow.modelsSha256 === b.workflow.modelsSha256 &&
-    a.plan.sha256 === b.plan.sha256
-  );
-}
-
 function evidenceFingerprint(runIdentity: string, input: ExecutionEvidenceInput) {
   return hashCanonicalJson({
     runIdentity,
@@ -553,153 +517,25 @@ function evidenceFingerprint(runIdentity: string, input: ExecutionEvidenceInput)
 }
 
 export function validatedExecutionEvidence(run: ExecutionRun) {
-  const valid: ExecutionEvidence[] = [],
-    invalid: string[] = [];
-  for (const evidence of run.evidence) {
-    const expected = hashCanonicalJson({
-      runIdentity: run.snapshot.runIdentity,
-      kind: evidence.kind,
-      scope: evidence.scope,
-      data: evidence.data ?? {},
-    });
-    if (evidence.runIdentity === run.snapshot.runIdentity && evidence.fingerprint === expected)
-      valid.push(evidence);
-    else invalid.push(evidence.id);
-  }
-  return { valid, invalid };
-}
-
-function resumePhase(
-  run: ExecutionRun,
-  evidence: ExecutionEvidence[],
-): { phase: ExecutionPhase; lifecycle: ExecutionRunLifecycle } {
-  const kinds = new Set(evidence.map((item) => item.kind));
-  if (
-    run.executionTarget === 'remote' &&
-    kinds.has('LOCAL_FILE_VERIFIED') &&
-    !kinds.has('CLEANUP_COMPLETED')
-  )
-    return { phase: 'REMOTE_CLEANUP', lifecycle: 'RUNNING' };
-  if (
-    run.executionTarget === 'remote' &&
-    kinds.has('LOCAL_FILE_VERIFIED') &&
-    kinds.has('CLEANUP_COMPLETED') &&
-    (!run.remoteLifecycle?.finalizedAt || run.remoteLifecycle.latest?.status !== 'stopped')
-  )
-    return { phase: 'CLOUD_INSTANCE_FINALIZING', lifecycle: 'RUNNING' };
-  if (kinds.has('LOCAL_FILE_VERIFIED')) return { phase: 'COMPLETED', lifecycle: 'COMPLETED' };
-  if (run.executionTarget === 'remote' && kinds.has('R2_OBJECT_VERIFIED'))
-    return { phase: 'LOCAL_DOWNLOADING', lifecycle: 'RUNNING' };
-  if (run.executionTarget === 'remote' && kinds.has('PACKAGE_VERIFIED'))
-    return { phase: 'R2_UPLOAD_URL_ISSUED', lifecycle: 'RUNNING' };
-  if (kinds.has('EXECUTION_COMPLETED'))
-    return {
-      phase: run.executionTarget === 'remote' ? 'ARTIFACTS_COLLECTING' : 'LOCAL_OUTPUT_VERIFYING',
-      lifecycle: 'RUNNING',
-    };
-  if (kinds.has('MODELS_VERIFIED')) return { phase: 'WORKFLOW_PREPARING', lifecycle: 'RUNNING' };
-  return { phase: initialPhase(run.executionTarget), lifecycle: 'RUNNING' };
+  return validateEvidence(run, hashCanonicalJson);
 }
 
 export async function startExecutionRun(
   root: string,
   preflightProvider: PreflightProvider,
 ): Promise<ExecutionRun> {
-  return withProjectLock(root, async () => {
-    const current = await getCurrentExecutionRun(root);
-    if (current?.error?.code === 'LOCAL_OUTPUT_COLLECTION_FAILED')
-      throw new Error(
-        '生成済みPromptの画像回収が未確定です。「既存Runの状態を再確認」または安全なRun破棄を行ってください。',
-      );
-    if (current && !terminalLifecycle(current.lifecycle))
-      throw new Error(`Execution Run ${current.runId} is already active for this project.`);
-    const before = await captureSnapshot(root, {
-      state: 'READY',
-      plannedImages: 0,
-      targetImages: null,
-      blocking: [],
-      warnings: [],
-      sections: [],
-    });
-    const preflight = await preflightProvider();
-    if (preflight.state !== 'READY')
-      throw new Error(
-        `Execution cannot start: Preflight is BLOCKED: ${preflight.blocking.map((item) => item.message).join(' / ')}`,
-      );
-    const snapshot = await captureSnapshot(root, preflight);
-    if (!sameSnapshot(before, snapshot))
-      throw new Error(
-        'Execution cannot start: Workflow/API graph or Prompt Plan changed during Preflight.',
-      );
-    const now = new Date().toISOString(),
-      runId = randomUUID();
-    const stable = await persistRunSnapshot(root, runId, snapshot);
-    // Compilers and reset operations may not share this project's Run lock.
-    // A second provenance capture catches changes during the copy phase.
-    const postCopy = await captureSnapshot(root, preflight);
-    if (!sameSnapshot(snapshot, postCopy)) {
-      await rm(path.join(root, RUNS_DIR, runId), { recursive: true, force: true });
-      throw new Error(
-        'EXECUTION_SNAPSHOT_SOURCE_CHANGED: Project workflow changed during Run creation.',
-      );
-    }
-    const branches = stable.plan.branches.map((branch) => ({
-      branchId: branch.branchId,
-      completed: 0,
-      total: branch.leafIds.length,
-      state: 'pending' as const,
-    }));
-    const run: ExecutionRun = {
-      schemaVersion: 1,
-      runId,
-      projectId: snapshot.projectId,
-      executionTarget: snapshot.target,
-      remote: snapshot.remote,
-      remoteLifecycle:
-        snapshot.target === 'remote'
-          ? {
-              initialStatus: null,
-              startedByBatchStudio: false,
-              latest: null,
-              restorePolicy: 'restore-if-started',
-              restoredInitialState: false,
-              finalizedAt: null,
-            }
-          : null,
-      lifecycle: 'RUNNING',
-      phase: initialPhase(snapshot.target),
-      controls: {
-        scheduling: 'ACTIVE',
-        interrupt: 'IDLE',
-        stopSchedulingRequestedAt: null,
-        forceInterruptRequestedAt: null,
-      },
-      current: { branchId: null, leafId: null, promptId: null },
-      progress: {
-        overall: { completed: 0, total: preflight.plannedImages },
-        branches,
-        models: [],
-        generationTiming: { currentPromptId: null, currentStartedAt: null, recentDurationsMs: [] },
-      },
-      promptIds: [],
-      evidence: [],
-      error: null,
-      errorHistory: [],
-      snapshot: stable,
-      resume: {
-        attempts: 0,
-        lastAttemptAt: null,
-        lastValidatedEvidenceIds: [],
-        lastIgnoredEvidenceIds: [],
-        lastDecisionPhase: null,
-      },
-      startedAt: now,
-      updatedAt: now,
-      completedAt: null,
-    };
-    await writeRun(root, run);
-    await writeCurrent(root, runId);
-    return run;
+  return createExecutionRun({
+    exclusive: (work) => withProjectLock(root, work),
+    current: () => getCurrentExecutionRun(root),
+    capture: (preflight) => captureSnapshot(root, preflight),
+    preflight: preflightProvider,
+    persistSnapshot: (runId, snapshot) => persistRunSnapshot(root, runId, snapshot),
+    removeSnapshot: (runId) =>
+      rm(path.join(root, RUNS_DIR, runId), { recursive: true, force: true }),
+    write: (run) => writeRun(root, run),
+    setCurrent: (runId) => writeCurrent(root, runId),
+    now: () => new Date().toISOString(),
+    nextId: randomUUID,
   });
 }
 

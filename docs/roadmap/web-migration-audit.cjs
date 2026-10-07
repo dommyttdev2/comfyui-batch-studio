@@ -39,6 +39,16 @@ const groups = {
   W14: list('codex-app-server codex-artifact-turn codex-chat-state codex-file-artifact codex-model-selection codex-thread-history codex-turn-monitor grok-artifact-adapter grok-auto-artifact-watcher grok-chat-state grok-navigation-queue grok-navigation'),
 };
 const coreOwners = {
+  'execution-record-policy': 'W06',
+  'template-policy': 'W05', 'workflow-use-cases': 'W05',
+  'execution-evidence': 'W06', 'execution-recovery': 'W06',
+  'availability-policy': 'W05', 'model-placement': 'W05',
+  'preflight': 'W05',
+  'execution-resume': 'W06', 'image-pixels': 'W09',
+  'execution-creation': 'W06',
+  'model-editing': 'W03', 'workflow-compilation': 'W05',
+  'catalog-validation': 'W03', 'canonical-artifact': 'W03',
+  'artifact-types': 'W03', 'artifact-validation': 'W03', 'model-selection': 'W03', 'model-file-selection': 'W03', 'model-version-change': 'W03', 'model-impact': 'W03', 'prompt-policy': 'W05', 'workflow-graph': 'W05', 'image-tasks': 'W06', 'caption-policy': 'W09',
   'contracts': 'W01', 'artifact-policy': 'W03', 'execution-policy': 'W06', 'confirmation-policy': 'W10', 'image-policy': 'W09',
   'project-ports': 'W03', 'project-access': 'W03', 'project-use-cases': 'W03', 'execution-use-cases': 'W06',
   'agent-use-cases': 'W04', 'confirmation-use-cases': 'W10', 'platform-ports': 'W10', 'platform-use-cases': 'W10', 'core': 'W10',
@@ -192,7 +202,7 @@ const testCoverage = rows.filter((r) => r.file.startsWith('tests/')).map((r) => 
   const registration = supports.has(path.basename(r.file)) || r.file.startsWith('tests/core-support/') ? 'support' : pkg.scripts.test.includes(r.file) ? 'npm-test' : (pkg.scripts['test:core'] || '').includes(r.file) ? 'core-local'
     : read('.github/workflows/ci.yml').includes(r.file) ? 'CI-only' : ci.includes(r.file) ? 'CI-conditional' : 'standalone';
   const name = path.basename(r.file);
-  const featurePackages = name === 'core-policy.cjs' ? ['W03', 'W06', 'W09', 'W10'] : name === 'business-core.cjs' ? ['W01', 'W03', 'W04', 'W06', 'W09', 'W10'] : supports.has(name) || r.file.startsWith('tests/core-support/') ? ['W12'] : name === 'run.cjs' ? ['W03', 'W05']
+  const featurePackages = name === 'core-artifacts.cjs' ? ['W03', 'W05', 'W06', 'W09'] : name === 'core-policy.cjs' ? ['W03', 'W06', 'W09', 'W10'] : name === 'business-core.cjs' ? ['W01', 'W03', 'W04', 'W06', 'W09', 'W10'] : supports.has(name) || r.file.startsWith('tests/core-support/') ? ['W12'] : name === 'run.cjs' ? ['W03', 'W05']
     : /service-integrations/.test(name) ? ['W07', 'W08', 'W10'] : /ipc-|marketplace-write-guard/.test(name) ? ['W01']
     : /agent|codex|grok|assistant/.test(name) ? ['W04'] : /r2-/.test(name) ? ['W08']
     : /civitai|vastai/.test(name) ? ['W07'] : /remote|execution|local-comfy/.test(name) ? ['W06']

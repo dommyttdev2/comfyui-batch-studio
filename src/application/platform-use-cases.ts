@@ -1,9 +1,9 @@
 import {
+  type ActorContext,
   authorize,
   BusinessError,
-  requireId,
-  type ActorContext,
   type Command,
+  requireId,
 } from '../domain/contracts.js';
 import { assertRenderSize, type RenderSize } from '../domain/image-policy.js';
 import type { ImageCodec, ResourceStore, SecretStore } from './platform-ports.js';

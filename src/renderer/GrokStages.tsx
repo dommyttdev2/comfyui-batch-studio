@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { configureBaseModels, replaceModelSelection } from '../domain/model-editing.js';
 import type {
   ArtifactReadResult,
   AssistantPaneProvider,
   AutoArtifactEvent,
   CatalogStatus,
+  CheckpointSelection,
   CivitaiCatalogStatus,
   DiffusionModelSelection,
   GrokContextStage,
@@ -16,15 +18,14 @@ import type {
   ProjectSummary,
   TextEncoderSelection,
   VaeSelection,
-  CheckpointSelection,
 } from '../shared/types';
+import { useImportNotice } from './ArtifactImportToast';
+import { ModelFilePicker } from './ModelFilePicker';
+import { ModelPicker } from './ModelPicker';
+import { SelectedModelCards } from './SelectedModelCards';
+import { type ResetScope, StageResetMenu } from './StageResetMenu';
 import type { Runner } from './ui';
 import { issuesView } from './ui';
-import { ModelPicker } from './ModelPicker';
-import { ModelFilePicker } from './ModelFilePicker';
-import { useImportNotice } from './ArtifactImportToast';
-import { SelectedModelCards } from './SelectedModelCards';
-import { StageResetMenu, type ResetScope } from './StageResetMenu';
 import './model-selection.css';
 
 type AgentReturnFile = { name: string; accept: string };
@@ -858,41 +859,7 @@ export function ModelsStage({
     selectedBaseModel = catalogBaseModel(catalog, baseModel),
     baseRoleLabel = family === 'anima' ? 'Diffusion Model' : 'Checkpoint';
   const saveBase = async () => {
-    if (!family || !baseModel || !catalog)
-      throw new Error(
-        `Model系統と${family === 'anima' ? 'Diffusion Model' : 'Checkpoint'}を選択してください。`,
-      );
-    const catalogInfo = {
-      schemaVersion: catalog.schemaVersion,
-      generation: catalog.generation,
-      generatedAt: catalog.generatedAt,
-    };
-    let value: ModelsArtifact;
-    if (family === 'anima') {
-      const selectedTextEncoder = textEncoder,
-        selectedVae = vae;
-      if (!selectedTextEncoder || !selectedVae)
-        throw new Error('AnimaではText EncoderとVAEの選択が必須です。');
-      const diffusionModel: DiffusionModelSelection = { ...baseModel, ref: 'diffusion_model.main' };
-      value = {
-        schemaVersion: 5,
-        modelFamily: 'anima',
-        catalog: catalogInfo,
-        diffusionModel,
-        textEncoder: selectedTextEncoder,
-        vae: selectedVae,
-        loras: [],
-      };
-    } else {
-      const checkpoint: CheckpointSelection = { ...baseModel, ref: 'checkpoint.main' };
-      value = {
-        schemaVersion: 5,
-        modelFamily: 'illustrious',
-        catalog: catalogInfo,
-        checkpoint,
-        loras: [],
-      };
-    }
+    const value = configureBaseModels({ family, base: baseModel, catalog, textEncoder, vae });
     const saved = await window.batchStudio.artifact.saveDraft(
       project.rootPath,
       'models',
@@ -912,30 +879,7 @@ export function ModelsStage({
         : await window.batchStudio.artifact.read(project.rootPath, 'models', 'confirmed');
       const models = parseModelsArtifact(source.content);
       if (!models || models.schemaVersion === 1) throw new Error('models.jsonを読み込めません。');
-      const existing =
-        selected.ref === 'checkpoint.main'
-          ? models.checkpoint
-          : selected.ref === 'diffusion_model.main'
-            ? models.diffusionModel
-            : models.loras.find((lora) => lora.ref === selected.ref);
-      if (
-        !existing ||
-        existing.modelId !== selected.modelId ||
-        existing.versionId !== selected.versionId ||
-        existing.fileId !== selected.fileId
-      )
-        throw new Error('モデル選定が他の操作で更新されました。画面を再読み込みしてください。');
-      const updated: ModelsArtifact =
-        selected.ref === 'checkpoint.main'
-          ? { ...models, checkpoint: next as CheckpointSelection }
-          : selected.ref === 'diffusion_model.main'
-            ? { ...models, diffusionModel: next as DiffusionModelSelection }
-            : {
-                ...models,
-                loras: models.loras.map((lora) =>
-                  lora.ref === selected.ref ? { ...next, ref: lora.ref } : lora,
-                ),
-              };
+      const updated = replaceModelSelection(models, selected, next);
       const result = await window.batchStudio.artifact.saveDraft(
         project.rootPath,
         'models',

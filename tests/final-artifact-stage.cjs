@@ -14,7 +14,9 @@ const service = fs.readFileSync(
 const caption = fs.readFileSync(path.join(repo, 'src', 'main', 'caption-service.ts'), 'utf8');
 const main = readMainProcessSource(repo);
 const preload = fs.readFileSync(path.join(repo, 'src', 'preload', 'index.cjs'), 'utf8');
-const types = fs.readFileSync(path.join(repo, 'src', 'shared', 'types.ts'), 'utf8');
+const types = ['shared/types.ts', 'domain/artifact-types.ts']
+  .map((file) => fs.readFileSync(path.join(repo, 'src', file), 'utf8'))
+  .join('\n');
 
 matchCode(
   ui,

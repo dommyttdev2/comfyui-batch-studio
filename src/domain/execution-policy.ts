@@ -1,3 +1,4 @@
+import type { ExecutionRun } from './artifact-types.js';
 import { BusinessError } from './contracts.js';
 export type RunLifecycle =
   | 'RUNNING'
@@ -111,4 +112,50 @@ export function assertStopped(run: RunState): void {
 // Navigating away or disconnecting a browser never owns the Run lifetime.
 export function leaveProject(): { runtimeContinues: true } {
   return { runtimeContinues: true };
+}
+
+export function executionState(run: ExecutionRun): RunState {
+  const stopped =
+    !!run.remoteLifecycle?.finalizedAt && run.remoteLifecycle.latest?.status === 'stopped';
+  return {
+    id: run.runId,
+    target: run.executionTarget,
+    lifecycle: run.lifecycle,
+    phase: run.phase,
+    recovery: run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ? 'uncertain' : 'known',
+    finalization:
+      run.executionTarget === 'local'
+        ? 'not-required'
+        : stopped
+          ? 'stopped'
+          : run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED'
+            ? 'failed'
+            : 'pending',
+  };
+}
+export function isRemotePreparationPhase(phase: string): boolean {
+  return preparation.has(phase);
+}
+
+export type PersistedRecovery =
+  | 'recover-local'
+  | 'pause-prepared'
+  | 'pause-before-submit'
+  | 'verify-local-output'
+  | 'retain-uncertain'
+  | 'finalize-remote'
+  | 'recover-remote';
+export function planPersistedRecovery(run: ExecutionRun): PersistedRecovery {
+  if (run.executionTarget === 'remote')
+    return run.phase === 'CLOUD_INSTANCE_FINALIZING' ? 'finalize-remote' : 'recover-remote';
+  if (run.current.promptId || run.submission?.status === 'sending') return 'recover-local';
+  if (run.submission?.status === 'prepared') return 'pause-prepared';
+  if (
+    ['LOCAL_COMFYUI_CONNECTING', 'LOCAL_CAPABILITY_CHECKING', 'WORKFLOW_PREPARING'].includes(
+      run.phase,
+    )
+  )
+    return 'pause-before-submit';
+  if (run.phase === 'COMPLETED') return 'verify-local-output';
+  return 'retain-uncertain';
 }

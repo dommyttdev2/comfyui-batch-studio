@@ -95,7 +95,7 @@ async function makeProject(execution, hashCanonicalJson, projectId = 'local-api-
         api: { path: 'LoRA_project.api.json', sha256: apiSha256 },
       },
       workflowIdentity,
-      modelsSha256: hashCanonicalJson({ schemaVersion: models.schemaVersion, loras: models.loras }),
+      modelsSha256: (await load('workflow-api.js')).hashWorkflowModelInputs(models),
     },
   });
   const ready = {

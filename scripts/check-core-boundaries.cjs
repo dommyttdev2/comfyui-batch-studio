@@ -32,11 +32,13 @@ function inspectCore(base = path.resolve(__dirname, '..')) {
     if (/(?:\bimport\s*\(|\b(?:require|eval|Function)\b)/.test(code))
       problems.push(file + ': dynamic code/module loading');
     if (
-      /\b(window|document|process|Buffer|Date|fetch|XMLHttpRequest|WebSocket|ipcMain|webContents|dialog|shell|setTimeout)\b/.test(
+      /\b(window|document|process|Buffer|fetch|XMLHttpRequest|WebSocket|ipcMain|webContents|dialog|shell|setTimeout)\b/.test(
         code,
       )
     )
       problems.push(file + ': platform symbol');
+    if (/\b(?:new\s+Date|Date\.(?:now|UTC))\b/.test(code))
+      problems.push(file + ': non-injected clock');
     if (/\bMath\.random\s*\(/.test(code)) problems.push(file + ': non-injected randomness');
     if (/\bimport\s+[A-Za-z_$][\w$]*\s*=/.test(code)) problems.push(file + ': import assignment');
   }

@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { assessModelAvailability, modelAvailabilityState } from '../domain/availability-policy.js';
 import type {
   AvailabilityResult,
   ExecutionTarget,
@@ -9,12 +10,12 @@ import type {
   ValidationIssue,
 } from '../shared/types.js';
 import { exists, readJson } from './fs-utils.js';
-import { readProjectMeta } from './project-meta.js';
 import {
   effectiveModelFamily,
-  requiredModelSelections,
   remoteModelRelativePath,
+  requiredModelSelections,
 } from './model-placement-paths.js';
+import { readProjectMeta } from './project-meta.js';
 
 async function findRecursive(root: string, target: string): Promise<string | null> {
   if (!(await exists(root))) return null;
@@ -127,58 +128,15 @@ export async function checkAvailability(
             : null,
       local = !!localPath,
       r2Found = r2Lookup ? await r2Lookup(relative) : r2Names.has(path.basename(s.fileName));
-    const requiredAvailable = executionTarget === 'local' ? local : r2Found,
-      alternateAvailable = executionTarget === 'local' ? r2Found : local;
     rows.push({
       ref: s.ref,
       fileName: s.fileName,
       kind: s.kind,
       local,
       r2: r2Found,
-      state: requiredAvailable ? 'available' : alternateAvailable ? 'transfer-required' : 'missing',
+      state: modelAvailabilityState(executionTarget, local, r2Found),
       localPath: localPath ?? undefined,
     });
   }
-  const issues: ValidationIssue[] = [];
-  if (executionTarget === 'local' && !localRoot)
-    issues.push({
-      severity: 'error',
-      code: 'COMFYUI_INSTALL_PATH_REQUIRED',
-      message:
-        'ローカル実行にはComfyUIのインストール先設定が必要です。環境設定でComfyUIのインストール先ディレクトリを指定してください。',
-    });
-  else if (executionTarget === 'local' && !localRootExists)
-    issues.push({
-      severity: 'error',
-      code: 'COMFYUI_MODELS_ROOT_MISSING',
-      message: `ローカル実行のモデル確認先 ${localRoot} が見つかりません。環境設定のComfyUIインストール先を確認してください。`,
-    });
-  if (executionTarget === 'local' && localRootExists) {
-    for (const row of rows.filter((x) => !x.local))
-      issues.push({
-        severity: 'error',
-        code: row.r2 ? 'MODEL_LOCAL_PLACEMENT_REQUIRED' : 'MODEL_LOCAL_FILE_MISSING',
-        message: row.r2
-          ? `${row.fileName} はR2にありますが、ローカル実行には ${localRoot} 配下への配置が必須です。`
-          : `${row.fileName} が ${localRoot} 配下に見つかりません。ローカル実行にはローカル配置が必須です。`,
-        path: row.ref,
-      });
-  }
-  if (executionTarget === 'remote') {
-    for (const row of rows.filter((x) => !x.r2))
-      issues.push({
-        severity: 'error',
-        code: row.local ? 'MODEL_R2_PLACEMENT_REQUIRED' : 'MODEL_R2_FILE_MISSING',
-        message: row.local
-          ? `${row.fileName} はローカルにありますが、リモート実行にはR2への配置が必須です。`
-          : `${row.fileName} がR2に見つかりません。リモート実行にはR2への配置が必須です。`,
-        path: row.ref,
-      });
-  }
-  return {
-    rows,
-    executionTarget,
-    localModelsRoot: localRoot || null,
-    validation: { valid: !issues.some((i) => i.severity === 'error'), issues },
-  };
+  return assessModelAvailability(rows, executionTarget, localRoot, localRootExists);
 }
