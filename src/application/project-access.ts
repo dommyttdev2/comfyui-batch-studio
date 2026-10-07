@@ -1,12 +1,12 @@
+import { downstream } from '../domain/artifact-policy.js';
 import {
+  type ActorContext,
   authorize,
   BusinessError,
-  requireRevision,
-  type ActorContext,
   type MutationCommand,
+  requireRevision,
 } from '../domain/contracts.js';
-import { downstream } from '../domain/artifact-policy.js';
-import { assertRunState, assertProjectWritable } from '../domain/execution-policy.js';
+import { assertProjectWritable, assertRunState } from '../domain/execution-policy.js';
 import type { Clock, ProjectState } from './project-ports.js';
 export function assertCurrentProject(project: ProjectState, projectId: string): void {
   if (

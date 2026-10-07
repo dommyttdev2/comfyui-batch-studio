@@ -1,11 +1,6 @@
-import type {
-  ActorContext,
-  ArtifactKey,
-  DomainEvent,
-  Revision,
-  Validation,
-} from '../domain/contracts.js';
 import type { Artifact } from '../domain/artifact-policy.js';
+import type { ModelCatalog } from '../domain/artifact-types.js';
+import type { ActorContext, ArtifactKey, DomainEvent, Revision } from '../domain/contracts.js';
 import type { RunState } from '../domain/execution-policy.js';
 export interface EditLease {
   id: string;
@@ -40,8 +35,8 @@ export interface Clock {
 export interface IdSource {
   next(): string;
 }
-export interface ArtifactValidator {
-  validate(key: ArtifactKey, content: string, project: ProjectState): Promise<Validation>;
+export interface CatalogRepository {
+  read(projectId: string): Promise<ModelCatalog | null>;
 }
 export function event(
   actor: ActorContext,

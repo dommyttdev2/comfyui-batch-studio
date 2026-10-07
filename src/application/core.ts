@@ -1,13 +1,16 @@
+import { type AgentPort, AgentUseCases } from './agent-use-cases.js';
+import { type ConfirmationPort, ConfirmationUseCases } from './confirmation-use-cases.js';
+import { type ExecutionPort, ExecutionUseCases } from './execution-use-cases.js';
+import type { ImageCodec, ResourceStore, SecretStore } from './platform-ports.js';
 import { PlatformUseCases } from './platform-use-cases.js';
-import type { SecretStore, ResourceStore, ImageCodec } from './platform-ports.js';
+import type { CatalogRepository, Clock, IdSource, ProjectRepository } from './project-ports.js';
 import { ProjectUseCases } from './project-use-cases.js';
-import { ExecutionUseCases, type ExecutionPort } from './execution-use-cases.js';
-import { AgentUseCases, type AgentPort } from './agent-use-cases.js';
-import { ConfirmationUseCases, type ConfirmationPort } from './confirmation-use-cases.js';
-import type { ArtifactValidator, Clock, IdSource, ProjectRepository } from './project-ports.js';
+import { type Digest, type WorkflowTemplates, WorkflowUseCases } from './workflow-use-cases.js';
 export interface CorePorts {
   projects: ProjectRepository;
-  validator: ArtifactValidator;
+  templates: WorkflowTemplates;
+  digest: Digest;
+  catalogs: CatalogRepository;
   clock: Clock;
   ids: IdSource;
   execution: ExecutionPort;
@@ -20,8 +23,15 @@ export interface CorePorts {
 // Composition boundary. P2 supplies server infrastructure and authenticated controllers.
 export function createBusinessCore(ports: CorePorts) {
   return {
+    workflows: new WorkflowUseCases(
+      ports.projects,
+      ports.catalogs,
+      ports.templates,
+      ports.digest,
+      ports.clock,
+    ),
     platform: new PlatformUseCases(ports.secrets, ports.resources, ports.images),
-    projects: new ProjectUseCases(ports.projects, ports.validator, ports.clock, ports.ids),
+    projects: new ProjectUseCases(ports.projects, ports.catalogs, ports.clock, ports.ids),
     execution: new ExecutionUseCases(ports.execution),
     agents: new AgentUseCases(ports.agents),
     confirmations: new ConfirmationUseCases(ports.confirmations, ports.clock, ports.ids),

@@ -1,3 +1,8 @@
+import { randomUUID } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { IpcMainInvokeEvent, MenuItemConstructorOptions, WebContents } from 'electron';
 import {
   app,
   BaseWindow,
@@ -8,62 +13,76 @@ import {
   shell,
   WebContentsView,
 } from 'electron';
-import type { IpcMainInvokeEvent, MenuItemConstructorOptions, WebContents } from 'electron';
-import { randomUUID } from 'node:crypto';
-import path from 'node:path';
-import { mkdir } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import {
+  blocksProjectEdit,
+  executionState,
+  isRemotePreparationPhase,
+  planPersistedRecovery,
+  planRunStop,
+} from '../domain/execution-policy.js';
 import { IPC } from '../shared/ipc.js';
-import { registerIpc } from './ipc-registration.js';
-import { PickerSelectionGate } from './picker-selection-gate.js';
-import { authorizeIpcAccess, type IpcSenderContext } from './ipc-access.js';
 import type {
+  AgentEvent,
+  AgentModelSelection,
+  AgentModelSettings,
+  AgentProvider,
   AppSettingsSaveInput,
+  AssistantPaneContext,
+  AssistantPaneProvider,
+  AssistantPaneSnapshot,
+  AssistantPaneState,
+  AutoArtifactEvent,
   CatalogSelectionTemplateInput,
   CivitaiCatalogStatus,
   CivitaiConnectionInput,
-  GrokContextStage,
-  AssistantPaneState,
   ExecutionRun,
+  GrokContextStage,
+  GrokTask,
+  MarketplaceSourceType,
   ProjectBriefInput,
   ProjectSettings,
   PromptPlanArtifact,
-  GrokTask,
-  AssistantPaneProvider,
-  AutoArtifactEvent,
-  ThumbnailSlotKey,
-  MarketplaceSourceType,
   R2ConnectionInput,
+  ThumbnailSlotKey,
   ValidationIssue,
   VastAiConnectionInput,
   VastAiOfferSearchInput,
   VastAiRentRequest,
   VastAiSshEndpoint,
-  AgentEvent,
-  AgentProvider,
-  AgentModelSelection,
-  AgentModelSettings,
-  AssistantPaneContext,
-  AssistantPaneSnapshot,
 } from '../shared/types.js';
+import { importAutoArtifact } from './agent-artifact-import.js';
+import type { AgentCliAdapter } from './agent-cli-adapter.js';
+import { AgentConversationRunner } from './agent-conversation-runner.js';
+import { AgentConversationStore } from './agent-conversation-store.js';
+import { AgentModelSelectionStore } from './agent-model-selection.js';
+import { AgentSessionStateStore } from './agent-session-state.js';
+import { AppSettingsStore } from './app-settings.js';
 import {
-  createProject,
+  beginEditArtifact,
   confirmArtifact,
+  createProject,
   importGrok,
   readArtifact,
-  beginEditArtifact,
   saveDraft,
-  savePromptPlan,
   saveProjectBrief,
+  savePromptPlan,
 } from './artifact-service.js';
-import { readGrokLoraSelectionHistory } from './grok-lora-history.js';
-import { manualResetFrom, type ManualResetScope } from './model-downstream-reset.js';
-import { scanProject } from './project-scan.js';
-import { readProjectMeta, saveProjectSettings } from './project-meta.js';
-import { catalogStatus } from './model-catalog.js';
-import { compileWorkflow } from './compiler.js';
+import { AssistantProviderStore } from './assistant-provider-state.js';
 import { checkAvailability, checkLoraFileAvailability } from './availability.js';
-import { runPreflight } from './preflight.js';
+import {
+  generateCaption,
+  getCaptionStatus,
+  importCaptionGrok,
+  savePixivTitle,
+} from './caption-service.js';
+import { CivitaiCatalogService } from './civitai-catalog.js';
+import { CivitaiConfigStore } from './civitai-config.js';
+import { CivitaiRequestPolicy } from './civitai-request-policy.js';
+import { CodexCliAdapter } from './codex-cli-adapter.js';
+import { CodexCliTaskRunner } from './codex-cli-task-runner.js';
+import { ComfyUiClient } from './comfyui-client.js';
+import { compileWorkflow } from './compiler.js';
+import { ExecutionCoordinator } from './execution-coordinator.js';
 import {
   abandonExecutionRunForRemoteReplacement,
   discardExecutionRun,
@@ -75,97 +94,85 @@ import {
   mutateExecutionRun,
   requestForceInterrupt,
   requestStopScheduling,
+  restoreExecutionRunBackup,
   resumeExecutionRun,
   resumeExecutionRunFinalization,
-  restoreExecutionRunBackup,
   startExecutionRun,
   validatedExecutionEvidence,
 } from './execution-run.js';
-import { LocalExecutionService, verifyLocalOutputs } from './local-execution.js';
-import { ComfyUiClient } from './comfyui-client.js';
-import { ExecutionCoordinator } from './execution-coordinator.js';
-import { CivitaiCatalogService } from './civitai-catalog.js';
-import { CivitaiRequestPolicy } from './civitai-request-policy.js';
-import { CivitaiConfigStore } from './civitai-config.js';
-import { UiStateStore } from './ui-state.js';
-import { AssistantProviderStore } from './assistant-provider-state.js';
-import { CodexCliAdapter } from './codex-cli-adapter.js';
-import { AgentSessionStateStore } from './agent-session-state.js';
-import type { AgentCliAdapter } from './agent-cli-adapter.js';
-import { AgentConversationStore } from './agent-conversation-store.js';
-import { AgentConversationRunner } from './agent-conversation-runner.js';
-import { AgentModelSelectionStore } from './agent-model-selection.js';
-import { importAutoArtifact } from './agent-artifact-import.js';
-import { GrokCliAdapter } from './grok-cli-adapter.js';
-import { GrokCliTaskRunner } from './grok-cli-task-runner.js';
-import { CodexCliTaskRunner } from './codex-cli-task-runner.js';
-import { R2ConfigStore } from './r2-config.js';
-import { R2Manager } from './r2-manager.js';
-import { R2ObjectIndex } from './r2-object-index.js';
-import { AppSettingsStore } from './app-settings.js';
-import { VastAiConfigStore, VASTAI_ENVIRONMENT_VARIABLE } from './vastai-config.js';
-import { VastAiClient, VastAiInstanceNotFoundError } from './vastai-client.js';
-import { validateSshKeyPair } from './ssh-key-pair.js';
-import { SshHostKeyStore } from './ssh-host-keys.js';
-import { VerifiedSshClient } from './ssh-client.js';
-import { RemoteWorkerClient } from './remote-worker.js';
-import { RemoteControlPlane } from './remote-control-plane.js';
-import { RemoteModelStager } from './remote-model-stager.js';
-import { RemoteEnvironmentBootstrap } from './remote-environment-bootstrap.js';
-import { RemoteExecutionService } from './remote-execution.js';
-import { RemoteInstanceLifecycleService } from './remote-instance-lifecycle.js';
-import {
-  generateCaption,
-  getCaptionStatus,
-  importCaptionGrok,
-  savePixivTitle,
-} from './caption-service.js';
-import { getFinalArtifactStatus } from './final-artifact-service.js';
 import {
   assertFinalArtifactImage,
   listFinalArtifactImages,
   readFinalArtifactImage,
   readFinalArtifactPreview,
 } from './final-artifact-image-service.js';
+import { getFinalArtifactStatus } from './final-artifact-service.js';
+import { GrokCliAdapter } from './grok-cli-adapter.js';
+import { GrokCliTaskRunner } from './grok-cli-task-runner.js';
+import { readGrokLoraSelectionHistory } from './grok-lora-history.js';
+import { authorizeIpcAccess, type IpcSenderContext } from './ipc-access.js';
+import { registerIpc } from './ipc-registration.js';
+import { LocalExecutionService, verifyLocalOutputs } from './local-execution.js';
 import {
   exportCustomMarketplaceImage,
   generateMarketplaceImages,
   generateMarketplaceZip,
   getMarketplaceImageTargets,
-  loadMarketplaceImageState,
-  restoreMarketplaceImageState,
   initializeCorruptMarketplaceImageState,
-  renderMarketplacePng,
-  saveMarketplaceImageState,
+  loadMarketplaceImageState,
   readMarketplaceSource,
   readMarketplaceSourcePreview,
+  renderMarketplacePng,
+  restoreMarketplaceImageState,
+  saveMarketplaceImageState,
 } from './marketplace-image-service.js';
-import {
-  exportThumbnail,
-  deleteThumbnailOutputs,
-  listExportedThumbnails,
-  assertExportedThumbnail,
-  listThumbnailFonts,
-  listThumbnailImages,
-  loadThumbnailState,
-  restoreThumbnailState,
-  initializeCorruptThumbnailState,
-  readThumbnailImage,
-  readThumbnailPreview,
-  readThumbnailTemplate,
-  saveThumbnailState,
-} from './thumbnail-service.js';
+import { catalogStatus } from './model-catalog.js';
+import { type ManualResetScope, manualResetFrom } from './model-downstream-reset.js';
+import { PickerSelectionGate } from './picker-selection-gate.js';
+import { runPreflight } from './preflight.js';
+import { readProjectMeta, saveProjectSettings } from './project-meta.js';
+import { scanProject } from './project-scan.js';
+import { R2ConfigStore } from './r2-config.js';
+import { R2Manager } from './r2-manager.js';
+import { R2ObjectIndex } from './r2-object-index.js';
+import { RemoteControlPlane } from './remote-control-plane.js';
+import { RemoteEnvironmentBootstrap } from './remote-environment-bootstrap.js';
+import { RemoteExecutionService } from './remote-execution.js';
+import { RemoteInstanceLifecycleService } from './remote-instance-lifecycle.js';
+import { RemoteModelStager } from './remote-model-stager.js';
+import { RemoteWorkerClient } from './remote-worker.js';
+import { VerifiedSshClient } from './ssh-client.js';
+import { SshHostKeyStore } from './ssh-host-keys.js';
+import { validateSshKeyPair } from './ssh-key-pair.js';
 import {
   readCachedThumbnailImage,
   storeWebpThumbnailPreview,
-  thumbnailCachePruneMetrics,
   type ThumbnailCacheTiming,
+  thumbnailCachePruneMetrics,
 } from './thumbnail-image-cache.js';
 import {
   logThumbnailPickerPerformance,
-  pickerPerformanceLogPath,
   type PickerMetrics,
+  pickerPerformanceLogPath,
 } from './thumbnail-picker-perf.js';
+import {
+  assertExportedThumbnail,
+  deleteThumbnailOutputs,
+  exportThumbnail,
+  initializeCorruptThumbnailState,
+  listExportedThumbnails,
+  listThumbnailFonts,
+  listThumbnailImages,
+  loadThumbnailState,
+  readThumbnailImage,
+  readThumbnailPreview,
+  readThumbnailTemplate,
+  restoreThumbnailState,
+  saveThumbnailState,
+} from './thumbnail-service.js';
+import { UiStateStore } from './ui-state.js';
+import { VastAiClient, VastAiInstanceNotFoundError } from './vastai-client.js';
+import { VASTAI_ENVIRONMENT_VARIABLE, VastAiConfigStore } from './vastai-config.js';
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename);
@@ -1044,31 +1051,8 @@ function safeExecutionError(error: unknown) {
     .replace(/https?:\/\/\S+/gi, '[url]')
     .replace(/(?:github_pat_|ghp_)[A-Za-z0-9_]+/gi, '[token]');
 }
-const REMOTE_PRE_GENERATION_PHASES = new Set([
-  'CLOUD_INSTANCE_RESOLVING',
-  'CLOUD_INSTANCE_STARTING',
-  'CLOUD_INSTANCE_READY',
-  'SSH_CONNECTING',
-  'SSH_CONNECTED',
-  'REMOTE_WORKER_PREPARING',
-  'REMOTE_ENVIRONMENT_CHECKING',
-  'REMOTE_DEPENDENCIES_INSTALLING',
-  'REMOTE_GITHUB_AUTHENTICATING',
-  'REMOTE_COMFYUI_UPDATING',
-  'REMOTE_COMFYUI_RELEASE_CHECKING',
-  'REMOTE_COMFYUI_RELEASE_FETCHING',
-  'REMOTE_COMFYUI_CHECKING_OUT',
-  'REMOTE_COMFYUI_REQUIREMENTS_INSTALLING',
-  'REMOTE_COMFYUI_MANAGER_CONFIGURING',
-  'REMOTE_COMFYUI_RESTARTING',
-  'REMOTE_ENVIRONMENT_READY',
-  'REMOTE_MODELS_CHECKING',
-  'REMOTE_MODELS_DOWNLOADING',
-  'REMOTE_MODELS_READY',
-  'WORKFLOW_PREPARING',
-]);
 function isRemotePreGenerationPhase(phase: string) {
-  return REMOTE_PRE_GENERATION_PHASES.has(phase);
+  return isRemotePreparationPhase(phase);
 }
 async function prepareRemoteExecution(root: string, runId: string) {
   try {
@@ -1289,20 +1273,10 @@ async function stopUncertainLocalRunForEdit(root: string, runId: string, mode: E
 async function stopRunForExit(root: string, runId: string, mode: ExitMode) {
   let run = await getExecutionRun(root, runId);
   if (!run) throw new Error('Execution Run disappeared during stop.');
-  if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN') {
-    if (run.executionTarget === 'local') return stopUncertainLocalRunForEdit(root, runId, mode);
-    throw new Error(
-      'Remote Workerの復旧状態が不確定です。Vast.ai Instanceの停止を確認してからRunを破棄してください。',
-    );
-  }
+  const stopPlan = planRunStop(executionState(run));
+  if (stopPlan === 'recover-local') return stopUncertainLocalRunForEdit(root, runId, mode);
   if (run.lifecycle === 'RUNNING') {
-    if (
-      run.executionTarget === 'remote' &&
-      !isRemotePreGenerationPhase(run.phase) &&
-      run.phase !== 'EXECUTING'
-    )
-      throw new Error('Remote成果物の処理中です。処理完了後に工程を移動してください。');
-    if (run.executionTarget === 'remote' && isRemotePreGenerationPhase(run.phase)) {
+    if (stopPlan === 'pause-preparation') {
       await mutateExecutionRun(root, runId, (current) => {
         if (current.lifecycle !== 'RUNNING') return;
         current.lifecycle = 'PAUSED';
@@ -1368,19 +1342,7 @@ async function runRequiresExitGuard(root: string) {
 
 async function ensureProjectWritable(root: string) {
   const runs = await listExecutionRuns(root);
-  if (
-    runs.some(
-      (run) =>
-        run.lifecycle === 'RUNNING' ||
-        (run.executionTarget === 'remote' &&
-          !(run.remoteLifecycle?.finalizedAt && run.remoteLifecycle.latest?.status === 'stopped') &&
-          (run.lifecycle === 'PAUSED' ||
-            run.lifecycle === 'INTERRUPTED' ||
-            (run.lifecycle === 'FAILED' &&
-              run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED'))) ||
-        run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN',
-    )
-  )
+  if (runs.some((run) => blocksProjectEdit(executionState(run))))
     throw new Error(
       '実行中のRunがあるため、この工程は閲覧専用です。編集はRunの停止後に行ってください。',
     );
@@ -1617,10 +1579,11 @@ async function reconcilePersistedExecutionRuns(root: string) {
       if (run.lifecycle !== 'RUNNING') continue;
       const ref = { projectRoot: key, runId: run.runId };
       if (executionCoordinator.hasActive(ref)) continue;
+      const recovery = planPersistedRecovery(run);
       try {
         if (run.executionTarget === 'local') {
           const endpoint = settings.comfyUiApiEndpoint;
-          if (run.current.promptId || run.submission?.status === 'sending') {
+          if (recovery === 'recover-local') {
             void executionCoordinator
               .startLocal(ref, endpoint, async () => {
                 await localExecutor().recover(root, run.runId);
@@ -1629,7 +1592,7 @@ async function reconcilePersistedExecutionRuns(root: string) {
                   executionCoordinator.retain(ref);
               })
               .finally(maybeQuitAfterExecution);
-          } else if (run.submission?.status === 'prepared') {
+          } else if (recovery === 'pause-prepared') {
             // A prepared intent is durably marked before sending; no POST can
             // have occurred unless the sending transition also persisted.
             await mutateExecutionRun(root, run.runId, (current) => {
@@ -1638,11 +1601,7 @@ async function reconcilePersistedExecutionRuns(root: string) {
               current.lifecycle = 'PAUSED';
               current.controls.scheduling = 'STOPPED';
             });
-          } else if (
-            run.phase === 'LOCAL_COMFYUI_CONNECTING' ||
-            run.phase === 'LOCAL_CAPABILITY_CHECKING' ||
-            run.phase === 'WORKFLOW_PREPARING'
-          ) {
+          } else if (recovery === 'pause-before-submit') {
             // These phases precede every local POST /prompt.
             await mutateExecutionRun(root, run.runId, (current) => {
               if (current.lifecycle !== 'RUNNING' || current.current.promptId) return;
@@ -1650,7 +1609,7 @@ async function reconcilePersistedExecutionRuns(root: string) {
               current.controls.scheduling = 'STOPPED';
               current.error = null;
             });
-          } else if (run.phase === 'COMPLETED') {
+          } else if (recovery === 'verify-local-output') {
             await verifyLocalOutputs(settings.comfyUiInstallPath, run);
             await mutateExecutionRun(root, run.runId, (current) => {
               if (current.lifecycle !== 'RUNNING') return;
@@ -1673,8 +1632,7 @@ async function reconcilePersistedExecutionRuns(root: string) {
         void executionCoordinator
           .startRemote(ref, 'vastai', run.remote.instanceId, async () => {
             try {
-              if (run.phase === 'CLOUD_INSTANCE_FINALIZING')
-                await recoverRemoteFinalization(root, run.runId);
+              if (recovery === 'finalize-remote') await recoverRemoteFinalization(root, run.runId);
               else await remoteImageExecutor().recover(root, run.runId);
             } catch (error) {
               await markExecutionRecoveryUncertain(root, run.runId, error);

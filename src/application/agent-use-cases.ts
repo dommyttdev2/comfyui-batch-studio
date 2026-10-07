@@ -1,11 +1,11 @@
+import { requireMessage } from '../domain/artifact-policy.js';
 import {
+  type ActorContext,
   authorize,
   BusinessError,
-  requireId,
-  type ActorContext,
   type Command,
+  requireId,
 } from '../domain/contracts.js';
-import { requireMessage } from '../domain/artifact-policy.js';
 export type AgentStage = 'story' | 'models' | 'promptPlan' | 'caption';
 export type AgentProvider = 'codex' | 'grok';
 export interface AgentScope {

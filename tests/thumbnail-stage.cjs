@@ -48,7 +48,9 @@ const thumbnailCache = fs.readFileSync(
   path.join(repo, 'src', 'main', 'thumbnail-image-cache.ts'),
   'utf8',
 );
-const thumbnailTypes = fs.readFileSync(path.join(repo, 'src', 'shared', 'types.ts'), 'utf8');
+const thumbnailTypes = ['shared/types.ts', 'domain/artifact-types.ts']
+  .map((file) => fs.readFileSync(path.join(repo, 'src', file), 'utf8'))
+  .join('\n');
 const thumbnailIpc = fs.readFileSync(path.join(repo, 'src', 'shared', 'ipc.ts'), 'utf8');
 matchCode(
   pickerPerf,

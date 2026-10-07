@@ -1,186 +1,24 @@
 import path from 'node:path';
-import type {
-  ModelsArtifact,
-  PreflightResult,
-  PromptPlanArtifact,
-  ValidationIssue,
-} from '../shared/types.js';
-import { exists, readJson } from './fs-utils.js';
-import {
-  hashCanonicalJson,
-  hashWorkflowModelInputs,
-  validateApiGraphStructure,
-} from './workflow-api.js';
-import { scanProject } from './project-scan.js';
-import { validateModels, validatePromptPlan } from './validation.js';
-import { validateModelsAgainstCatalog } from './model-catalog.js';
+import { assessPreflight } from '../application/preflight.js';
+import type { PreflightResult, ValidationIssue } from '../shared/types.js';
 import { checkAvailability } from './availability.js';
-
+import { exists, readJson } from './fs-utils.js';
+import { loadCatalog } from './model-catalog.js';
+import { scanProject } from './project-scan.js';
+import { hashCanonicalJson } from './workflow-api.js';
 export async function runPreflight(
   root: string,
   r2Lookup?: ((fileName: string) => Promise<boolean>) | null,
   localModelsRoot?: string | null,
   remoteTargetCheck?: () => Promise<ValidationIssue[]>,
 ): Promise<PreflightResult> {
-  const project = await scanProject(root);
-  const sections: PreflightResult['sections'] = [];
-  const block: ValidationIssue[] = [];
-  const warn: ValidationIssue[] = [];
-  const add = (name: string, issues: ValidationIssue[]) => {
-    sections.push({ name, valid: !issues.some((i) => i.severity === 'error'), issues });
-    block.push(...issues.filter((i) => i.severity === 'error'));
-    warn.push(...issues.filter((i) => i.severity === 'warning'));
-  };
-  const artifactIssues: ValidationIssue[] = [];
-  for (const a of project.artifacts) {
-    if (a.state === 'stale' && ['story', 'models', 'promptPlan', 'workflow'].includes(a.key))
-      artifactIssues.push({
-        severity: 'error',
-        code: 'ARTIFACT_STALE',
-        message: `${a.label} は上流Artifact更新後に再確定/再生成が必要です。`,
-        path: a.key,
-      });
-  }
-  add('Artifact整合性', artifactIssues);
-  const storyExists = await exists(path.join(root, 'story.md'));
-  add(
-    'ストーリー',
-    storyExists
-      ? []
-      : [{ severity: 'error', code: 'STORY_MISSING', message: 'story.mdが確定していません。' }],
-  );
-  const models = await readJson<ModelsArtifact>(path.join(root, 'models.json'));
-  if (!models)
-    add('モデル選定', [
-      { severity: 'error', code: 'MODELS_MISSING', message: 'models.jsonが確定していません。' },
-    ]);
-  else {
-    const v = validateModels(models);
-    add(
-      'モデル選定',
-      v.valid ? (await validateModelsAgainstCatalog(root, models, v)).issues : v.issues,
-    );
-  }
-  const plan = await readJson<PromptPlanArtifact>(path.join(root, 'prompt_plan.json'));
-  if (!plan)
-    add('プロンプト設計', [
-      { severity: 'error', code: 'PLAN_MISSING', message: 'prompt_plan.jsonが確定していません。' },
-    ]);
-  else add('プロンプト設計', validatePromptPlan(plan, models).issues);
-  const workflowName = project.artifacts.find((a) => a.key === 'workflow')?.relativePath;
-  add(
-    'ワークフロー',
-    workflowName
-      ? []
-      : [
-          {
-            severity: 'error',
-            code: 'WORKFLOW_MISSING',
-            message: 'ワークフローが生成されていません。',
-          },
-        ],
-  );
-  const build = project.meta?.workflowBuild as any;
-  const apiRelativePath = build?.apiOutputPath ?? build?.outputs?.api?.path;
-  const apiIssues: ValidationIssue[] = [];
-  if (models && (!build?.modelsSha256 || build.modelsSha256 !== hashWorkflowModelInputs(models)))
-    apiIssues.push({
-      severity: 'error',
-      code: 'WORKFLOW_MODEL_STALE',
-      message:
-        'models.jsonの内容がWorkflow生成時と異なります。モデルを確認してWorkflowを再生成してください。',
-      path: 'models.json',
-    });
-  if (!apiRelativePath)
-    apiIssues.push({
-      severity: 'error',
-      code: 'API_GRAPH_MISSING',
-      message: 'Execution用ComfyUI API-format graphが生成されていません。',
-    });
-  else {
-    const apiPath = path.join(root, String(apiRelativePath));
-    if (!(await exists(apiPath)))
-      apiIssues.push({
-        severity: 'error',
-        code: 'API_GRAPH_MISSING',
-        message: 'Execution用ComfyUI API-format graphが見つかりません。',
-        path: String(apiRelativePath),
-      });
-    else {
-      const apiGraph = await readJson<unknown>(apiPath);
-      apiIssues.push(...validateApiGraphStructure(apiGraph));
-      if (
-        apiGraph &&
-        build?.outputs?.api?.sha256 &&
-        hashCanonicalJson(apiGraph) !== build.outputs.api.sha256
-      )
-        apiIssues.push({
-          severity: 'error',
-          code: 'API_GRAPH_HASH_MISMATCH',
-          message: 'Execution API graphのhashがWorkflow build provenanceと一致しません。',
-          path: String(apiRelativePath),
-        });
-      if (apiGraph && workflowName && build?.outputs?.ui?.sha256) {
-        const uiWorkflow = await readJson<unknown>(path.join(root, workflowName));
-        if (uiWorkflow) {
-          const uiHash = hashCanonicalJson(uiWorkflow),
-            apiHash = hashCanonicalJson(apiGraph);
-          if (uiHash !== build.outputs.ui.sha256)
-            apiIssues.push({
-              severity: 'error',
-              code: 'UI_WORKFLOW_HASH_MISMATCH',
-              message: 'UI WorkflowのhashがWorkflow build provenanceと一致しません。',
-              path: workflowName,
-            });
-          if (
-            build?.workflowIdentity &&
-            hashCanonicalJson({ uiSha256: uiHash, apiSha256: apiHash }) !== build.workflowIdentity
-          )
-            apiIssues.push({
-              severity: 'error',
-              code: 'WORKFLOW_IDENTITY_MISMATCH',
-              message: 'UI WorkflowとExecution API graphの対応identityが一致しません。',
-            });
-        }
-      }
-    }
-  }
-  add('Execution API graph', apiIssues);
-  const av = await checkAvailability(root, r2Lookup, localModelsRoot);
-  add('モデル配置', av.validation.issues);
-  if (av.executionTarget === 'remote') {
-    const targetIssues = remoteTargetCheck
-      ? await remoteTargetCheck()
-      : project.meta?.settings.remoteProvider === 'vastai' &&
-          Number.isInteger(project.meta.settings.remoteInstanceId) &&
-          Number(project.meta.settings.remoteInstanceId) > 0
-        ? []
-        : [
-            {
-              severity: 'error' as const,
-              code: 'REMOTE_INSTANCE_REQUIRED',
-              message: 'リモート実行にはVast.ai Instanceを選択してください。',
-            },
-          ];
-    add('クラウド実行先', targetIssues);
-  }
-  const planned = plan ? plan.branches.reduce((n, b) => n + b.leaves.length, 0) : 0;
-  if (project.targetImageCount != null && planned && planned !== project.targetImageCount)
-    warn.push({
-      severity: 'warning',
-      code: 'TARGET_DELTA',
-      message: `目標${project.targetImageCount}枚 / 現在${planned}枚です。`,
-    });
-  const uniqueBlock = block.filter(
-    (x, i, a) =>
-      a.findIndex((y) => y.code === x.code && y.path === x.path && y.message === x.message) === i,
-  );
-  return {
-    state: uniqueBlock.length ? 'BLOCKED' : 'READY',
-    plannedImages: planned,
-    targetImages: project.targetImageCount,
-    blocking: uniqueBlock,
-    warnings: warn,
-    sections,
-  };
+  return assessPreflight({
+    project: () => scanProject(root),
+    exists: (resource) => exists(path.join(root, resource)),
+    json: (resource) => readJson(path.join(root, resource)),
+    catalog: () => loadCatalog(root),
+    availability: () => checkAvailability(root, r2Lookup, localModelsRoot),
+    remoteTargetCheck,
+    hash: hashCanonicalJson,
+  });
 }

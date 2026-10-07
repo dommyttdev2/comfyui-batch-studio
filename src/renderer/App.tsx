@@ -1,38 +1,39 @@
-import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
+import { type ReactNode, type SyntheticEvent, useEffect, useRef, useState } from 'react';
+import { blocksProjectEdit, executionState } from '../domain/execution-policy.js';
 import type {
   AssistantPaneProvider,
   ExecutionRun,
   ProjectBriefInput,
   ProjectSummary,
 } from '../shared/types';
-import { grokContextStage, stages, shouldShowGrok, statusDot, type Runner, type Stage } from './ui';
-import { Overview, Settings } from './ProjectStages';
-import { StoryStage, ModelsStage } from './GrokStages';
-import { PromptPlanStage } from './PromptPlanStage';
-import { CaptionStage } from './CaptionStage';
-import { FinalArtifactStage } from './FinalArtifactStage';
-import { MarketplaceImageStage } from './MarketplaceImageStage';
-import { ThumbnailStage } from './ThumbnailStage';
 import {
-  WorkflowStage,
-  AvailabilityStage,
-  PreflightStage,
-  ExecutionStage,
-} from './ExecutionStages';
-import { R2ManagerStage } from './R2ManagerStage';
+  type ImportNotice,
+  ImportNoticeContext,
+  type ImportNoticeInput,
+  ImportToastStack,
+} from './ArtifactImportToast';
+import { CaptionStage } from './CaptionStage';
 import { CivitExplorerStage } from './CivitExplorerStage';
 import { EnvironmentSettings } from './EnvironmentSettings';
-import { ServiceIntegrationsStage } from './ServiceIntegrationsStage';
-import { VastAiIntegrationPanel } from './integrations/VastAiIntegrationPanel';
-import { HomeConnectedServices } from './HomeConnectedServices';
-import { StageResetMenu, type ResetScope } from './StageResetMenu';
-import { StageErrorBoundary } from './StageErrorBoundary';
 import {
-  ImportNoticeContext,
-  ImportToastStack,
-  type ImportNotice,
-  type ImportNoticeInput,
-} from './ArtifactImportToast';
+  AvailabilityStage,
+  ExecutionStage,
+  PreflightStage,
+  WorkflowStage,
+} from './ExecutionStages';
+import { FinalArtifactStage } from './FinalArtifactStage';
+import { ModelsStage, StoryStage } from './GrokStages';
+import { HomeConnectedServices } from './HomeConnectedServices';
+import { VastAiIntegrationPanel } from './integrations/VastAiIntegrationPanel';
+import { MarketplaceImageStage } from './MarketplaceImageStage';
+import { Overview, Settings } from './ProjectStages';
+import { PromptPlanStage } from './PromptPlanStage';
+import { R2ManagerStage } from './R2ManagerStage';
+import { ServiceIntegrationsStage } from './ServiceIntegrationsStage';
+import { StageErrorBoundary } from './StageErrorBoundary';
+import { type ResetScope, StageResetMenu } from './StageResetMenu';
+import { ThumbnailStage } from './ThumbnailStage';
+import { grokContextStage, type Runner, type Stage, shouldShowGrok, stages, statusDot } from './ui';
 import './divider.css';
 import { flushEditorSaves } from './editor-save-registry';
 
@@ -84,17 +85,7 @@ async function setAssistantProvider(
   return window.batchStudio.assistant.setProvider(provider, stage);
 }
 function protectsProjectInputs(run: ExecutionRun | null): boolean {
-  return Boolean(
-    run &&
-      (run.lifecycle === 'RUNNING' ||
-        (run.executionTarget === 'remote' &&
-          !(run.remoteLifecycle?.finalizedAt && run.remoteLifecycle.latest?.status === 'stopped') &&
-          (run.lifecycle === 'PAUSED' ||
-            run.lifecycle === 'INTERRUPTED' ||
-            (run.lifecycle === 'FAILED' &&
-              run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED'))) ||
-        run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN'),
-  );
+  return !!run && blocksProjectEdit(executionState(run));
 }
 
 // Prevent edits without disabling scrolling or text selection. The main process

@@ -35,7 +35,7 @@ const autosave = fs.readFileSync(
 
 const imagePipeline = fs.readFileSync(path.join(repo, 'src', 'main', 'image-pipeline.ts'), 'utf8');
 const imagePipelineCore = fs.readFileSync(
-  path.join(repo, 'src', 'main', 'image-pipeline-core.ts'),
+  path.join(repo, 'src', 'domain', 'image-pixels.ts'),
   'utf8',
 );
 const imageService = fs.readFileSync(

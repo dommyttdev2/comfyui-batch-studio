@@ -4,7 +4,7 @@ Status: Planning evidence / 再照合: 2026-10-06
 
 [移行計画](web-migration-plan.md)のW01–W14とG01–G14を正本とする。後方互換性なし・旧データマイグレーションなし・fallback禁止を全項目へ適用する。新dataDir/現行schema/明示設定で開始し、対応外・失敗はerrorとする。各code fileとIPCは主担当を一つだけ持つ。phaseは主実装受入段階。desktopRemovalPhase=P9は旧sourceの残存確認・撤去段階であり、互換adapterを提供する期間ではない。依存・横断条件は計画側を参照する。
 
-基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全291コード・設定（src 178、tests 76、scripts 9）、8 binary asset、31仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
+基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全318コード・設定（src 203、tests 78、scripts 9）、8 binary asset、31仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
 
 [機械可読索引](web-migration-inventory.json)にhash・import・根拠行・分類・test実行経路を保存する。[再照合ツール](web-migration-audit.cjs)は`node docs/roadmap/web-migration-audit.cjs --check`で検証し、`--write`で再生成する。現索引との差分、未分類file/IPC、主担当重複、IPC方向/handler不整合は失敗する。新file/IPCの処置をレビューしてから再生成する。
 
@@ -22,16 +22,16 @@ Status: Planning evidence / 再照合: 2026-10-06
 | --- | ---: | --- | --- |
 | W01 通信契約・認可境界 | 12 | P2 | G01 |
 | W02 Web shell・共通UI状態 | 27 | P3 | G02 |
-| W03 Project・Artifact永続化 | 13 | P3 | G03 |
+| W03 Project・Artifact永続化 | 22 | P3 | G03 |
 | W04 AI会話・工程task | 23 | P4 | G04 |
-| W05 モデル解決・Compiler・Preflight | 19 | P5 | G05 |
-| W06 生成runtime・SSH・復旧 | 19 | P6 | G06 |
+| W05 モデル解決・Compiler・Preflight | 27 | P5 | G05 |
+| W06 生成runtime・SSH・復旧 | 25 | P6 | G06 |
 | W07 Civitai catalog・Vast.ai操作 | 8 | P5 | G07 |
 | W08 R2転送・object管理 | 6 | P5 | G08 |
-| W09 画像・Caption・成果物・Picker | 25 | P7 | G09 |
+| W09 画像・Caption・成果物・Picker | 27 | P7 | G09 |
 | W10 起動・OS・Secret基盤 | 13 | P5 | G10 |
 | W11 build・起動配布・更新 | 25 | P8 | G11 |
-| W12 検証・test harness | 78 | P8 | G12 |
+| W12 検証・test harness | 80 | P8 | G12 |
 | W13 schema・runtime resource | 11 | P8 | G13 |
 | W14 旧実装整理 | 12 | P9 | G14 |
 
@@ -58,7 +58,7 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [schemas/models.schema.json](../../schemas/models.schema.json) | 191 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
 | [schemas/prompt-plan.schema.json](../../schemas/prompt-plan.schema.json) | 395 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
 | [schemas/workflow-template-manifest.schema.json](../../schemas/workflow-template-manifest.schema.json) | 61 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
-| [scripts/check-core-boundaries.cjs](../../scripts/check-core-boundaries.cjs) | 53 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [scripts/check-core-boundaries.cjs](../../scripts/check-core-boundaries.cjs) | 55 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [scripts/check-running-batch-studio.cjs](../../scripts/check-running-batch-studio.cjs) | 62 | W11 / P8 / G11 | server lock/health/build ID確認へ |
 | [scripts/copy-runtime.cjs](../../scripts/copy-runtime.cjs) | 23 | W11 / P8 / G11 | server resources/Web staticの配置へ |
 | [scripts/create_thumbnail_psd_templates.py](../../scripts/create_thumbnail_psd_templates.py) | 331 | W11 / P8 / G11 | 生成/検証ツール維持、新resource配置を確認 |
@@ -69,18 +69,43 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [scripts/verify-comfyui-api.mjs](../../scripts/verify-comfyui-api.mjs) | 162 | W12 / P8 / G12 | 生成/検証ツール維持、新resource配置を確認 |
 | [src/application/agent-use-cases.ts](../../src/application/agent-use-cases.ts) | 117 | W04 / P1 / G04 | 配布設定をWeb/server構成へ適合 |
 | [src/application/confirmation-use-cases.ts](../../src/application/confirmation-use-cases.ts) | 95 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
-| [src/application/core.ts](../../src/application/core.ts) | 30 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
-| [src/application/execution-use-cases.ts](../../src/application/execution-use-cases.ts) | 86 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
-| [src/application/platform-ports.ts](../../src/application/platform-ports.ts) | 23 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
+| [src/application/core.ts](../../src/application/core.ts) | 40 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
+| [src/application/execution-creation.ts](../../src/application/execution-creation.ts) | 139 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
+| [src/application/execution-recovery.ts](../../src/application/execution-recovery.ts) | 123 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
+| [src/application/execution-use-cases.ts](../../src/application/execution-use-cases.ts) | 108 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
+| [src/application/platform-ports.ts](../../src/application/platform-ports.ts) | 20 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
 | [src/application/platform-use-cases.ts](../../src/application/platform-use-cases.ts) | 40 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
+| [src/application/preflight.ts](../../src/application/preflight.ts) | 193 | W05 / P1 / G05 | 配布設定をWeb/server構成へ適合 |
 | [src/application/project-access.ts](../../src/application/project-access.ts) | 85 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
-| [src/application/project-ports.ts](../../src/application/project-ports.ts) | 62 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
-| [src/application/project-use-cases.ts](../../src/application/project-use-cases.ts) | 161 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/application/project-ports.ts](../../src/application/project-ports.ts) | 57 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/application/project-use-cases.ts](../../src/application/project-use-cases.ts) | 244 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/application/workflow-use-cases.ts](../../src/application/workflow-use-cases.ts) | 116 | W05 / P1 / G05 | 配布設定をWeb/server構成へ適合 |
 | [src/domain/artifact-policy.ts](../../src/domain/artifact-policy.ts) | 36 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/artifact-types.ts](../../src/domain/artifact-types.ts) | 612 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/artifact-validation.ts](../../src/domain/artifact-validation.ts) | 1267 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/availability-policy.ts](../../src/domain/availability-policy.ts) | 65 | W05 / P1 / G05 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/canonical-artifact.ts](../../src/domain/canonical-artifact.ts) | 75 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/caption-policy.ts](../../src/domain/caption-policy.ts) | 180 | W09 / P1 / G09 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/catalog-validation.ts](../../src/domain/catalog-validation.ts) | 126 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
 | [src/domain/confirmation-policy.ts](../../src/domain/confirmation-policy.ts) | 47 | W10 / P1 / G10 | 配布設定をWeb/server構成へ適合 |
 | [src/domain/contracts.ts](../../src/domain/contracts.ts) | 80 | W01 / P1 / G01 | 配布設定をWeb/server構成へ適合 |
-| [src/domain/execution-policy.ts](../../src/domain/execution-policy.ts) | 115 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/execution-evidence.ts](../../src/domain/execution-evidence.ts) | 18 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/execution-policy.ts](../../src/domain/execution-policy.ts) | 162 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/execution-record-policy.ts](../../src/domain/execution-record-policy.ts) | 27 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/execution-resume.ts](../../src/domain/execution-resume.ts) | 42 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/image-pixels.ts](../../src/domain/image-pixels.ts) | 171 | W09 / P1 / G09 | 配布設定をWeb/server構成へ適合 |
 | [src/domain/image-policy.ts](../../src/domain/image-policy.ts) | 31 | W09 / P1 / G09 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/image-tasks.ts](../../src/domain/image-tasks.ts) | 302 | W06 / P1 / G06 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/model-editing.ts](../../src/domain/model-editing.ts) | 78 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/model-file-selection.ts](../../src/domain/model-file-selection.ts) | 40 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/model-impact.ts](../../src/domain/model-impact.ts) | 82 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/model-placement.ts](../../src/domain/model-placement.ts) | 82 | W05 / P1 / G05 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/model-selection.ts](../../src/domain/model-selection.ts) | 82 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/model-version-change.ts](../../src/domain/model-version-change.ts) | 81 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/prompt-policy.ts](../../src/domain/prompt-policy.ts) | 251 | W05 / P1 / G05 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/template-policy.ts](../../src/domain/template-policy.ts) | 4 | W05 / P1 / G05 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/workflow-compilation.ts](../../src/domain/workflow-compilation.ts) | 61 | W05 / P1 / G05 | 配布設定をWeb/server構成へ適合 |
+| [src/domain/workflow-graph.ts](../../src/domain/workflow-graph.ts) | 191 | W05 / P1 / G05 | 配布設定をWeb/server構成へ適合 |
 | [src/main/agent-artifact-import.ts](../../src/main/agent-artifact-import.ts) | 178 | W04 / P4 / G04 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/agent-cli-adapter.ts](../../src/main/agent-cli-adapter.ts) | 31 | W04 / P4 / G04 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/agent-cli-diagnostic.ts](../../src/main/agent-cli-diagnostic.ts) | 39 | W04 / P4 / G04 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
@@ -93,8 +118,8 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [src/main/artifact-service.ts](../../src/main/artifact-service.ts) | 639 | W03 / P3 / G03 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/assistant-provider-state.ts](../../src/main/assistant-provider-state.ts) | 143 | W04 / P4 / G04 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/atomic-image-output.ts](../../src/main/atomic-image-output.ts) | 106 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/availability.ts](../../src/main/availability.ts) | 185 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/caption-service.ts](../../src/main/caption-service.ts) | 456 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/availability.ts](../../src/main/availability.ts) | 143 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/caption-service.ts](../../src/main/caption-service.ts) | 290 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/civitai-cache.ts](../../src/main/civitai-cache.ts) | 149 | W07 / P5 / G07 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/civitai-catalog.ts](../../src/main/civitai-catalog.ts) | 881 | W07 / P5 / G07 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/civitai-client.ts](../../src/main/civitai-client.ts) | 168 | W07 / P5 / G07 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
@@ -111,10 +136,10 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [src/main/codex-thread-history.ts](../../src/main/codex-thread-history.ts) | 68 | W14 / P9 / G14; Desktop撤去 P9 | 旧code/store参照を撤去。互換読込・旧データ移行なし |
 | [src/main/codex-turn-monitor.ts](../../src/main/codex-turn-monitor.ts) | 177 | W14 / P9 / G14; Desktop撤去 P9 | 旧code/store参照を撤去。互換読込・旧データ移行なし |
 | [src/main/comfyui-client.ts](../../src/main/comfyui-client.ts) | 174 | W06 / P6 / G06 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/compiler.ts](../../src/main/compiler.ts) | 141 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/compiler.ts](../../src/main/compiler.ts) | 105 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/execution-coordinator.ts](../../src/main/execution-coordinator.ts) | 132 | W06 / P6 / G06 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/execution-output.ts](../../src/main/execution-output.ts) | 8 | W06 / P6 / G06 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/execution-run.ts](../../src/main/execution-run.ts) | 954 | W06 / P6 / G06 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/execution-run.ts](../../src/main/execution-run.ts) | 790 | W06 / P6 / G06 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/final-artifact-image-service.ts](../../src/main/final-artifact-image-service.ts) | 167 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/final-artifact-service.ts](../../src/main/final-artifact-service.ts) | 48 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/fs-utils.ts](../../src/main/fs-utils.ts) | 301 | W03 / P3 / G03 | 新形式のatomic保存/検証。破損時の自動backup採用/空状態置換禁止 |
@@ -129,9 +154,9 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [src/main/grok-navigation-queue.ts](../../src/main/grok-navigation-queue.ts) | 90 | W14 / P9 / G14; Desktop撤去 P9 | 旧code/store参照を撤去。互換読込・旧データ移行なし |
 | [src/main/grok-navigation.ts](../../src/main/grok-navigation.ts) | 61 | W14 / P9 / G14; Desktop撤去 P9 | 旧code/store参照を撤去。互換読込・旧データ移行なし |
 | [src/main/image-dimensions.ts](../../src/main/image-dimensions.ts) | 62 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/image-pipeline-core.ts](../../src/main/image-pipeline-core.ts) | 283 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/image-pipeline-core.ts](../../src/main/image-pipeline-core.ts) | 141 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/image-pipeline.ts](../../src/main/image-pipeline.ts) | 77 | W09 / P7 / G09; Electron依存置換 P7 | nativeImageコーデック置換、画像契約/キャッシュ/出力維持 |
-| [src/main/image-tasks.ts](../../src/main/image-tasks.ts) | 300 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/image-tasks.ts](../../src/main/image-tasks.ts) | 2 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/ipc-access.ts](../../src/main/ipc-access.ts) | 312 | W01 / P2 / G01 | 認証sessionのProject/File権限へ再設計 |
 | [src/main/ipc-registration.ts](../../src/main/ipc-registration.ts) | 19 | W01 / P2 / G01; Desktop撤去 P9 | main.tsへの依存型逆参照を解消しHTTP service境界へ |
 | [src/main/ipc-registration/assistant.ts](../../src/main/ipc-registration/assistant.ts) | 271 | W01 / P2 / G01; Desktop撤去 P9 | handler内業務ロジックをserviceへ抽出、HTTP入力/認可/確認tokenへ |
@@ -141,15 +166,15 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [src/main/ipc-registration/project.ts](../../src/main/ipc-registration/project.ts) | 270 | W01 / P2 / G01; Desktop撤去 P9 | handler内業務ロジックをserviceへ抽出、HTTP入力/認可/確認tokenへ |
 | [src/main/ipc-registration/storage.ts](../../src/main/ipc-registration/storage.ts) | 124 | W01 / P2 / G01; Desktop撤去 P9 | handler内業務ロジックをserviceへ抽出、HTTP入力/認可/確認tokenへ |
 | [src/main/local-execution.ts](../../src/main/local-execution.ts) | 633 | W06 / P6 / G06 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/main.ts](../../src/main/main.ts) | 2402 | W10 / P5 / G10; Desktop撤去 P9 | composition root・runtime recovery・session・UI shellへ分解 |
+| [src/main/main.ts](../../src/main/main.ts) | 2360 | W10 / P5 / G10; Desktop撤去 P9 | composition root・runtime recovery・session・UI shellへ分解 |
 | [src/main/marketplace-generation-manifest.ts](../../src/main/marketplace-generation-manifest.ts) | 128 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/marketplace-image-service.ts](../../src/main/marketplace-image-service.ts) | 737 | W09 / P7 / G09; Electron依存置換 P7 | 新codec/asset/revision/manifest契約。旧処理へのfallback禁止 |
-| [src/main/model-catalog.ts](../../src/main/model-catalog.ts) | 173 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/model-downstream-reset.ts](../../src/main/model-downstream-reset.ts) | 330 | W03 / P3 / G03 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/model-catalog.ts](../../src/main/model-catalog.ts) | 67 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/model-downstream-reset.ts](../../src/main/model-downstream-reset.ts) | 256 | W03 / P3 / G03 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/model-file-sources.ts](../../src/main/model-file-sources.ts) | 49 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/model-placement-paths.ts](../../src/main/model-placement-paths.ts) | 82 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/model-placement-paths.ts](../../src/main/model-placement-paths.ts) | 2 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/picker-selection-gate.ts](../../src/main/picker-selection-gate.ts) | 83 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/preflight.ts](../../src/main/preflight.ts) | 187 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/preflight.ts](../../src/main/preflight.ts) | 25 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/project-meta.ts](../../src/main/project-meta.ts) | 105 | W03 / P3 / G03 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/project-scan.ts](../../src/main/project-scan.ts) | 190 | W03 / P3 / G03 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/project-transaction.ts](../../src/main/project-transaction.ts) | 272 | W03 / P3 / G03 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
@@ -173,14 +198,14 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [src/main/thumbnail-service.ts](../../src/main/thumbnail-service.ts) | 512 | W09 / P7 / G09; Electron依存置換 P7 | 新codec/font/revision契約。自動font代替/旧revision読替禁止 |
 | [src/main/tracked-output-cleanup.ts](../../src/main/tracked-output-cleanup.ts) | 33 | W09 / P7 / G09 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/ui-state.ts](../../src/main/ui-state.ts) | 98 | W03 / P3 / G03 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/validation.ts](../../src/main/validation.ts) | 1272 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/validation.ts](../../src/main/validation.ts) | 2 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/vastai-client.ts](../../src/main/vastai-client.ts) | 720 | W07 / P5 / G07 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/vastai-config.ts](../../src/main/vastai-config.ts) | 159 | W10 / P5 / G10; Electron依存置換 P5 | 新SecretStoreへ置換・新規登録。旧暗号化設定の移行/取得元fallback禁止 |
-| [src/main/workflow-api.ts](../../src/main/workflow-api.ts) | 206 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
-| [src/main/workflow-template-integrity.ts](../../src/main/workflow-template-integrity.ts) | 12 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/workflow-api.ts](../../src/main/workflow-api.ts) | 23 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
+| [src/main/workflow-template-integrity.ts](../../src/main/workflow-template-integrity.ts) | 8 | W05 / P5 / G05 | Node処理再利用、dataDir/権限/排他/復旧との接合を検証 |
 | [src/main/workflow-template-paths.ts](../../src/main/workflow-template-paths.ts) | 33 | W05 / P5 / G05 | 明示resourceDir/Templateを解決。不在時の別Template/cwd探索禁止 |
 | [src/preload/index.cjs](../../src/preload/index.cjs) | 433 | W01 / P2 / G01; Desktop撤去 P9 | 新版から非到達・最終撤去。Electron互換bridgeを作らない |
-| [src/renderer/App.tsx](../../src/renderer/App.tsx) | 971 | W02 / P3 / G02 | React内Pane/session/route/保存・離脱を変更 |
+| [src/renderer/App.tsx](../../src/renderer/App.tsx) | 962 | W02 / P3 / G02 | React内Pane/session/route/保存・離脱を変更 |
 | [src/renderer/ArtifactImportToast.tsx](../../src/renderer/ArtifactImportToast.tsx) | 102 | W04 / P4 / G04 | Web再利用、import/配信を確認 |
 | [src/renderer/AssistantPane.tsx](../../src/renderer/AssistantPane.tsx) | 471 | W04 / P4 / G04 | API注入・埋込表示・再接続へ |
 | [src/renderer/CaptionStage.tsx](../../src/renderer/CaptionStage.tsx) | 255 | W09 / P7 / G09 | React再利用、bridgeをAPI clientへ |
@@ -189,7 +214,7 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [src/renderer/ExecutionStages.tsx](../../src/renderer/ExecutionStages.tsx) | 1238 | W06 / P6 / G06 | React再利用、bridgeをAPI clientへ |
 | [src/renderer/FinalArtifactStage.tsx](../../src/renderer/FinalArtifactStage.tsx) | 83 | W09 / P7 / G09 | React再利用、bridgeをAPI clientへ |
 | [src/renderer/GrokLoraHistory.tsx](../../src/renderer/GrokLoraHistory.tsx) | 179 | W04 / P4 / G04 | React再利用、bridgeをAPI clientへ |
-| [src/renderer/GrokStages.tsx](../../src/renderer/GrokStages.tsx) | 1200 | W04 / P4 / G04 | React再利用、bridgeをAPI clientへ |
+| [src/renderer/GrokStages.tsx](../../src/renderer/GrokStages.tsx) | 1144 | W04 / P4 / G04 | React再利用、bridgeをAPI clientへ |
 | [src/renderer/HomeConnectedServices.tsx](../../src/renderer/HomeConnectedServices.tsx) | 71 | W10 / P5 / G10 | React再利用、bridgeをAPI clientへ |
 | [src/renderer/ImagePickerGrid.tsx](../../src/renderer/ImagePickerGrid.tsx) | 354 | W02 / P3 / G02 | Web再利用、import/配信を確認 |
 | [src/renderer/MarketplaceImagePickerWindow.tsx](../../src/renderer/MarketplaceImagePickerWindow.tsx) | 76 | W09 / P7 / G09 | 所有session付Picker/dialogへ |
@@ -238,13 +263,13 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [src/shared/ipc.ts](../../src/shared/ipc.ts) | 174 | W01 / P2 / G01; Desktop撤去 P9 | 全173定義を下表で分類、最終廃止 |
 | [src/shared/marketplace-image-targets.json](../../src/shared/marketplace-image-targets.json) | 42 | W13 / P8 / G13 | 共通型/純粋処理/定数を再利用 |
 | [src/shared/marketplace-picker-generation.ts](../../src/shared/marketplace-picker-generation.ts) | 45 | W09 / P7 / G09 | 共通型/純粋処理/定数を再利用 |
-| [src/shared/model-file-selection.ts](../../src/shared/model-file-selection.ts) | 40 | W05 / P5 / G05 | 共通型/純粋処理/定数を再利用 |
-| [src/shared/model-selection.ts](../../src/shared/model-selection.ts) | 81 | W05 / P5 / G05 | 共通型/純粋処理/定数を再利用 |
-| [src/shared/model-version-change.ts](../../src/shared/model-version-change.ts) | 81 | W05 / P5 / G05 | 共通型/純粋処理/定数を再利用 |
-| [src/shared/prompt-policy.ts](../../src/shared/prompt-policy.ts) | 251 | W05 / P5 / G05 | 共通型/純粋処理/定数を再利用 |
+| [src/shared/model-file-selection.ts](../../src/shared/model-file-selection.ts) | 2 | W05 / P5 / G05 | 共通型/純粋処理/定数を再利用 |
+| [src/shared/model-selection.ts](../../src/shared/model-selection.ts) | 2 | W05 / P5 / G05 | 共通型/純粋処理/定数を再利用 |
+| [src/shared/model-version-change.ts](../../src/shared/model-version-change.ts) | 2 | W05 / P5 / G05 | 共通型/純粋処理/定数を再利用 |
+| [src/shared/prompt-policy.ts](../../src/shared/prompt-policy.ts) | 2 | W05 / P5 / G05 | 共通型/純粋処理/定数を再利用 |
 | [src/shared/r2-download-utils.ts](../../src/shared/r2-download-utils.ts) | 39 | W08 / P5 / G08 | 共通型/純粋処理/定数を再利用 |
 | [src/shared/r2-manager-utils.ts](../../src/shared/r2-manager-utils.ts) | 91 | W08 / P5 / G08 | 共通型/純粋処理/定数を再利用 |
-| [src/shared/types.ts](../../src/shared/types.ts) | 1669 | W01 / P2 / G01 | domain型維持、API DTOとDesktop global API型を分離 |
+| [src/shared/types.ts](../../src/shared/types.ts) | 1276 | W01 / P2 / G01 | domain型維持、API DTOとDesktop global API型を分離 |
 | [templates/anima-scene-batch/manifest.json](../../templates/anima-scene-batch/manifest.json) | 10 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
 | [templates/anima-scene-batch/template.json](../../templates/anima-scene-batch/template.json) | 14 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
 | [templates/default-scene-batch/manifest.json](../../templates/default-scene-batch/manifest.json) | 10 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
@@ -258,8 +283,8 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [tests/assistant-pane.cjs](../../tests/assistant-pane.cjs) | 331 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/assistant-provider.cjs](../../tests/assistant-provider.cjs) | 291 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/atomic-image-output.cjs](../../tests/atomic-image-output.cjs) | 148 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
-| [tests/business-core.cjs](../../tests/business-core.cjs) | 640 | W12 / P8 / G12; Electron依存置換 P8 | 配布設定をWeb/server構成へ適合 |
-| [tests/caption-stage.cjs](../../tests/caption-stage.cjs) | 123 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
+| [tests/business-core.cjs](../../tests/business-core.cjs) | 655 | W12 / P8 / G12; Electron依存置換 P8 | 配布設定をWeb/server構成へ適合 |
+| [tests/caption-stage.cjs](../../tests/caption-stage.cjs) | 125 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/caption-stale.cjs](../../tests/caption-stale.cjs) | 232 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/civitai-catalog.cjs](../../tests/civitai-catalog.cjs) | 503 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/civitai-rate-limit.cjs](../../tests/civitai-rate-limit.cjs) | 156 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
@@ -268,12 +293,14 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [tests/codex-snapshot-race.cjs](../../tests/codex-snapshot-race.cjs) | 63 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/codex-turn-status.cjs](../../tests/codex-turn-status.cjs) | 353 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/compiler-lora-mode.cjs](../../tests/compiler-lora-mode.cjs) | 110 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
+| [tests/core-artifacts.cjs](../../tests/core-artifacts.cjs) | 573 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/core-policy.cjs](../../tests/core-policy.cjs) | 68 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
-| [tests/core-support/memory-ports.cjs](../../tests/core-support/memory-ports.cjs) | 179 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/core-support/artifact-fixtures.cjs](../../tests/core-support/artifact-fixtures.cjs) | 76 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/core-support/memory-ports.cjs](../../tests/core-support/memory-ports.cjs) | 231 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/execution-coordinator.cjs](../../tests/execution-coordinator.cjs) | 95 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/execution-run.cjs](../../tests/execution-run.cjs) | 551 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/execution-safe-exit.cjs](../../tests/execution-safe-exit.cjs) | 105 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
-| [tests/final-artifact-stage.cjs](../../tests/final-artifact-stage.cjs) | 166 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
+| [tests/final-artifact-stage.cjs](../../tests/final-artifact-stage.cjs) | 168 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/fs-utils.cjs](../../tests/fs-utils.cjs) | 216 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/grok-cli-adapter.cjs](../../tests/grok-cli-adapter.cjs) | 601 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/grok-cli-task-runner.cjs](../../tests/grok-cli-task-runner.cjs) | 315 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
@@ -303,8 +330,8 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [tests/picker-selection-gate.cjs](../../tests/picker-selection-gate.cjs) | 59 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/project-meta-serialization.cjs](../../tests/project-meta-serialization.cjs) | 80 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/project-roots.cjs](../../tests/project-roots.cjs) | 102 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
-| [tests/prompt-plan-v2.cjs](../../tests/prompt-plan-v2.cjs) | 259 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
-| [tests/prompt-plan-warning-location.cjs](../../tests/prompt-plan-warning-location.cjs) | 56 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
+| [tests/prompt-plan-v2.cjs](../../tests/prompt-plan-v2.cjs) | 191 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
+| [tests/prompt-plan-warning-location.cjs](../../tests/prompt-plan-warning-location.cjs) | 59 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/r2-manager-parity.cjs](../../tests/r2-manager-parity.cjs) | 488 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/r2-object-index.cjs](../../tests/r2-object-index.cjs) | 120 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/release-201-compare.cjs](../../tests/release-201-compare.cjs) | 96 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
@@ -321,7 +348,7 @@ IPC分類: binary-command=6 / binary-query=8 / command=65 / event=2 / native-rep
 | [tests/stage-load-recovery.cjs](../../tests/stage-load-recovery.cjs) | 55 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/standard-graph-fixture.cjs](../../tests/standard-graph-fixture.cjs) | 42 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/thumbnail-cache-prune.cjs](../../tests/thumbnail-cache-prune.cjs) | 103 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
-| [tests/thumbnail-stage.cjs](../../tests/thumbnail-stage.cjs) | 526 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
+| [tests/thumbnail-stage.cjs](../../tests/thumbnail-stage.cjs) | 528 | W12 / P8 / G12 | source照合の前提を更新、service/API/E2Eの挙動を検証 |
 | [tests/ui-state.cjs](../../tests/ui-state.cjs) | 66 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/vastai-client.cjs](../../tests/vastai-client.cjs) | 534 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/workflow-api-graph.cjs](../../tests/workflow-api-graph.cjs) | 262 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
@@ -350,8 +377,8 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | PROJECT_CLOSE | invoke: [project.ts:154](../../src/main/ipc-registration/project.ts#L154) | ui-flow | W03 / P3 / G03 |  |
 | PROJECT_SELECT_PARENT | invoke: [project.ts:167](../../src/main/ipc-registration/project.ts#L167) | native-replacement | W03 / P3 / G03 |  |
 | PROJECT_CREATE | invoke: [project.ts:177](../../src/main/ipc-registration/project.ts#L177) | command | W03 / P3 / G03 |  |
-| PROJECT_MENU_COMMAND | notification: [main.ts:533](../../src/main/main.ts#L533), [main.ts:797](../../src/main/main.ts#L797), [main.ts:814](../../src/main/main.ts#L814), [main.ts:832](../../src/main/main.ts#L832) | ui-local | W03 / P3 / G03 |  |
-| EDITOR_FLUSH_REQUEST | notification: [main.ts:1417](../../src/main/main.ts#L1417) | ui-flow | W02 / P3 / G02 |  |
+| PROJECT_MENU_COMMAND | notification: [main.ts:540](../../src/main/main.ts#L540), [main.ts:804](../../src/main/main.ts#L804), [main.ts:821](../../src/main/main.ts#L821), [main.ts:839](../../src/main/main.ts#L839) | ui-local | W03 / P3 / G03 |  |
+| EDITOR_FLUSH_REQUEST | notification: [main.ts:1379](../../src/main/main.ts#L1379) | ui-flow | W02 / P3 / G02 |  |
 | EDITOR_FLUSH_RESULT | invoke: [project.ts:51](../../src/main/ipc-registration/project.ts#L51) | ui-flow | W02 / P3 / G02 |  |
 | PROJECT_SCAN | invoke: [project.ts:195](../../src/main/ipc-registration/project.ts#L195) | query | W03 / P3 / G03 |  |
 | PROJECT_OPEN_FOLDER | invoke: [project.ts:199](../../src/main/ipc-registration/project.ts#L199) | native-replacement | W03 / P3 / G03 |  |
@@ -444,7 +471,7 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | THUMBNAIL_PICKER_COMMIT_RESULT | invoke: [image.ts:408](../../src/main/ipc-registration/image.ts#L408) | ui-flow | W09 / P7 / G09 |  |
 | THUMBNAIL_PICKER_PREVIEWED | notification: [image.ts:358](../../src/main/ipc-registration/image.ts#L358) | ui-flow | W09 / P7 / G09 |  |
 | THUMBNAIL_PICKER_COMMITTED | notification: [image.ts:399](../../src/main/ipc-registration/image.ts#L399) | ui-flow | W09 / P7 / G09 |  |
-| THUMBNAIL_PICKER_CANCELLED | notification: [main.ts:663](../../src/main/main.ts#L663) | ui-flow | W09 / P7 / G09 |  |
+| THUMBNAIL_PICKER_CANCELLED | notification: [main.ts:670](../../src/main/main.ts#L670) | ui-flow | W09 / P7 / G09 |  |
 | MARKETPLACE_TARGETS | invoke: [image.ts:498](../../src/main/ipc-registration/image.ts#L498) | query | W09 / P7 / G09 |  |
 | MARKETPLACE_LIST_THUMBNAILS | invoke: [image.ts:443](../../src/main/ipc-registration/image.ts#L443) | query | W09 / P7 / G09 |  |
 | MARKETPLACE_READ_SOURCE | invoke: [image.ts:447](../../src/main/ipc-registration/image.ts#L447) | binary-query | W09 / P7 / G09 |  |
@@ -465,7 +492,7 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | MARKETPLACE_PICKER_COMMIT_RESULT | invoke: [image.ts:688](../../src/main/ipc-registration/image.ts#L688) | ui-flow | W09 / P7 / G09 |  |
 | MARKETPLACE_PICKER_PREVIEWED | notification: [image.ts:640](../../src/main/ipc-registration/image.ts#L640) | ui-flow | W09 / P7 / G09 |  |
 | MARKETPLACE_PICKER_COMMITTED | notification: [image.ts:680](../../src/main/ipc-registration/image.ts#L680) | ui-flow | W09 / P7 / G09 |  |
-| MARKETPLACE_PICKER_CANCELLED | notification: [main.ts:749](../../src/main/main.ts#L749) | ui-flow | W09 / P7 / G09 |  |
+| MARKETPLACE_PICKER_CANCELLED | notification: [main.ts:756](../../src/main/main.ts#L756) | ui-flow | W09 / P7 / G09 |  |
 | R2_SETTINGS | invoke: [storage.ts:7](../../src/main/ipc-registration/storage.ts#L7) | query | W08 / P5 / G08 |  |
 | R2_ENVIRONMENT | invoke: [storage.ts:8](../../src/main/ipc-registration/storage.ts#L8) | query | W08 / P5 / G08 |  |
 | R2_TEST | invoke: [storage.ts:9](../../src/main/ipc-registration/storage.ts#L9) | command | W08 / P5 / G08 |  |
@@ -495,7 +522,7 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | ASSISTANT_SET_PROVIDER | invoke: [assistant.ts:104](../../src/main/ipc-registration/assistant.ts#L104) | command | W04 / P4 / G04 |  |
 | ASSISTANT_SET_CONTEXT | invoke: [assistant.ts:112](../../src/main/ipc-registration/assistant.ts#L112) | ui-flow | W04 / P4 / G04 |  |
 | ASSISTANT_CONTEXT | invoke: [assistant.ts:122](../../src/main/ipc-registration/assistant.ts#L122) | ui-flow | W04 / P4 / G04 |  |
-| ASSISTANT_CONTEXT_CHANGED | notification: [assistant.ts:78](../../src/main/ipc-registration/assistant.ts#L78), [main.ts:1805](../../src/main/main.ts#L1805) | ui-flow | W04 / P4 / G04 |  |
+| ASSISTANT_CONTEXT_CHANGED | notification: [assistant.ts:78](../../src/main/ipc-registration/assistant.ts#L78), [main.ts:1763](../../src/main/main.ts#L1763) | ui-flow | W04 / P4 / G04 |  |
 | ASSISTANT_SNAPSHOT | invoke: [assistant.ts:126](../../src/main/ipc-registration/assistant.ts#L126) | query | W04 / P4 / G04 |  |
 | ASSISTANT_SEND | invoke: [assistant.ts:129](../../src/main/ipc-registration/assistant.ts#L129) | command | W04 / P4 / G04 |  |
 | ASSISTANT_STOP_TURN | invoke: [assistant.ts:145](../../src/main/ipc-registration/assistant.ts#L145) | command | W04 / P4 / G04 |  |
@@ -508,8 +535,8 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | ASSISTANT_SET_DIVIDER_X | invoke: [assistant.ts:205](../../src/main/ipc-registration/assistant.ts#L205) | ui-local | W04 / P4 / G04 |  |
 | AGENT_TASK_START | invoke: [assistant.ts:242](../../src/main/ipc-registration/assistant.ts#L242) | command | W04 / P4 / G04 |  |
 | AGENT_TASK_STOP | invoke: [assistant.ts:260](../../src/main/ipc-registration/assistant.ts#L260) | command | W04 / P4 / G04 |  |
-| AGENT_EVENT | notification: [main.ts:1866](../../src/main/main.ts#L1866), [main.ts:1873](../../src/main/main.ts#L1873) | event | W04 / P4 / G04 |  |
-| AUTO_ARTIFACT_EVENT | notification: [main.ts:1952](../../src/main/main.ts#L1952), [main.ts:1953](../../src/main/main.ts#L1953) | event | W04 / P4 / G04 |  |
+| AGENT_EVENT | notification: [main.ts:1824](../../src/main/main.ts#L1824), [main.ts:1831](../../src/main/main.ts#L1831) | event | W04 / P4 / G04 |  |
+| AUTO_ARTIFACT_EVENT | notification: [main.ts:1910](../../src/main/main.ts#L1910), [main.ts:1911](../../src/main/main.ts#L1911) | event | W04 / P4 / G04 |  |
 
 ## Test全fileの実行経路と処置
 
@@ -534,7 +561,9 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [tests/codex-snapshot-race.cjs](../../tests/codex-snapshot-race.cjs) | standalone | 挙動検証へ置換/補完 | G04 | P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復 (G12) |
 | [tests/codex-turn-status.cjs](../../tests/codex-turn-status.cjs) | standalone | 挙動検証へ置換/補完 | G04 | P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復 (G12) |
 | [tests/compiler-lora-mode.cjs](../../tests/compiler-lora-mode.cjs) | npm-test | 契約維持・server buildへ適合 | G05 | P8までに新test実行経路へ接続 (G12) |
+| [tests/core-artifacts.cjs](../../tests/core-artifacts.cjs) | core-local | 契約維持・server buildへ適合 | G03, G05, G06, G09 | P1からcore単独回帰に接続済み。P2以降も必須 (G12) |
 | [tests/core-policy.cjs](../../tests/core-policy.cjs) | core-local | 契約維持・server buildへ適合 | G03, G06, G09, G10 | P1からcore単独回帰に接続済み。P2以降も必須 (G12) |
+| [tests/core-support/artifact-fixtures.cjs](../../tests/core-support/artifact-fixtures.cjs) | support | harness/fixture移植 | G12 | P8までに新test実行経路へ接続 (G12) |
 | [tests/core-support/memory-ports.cjs](../../tests/core-support/memory-ports.cjs) | support | harness/fixture移植 | G12 | P8までに新test実行経路へ接続 (G12) |
 | [tests/execution-coordinator.cjs](../../tests/execution-coordinator.cjs) | npm-test | 契約維持・server buildへ適合 | G06 | P8までに新test実行経路へ接続 (G12) |
 | [tests/execution-run.cjs](../../tests/execution-run.cjs) | npm-test | 挙動検証へ置換/補完 | G06 | P8までに新test実行経路へ接続 (G12) |

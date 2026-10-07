@@ -1,4 +1,4 @@
-import { BusinessError, type ArtifactKey, type Validation } from './contracts.js';
+import { type ArtifactKey, BusinessError, type Validation } from './contracts.js';
 export interface Artifact {
   key: ArtifactKey;
   content: string;

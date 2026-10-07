@@ -1,19 +1,32 @@
+import { assertConfirmable, downstream } from '../domain/artifact-policy.js';
+import type {
+  ModelFamily,
+  ModelSelectionBase,
+  ModelsArtifact,
+  TextEncoderSelection,
+  VaeSelection,
+} from '../domain/artifact-types.js';
 import {
-  authorize,
-  BusinessError,
-  requireId,
+  changesGenerationInputs,
+  parseArtifact,
+  validateCanonicalArtifact,
+} from '../domain/canonical-artifact.js';
+import {
   type ActorContext,
   type ArtifactKey,
+  authorize,
+  BusinessError,
   type Command,
   type MutationCommand,
+  requireId,
 } from '../domain/contracts.js';
-import { assertConfirmable, downstream } from '../domain/artifact-policy.js';
 import { leaveProject } from '../domain/execution-policy.js';
+import { configureBaseModels, replaceModelSelection } from '../domain/model-editing.js';
 import { assertCurrentProject, assertMutation, nextRevision } from './project-access.js';
 import {
-  event,
-  type ArtifactValidator,
+  type CatalogRepository,
   type Clock,
+  event,
   type IdSource,
   type ProjectRepository,
   type ProjectState,
@@ -21,7 +34,7 @@ import {
 export class ProjectUseCases {
   constructor(
     private readonly repository: ProjectRepository,
-    private readonly validator: ArtifactValidator,
+    private readonly catalogs: CatalogRepository,
     private readonly clock: Clock,
     private readonly ids: IdSource,
   ) {}
@@ -84,7 +97,7 @@ export class ProjectUseCases {
       async (project) => {
         if (!Object.hasOwn(downstream, command.key) || typeof command.content !== 'string')
           throw new BusinessError('INVALID_INPUT', 'Unknown artifact or invalid content.');
-        const validation = await this.validator.validate(command.key, command.content, project);
+        const validation = await this.validate(command.key, command.content, project);
         project.drafts[command.key] = {
           key: command.key,
           content: command.content,
@@ -95,6 +108,60 @@ export class ProjectUseCases {
       command.key,
     );
   }
+  async configureModels(
+    actor: ActorContext,
+    command: MutationCommand & {
+      family: ModelFamily;
+      base: ModelSelectionBase;
+      textEncoder?: TextEncoderSelection;
+      vae?: VaeSelection;
+    },
+  ) {
+    return this.mutate(
+      actor,
+      command,
+      async (project) => {
+        const catalog = await this.catalogs.read(project.id);
+        const models = configureBaseModels({ ...command, catalog });
+        const content = JSON.stringify(models);
+        const validation = await this.validate('models', content, project);
+        if (!validation.valid)
+          throw new BusinessError(
+            'INVALID_ARTIFACT',
+            'Base selection does not match the current catalog.',
+          );
+        project.drafts.models = { key: 'models', content, status: 'draft', validation };
+      },
+      'models',
+    );
+  }
+  async replaceModels(
+    actor: ActorContext,
+    command: MutationCommand & { expected: ModelSelectionBase; next: ModelSelectionBase },
+  ) {
+    return this.mutate(
+      actor,
+      command,
+      async (project) => {
+        const source = project.drafts.models ?? project.artifacts.models;
+        if (!source || source.status === 'stale')
+          throw new BusinessError('INVALID_ARTIFACT', 'Current model selection is required.');
+        const models = parseArtifact(source.content) as ModelsArtifact | null;
+        if (!models || models.schemaVersion !== 5)
+          throw new BusinessError('INVALID_ARTIFACT', 'Current model schema is required.');
+        const updated = replaceModelSelection(models, command.expected, command.next);
+        const content = JSON.stringify(updated);
+        const validation = await this.validate('models', content, project);
+        if (!validation.valid)
+          throw new BusinessError(
+            'INVALID_ARTIFACT',
+            'Replacement does not match the current catalog.',
+          );
+        project.drafts.models = { key: 'models', content, status: 'draft', validation };
+      },
+      'models',
+    );
+  }
   async confirm(actor: ActorContext, command: MutationCommand & { key: ArtifactKey }) {
     return this.mutate(
       actor,
@@ -103,14 +170,19 @@ export class ProjectUseCases {
         const draft = project.drafts[command.key];
         assertConfirmable(draft);
         // Revalidate canonical content inside the transaction, not a UI result.
-        const validation = await this.validator.validate(command.key, draft.content, project);
+        const validation = await this.validate(command.key, draft.content, project);
         if (!validation.valid)
           throw new BusinessError('INVALID_ARTIFACT', 'Canonical validation rejected the draft.');
+        const changed = changesGenerationInputs(
+          command.key,
+          project.artifacts[command.key]?.content,
+          draft.content,
+        );
         draft.status = 'confirmed';
         draft.validation = validation;
         project.artifacts[command.key] = draft;
         delete project.drafts[command.key];
-        for (const key of downstream[command.key]) {
+        for (const key of changed ? downstream[command.key] : []) {
           const item = project.artifacts[key];
           if (item) item.status = 'stale';
           const pending = project.drafts[key];
@@ -139,6 +211,15 @@ export class ProjectUseCases {
       command.key,
     );
   }
+  private async validate(key: ArtifactKey, content: string, project: ProjectState) {
+    const confirmed = project.artifacts.models;
+    const models =
+      confirmed?.status === 'confirmed' && confirmed.validation.valid
+        ? (parseArtifact(confirmed.content) as ModelsArtifact | null)
+        : null;
+    const catalog = key === 'models' ? await this.catalogs.read(project.id) : null;
+    return validateCanonicalArtifact(key, content, models, catalog);
+  }
   private async mutate(
     actor: ActorContext,
     command: MutationCommand,
@@ -147,6 +228,8 @@ export class ProjectUseCases {
   ) {
     authorize(actor, command.projectId, 'edit');
     requireId(subjectId, 'Artifact');
+    if (!Object.hasOwn(downstream, subjectId))
+      throw new BusinessError('INVALID_INPUT', 'Unknown artifact.');
     return this.repository.transaction(command.projectId, async (tx) => {
       const project = await tx.load();
       assertMutation(actor, command, project, this.clock);

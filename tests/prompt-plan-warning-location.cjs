@@ -2,7 +2,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const validationSrc = fs.readFileSync(path.resolve(__dirname, '../src/main/validation.ts'), 'utf8');
+const validationSrc = fs.readFileSync(
+  path.resolve(__dirname, '../src/domain/artifact-validation.ts'),
+  'utf8',
+);
 const uiSrc = fs.readFileSync(path.resolve(__dirname, '../src/renderer/ui.tsx'), 'utf8');
 const promptPlanSrc = fs.readFileSync(
   path.resolve(__dirname, '../src/renderer/PromptPlanStage.tsx'),

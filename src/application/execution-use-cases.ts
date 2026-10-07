@@ -1,23 +1,27 @@
 import {
+  type ActorContext,
   authorize,
   BusinessError,
-  requireId,
-  type ActorContext,
   type Command,
+  requireId,
 } from '../domain/contracts.js';
 import {
   assertRunState,
   assertStopped,
+  executionState,
   planRunStop,
   type RunState,
   type StopPlan,
 } from '../domain/execution-policy.js';
+import { createExecutionRun, type ExecutionCreationPorts } from './execution-creation.js';
+import { type ExecutionRecoveryPorts, recoverExecutionRun } from './execution-recovery.js';
 export interface ExecutionPort {
   withRunLock<T>(projectId: string, runId: string, work: () => Promise<T>): Promise<T>;
-  // Must reserve Project and external resource ownership atomically before launch.
-  start(projectId: string, requestId: string): Promise<RunState>;
+  // Supplies scoped IO operations; all creation decisions remain in application.
+  creation(projectId: string, requestId: string): Promise<ExecutionCreationPorts>;
+  launch(projectId: string, runId: string): Promise<void>;
   load(projectId: string, runId: string): Promise<RunState>;
-  reconcile(projectId: string, runId: string): Promise<RunState>;
+  recovery(projectId: string, runId: string): Promise<ExecutionRecoveryPorts>;
   pausePreparation(projectId: string, runId: string): Promise<void>;
   stopScheduling(projectId: string, runId: string): Promise<void>;
   interrupt(projectId: string, runId: string): Promise<void>;
@@ -35,17 +39,35 @@ export class ExecutionUseCases {
   }
   async start(actor: ActorContext, command: Command) {
     authorize(actor, command.projectId, 'execute');
-    const run = await this.runtime.start(command.projectId, actor.requestId);
-    assertRunState(run);
-    return run;
+    const ports = await this.runtime.creation(command.projectId, actor.requestId);
+    const capture = ports.capture.bind(ports);
+    const run = await createExecutionRun({
+      exclusive: (work) => ports.exclusive(work),
+      current: () => ports.current(),
+      preflight: () => ports.preflight(),
+      persistSnapshot: (id, snapshot) => ports.persistSnapshot(id, snapshot),
+      removeSnapshot: (id) => ports.removeSnapshot(id),
+      write: (run) => ports.write(run),
+      setCurrent: (id) => ports.setCurrent(id),
+      now: () => ports.now(),
+      nextId: () => ports.nextId(),
+      capture: async (preflight) => {
+        const snapshot = await capture(preflight);
+        if (snapshot.projectId !== command.projectId)
+          throw new BusinessError('FORBIDDEN', 'Run snapshot scope mismatch.');
+        return snapshot;
+      },
+    });
+    await this.runtime.launch(command.projectId, run.runId);
+    return executionState(run);
   }
   async recover(actor: ActorContext, command: Command & { runId: string }) {
     authorize(actor, command.projectId, 'execute');
     requireId(command.runId, 'Run');
-    const run = await this.runtime.reconcile(command.projectId, command.runId);
-    assertRunState(run);
-    if (run.id !== command.runId) throw new BusinessError('FORBIDDEN', 'Run scope mismatch.');
-    return run;
+    return this.runtime.withRunLock(command.projectId, command.runId, async () => {
+      const ports = await this.runtime.recovery(command.projectId, command.runId);
+      return recoverExecutionRun(ports, command.projectId, command.runId);
+    });
   }
   async stop(
     actor: ActorContext,

@@ -20,7 +20,7 @@ const main = readMainProcessSource(repo);
 const standalone = read('src/renderer/StandaloneToolApp.tsx');
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
-const preflight = read('src/main/preflight.ts');
+const preflight = read('src/application/preflight.ts');
 const vastClient = read('src/main/vastai-client.ts');
 
 matchCode(app, /サービス連携/);

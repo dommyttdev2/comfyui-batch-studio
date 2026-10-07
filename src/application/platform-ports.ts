@@ -17,6 +17,3 @@ export interface ResourceStore {
 export interface ArtifactRepository {
   read(projectId: string, key: ArtifactKey): Promise<string>;
 }
-export interface Compiler {
-  compile(projectId: string, models: string, promptPlan: string): Promise<string>;
-}
