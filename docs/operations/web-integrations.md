@@ -1,0 +1,24 @@
+# 新Web外部連携の設定
+
+P5作業中。契約は[web-integrations](../contracts/web-integrations.md)。旧Electronの設定は読み込まない。serverを停止して管理者CLIで新規登録する。
+
+## 明示設定元
+
+BATCH_STUDIO_DATA_DIRは独立Webの既存data directory。BATCH_STUDIO_SECRET_SOURCEにenvironmentまたはvaultを必ず指定し、BATCH_STUDIO_INTEGRATION_PROVIDERSにcivitai,r2,vastの使用providerをカンマ区切りで指定する。Secret値をコマンド引数やログに書かず、管理者が環境変数を設定したprocessでnpm run init:server-integrationsを実行する。既存登録は上書きできず、稼働serverのleaseがあると登録を拒否する。
+
+- Civitai: BATCH_STUDIO_SECRET_CIVITAI_API_KEY。
+- R2: BATCH_STUDIO_R2_ACCOUNT（32桁小文字hex）、BATCH_STUDIO_SECRET_R2_ACCESS_KEY_ID、BATCH_STUDIO_SECRET_R2_SECRET_ACCESS_KEY。公開URLを使う場合はBATCH_STUDIO_R2_PUBLIC_URLをHTTPSで明示する。
+- Vast: BATCH_STUDIO_SECRET_VAST_API_KEY。
+- vault: BATCH_STUDIO_VAULT_KEYに管理者が生成した32byte鍵を64桁小文字hexで指定する。鍵をGit/store/会話へ保存しない。server起動時も同じ鍵を管理者のSecret管理から環境に注入する。
+
+environmentは固定名の変数だけを実行時参照する。vaultは初回指定SecretをAES-256-GCMで暗号化してintegrations.jsonに保存し、以後のSecret更新はadmin設定APIを使う。sourceを自動切替しない。vaultのprovider credential環境変数は初回登録後に削除してよいがmaster keyはserver実行に必要。鍵を紛失すると暗号文を復号できないため、管理者のSecret管理で鍵の保管・復旧を行う。
+
+## 公開設定API
+
+GET /api/v1/integrations/settingsはread/admin権限で、設定有無・global revision・provider状態・provider revision・R2 account/public URL・操作権限のみ返す。Secret値、暗号文、鍵元、物理pathは返さない。readyは設定を解決できる状態で、サービスとの疎通成功を意味しない。
+
+POSTはadmin、session、Origin/CSRF/buildが必要。bodyはprovider、expectedRevision、settingsのみ。settingsはenabledとR2 account/publicUrl、vaultで新規登録/更新する場合だけsecretsを含む。expectedRevisionはGETで取得したglobal revision。環境元へのSecret書込、任意endpoint/URL/role、確認booleanは拒否する。競合時は現在設定を取得して利用者が再確認する。
+
+未登録はunconfigured、無効設定はdisabled、指定Secret/鍵不足・暗号文不一致はunavailable。未知schema/壊れた登録はserver起動を拒否する。旧Secret、別環境変数、平文、fixtureで復旧しない。CLIのDocker subprocessは固定のOS環境変数だけを渡し、統合Secretやmaster keyを継承しない。
+
+実Civitai/R2/Vast、SSHと転送の操作・受入は後続P5子Issueで接続する。この設定実装だけでP5受入完了とは扱わない。
