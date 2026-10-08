@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export type PickerGridSize = 'large' | 'medium' | 'small';
 const COLUMNS: Record<PickerGridSize, number> = { large: 3, medium: 5, small: 7 };
@@ -101,9 +101,10 @@ export function VirtualPickerGrid<T extends { path: string }>({
     <div
       ref={viewportRef}
       className="thumbnail-image-picker-viewport"
-      onScroll={(event) =>
-        setGeometry((current) => ({ ...current, top: event.currentTarget.scrollTop }))
-      }
+      onScroll={(event) => {
+        const top = event.currentTarget.scrollTop;
+        setGeometry((current) => ({ ...current, top }));
+      }}
     >
       <div
         className="thumbnail-image-picker-virtual-space"
