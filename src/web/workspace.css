@@ -238,3 +238,16 @@ div[role="alertdialog"] {
     flex-wrap: wrap;
   }
 }
+
+.assistant-messages {
+  max-height: 35vh;
+  overflow: auto;
+}
+.assistant-messages pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.assistant-job {
+  padding: 0.5rem 0;
+  border-top: 1px solid #555;
+}

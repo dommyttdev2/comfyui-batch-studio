@@ -387,7 +387,7 @@
     {
       "file": "package.json",
       "lines": 74,
-      "sha256": "d7e4a3bd09983c10e026952f86f12f489a66123c36950ac56a1811a88517fc03",
+      "sha256": "f540fc8bdaab8da933696e10103954f70603a5f1f190f53574503f4af8c6f8fb",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -645,7 +645,7 @@
     {
       "file": "scripts/check-web-boundaries.cjs",
       "lines": 30,
-      "sha256": "dc55339b685535875eae3f0801588cf1e7d47191cb601f43f6640417e06afb77",
+      "sha256": "0121b5c5bb3d4bf6fae22dfb38333f32ecbeea09e74a4312a8ae2cc817a23847",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -11313,8 +11313,8 @@
     },
     {
       "file": "src/web/api.ts",
-      "lines": 147,
-      "sha256": "14b6018b61a8af8d22c3d20cf60432d62c07d4e70c0380e7b2c3b3b51a3af7da",
+      "lines": 149,
+      "sha256": "d03b5676a7d6f827c879c6a4215d68d507eea379b354713d2f2cf7ff906b6264",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P3",
@@ -11330,6 +11330,58 @@
         "ApiError",
         "Api",
         "api"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/web/assistant-pane.tsx",
+      "lines": 267,
+      "sha256": "f932004132459dee4b15a08a0c67895845006caa92cf8ee6eb8482116a746b1c",
+      "workPackage": "W02",
+      "layer": "web-presentation",
+      "phase": "P3",
+      "gate": "G02",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "react",
+        "./assistant",
+        "./workspace",
+        "./modal",
+        ", {})}\n                      >\n                        成果物を再取り込み\n                      </button>\n                    ) : null}\n                  </span>\n                ))}\n            </div>\n          ))}\n        </>\n      )}\n      {discard && (\n        <Dialog title="
+      ],
+      "exports": [
+        "AssistantPane"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/web/assistant.ts",
+      "lines": 268,
+      "sha256": "7ddf813830e47b0a6dd6c5be444f4ca3bef6556dd30d6f08cf7bef1ab7f9e97b",
+      "workPackage": "W02",
+      "layer": "web-presentation",
+      "phase": "P3",
+      "gate": "G02",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./api",
+        "./workspace"
+      ],
+      "exports": [
+        "History",
+        "AssistantState",
+        "tasks",
+        "assistant"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -11360,8 +11412,8 @@
     },
     {
       "file": "src/web/main.tsx",
-      "lines": 496,
-      "sha256": "661f23c3c7bee59c533fa105e93c772bf96a198de3fa7695f3c6d06ccfbd7112",
+      "lines": 459,
+      "sha256": "710cc1c0fe3f90bab60d91dc9a3f373e16e9d49876e94182c43571c3c660bfd1",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P3",
@@ -11369,6 +11421,7 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "./assistant-pane",
         "./modal",
         "react",
         "react-dom/client",
@@ -11430,8 +11483,8 @@
     },
     {
       "file": "src/web/workspace.css",
-      "lines": 241,
-      "sha256": "692593a53bcb25541e06fae66318060f41097d4dc0cd8eda83cedd449bdac812",
+      "lines": 254,
+      "sha256": "d737accff6b7bd102cf3e29018f08d503973b09ea5c686baa90d12115899f5de",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P3",
@@ -11448,8 +11501,8 @@
     },
     {
       "file": "src/web/workspace.ts",
-      "lines": 316,
-      "sha256": "abde7c9fc4bb77f2f401543ee95465a3ca5b0b11b3994f59ea760b320c7ad8a0",
+      "lines": 324,
+      "sha256": "95967e75fbd9eab62466d3de5d81f0fa73a54eb3577e320cc999238d87853256",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P3",
@@ -13981,6 +14034,33 @@
       "entryReachable": false
     },
     {
+      "file": "tests/server-agent-browser.mjs",
+      "lines": 121,
+      "sha256": "bcf2d53d51a7f4df91e24f6ae7eef64f16f5e6a87fa9f6290c7e84794fa75edb",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "@playwright/test",
+        "./server-project-browser-fixtures.mjs",
+        "./server-agent-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "tests/server-agent-cli.mjs",
       "lines": 48,
       "sha256": "38ea3219b04ed9eb921c48e36d326ff9e1396da89541cba2b70b4aa8cc3ca4b9",
@@ -14366,7 +14446,7 @@
     {
       "file": "tests/server-project-browser-fixtures.mjs",
       "lines": 54,
-      "sha256": "cf55ed8a4070f854eea797734000a97f881a87e24f9b5a02f7d340d1e94f8679",
+      "sha256": "b899749c4f10a4480cbcb03bd21c4f7d784555b622428f97142f391fc33d3095",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -19069,6 +19149,18 @@
       "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
     },
     {
+      "file": "tests/server-agent-browser.mjs",
+      "registration": "browser-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
       "file": "tests/server-agent-cli.mjs",
       "registration": "agent-local",
       "treatment": "契約維持・server buildへ適合",
@@ -19818,16 +19910,16 @@
     }
   ],
   "counts": {
-    "files": 496,
-    "source": 345,
-    "tests": 104,
+    "files": 499,
+    "source": 347,
+    "tests": 105,
     "scripts": 16,
     "ipc": 172,
     "resources": 8,
     "documents": 38,
     "ownership": {
       "W01": 18,
-      "W02": 35,
+      "W02": 37,
       "W03": 34,
       "W04": 58,
       "W05": 33,
@@ -19837,7 +19929,7 @@
       "W09": 47,
       "W10": 26,
       "W11": 29,
-      "W12": 110,
+      "W12": 111,
       "W13": 11,
       "W14": 12
     },
@@ -19859,7 +19951,7 @@
       "CI-conditional": 2,
       "CI-only": 2,
       "agent-local": 5,
-      "browser-local": 1,
+      "browser-local": 2,
       "core-local": 4,
       "npm-test": 61,
       "project-local": 6,

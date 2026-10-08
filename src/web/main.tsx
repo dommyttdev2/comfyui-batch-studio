@@ -1,3 +1,4 @@
+import { AssistantPane } from './assistant-pane';
 import { Dialog, ModalHost } from './modal';
 import { useState, useSyncExternalStore, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -411,45 +412,7 @@ function App() {
                     <p>画像編集は後続フェーズで利用できます。</p>
                   )}
                 </section>
-                <aside className="assistant">
-                  <h2>Assistant</h2>
-                  <label>
-                    Provider
-                    <select
-                      value={tab.provider}
-                      onChange={(e) => {
-                        tab.provider = e.target.value;
-                        w.emit();
-                      }}
-                    >
-                      <option value="codex">Codex</option>
-                      <option value="grok">Grok</option>
-                    </select>
-                  </label>
-                  <label>
-                    Pane幅
-                    <input
-                      type="range"
-                      min="20"
-                      max="40"
-                      value={tab.pane}
-                      onChange={(e) => {
-                        tab.pane = Number(e.target.value);
-                        w.emit();
-                      }}
-                    />
-                  </label>
-                  <textarea
-                    aria-label="Assistant入力"
-                    value={tab.assistantInput}
-                    onChange={(e) => {
-                      tab.assistantInput = e.target.value;
-                      w.emit();
-                    }}
-                  />
-                  <p>CLI会話・taskはP4で接続します。</p>
-                  <button disabled>送信（未接続）</button>
-                </aside>
+                <AssistantPane tab={tab} />
               </main>
             )
           )}

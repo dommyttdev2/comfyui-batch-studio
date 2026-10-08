@@ -7,7 +7,7 @@ function walk(dir) {
     if (entry.isDirectory()) walk(file);
     else if (/\.tsx?$/.test(file)) {
       const source = fs.readFileSync(file, 'utf8');
-      for (const match of source.matchAll(/(?:\bfrom\s*|\bimport\s*)['"]([^'"]+)['"]/g)) {
+      for (const match of source.matchAll(/(?:\bfrom\s+|\bimport\s+)['"]([^'"]+)['"]/g)) {
         const target = match[1];
         if (
           target.startsWith('.')
