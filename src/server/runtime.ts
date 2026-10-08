@@ -4,6 +4,7 @@ import { EventBroker, attachEvents } from './events.js';
 import { fields, HttpFailure, json, type CommandController } from './http.js';
 import { JobRegistry, type JobDefinition } from './jobs.js';
 import { FileLease, Ownership } from './ownership.js';
+import { FixtureCatalog, WorkflowApi } from './workflow-api.js';
 import { ProjectApi } from './project-api.js';
 import { DiskProjects } from './project-repository.js';
 import { ProjectRegistration } from './project-registration.js';
@@ -29,6 +30,7 @@ export async function createServerRuntime(
     commands?: ReadonlyMap<string, CommandController>;
     definitions?: ReadonlyMap<string, JobDefinition>;
     shutdownMs?: number;
+    catalogFile?: string;
   } = {},
 ) {
   const shutdownMs = options.shutdownMs ?? 5000;
@@ -48,7 +50,9 @@ export async function createServerRuntime(
   const broker = new EventBroker(config.dataDir, (actor) => jobs.list(actor));
   jobs = new JobRegistry(config.dataDir, options.definitions ?? new Map(), broker.append);
   const repository = new DiskProjects(projects, ownership, broker);
-  const projectApi = new ProjectApi(repository);
+  const catalogs = new FixtureCatalog(options.catalogFile);
+  const projectApi = new ProjectApi(repository, catalogs);
+  const workflowApi = new WorkflowApi(config, repository, catalogs);
   let state: 'running' | 'draining' | 'closed' | 'uncertain' = 'running';
   let closing: Promise<void> | undefined;
   let runtime: Awaited<ReturnType<typeof startServer>>;
@@ -80,6 +84,7 @@ export async function createServerRuntime(
           return true;
         }
         if (await registration.route(context)) return true;
+        if (await workflowApi.route(context)) return true;
         if (await projectApi.route(context)) return true;
         return jobs.route(context);
       },
