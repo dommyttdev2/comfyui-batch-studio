@@ -122,8 +122,10 @@ export class Api {
       if (packet.sequence !== undefined) this.cursor = packet.sequence;
       receive(packet);
     };
-    ws.onclose = () => {
-      if (this.socket === ws) receive({ type: 'connection.closed' });
+    ws.onclose = (event) => {
+      if (this.socket !== ws) return;
+      if (event.code === 1008 && event.reason === 'Session unavailable.') this.onInvalidSession();
+      else receive({ type: 'connection.closed' });
     };
     ws.onerror = () => {
       if (this.socket === ws) receive({ type: 'connection.error' });

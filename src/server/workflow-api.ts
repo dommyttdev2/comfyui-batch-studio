@@ -100,9 +100,14 @@ export class WorkflowApi {
         hash = JSON.parse(await readFile(path.join(path.dirname(file), 'manifest.json'), 'utf8'))
           .template.sha256;
       } else {
-        const manifest = object(
-          JSON.parse(await readFile(path.join(root, 'web-assets.json'), 'utf8')),
-        );
+        let manifest;
+        try {
+          manifest = object(JSON.parse(await readFile(path.join(root, 'web-assets.json'), 'utf8')));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+            throw new HttpFailure(404, 'ASSET_NOT_FOUND');
+          throw error;
+        }
         fields(manifest, ['schema', 'assets']);
         if (manifest.schema !== 'web-assets/1' || !Array.isArray(manifest.assets))
           throw new HttpFailure(400, 'INVALID_ASSET_STORE');
@@ -117,6 +122,8 @@ export class WorkflowApi {
           !/^([a-f0-9]{64})$/.test(String(record.sha256))
         )
           throw new HttpFailure(400, 'INVALID_ASSET');
+        const assetRoot = path.join(root, 'assets');
+        if ((await realpath(assetRoot)) !== assetRoot) throw new HttpFailure(403, 'ASSET_ESCAPE');
         file = path.resolve(root, 'assets', record.file);
         const rel = path.relative(path.join(root, 'assets'), file);
         if (rel.startsWith('..') || path.isAbsolute(rel))

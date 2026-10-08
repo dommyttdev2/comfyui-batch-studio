@@ -47,6 +47,82 @@ function canonical(v: unknown): unknown {
     );
   return v;
 }
+export function validateProjectStore(value: unknown, id: string): Envelope {
+  const e = object(value);
+  fields(e, ['schema', 'project', 'operations', 'outbox', 'delivery', 'confirmations']);
+  if (
+    e.schema !== 'web-project-store/1' ||
+    !Array.isArray(e.confirmations) ||
+    !Array.isArray(e.operations) ||
+    !Array.isArray(e.outbox) ||
+    !Number.isSafeInteger(e.delivery) ||
+    Number(e.delivery) < 0 ||
+    Number(e.delivery) > e.outbox.length
+  )
+    throw new HttpFailure(400, 'INVALID_PROJECT_STORE');
+  assertCurrentProject(e.project as ProjectState, id);
+  for (const raw of e.confirmations) {
+    const c = object(raw);
+    fields(c, [
+      'id',
+      'userId',
+      'sessionId',
+      'projectId',
+      'operation',
+      'targetId',
+      'fingerprint',
+      'revision',
+      'expiresAt',
+    ]);
+    if (
+      c.projectId !== id ||
+      !['artifact-reset', 'stage-reset'].includes(String(c.operation)) ||
+      !['id', 'userId', 'sessionId', 'targetId'].every(
+        (k) => typeof c[k] === 'string' && String(c[k]).length > 0,
+      ) ||
+      !/^[a-f0-9]{64}$/.test(String(c.fingerprint)) ||
+      !Number.isSafeInteger(c.revision) ||
+      Number(c.revision) < 0 ||
+      !Number.isSafeInteger(c.expiresAt)
+    )
+      throw new HttpFailure(400, 'INVALID_PROJECT_STORE');
+  }
+  if (
+    new Set(e.operations.map((o) => String(o.user) + ':' + String(o.id))).size !==
+    e.operations.length
+  )
+    throw new HttpFailure(400, 'INVALID_PROJECT_STORE');
+  for (const op of e.operations) {
+    const o = object(op);
+    fields(o, ['id', 'user', 'hash', 'time', 'state', 'result']);
+    if (
+      typeof o.id !== 'string' ||
+      typeof o.user !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(String(o.hash)) ||
+      !Number.isSafeInteger(o.time) ||
+      !['reserved', 'done'].includes(String(o.state)) ||
+      (o.state === 'reserved' && o.result !== null)
+    )
+      throw new HttpFailure(400, 'INVALID_PROJECT_STORE');
+    if (o.result !== null) assertCurrentProject(o.result as ProjectState, id);
+  }
+  for (const raw of e.outbox) {
+    const x = object(raw);
+    fields(x, ['type', 'eventId', 'projectId', 'revision', 'subjectId', 'requestId']);
+    if (
+      x.type !== 'project.changed' ||
+      x.projectId !== id ||
+      typeof x.eventId !== 'string' ||
+      typeof x.subjectId !== 'string' ||
+      typeof x.requestId !== 'string' ||
+      !Number.isSafeInteger(x.revision) ||
+      Number(x.revision) < 0 ||
+      Number(x.revision) > Number((e.project as ProjectState).revision)
+    )
+      throw new HttpFailure(400, 'INVALID_PROJECT_STORE');
+  }
+  return e as unknown as Envelope;
+}
 export class DiskProjects implements ProjectRepository {
   private readonly queues = new Map<string, SerialQueue>();
   private readonly leases = new Map<string, FileLease>();
@@ -85,47 +161,7 @@ export class DiskProjects implements ProjectRepository {
     const file = path.join(root, 'web-project.json');
     const data = await readFile(file);
     if (data.length > 64 * 1024 * 1024) throw new HttpFailure(503, 'STORAGE_LIMIT');
-    const e = object(JSON.parse(data.toString()));
-    fields(e, ['schema', 'project', 'operations', 'outbox', 'delivery', 'confirmations']);
-    if (
-      e.schema !== 'web-project-store/1' ||
-      !Array.isArray(e.confirmations) ||
-      !Array.isArray(e.operations) ||
-      !Array.isArray(e.outbox) ||
-      !Number.isSafeInteger(e.delivery) ||
-      Number(e.delivery) < 0 ||
-      Number(e.delivery) > e.outbox.length
-    )
-      throw new HttpFailure(400, 'INVALID_PROJECT_STORE');
-    assertCurrentProject(e.project as ProjectState, id);
-    for (const op of e.operations) {
-      const o = object(op);
-      fields(o, ['id', 'user', 'hash', 'time', 'state', 'result']);
-      if (
-        typeof o.id !== 'string' ||
-        typeof o.user !== 'string' ||
-        typeof o.hash !== 'string' ||
-        !Number.isSafeInteger(o.time) ||
-        !['reserved', 'done'].includes(String(o.state))
-      )
-        throw new HttpFailure(400, 'INVALID_PROJECT_STORE');
-      if (o.result !== null) assertCurrentProject(o.result as ProjectState, id);
-    }
-    for (const raw of e.outbox) {
-      const x = object(raw);
-      fields(x, ['type', 'eventId', 'projectId', 'revision', 'subjectId', 'requestId']);
-      if (
-        x.type !== 'project.changed' ||
-        x.projectId !== id ||
-        typeof x.eventId !== 'string' ||
-        typeof x.subjectId !== 'string' ||
-        typeof x.requestId !== 'string' ||
-        !Number.isSafeInteger(x.revision) ||
-        Number(x.revision) > Number((e.project as ProjectState).revision)
-      )
-        throw new HttpFailure(400, 'INVALID_PROJECT_STORE');
-    }
-    return e as unknown as Envelope;
+    return validateProjectStore(JSON.parse(data.toString()), id);
   }
   private async persist(id: string, e: Envelope) {
     const encoded = JSON.stringify(e);
@@ -233,6 +269,8 @@ export class DiskProjects implements ProjectRepository {
           eventDelivery: e.delivery === e.outbox.length ? 'complete' : 'pending',
         };
       }
+      if (e.operations.some((o) => o.state === 'reserved'))
+        throw new HttpFailure(409, 'OPERATION_UNCERTAIN');
       if (e.operations.length >= 100000) throw new HttpFailure(503, 'STORAGE_LIMIT');
       for (const op of e.operations) if (this.now() - op.time > 7 * 86400000) op.result = null;
       const operation: Operation = {

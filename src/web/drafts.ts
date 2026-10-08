@@ -9,6 +9,12 @@ export interface DraftRecord {
   updatedAt: number;
 }
 export class Drafts {
+  private pending: Promise<unknown> = Promise.resolve();
+  private serial<T>(work: () => Promise<T>): Promise<T> {
+    const next = this.pending.catch(() => {}).then(work);
+    this.pending = next;
+    return next;
+  }
   private connection?: Promise<IDBDatabase>;
   private db() {
     return (this.connection ??= new Promise<IDBDatabase>((resolve, reject) => {
@@ -37,32 +43,38 @@ export class Drafts {
     });
   }
   async put(value: Omit<DraftRecord, 'id' | 'schema' | 'updatedAt'>) {
-    const record: DraftRecord = {
-      ...value,
-      id: [value.userId, value.projectId, value.key].join(':'),
-      schema: 'web-draft/1',
-      updatedAt: Date.now(),
-    };
-    const all = (await this.all()).filter(
-      (r) =>
-        r.userId === value.userId && r.id !== record.id && Date.now() - r.updatedAt <= 7 * 86400000,
-    );
-    if (new TextEncoder().encode(JSON.stringify([...all, record])).length > 20 * 1024 * 1024)
-      throw Error('DRAFT_STORAGE_LIMIT');
-    await this.write((s) => s.put(record));
+    return this.serial(async () => {
+      const record: DraftRecord = {
+        ...value,
+        id: [value.userId, value.projectId, value.key].join(':'),
+        schema: 'web-draft/1',
+        updatedAt: Date.now(),
+      };
+      const all = (await this.all()).filter(
+        (r) =>
+          r.userId === value.userId &&
+          r.id !== record.id &&
+          Date.now() - r.updatedAt <= 7 * 86400000,
+      );
+      if (new TextEncoder().encode(JSON.stringify([...all, record])).length > 20 * 1024 * 1024)
+        throw Error('DRAFT_STORAGE_LIMIT');
+      await this.write((s) => s.put(record));
+    });
   }
   async remove(user: string, project: string, key: string) {
-    await this.write((s) => s.delete([user, project, key].join(':')));
+    await this.serial(() => this.write((s) => s.delete([user, project, key].join(':'))));
   }
   async purge(user: string, allowed?: string[]) {
-    const all = await this.all();
-    await this.write((s) => {
-      for (const r of all)
-        if (
-          r.userId === user &&
-          (!allowed || !allowed.includes(r.projectId) || Date.now() - r.updatedAt > 7 * 86400000)
-        )
-          s.delete(r.id);
+    return this.serial(async () => {
+      const all = await this.all();
+      await this.write((s) => {
+        for (const r of all)
+          if (
+            r.userId === user &&
+            (!allowed || !allowed.includes(r.projectId) || Date.now() - r.updatedAt > 7 * 86400000)
+          )
+            s.delete(r.id);
+      });
     });
   }
   async recover(user: string, project: string) {

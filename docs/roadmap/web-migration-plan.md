@@ -401,4 +401,4 @@ P1は親Issue #305 / PR #309が完了し、刷新branchのf221c1799a668e757e6f4d
 
 ## 13. P3着手管理（2026-10-08）
 
-P2はPR #323で刷新branchの053cd134920a573179bb99072545b3cd977f0021にsquash統合済み。P3親Issue [#334](https://github.com/dommyttdev2/comfyui-batch-studio/issues/334)と子Issue #335–#343を起票し、codex/web-p3-334-project-workspaceから刷新branch向け親draft PRを作成する。責務・依存と受入は[P3実行計画](web-migration-p3-plan.md)に一本化する。今回は実装未着手。
+P2はPR #323で刷新branchの053cd134920a573179bb99072545b3cd977f0021にsquash統合済み。P3親Issue [#334](https://github.com/dommyttdev2/comfyui-batch-studio/issues/334)と子Issue #335–#343を起票し、codex/web-p3-334-project-workspaceから刷新branch向け親draft PRを作成する。責務・依存と受入は[P3実行計画](web-migration-p3-plan.md)に一本化する。P3はProject/Artifact/Compiler fixture・画面内タブ・共通Modal Hostを実装し、Windows/Linux/Chromiumのローカル受入を完了した。次はP4の実CLI会話/task。詳細と残るphase境界は[P3受入](../quality/web-p3-acceptance.md)、[運用](../operations/web-workspace.md)を参照する。

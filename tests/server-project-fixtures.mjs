@@ -24,7 +24,7 @@ export async function projectFixture() {
     sessionId: 'session',
     requestId: 'request',
     projectIds: [],
-    permissions: ['read', 'edit', 'admin'],
+    permissions: ['read', 'edit', 'execute', 'admin'],
   };
   const created = await registration.provision(
     actor,

@@ -1,6 +1,6 @@
 # P3: Project・ArtifactとWeb shellの実行計画
 
-Status: Planned / 起票済み（2026-10-08）。今回の作業は管理・計画のみ。実装未着手。
+Status: Accepted / P3実装・ローカル受入完了（2026-10-08）。統合は親PR #344で刷新branchへ行う。
 
 ## 前提と目的
 
@@ -72,8 +72,22 @@ Repositoryのatomic outboxとP2 EventBrokerを接続する際は、重複配信�
 7. Chromiumの実browser E2EをP3で開始し、Electron不要のWeb build/startをWindows/Linuxで確認する。1/5/10 tabの応答/メモリ、listener/timer cleanupを同条件で記録する。実画像memory gateはP7。
 8. core/P2回帰・依存禁止検査・server/Web typecheck/build、索引--check、契約/正本対応表を確認し、全子Issue完了後に親PRをreadyへ変える。
 
-今回は計画・起票・branch/親PR作成のみ。製品codeの変更やP3テストの成功を意味しない。
+実装・受入の証拠は[P3受入matrix](../quality/web-p3-acceptance.md)、起動・復旧は[Web Workspace運用](../operations/web-workspace.md)を参照する。
 
 ## #335 契約確定
 
 Project/root/asset、lease/CAS/操作再送、atomic outbox/event、Workspace/Modal/draftの正本は[Web Project・Workspace契約](../contracts/web-project-workspace.md)。受入境界は[P3受入matrix](../quality/web-p3-acceptance.md)。P2 job-only eventとlease取得のみの実装との差分を明示し、#336–#343へ割り当てた。これは契約確定であり、P3製品機能の実装完了ではない。
+
+## 実装PRの対応
+
+- #335: [PR #345](https://github.com/dommyttdev2/comfyui-batch-studio/pull/345)。
+- #336: [PR #346](https://github.com/dommyttdev2/comfyui-batch-studio/pull/346)。
+- #337: [PR #347](https://github.com/dommyttdev2/comfyui-batch-studio/pull/347)。
+- #338: [PR #348](https://github.com/dommyttdev2/comfyui-batch-studio/pull/348)。
+- #339: [PR #349](https://github.com/dommyttdev2/comfyui-batch-studio/pull/349)。
+- #340: [PR #350](https://github.com/dommyttdev2/comfyui-batch-studio/pull/350)。
+- #341: [PR #351](https://github.com/dommyttdev2/comfyui-batch-studio/pull/351)。
+- #342: [PR #352](https://github.com/dommyttdev2/comfyui-batch-studio/pull/352)。
+- #343: 統合受入・復旧CLI・独立Web境界・Docker Chromium・正本/索引更新。
+
+P3の製品経路はsrc/web（presentation）、src/server（HTTP/WS・実IO）、src/application/src/domain（業務判断）に分離済み。P4へ進む。
