@@ -4,7 +4,7 @@ Status: Planning evidence / 再照合: 2026-10-08
 
 [移行計画](web-migration-plan.md)のW01–W14とG01–G14を正本とする。後方互換性なし・旧データマイグレーションなし・fallback禁止を全項目へ適用する。新dataDir/現行schema/明示設定で開始し、対応外・失敗はerrorとする。各code fileとIPCは主担当を一つだけ持つ。phaseは主実装受入段階。desktopRemovalPhase=P9は旧sourceの残存確認・撤去段階であり、互換adapterを提供する期間ではない。依存・横断条件は計画側を参照する。
 
-基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全425コード・設定（src 309、tests 80、scripts 9）、8 binary asset、32仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
+基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全426コード・設定（src 309、tests 80、scripts 9）、8 binary asset、33仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
 
 [機械可読索引](web-migration-inventory.json)にhash・import・根拠行・分類・test実行経路を保存する。[再照合ツール](web-migration-audit.cjs)は`node docs/roadmap/web-migration-audit.cjs --check`で検証し、`--write`で再生成する。現索引との差分、未分類file/IPC、主担当重複、IPC方向/handler不整合は失敗する。新file/IPCの処置をレビューしてから再生成する。
 
@@ -30,7 +30,7 @@ Status: Planning evidence / 再照合: 2026-10-08
 | W08 R2転送・object管理 | 13 | P5 | G08 |
 | W09 画像・Caption・成果物・Picker | 47 | P7 | G09 |
 | W10 起動・OS・Secret基盤 | 15 | P5 | G10 |
-| W11 build・起動配布・更新 | 24 | P8 | G11 |
+| W11 build・起動配布・更新 | 25 | P8 | G11 |
 | W12 検証・test harness | 82 | P8 | G12 |
 | W13 schema・runtime resource | 11 | P8 | G13 |
 | W14 旧実装整理 | 12 | P9 | G14 |
@@ -46,6 +46,7 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [.github/workflows/ci.yml](../../.github/workflows/ci.yml) | 42 | W11 / P8 / G11 | Windows/Linux server + browser E2E/画像検証へ |
 | [.github/workflows/release-201-performance.yml](../../.github/workflows/release-201-performance.yml) | 79 | W11 / P8 / G11 | Web/server配布設定として確認 |
 | [.gitignore](../../.gitignore) | 7 | W11 / P8 / G11 | 配布設定をWeb/server構成へ適合 |
+| [.release-pr-body.md](../../.release-pr-body.md) | 5 | W11 / P8 / G11 | 配布設定をWeb/server構成へ適合 |
 | [Dockerfile](../../Dockerfile) | 23 | W11 / P8 / G11 | 配布設定をWeb/server構成へ適合 |
 | [biome.json](../../biome.json) | 39 | W11 / P8 / G11 | Web/server配布設定として確認 |
 | [compose.yaml](../../compose.yaml) | 12 | W11 / P8 / G11 | 配布設定をWeb/server構成へ適合 |
@@ -776,6 +777,7 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [docs/requirements/requirements.md](../../docs/requirements/requirements.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/roadmap/business-core-separation-verification.md](../../docs/roadmap/business-core-separation-verification.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/roadmap/implementation-phases.md](../../docs/roadmap/implementation-phases.md) | 移行完了時に該当仕様を更新 (W11/G11) |
+| [docs/roadmap/web-workspace-tabs-plan.md](../../docs/roadmap/web-workspace-tabs-plan.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/ui/application-shell.md](../../docs/ui/application-shell.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/ui/japanese-ux-design.md](../../docs/ui/japanese-ux-design.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/ui/project-initialization.md](../../docs/ui/project-initialization.md) | 移行完了時に該当仕様を更新 (W11/G11) |

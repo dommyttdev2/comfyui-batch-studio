@@ -158,7 +158,7 @@ IPCはquery 44、command 65、binary-query 8、binary-command 6、event 2、ui-l
 ### 4.2 セッション・同時編集・終了
 
 - ClientSessionは選択Project、工程、provider、画面状態を所有する。runtimeとProjectファイルの所有者にはしない。
-- 同一Projectは複数タブで閲覧できる。初期版はProjectごとに一つの編集leaseを持たせ、他のタブは閲覧専用にする。複数編集を後から認めてもserver revision/CASを必須にする。
+- 複数Projectは、1つのブラウザ画面内のアプリ内タブで切り替える。同一ProjectはWorkspace内で1タブとし、再Openは既存タブを選択する。Projectごとの工程・draft・Pane状態を保持する。他clientとの編集leaseとserver revision/CASは維持する。Civitai Explorer/R2 Browser等は大型モーダルで操作する。詳細は[画面内タブ・モーダル計画](web-workspace-tabs-plan.md)を参照する。
 - 新schemaのrevisionはserverが発行し、更新にはexpectedRevisionを必須とする。不一致は409相当の競合、欠落・旧形式は入力errorとする。client hookとthumbnail/marketplace server保存の三箇所を変更し、時刻採番や旧revisionの読み替えを残さない。
 - app内navigationはflush完了後に移動。tab終了だけで保存成功を保証しない。必要な未送信draftは端末内で回復可能にし、再送時もCASを適用する。
 - 現`EXECUTION_LEAVE`はProject一致の検証後にtrueを返し、工程移動ではRunを停止しない。Webでも維持する。現Desktopで停止確認があるのはProject切替・window close・app exitである。Webではtab切断/Project切替とserver終了を分離し、tab離脱でruntimeを停止しない。この差分だけを仕様変更として文書・testへ反映する。
@@ -393,3 +393,8 @@ mainの必要な業務修正は同期専用Issue/PRで新契約へ適合する�
 - 旧調査とCLI修正は元の作業ツリーに保持されている。旧P1原型はユーザー指示により破棄した。P1は計画と新契約の確定後に改めて実装する。
 - Docker/Linux検証環境はv0.82.0に含まれる既存基盤として使用する。過去の別作業ツリーの検証成功を、新baselineの実装受入へ流用しない。
 - P0の索引再照合、未接続testの採否、UI/画像/Run/AIの受入checklistを[開始基準と受入チェックリスト](web-migration-baseline-checklist.md)へ整理した。P1の層分離・core単独検証は[業務coreの境界と受入](web-migration-core-design.md)へ記録した。Web機能受入は各後続phaseで行う。
+
+
+## 12. P2着手管理（2026-10-08）
+
+P1は親Issue #305 / PR #309が完了し、刷新branchのf221c1799a668e757e6f4de141100588c2547a6bに統合済み。次は[P2親Issue #313](https://github.com/dommyttdev2/comfyui-batch-studio/issues/313)のserver基盤を進める。ブランチ・子Issue・依存・受入条件は[P2実行計画](web-migration-p2-plan.md)を参照する。今回の計画追加はP2実装完了を意味しない。

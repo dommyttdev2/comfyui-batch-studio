@@ -23,6 +23,7 @@
       ".dockerignore",
       ".gitattributes",
       ".gitignore",
+      ".release-pr-body.md",
       "Dockerfile",
       "biome.json",
       "compose.yaml",
@@ -229,6 +230,24 @@
           "text": "dist-electron/"
         }
       ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": ".release-pr-body.md",
+      "lines": 5,
+      "sha256": "73e3fc123b0fa47b0749c7dcc5b1c9450d146f6723891193676e583085050693",
+      "workPackage": "W11",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G11",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
     },
@@ -17045,7 +17064,7 @@
   "documents": [
     {
       "file": "docs/README.md",
-      "sha256": "2ca4e4f7624ec73e117d8496aa04dabbd78820f7c65cd6cd6b54d23d002574bd",
+      "sha256": "880e923c2f89fd14da3cf13b17417ff8c4c6348ddc2a1f248698783fd1d84424",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -17226,6 +17245,13 @@
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
+      "file": "docs/roadmap/web-workspace-tabs-plan.md",
+      "sha256": "2d4ca8a669b651f3c17e804686a01e13a6ef1d74c1672ef9cc8b97855fc5b31e",
+      "workPackage": "W11",
+      "gate": "G11",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
       "file": "docs/ui/application-shell.md",
       "sha256": "9acb43aecbcc52c5cd3da8418adedd0e3644a75a25e7d711d13672e4499d2145",
       "workPackage": "W11",
@@ -17269,13 +17295,13 @@
     }
   ],
   "counts": {
-    "files": 425,
+    "files": 426,
     "source": 309,
     "tests": 80,
     "scripts": 9,
     "ipc": 172,
     "resources": 8,
-    "documents": 32,
+    "documents": 33,
     "ownership": {
       "W01": 12,
       "W02": 27,
@@ -17287,7 +17313,7 @@
       "W08": 13,
       "W09": 47,
       "W10": 15,
-      "W11": 24,
+      "W11": 25,
       "W12": 82,
       "W13": 11,
       "W14": 12
