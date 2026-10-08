@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import path from 'node:path';
@@ -19,7 +19,13 @@ export interface Principal {
   projectIds: string[];
   permissions: Permission[];
 }
-type Session = { principal: Principal; fingerprint: string; csrf: string; expiresAt: number };
+type Session = {
+  publicId: string;
+  principal: Principal;
+  fingerprint: string;
+  csrf: string;
+  expiresAt: number;
+};
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 function equal(a: string, b: string): boolean {
   const left = Buffer.from(a);
@@ -135,7 +141,7 @@ export class Security {
       throw new HttpFailure(403, 'CSRF_REJECTED');
     return {
       userId: principal.userId,
-      sessionId,
+      sessionId: session.publicId,
       projectIds: principal.projectIds,
       permissions: principal.permissions,
     };
@@ -170,6 +176,7 @@ export class Security {
         const sessionId = randomBytes(32).toString('hex');
         const csrf = randomBytes(32).toString('hex');
         this.sessions.set(sessionId, {
+          publicId: randomUUID(),
           principal,
           fingerprint: hash(JSON.stringify(principal)),
           csrf,
