@@ -15,7 +15,9 @@ function walk(dir) {
             ? !['server', 'domain', 'application'].some((layer) =>
                 resolved.startsWith(path.join(root, 'src', layer) + path.sep),
               )
-            : !target.startsWith('node:') && target !== 'ws'
+            : !target.startsWith('node:') &&
+              target !== 'ws' &&
+              !(target === 'ssh2' && file === path.join(root, 'src/server/ssh-resources.ts'))
         )
           throw new Error('Forbidden server dependency: ' + file + ': ' + target);
       }
