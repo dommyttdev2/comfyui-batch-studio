@@ -21,6 +21,16 @@ export interface JobEvent {
   jobId: string;
   job: PublicJob;
 }
+export interface ProjectEvent {
+  type: 'project.changed';
+  eventId: string;
+  sequence: number;
+  projectId: string;
+  revision: number;
+  subjectId: string;
+  requestId: string;
+}
+type BrokerEvent = JobEvent | ProjectEvent;
 type Sink = (packet: unknown) => boolean;
 function validateJob(job: PublicJob): void {
   fields(object(job), [
@@ -67,7 +77,9 @@ export class EventBroker {
   private readonly file: string;
   private readonly queue = new SerialQueue();
   private sequence = 0;
-  private events: JobEvent[] = [];
+  private events: BrokerEvent[] = [];
+  private readonly delivered = new Map<string, number>();
+  private readonly projects = new Map<string, number>();
   private readonly subscribers = new Map<string, { projectIds: string[]; sink: Sink }>();
   private healthy = true;
   constructor(
@@ -82,9 +94,9 @@ export class EventBroker {
   async initialize(): Promise<void> {
     try {
       const value = object(JSON.parse(await readFile(this.file, 'utf8')));
-      fields(value, ['schema', 'sequence', 'events']);
+      fields(value, ['schema', 'sequence', 'events', 'delivered', 'projects']);
       if (
-        value.schema !== 'web-events/1' ||
+        value.schema !== 'web-events/2' ||
         !Number.isSafeInteger(value.sequence) ||
         (value.sequence as number) < 0 ||
         !Array.isArray(value.events) ||
@@ -92,8 +104,40 @@ export class EventBroker {
       )
         throw new HttpFailure(400, 'INVALID_EVENT_STORE');
       this.sequence = value.sequence as number;
+      if (!value.delivered || !value.projects) throw new HttpFailure(400, 'INVALID_EVENT_STORE');
+      for (const [id, seq] of Object.entries(object(value.delivered))) {
+        identifier(id);
+        if (!Number.isSafeInteger(seq) || Number(seq) < 1 || Number(seq) > this.sequence)
+          throw new HttpFailure(400, 'INVALID_EVENT_STORE');
+        this.delivered.set(id, Number(seq));
+      }
+      for (const [id, rev] of Object.entries(object(value.projects))) {
+        identifier(id);
+        if (!Number.isSafeInteger(rev) || Number(rev) < 0)
+          throw new HttpFailure(400, 'INVALID_EVENT_STORE');
+        this.projects.set(id, Number(rev));
+      }
       this.events = value.events.map((raw, index) => {
         const event = object(raw);
+        if (event.type === 'project.changed') {
+          fields(event, [
+            'type',
+            'eventId',
+            'sequence',
+            'projectId',
+            'revision',
+            'subjectId',
+            'requestId',
+          ]);
+          for (const k of ['eventId', 'projectId', 'subjectId', 'requestId']) identifier(event[k]);
+          if (
+            !Number.isSafeInteger(event.revision) ||
+            Number(event.revision) < 0 ||
+            event.sequence !== this.sequence - (value.events as unknown[]).length + index + 1
+          )
+            throw new HttpFailure(400, 'INVALID_EVENT_STORE');
+          return event as unknown as ProjectEvent;
+        }
         fields(event, [
           'type',
           'sequence',
@@ -142,7 +186,7 @@ export class EventBroker {
       };
       const events = [...this.events, event].slice(-this.capacity);
       try {
-        await atomicJson(this.file, { schema: 'web-events/1', sequence: event.sequence, events });
+        await this.persist(event.sequence, events);
       } catch (error) {
         this.healthy = false;
         throw error;
@@ -155,6 +199,60 @@ export class EventBroker {
       }
     });
   };
+  private persist(sequence = this.sequence, events = this.events) {
+    return atomicJson(this.file, {
+      schema: 'web-events/2',
+      sequence,
+      events,
+      delivered: Object.fromEntries(this.delivered),
+      projects: Object.fromEntries(this.projects),
+    });
+  }
+  appendProject = async (input: Omit<ProjectEvent, 'sequence'>): Promise<void> => {
+    for (const k of ['eventId', 'projectId', 'subjectId', 'requestId'] as const)
+      identifier(input[k]);
+    if (
+      input.type !== 'project.changed' ||
+      !Number.isSafeInteger(input.revision) ||
+      input.revision < 0
+    )
+      throw new HttpFailure(400, 'INVALID_EVENT');
+    await this.queue.run(async () => {
+      if (!this.healthy) throw new HttpFailure(503, 'EVENT_UNAVAILABLE');
+      if (this.delivered.has(input.eventId)) return;
+      if (this.delivered.size >= 100000 || this.sequence >= Number.MAX_SAFE_INTEGER)
+        throw new HttpFailure(503, 'STORAGE_LIMIT');
+      const event: ProjectEvent = { ...input, sequence: this.sequence + 1 };
+      const events = [...this.events, event].slice(-this.capacity);
+      this.delivered.set(input.eventId, event.sequence);
+      this.projects.set(
+        input.projectId,
+        Math.max(input.revision, this.projects.get(input.projectId) ?? 0),
+      );
+      try {
+        await this.persist(event.sequence, events);
+      } catch (e) {
+        this.healthy = false;
+        throw e;
+      }
+      this.sequence = event.sequence;
+      this.events = events;
+      for (const [id, client] of this.subscribers)
+        if (client.projectIds.includes(event.projectId) && !client.sink(event))
+          this.subscribers.delete(id);
+    });
+  };
+  async acknowledge(eventIds: string[]): Promise<void> {
+    await this.queue.run(async () => {
+      for (const id of eventIds) this.delivered.delete(id);
+      try {
+        await this.persist();
+      } catch (e) {
+        this.healthy = false;
+        throw e;
+      }
+    });
+  }
   async subscribe(
     actor: ActorContext,
     projectIds: string[],
@@ -176,6 +274,9 @@ export class EventBroker {
           !sink({
             type: 'snapshot',
             sequence: this.sequence,
+            projects: [...this.projects]
+              .filter(([id]) => projectIds.includes(id))
+              .map(([id, revision]) => ({ id, revision })),
             jobs: this.snapshots(actor)
               .filter((j) => projectIds.includes(j.projectId))
               .map(publicJob),

@@ -4,6 +4,7 @@ import { EventBroker, attachEvents } from './events.js';
 import { fields, HttpFailure, json, type CommandController } from './http.js';
 import { JobRegistry, type JobDefinition } from './jobs.js';
 import { FileLease, Ownership } from './ownership.js';
+import { DiskProjects } from './project-repository.js';
 import { ProjectRegistration } from './project-registration.js';
 import { Security } from './security.js';
 import { startServer } from './server.js';
@@ -45,6 +46,7 @@ export async function createServerRuntime(
   let jobs: JobRegistry;
   const broker = new EventBroker(config.dataDir, (actor) => jobs.list(actor));
   jobs = new JobRegistry(config.dataDir, options.definitions ?? new Map(), broker.append);
+  const repository = new DiskProjects(projects, ownership, broker);
   let state: 'running' | 'draining' | 'closed' | 'uncertain' = 'running';
   let closing: Promise<void> | undefined;
   let runtime: Awaited<ReturnType<typeof startServer>>;
@@ -52,6 +54,7 @@ export async function createServerRuntime(
     await registration.initialize();
     await broker.initialize();
     await jobs.initialize();
+    await repository.initialize();
     runtime = await startServer(config, {
       ...security.http(),
       commands: options.commands,
@@ -79,6 +82,7 @@ export async function createServerRuntime(
       },
     });
   } catch (error) {
+    await repository.close();
     await lease.release();
     throw error;
   }
@@ -108,6 +112,7 @@ export async function createServerRuntime(
           await httpClosed;
           throw new Error('HTTP work deadline exceeded; ownership requires reconciliation.');
         }
+        await repository.close();
         await lease.release();
         state = 'closed';
       } catch (error) {
