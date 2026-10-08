@@ -281,3 +281,159 @@ test('Chromium Civitai selection invokes current catalog validation and P1 LoRA 
     await f.close();
   }
 });
+
+import { randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { transformWithOxc } from 'vite';
+
+test('streaming browser SHA-256 matches Node for padding boundaries and irregular chunk splits', async () => {
+  const source = await readFile(new URL('../src/web/file-sha256.ts', import.meta.url), 'utf8');
+  const { code } = await transformWithOxc(source, 'file-sha256.ts');
+  const { Sha256 } = await import(
+    'data:text/javascript;base64,' + Buffer.from(code).toString('base64')
+  );
+  for (const size of [0, 1, 55, 56, 63, 64, 65, 127, 128, 1024 * 1024 + 17]) {
+    const bytes = randomBytes(size),
+      hash = new Sha256();
+    for (let offset = 0; offset < size; offset += 37)
+      hash.update(bytes.subarray(offset, offset + 37));
+    assert.equal(hash.digest(), createHash('sha256').update(bytes).digest('hex'));
+    assert.throws(() => hash.digest(), /HASH_FINISHED/);
+  }
+});
+test('Chromium resumes staging from the committed offset and rejects changed bytes of the same name and size', async () => {
+  const f = await browserFixture();
+  const p = f.page;
+  const bytes = randomBytes(8 * 1024 * 1024 + 99);
+  let release, entered;
+  const started = new Promise((r) => (entered = r)),
+    barrier = new Promise((r) => (release = r));
+  let first = true;
+  try {
+    await p.route('**/resources/staging/*', async (route) => {
+      if (route.request().method() === 'PUT' && first) {
+        first = false;
+        const response = await route.fetch();
+        entered();
+        await barrier;
+        await route.fulfill({ response });
+      } else await route.continue();
+    });
+    let d = await open(f, 'R2 Browser');
+    await d
+      .getByLabel('Browser file')
+      .setInputFiles({ name: 'resume.bin', mimeType: 'application/octet-stream', buffer: bytes });
+    await d.getByRole('button', { name: 'Browser fileをstagingへ送る', exact: true }).click();
+    await started;
+    await d.getByRole('button', { name: 'staging送信を一時停止', exact: true }).click();
+    release();
+    await expect(d.locator('.tool-result')).toContainText('一時停止');
+    const id = await d.getByLabel('再開するstaging ID').inputValue();
+    assert.ok(id);
+    await p.keyboard.press('Escape');
+    await p.getByRole('button', { name: 'ツール', exact: true }).click();
+    d = p.getByRole('dialog');
+    await d.getByRole('button', { name: 'stagingを開く', exact: true }).click();
+    await expect(d.locator('.tool-result')).toContainText('8388608');
+    const changed = Buffer.from(bytes);
+    changed[0] ^= 255;
+    await d
+      .getByLabel('Browser file')
+      .setInputFiles({ name: 'resume.bin', mimeType: 'application/octet-stream', buffer: changed });
+    await d.getByRole('button', { name: 'Browser fileをstagingへ送る', exact: true }).click();
+    await expect(d.getByRole('alert')).toContainText('SOURCE_CHANGED');
+    await d
+      .getByLabel('Browser file')
+      .setInputFiles({ name: 'resume.bin', mimeType: 'application/octet-stream', buffer: bytes });
+    await d.getByRole('button', { name: 'Browser fileをstagingへ送る', exact: true }).click();
+    await expect(d.locator('.tool-result')).toContainText('complete', { timeout: 20000 });
+    await expect(d.locator('.tool-result')).toContainText(
+      createHash('sha256').update(bytes).digest('hex'),
+    );
+  } finally {
+    release?.();
+    await f.close();
+  }
+});
+
+test('Chromium keeps R2 list and search pagination separate and exposes template download and conditional PUT operations', async () => {
+  const f = await browserFixture();
+  const p = f.page;
+  const seen = [];
+  try {
+    await p.route('**/integrations/r2/status', (r) =>
+      reply(r, { state: 'ready', canManage: true }),
+    );
+    await p.route('**/integrations/r2/list?**', (r) => {
+      const u = new URL(r.request().url());
+      seen.push(['list', u.searchParams.get('token')]);
+      return reply(r, {
+        objects: [{ key: 'page.bin', size: 1 }],
+        nextToken: u.searchParams.has('token') ? null : 's3-next',
+      });
+    });
+    await p.route('**/integrations/r2/search?**', (r) => {
+      const u = new URL(r.request().url());
+      seen.push(['search', u.searchParams.get('token')]);
+      return reply(r, {
+        objects: [{ key: 'search.bin', size: 2 }],
+        nextToken: u.searchParams.has('token') ? null : 'local:1',
+      });
+    });
+    await p.route('**/integrations/r2/templates?**', (r) =>
+      reply(r, {
+        revision: 1,
+        templates: [
+          {
+            id: 'template-one',
+            name: 'My models',
+            objects: [{ key: 'search.bin', name: 'search.bin', size: 2 }],
+          },
+        ],
+      }),
+    );
+    await p.route('**/integrations/r2/batch-download-info', (r) => {
+      assert.equal(r.request().postDataJSON().objects[0].key, 'search.bin');
+      return reply(r, {
+        objects: [{ name: 'search.bin', url: 'https://r2.invalid/signed-download' }],
+        expiresAt: Date.now() + 300000,
+      });
+    });
+    await p.route('**/integrations/r2/put-url-info', (r) => {
+      assert.equal(r.request().postDataJSON().key, 'new.bin');
+      return reply(r, {
+        url: 'https://r2.invalid/conditional-put',
+        expiresAt: Date.now() + 300000,
+      });
+    });
+    const d = await open(f, 'R2 Browser');
+    await d.getByLabel('Bucket', { exact: true }).fill('bucket-one');
+    await d.getByRole('button', { name: 'Object一覧', exact: true }).click();
+    await expect(d.getByRole('button', { name: '次ページ', exact: true })).toBeEnabled();
+    await d.getByRole('button', { name: '次ページ', exact: true }).click();
+    await expect(d.getByRole('button', { name: '次ページ', exact: true })).toBeDisabled();
+    await d.getByLabel('Object検索', { exact: true }).fill('search');
+    await d.getByRole('button', { name: 'Indexを検索', exact: true }).click();
+    await expect(d.getByRole('button', { name: '次ページ', exact: true })).toBeEnabled();
+    await d.getByRole('button', { name: '次ページ', exact: true }).click();
+    await expect(d.getByRole('button', { name: '次ページ', exact: true })).toBeDisabled();
+    assert.deepEqual(seen, [
+      ['list', null],
+      ['list', 's3-next'],
+      ['search', null],
+      ['search', 'local:1'],
+    ]);
+    await d.getByRole('button', { name: 'Template一覧', exact: true }).click();
+    await d.getByLabel('Download template', { exact: true }).selectOption('template-one');
+    await d.getByRole('button', { name: 'Templateの取得リンクを発行', exact: true }).click();
+    await expect(d.getByRole('link', { name: 'search.binを取得', exact: true })).toHaveAttribute(
+      'href',
+      'https://r2.invalid/signed-download',
+    );
+    await d.getByLabel('PUT先Object key', { exact: true }).fill('new.bin');
+    await d.getByRole('button', { name: '条件付きPUT URLを発行', exact: true }).click();
+    await expect(d.locator('.tool-result')).toContainText('https://r2.invalid/conditional-put');
+  } finally {
+    await f.close();
+  }
+});

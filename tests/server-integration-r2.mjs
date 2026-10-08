@@ -7,6 +7,7 @@ import { Readable } from 'node:stream';
 import test from 'node:test';
 import { ExternalOperations } from '../dist-server/server/external-operations.js';
 import { IntegrationSettings } from '../dist-server/server/integration-settings.js';
+import { JobRegistry } from '../dist-server/server/jobs.js';
 import { R2Service } from '../dist-server/server/r2-service.js';
 import { fixture } from './server-fixtures.mjs';
 
@@ -108,6 +109,7 @@ async function setup(dir) {
   await operations.initialize();
   return {
     service,
+    settings,
     operations,
     definitions,
     objects,
@@ -274,11 +276,24 @@ test('R2 API strictly validates fields/auth and streams downloads; templates per
     const url = http.runtime.origin + '/api/v1/integrations/r2/';
     const get = (endpoint) => fetch(url + endpoint, { headers: http.headers });
     const post = (endpoint, input) =>
-      fetch(url + endpoint, { method: 'POST', headers: http.headers, body: JSON.stringify(input) });
+      fetch(url + endpoint, {
+        method: 'POST',
+        headers: { ...http.headers, 'idempotency-key': 'index-request' },
+        body: JSON.stringify(input),
+      });
     assert.equal((await get('list?bucket=bucket&apiUrl=https://evil.invalid')).status, 400);
     assert.equal((await get('list?bucket=bucket&bucket=another')).status, 400);
     assert.equal((await fetch(url + 'buckets', { headers: http.baseHeaders })).status, 401);
-    await post('index', {});
+    const indexDefinitions = new Map([['r2-index', service.indexDefinition]]);
+    const indexJobs = new JobRegistry(http.dir, indexDefinitions);
+    await indexJobs.initialize();
+    service.attachIndexJobs(indexJobs, async (a) => a);
+    assert.equal((await post('index', {})).status, 400);
+    const indexResponse = await post('index', { projectId: 'A' });
+    assert.equal(indexResponse.status, 202);
+    const indexJob = (await indexResponse.json()).job;
+    await indexJobs.waitIdle(indexJob.id);
+    assert.equal(indexJobs.get(actor, indexJob.id).state, 'succeeded');
     assert.equal(
       (await (await get('search?bucket=bucket&query=a.safe')).json()).objects[0].key,
       'models/a.safetensors',
@@ -549,4 +564,54 @@ test('R2 copy retains the source and never invokes delete; bucket create/delete 
       }).initialize(),
       { code: 'R2_STORE_UNAVAILABLE' },
     );
+  }));
+
+test('trusted R2 Index job publishes events, rejects revoked grants and fences rotated credentials before persistence', () =>
+  directory(async (dir) => {
+    const f = await setup(dir);
+    let current = actor;
+    const events = [];
+    const jobs = new JobRegistry(
+      dir,
+      new Map([['r2-index', f.service.indexDefinition]]),
+      async (e) => events.push(e),
+    );
+    await jobs.initialize();
+    f.service.attachIndexJobs(jobs, async () => current);
+    let release, entered;
+    const barrier = new Promise((r) => (release = r)),
+      started = new Promise((r) => (entered = r));
+    const send = f.service.port.send;
+    f.service.port.send = async (name, input, signal) => {
+      if (name === 'ListObjectsV2') {
+        entered();
+        await barrier;
+      }
+      return send(name, input, signal);
+    };
+    const submit = (key) =>
+      jobs.submit(
+        actor,
+        'A',
+        'r2-index',
+        key,
+        { sourceFingerprint: f.settings.resolve('r2').fingerprint },
+        { stage: 'index', provider: 'r2', turnId: key },
+      );
+    const job = await submit('index-first');
+    await started;
+    current = { ...actor, permissions: ['read', 'execute'] };
+    release();
+    await jobs.waitIdle(job.id);
+    assert.equal(jobs.get(actor, job.id).state, 'failed');
+    assert.throws(() => f.service.indexedObjects('bucket'), { code: 'R2_INDEX_UNAVAILABLE' });
+    assert.ok(events.length >= 2);
+    current = actor;
+    f.service.port.send = send;
+    const second = await submit('index-second');
+    await jobs.waitIdle(second.id);
+    assert.equal(jobs.get(actor, second.id).state, 'succeeded');
+    assert.equal(f.service.indexedObjects('bucket').length, 1);
+    f.source.BATCH_STUDIO_SECRET_R2_SECRET_ACCESS_KEY = 'rotated-key';
+    assert.throws(() => f.service.indexedObjects('bucket'), { code: 'R2_INDEX_UNAVAILABLE' });
   }));

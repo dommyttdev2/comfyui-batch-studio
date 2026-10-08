@@ -171,8 +171,19 @@ export class Staging {
     return record;
   }
   private public(record: Record) {
-    const { id, name, size, offset, expiresAt, state, sha256 } = record;
-    return { id, name, size, offset, expiresAt, state, sha256, maxChunkBytes: MAX_CHUNK };
+    const { id, projectId, name, size, offset, expiresAt, state, sha256, expectedHash } = record;
+    return {
+      id,
+      projectId,
+      name,
+      size,
+      offset,
+      expiresAt,
+      state,
+      sha256,
+      expectedHash,
+      maxChunkBytes: MAX_CHUNK,
+    };
   }
   private async save(next: Store): Promise<void> {
     if (this.fault || Buffer.byteLength(JSON.stringify(next)) > 64 * 1024)

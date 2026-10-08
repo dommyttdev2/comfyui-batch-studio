@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { assistant as a, tasks } from './assistant';
-import { workspace as w, type Tab } from './workspace';
 import { Dialog } from './modal';
+import { type Tab, workspace as w } from './workspace';
 export function AssistantPane({ tab }: { tab: Tab }) {
   useSyncExternalStore(a.subscribe, a.snapshot);
   const s = a.state(tab),

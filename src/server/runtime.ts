@@ -58,6 +58,7 @@ export async function createServerRuntime(
   if (
     options.definitions?.has('agent') ||
     options.definitions?.has('civitai-sync') ||
+    options.definitions?.has('r2-index') ||
     options.definitions?.has('r2-transfer') ||
     options.definitions?.has('r2-object-copy')
   )
@@ -96,6 +97,8 @@ export async function createServerRuntime(
   const ssh = new SshResources(config.dataDir, integrations);
   externalDefinitions.set('trust-ssh', ssh.definition);
   const r2 = new R2Service(config.dataDir, integrations, externalDefinitions);
+  r2.attachIndexJobs(jobs, (actor) => security.forJob(actor));
+  definitions.set('r2-index', r2.indexDefinition);
   const externalOperations = new ExternalOperations(
     config.dataDir,
     externalDefinitions,
