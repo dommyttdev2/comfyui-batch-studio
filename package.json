@@ -31,7 +31,7 @@
     "test:core": "npm run build:core && node tests/core-policy.cjs && node tests/business-core.cjs && node tests/core-artifacts.cjs && node tests/core-separation.cjs",
     "build:server": "npm run build:core && tsc -p tsconfig.server.json && node scripts/server-build-manifest.cjs",
     "start:server": "node dist-server/server/entry.js",
-    "test:server": "npm run build:server && node --test tests/server-bootstrap.mjs tests/server-http.mjs tests/server-security.mjs",
+    "test:server": "npm run build:server && node --test tests/server-bootstrap.mjs tests/server-http.mjs tests/server-security.mjs tests/server-ownership.mjs",
     "init:server-auth": "node dist-server/server/auth-init.js"
   },
   "dependencies": {
