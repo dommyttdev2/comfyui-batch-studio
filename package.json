@@ -35,7 +35,7 @@
     "init:server-auth": "node dist-server/server/auth-init.js",
     "recover:server-lock": "node dist-server/server/recover.js",
     "init:server-root": "node dist-server/server/root-init.js",
-    "test:projects": "npm run build:server && node --test tests/server-project-registration.mjs"
+    "test:projects": "npm run build:server && node --test tests/server-project-registration.mjs tests/server-project-repository.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
