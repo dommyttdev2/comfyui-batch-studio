@@ -523,3 +523,5 @@ matchCode(
   /writeJsonAtomic\(manifestPath, manifest\)[\s\S]*cleanupTrackedOutput/,
   'old thumbnail cleanup must follow successful new output tracking',
 );
+
+require('./virtual-picker-scroll.cjs');
