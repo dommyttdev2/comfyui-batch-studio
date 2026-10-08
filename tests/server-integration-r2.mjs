@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
-import { Readable } from 'node:stream';
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
+import test from 'node:test';
+import { ExternalOperations } from '../dist-server/server/external-operations.js';
 import { IntegrationSettings } from '../dist-server/server/integration-settings.js';
 import { R2Service } from '../dist-server/server/r2-service.js';
-import { ExternalOperations } from '../dist-server/server/external-operations.js';
 import { fixture } from './server-fixtures.mjs';
+
 const actor = {
   userId: 'operator',
   sessionId: 'session',
@@ -28,15 +30,20 @@ async function setup(dir) {
     ['models/a.safetensors', { size: 4, etag: 'etag', bytes: Buffer.from('test') }],
   ]);
   const calls = [];
-  let loseCopy = false;
+  const bucketNames = new Set(['bucket']);
+  const inputs = [];
+  let loseMove = false,
+    ignoreDeleteCondition = false,
+    destinationRace = false;
   const port = {
     send: async (name, input) => {
       calls.push(name);
+      inputs.push({ name, input: { ...input, Body: undefined } });
       if (name === 'ListBuckets')
-        return { Buckets: [{ Name: 'bucket', CreationDate: new Date(0) }] };
+        return { Buckets: [...bucketNames].map((Name) => ({ Name, CreationDate: new Date(0) })) };
       if (name === 'ListObjectsV2')
         return {
-          Contents: [...objects]
+          Contents: (input.Bucket === 'bucket' ? [...objects] : [])
             .filter(([key]) => key.startsWith(input.Prefix))
             .map(([Key, row]) => ({
               Key,
@@ -49,25 +56,46 @@ async function setup(dir) {
       if (name === 'HeadObject') {
         const row = objects.get(input.Key);
         if (!row) throw { $metadata: { httpStatusCode: 404 } };
-        return { ContentLength: row.size, ETag: row.etag };
+        return { ContentLength: row.size, ETag: row.etag, Metadata: row.metadata ?? {} };
       }
-      if (name === 'CopyObject') {
-        const sourceKey = decodeURIComponent(input.CopySource.split('/').slice(1).join('/'));
-        const row = objects.get(sourceKey);
-        assert.equal(input.CopySourceIfMatch, row.etag);
-        objects.set(input.Key, row);
-        if (loseCopy) throw new Error('lost copy response');
-        return { CopyObjectResult: { ETag: row.etag } };
+      if (name === 'PutObject') {
+        if (destinationRace && input.Key.startsWith('models/b'))
+          objects.set(input.Key, { size: 7, etag: 'foreign', bytes: Buffer.from('foreign') });
+        if (input.IfNoneMatch === '*' && objects.has(input.Key))
+          throw { $metadata: { httpStatusCode: 412 } };
+        let bytes;
+        if (Buffer.isBuffer(input.Body)) bytes = input.Body;
+        else {
+          const parts = [];
+          for await (const part of input.Body) parts.push(Buffer.from(part));
+          bytes = Buffer.concat(parts);
+        }
+        const etag = '"' + createHash('md5').update(bytes).digest('hex') + '"';
+        objects.set(input.Key, { size: bytes.length, etag, bytes, metadata: input.Metadata ?? {} });
+        if (loseMove && input.Key.startsWith('models/')) throw new Error('lost move response');
+        return { ETag: etag };
       }
       if (name === 'DeleteObject') {
         const row = objects.get(input.Key);
-        if (row && input.IfMatch !== row.etag) throw new Error('precondition failed');
+        if (row && input.IfMatch !== row.etag && !ignoreDeleteCondition)
+          throw { $metadata: { httpStatusCode: 412 } };
         objects.delete(input.Key);
         return {};
       }
       if (name === 'GetObject') {
         const row = objects.get(input.Key);
-        return { Body: Readable.from([row.bytes]), ContentLength: row.size };
+        if (input.IfMatch && input.IfMatch !== row.etag)
+          throw { $metadata: { httpStatusCode: 412 } };
+        return { Body: Readable.from([row.bytes]), ContentLength: row.size, ETag: row.etag };
+      }
+      if (name === 'CreateBucket') {
+        bucketNames.add(input.Bucket);
+        return {};
+      }
+      if (name === 'DeleteBucket') {
+        if (input.Bucket === 'bucket' && objects.size) throw { $metadata: { httpStatusCode: 409 } };
+        bucketNames.delete(input.Bucket);
+        return {};
       }
       throw new Error('Unexpected command ' + name);
     },
@@ -85,8 +113,15 @@ async function setup(dir) {
     objects,
     source,
     calls,
-    loseCopy: () => {
-      loseCopy = true;
+    inputs,
+    loseMove: () => {
+      loseMove = true;
+    },
+    ignoreDeleteCondition: () => {
+      ignoreDeleteCondition = true;
+    },
+    destinationRace: () => {
+      destinationRace = true;
     },
   };
 }
@@ -118,14 +153,22 @@ test('R2 delete target requires confirmation, rechecks etag and never deletes ch
       bucket: 'bucket',
       keys: ['models/a.safetensors'],
     });
-    assert.ok(!f.calls.includes('DeleteObject'));
+    assert.ok(
+      !f.inputs.some(
+        (row) => row.name === 'DeleteObject' && row.input.Key === 'models/a.safetensors',
+      ),
+    );
     const p = await f.operations.prepare(actor, target.operation, target.targetId);
     f.objects.get('models/a.safetensors').etag = 'changed';
     await assert.rejects(
       f.operations.confirm(actor, target.operation, target.targetId, p.confirmationId),
       { code: 'TARGET_CHANGED' },
     );
-    assert.ok(!f.calls.includes('DeleteObject'));
+    assert.ok(
+      !f.inputs.some(
+        (row) => row.name === 'DeleteObject' && row.input.Key === 'models/a.safetensors',
+      ),
+    );
     const fresh = await f.operations.prepare(actor, target.operation, target.targetId);
     const r = await f.operations.confirm(
       actor,
@@ -137,10 +180,10 @@ test('R2 delete target requires confirmation, rechecks etag and never deletes ch
     assert.equal(f.operations.read(actor, r.id).state, 'succeeded');
     assert.equal(f.objects.size, 0);
   }));
-test('R2 lost copy response keeps source, persists uncertainty and does not replay effects during reconciliation', () =>
+test('R2 lost streamed move response keeps source, persists uncertainty and does not replay effects during reconciliation', () =>
   directory(async (dir) => {
     const f = await setup(dir);
-    f.loseCopy();
+    f.loseMove();
     const target = await f.service.createTarget(actor, {
       operation: 'move-object',
       bucket: 'bucket',
@@ -158,15 +201,19 @@ test('R2 lost copy response keeps source, persists uncertainty and does not repl
     assert.equal(f.operations.read(actor, r.id).state, 'uncertain');
     assert.ok(f.objects.has('models/a.safetensors'));
     assert.ok(f.objects.has('models/b.safetensors'));
-    const count = f.calls.filter((n) => n === 'CopyObject').length;
+    const count = f.calls.filter((n) => n === 'PutObject').length;
     assert.equal((await f.operations.reconcile(actor, r.id)).state, 'uncertain');
-    assert.equal(f.calls.filter((n) => n === 'CopyObject').length, count);
-    assert.ok(!f.calls.includes('DeleteObject'));
+    assert.equal(f.calls.filter((n) => n === 'PutObject').length, count);
+    assert.ok(
+      !f.inputs.some(
+        (row) => row.name === 'DeleteObject' && row.input.Key === 'models/a.safetensors',
+      ),
+    );
   }));
 test('credential rotation cannot bypass bucket scope exclusion of uncertain prior operation', () =>
   directory(async (dir) => {
     const f = await setup(dir);
-    f.loseCopy();
+    f.loseMove();
     const first = await f.service.createTarget(actor, {
       operation: 'move-object',
       bucket: 'bucket',
@@ -251,7 +298,11 @@ test('unknown R2 store and invalid object paths reject without overwrite or exte
       ),
       { code: 'FORBIDDEN' },
     );
-    assert.ok(!f.calls.includes('DeleteObject'));
+    assert.ok(
+      !f.inputs.some(
+        (row) => row.name === 'DeleteObject' && row.input.Key === 'models/a.safetensors',
+      ),
+    );
     const file = path.join(dir, 'r2.json');
     await writeFile(file, '{"schema":"legacy"}', { mode: 0o600 });
     const settings = new IntegrationSettings(dir, environment);
@@ -278,6 +329,151 @@ test('R2 confirmation operation must match the immutable server target action', 
     await assert.rejects(f.operations.prepare(actor, 'delete-bucket', target.targetId), {
       code: 'INVALID_OPERATION',
     });
+    assert.ok(!f.calls.includes('MoveObject'));
+    assert.ok(
+      !f.inputs.some(
+        (row) => row.name === 'DeleteObject' && row.input.Key === 'models/a.safetensors',
+      ),
+    );
+  }));
+test('R2 condition capability is proved on an operation-owned object; ignored Delete IfMatch never reaches user objects', () =>
+  directory(async (dir) => {
+    const f = await setup(dir);
+    f.ignoreDeleteCondition();
+    const target = await f.service.createTarget(actor, {
+      operation: 'delete-objects',
+      bucket: 'bucket',
+      keys: ['models/a.safetensors'],
+    });
+    const prepared = await f.operations.prepare(actor, target.operation, target.targetId);
+    const receipt = await f.operations.confirm(
+      actor,
+      target.operation,
+      target.targetId,
+      prepared.confirmationId,
+    );
+    await f.operations.drain();
+    assert.equal(f.operations.read(actor, receipt.id).state, 'uncertain');
+    assert.ok(f.objects.has('models/a.safetensors'));
+    assert.ok(
+      !f.inputs.some(
+        (row) => row.name === 'DeleteObject' && row.input.Key === 'models/a.safetensors',
+      ),
+    );
+  }));
+test('R2 destination created after confirmation is preserved; source is never deleted after a failed conditional streamed move', () =>
+  directory(async (dir) => {
+    const f = await setup(dir);
+    const target = await f.service.createTarget(actor, {
+      operation: 'move-object',
+      bucket: 'bucket',
+      keys: ['models/a.safetensors'],
+      destination: 'models/b.safetensors',
+    });
+    const prepared = await f.operations.prepare(actor, target.operation, target.targetId);
+    f.destinationRace();
+    const receipt = await f.operations.confirm(
+      actor,
+      target.operation,
+      target.targetId,
+      prepared.confirmationId,
+    );
+    await f.operations.drain();
+    assert.equal(f.operations.read(actor, receipt.id).state, 'uncertain');
+    assert.equal(f.objects.get('models/b.safetensors').bytes.toString(), 'foreign');
+    assert.equal(f.objects.get('models/a.safetensors').bytes.toString(), 'test');
+    assert.ok(
+      !f.inputs.some(
+        (row) => row.name === 'DeleteObject' && row.input.Key === 'models/a.safetensors',
+      ),
+    );
+  }));
+test('R2 successful move streams bytes with source/destination conditions and binds the new object to its durable receipt', () =>
+  directory(async (dir) => {
+    const f = await setup(dir);
+    const target = await f.service.createTarget(actor, {
+      operation: 'move-object',
+      bucket: 'bucket',
+      keys: ['models/a.safetensors'],
+      destination: 'models/b.safetensors',
+    });
+    const prepared = await f.operations.prepare(actor, target.operation, target.targetId);
+    const receipt = await f.operations.confirm(
+      actor,
+      target.operation,
+      target.targetId,
+      prepared.confirmationId,
+    );
+    await f.operations.drain();
+    assert.equal(f.operations.read(actor, receipt.id).state, 'succeeded');
+    assert.ok(!f.objects.has('models/a.safetensors'));
+    const destination = f.objects.get('models/b.safetensors');
+    assert.equal(destination.bytes.toString(), 'test');
+    assert.equal(destination.metadata['batch-operation'], receipt.id);
     assert.ok(!f.calls.includes('CopyObject'));
+    const request = f.inputs.find(
+      (row) => row.name === 'GetObject' && row.input.Key === 'models/a.safetensors',
+    );
+    assert.equal(request.input.IfMatch, 'etag');
+    const written = f.inputs.find(
+      (row) => row.name === 'PutObject' && row.input.Key === 'models/b.safetensors',
+    );
+    assert.equal(written.input.IfNoneMatch, '*');
+    await assert.rejects(
+      f.service.createTarget(actor, {
+        operation: 'delete-objects',
+        bucket: 'bucket',
+        keys: ['.batch-studio/probes/any'],
+      }),
+      { code: 'RESERVED_KEY' },
+    );
+  }));
+test('R2 copy retains the source and never invokes delete; bucket create/delete use confirmations and reject nonempty buckets', () =>
+  directory(async (dir) => {
+    const f = await setup(dir);
+    const perform = async (input) => {
+      const target = await f.service.createTarget(actor, input);
+      const prepared = await f.operations.prepare(actor, target.operation, target.targetId);
+      const receipt = await f.operations.confirm(
+        actor,
+        target.operation,
+        target.targetId,
+        prepared.confirmationId,
+      );
+      await f.operations.drain();
+      assert.equal(f.operations.read(actor, receipt.id).state, 'succeeded');
+    };
+    await perform({
+      operation: 'copy-object',
+      bucket: 'bucket',
+      keys: ['models/a.safetensors'],
+      destination: 'models/b.safetensors',
+    });
+    assert.equal(f.objects.get('models/a.safetensors').bytes.toString(), 'test');
+    assert.equal(f.objects.get('models/b.safetensors').bytes.toString(), 'test');
     assert.ok(!f.calls.includes('DeleteObject'));
+    await perform({ operation: 'create-bucket', bucket: 'empty-bucket', keys: [] });
+    assert.ok((await f.service.buckets()).some((row) => row.name === 'empty-bucket'));
+    await perform({ operation: 'delete-bucket', bucket: 'empty-bucket', keys: [] });
+    assert.ok(!(await f.service.buckets()).some((row) => row.name === 'empty-bucket'));
+    const target = await f.service.createTarget(actor, {
+      operation: 'delete-bucket',
+      bucket: 'bucket',
+      keys: [],
+    });
+    await assert.rejects(f.operations.prepare(actor, target.operation, target.targetId), {
+      code: 'BUCKET_NOT_EMPTY',
+    });
+    const store = JSON.parse(await readFile(path.join(dir, 'r2.json'), 'utf8'));
+    store.targets[0].keys = [];
+    await writeFile(path.join(dir, 'r2.json'), JSON.stringify(store), { mode: 0o600 });
+    const settings = new IntegrationSettings(dir, environment);
+    await settings.initialize();
+    await assert.rejects(
+      new R2Service(dir, settings, new Map(), {
+        send: async () => {},
+        signed: async () => '',
+      }).initialize(),
+      { code: 'R2_STORE_UNAVAILABLE' },
+    );
   }));

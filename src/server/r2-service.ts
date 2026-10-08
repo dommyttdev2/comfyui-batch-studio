@@ -1,39 +1,41 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, readFile } from 'node:fs/promises';
-import { pipeline } from 'node:stream/promises';
 import path from 'node:path';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import type { ActorContext } from '../domain/contracts.js';
-import type { R2Object } from '../domain/resource-observation-types.js';
 import type { R2BatchDownloadTemplate } from '../domain/integration-types.js';
 import { searchIndexedObjects } from '../domain/r2-object-index-policy.js';
 import {
+  normalizeBatchTemplateObjects,
   normalizeR2ObjectKey,
-  normalizeR2PutObjectKey,
-  objectName,
   normalizeR2PresignedExpiresIn,
   normalizeR2PutContentType,
-  normalizeBatchTemplateObjects,
+  normalizeR2PutObjectKey,
+  objectName,
 } from '../domain/r2-storage-policy.js';
+import type { R2Object } from '../domain/resource-observation-types.js';
 import {
-  saveR2Template,
   deleteSavedTemplate,
   type R2TemplateInput,
+  saveR2Template,
 } from '../domain/saved-template-policy.js';
-import type { IntegrationSettings } from './integration-settings.js';
 import type {
   ExternalDefinition,
-  ExternalOperation,
   ExternalFacts,
+  ExternalOperation,
 } from './external-operations.js';
 import {
   fields,
   HttpFailure,
   identifier,
+  type JsonObject,
   json,
   object,
-  type JsonObject,
   type RequestContext,
 } from './http.js';
+import type { IntegrationSettings } from './integration-settings.js';
+import { r2InternalPrefix, verifyR2ConditionalDelete } from './r2-conditions.js';
 import { R2Gateway, type R2Port } from './r2-gateway.js';
 import { atomicJson, SerialQueue } from './storage.js';
 
@@ -61,6 +63,7 @@ const mutations: ExternalOperation[] = [
   'delete-bucket',
   'delete-objects',
   'move-object',
+  'copy-object',
 ];
 function bucket(raw: unknown): string {
   if (typeof raw !== 'string' || !/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$/.test(raw))
@@ -70,6 +73,8 @@ function bucket(raw: unknown): string {
 function key(raw: unknown): string {
   if (typeof raw !== 'string' || !raw || Buffer.byteLength(raw) > 1024 || /[\0\r\n]/.test(raw))
     throw new HttpFailure(400, 'INVALID_KEY');
+  if (raw.replace(/^\/+/, '').startsWith(r2InternalPrefix))
+    throw new HttpFailure(400, 'RESERVED_KEY');
   return raw;
 }
 function text(raw: unknown, max = 1024): string {
@@ -106,15 +111,15 @@ export class R2Service {
             throw new HttpFailure(400, 'INVALID_OPERATION');
           return this.inspect(actor, id);
         },
-        execute: (actor, id, _receipt, facts) => {
+        execute: (actor, id, receipt, facts) => {
           if (this.owned(actor, id).operation !== op)
             throw new HttpFailure(400, 'INVALID_OPERATION');
-          return this.execute(actor, id, facts);
+          return this.execute(actor, id, facts, receipt);
         },
-        reconcile: (actor, _receipt, id, facts) => {
+        reconcile: (actor, receipt, id, facts) => {
           if (this.owned(actor, id).operation !== op)
             throw new HttpFailure(400, 'INVALID_OPERATION');
-          return this.reconcile(actor, id, facts);
+          return this.reconcile(actor, id, facts, receipt);
         },
       });
   }
@@ -205,6 +210,18 @@ export class R2Service {
           row.keys.length > 500
         )
           throw new Error('Invalid target');
+        if (
+          new Set(row.keys).size !== row.keys.length ||
+          ((row.operation === 'move-object' || row.operation === 'copy-object') &&
+            (row.keys.length !== 1 || row.destination === undefined)) ||
+          (row.operation === 'delete-objects' && !row.keys.length) ||
+          (String(row.operation).endsWith('bucket') && row.keys.length) ||
+          (row.operation !== 'move-object' &&
+            row.operation !== 'copy-object' &&
+            row.destination !== undefined) ||
+          (row.destination !== undefined && row.destination === row.keys[0])
+        )
+          throw new Error('Invalid target shape');
         row.keys.forEach(key);
         if (row.destination !== undefined) normalizeR2ObjectKey(key(row.destination));
         seen.add(row.id);
@@ -292,20 +309,29 @@ export class R2Service {
       (data.IsTruncated && typeof data.NextContinuationToken !== 'string')
     )
       throw new HttpFailure(502, 'R2_PROTOCOL');
-    const objects: R2Object[] = contents.map((row: any) => {
-      key(row.Key);
-      if (!Number.isSafeInteger(row.Size) || row.Size < 0 || typeof row.ETag !== 'string')
-        throw new HttpFailure(502, 'R2_PROTOCOL');
-      return {
-        key: row.Key,
-        name: objectName(row.Key),
-        size: row.Size,
-        etag: row.ETag,
-        lastModified: row.LastModified?.toISOString() ?? null,
-        storageClass: row.StorageClass,
-      };
-    });
-    return { objects, nextToken: data.IsTruncated ? data.NextContinuationToken : null };
+    const internalCount = contents.filter(
+      (row: any) => typeof row.Key === 'string' && row.Key.startsWith(r2InternalPrefix),
+    ).length;
+    const objects: R2Object[] = contents
+      .filter((row: any) => !(typeof row.Key === 'string' && row.Key.startsWith(r2InternalPrefix)))
+      .map((row: any) => {
+        key(row.Key);
+        if (!Number.isSafeInteger(row.Size) || row.Size < 0 || typeof row.ETag !== 'string')
+          throw new HttpFailure(502, 'R2_PROTOCOL');
+        return {
+          key: row.Key,
+          name: objectName(row.Key),
+          size: row.Size,
+          etag: row.ETag,
+          lastModified: row.LastModified?.toISOString() ?? null,
+          storageClass: row.StorageClass,
+        };
+      });
+    return {
+      objects,
+      internalCount,
+      nextToken: data.IsTruncated ? data.NextContinuationToken : null,
+    };
   }
   async syncIndex(actor: ActorContext) {
     admin(actor);
@@ -364,15 +390,18 @@ export class R2Service {
     if (new Set(keys).size !== keys.length) throw new HttpFailure(400, 'INVALID_INPUT');
     const op = input.operation as ExternalOperation;
     if (
-      (op === 'move-object' && keys.length !== 1) ||
+      ((op === 'move-object' || op === 'copy-object') && keys.length !== 1) ||
       (op === 'delete-objects' && !keys.length) ||
       (op.endsWith('bucket') && keys.length !== 0) ||
-      (op !== 'move-object' && input.destination !== undefined)
+      (op !== 'move-object' && op !== 'copy-object' && input.destination !== undefined)
     )
       throw new HttpFailure(400, 'INVALID_INPUT');
     const destination =
-      op === 'move-object' ? normalizeR2ObjectKey(key(input.destination)) : undefined;
-    if (destination === keys[0]) throw new HttpFailure(400, 'INVALID_INPUT');
+      op === 'move-object' || op === 'copy-object'
+        ? normalizeR2ObjectKey(key(input.destination))
+        : undefined;
+    if (destination !== undefined && destination === keys[0])
+      throw new HttpFailure(400, 'INVALID_INPUT');
     return this.queue.run(async () => {
       const next = this.current();
       if (next.targets.length >= 1000) throw new HttpFailure(409, 'R2_STORE_LIMIT');
@@ -427,8 +456,11 @@ export class R2Service {
       (t.operation !== 'create-bucket' && !existing)
     )
       throw new HttpFailure(409, 'TARGET_CHANGED');
-    if (t.operation === 'delete-bucket' && (await this.list(t.bucket)).objects.length)
-      throw new HttpFailure(409, 'BUCKET_NOT_EMPTY');
+    if (t.operation === 'delete-bucket') {
+      const contents = await this.list(t.bucket);
+      if (contents.objects.length || contents.internalCount)
+        throw new HttpFailure(409, 'BUCKET_NOT_EMPTY');
+    }
     const objects = [];
     for (const k of t.keys) {
       const h = await this.head(t.bucket, k);
@@ -441,6 +473,10 @@ export class R2Service {
       bucket: t.bucket,
       objects,
       destination: t.destination ?? null,
+      conditionalCheck:
+        t.keys.length > 0
+          ? '一時objectで条件付き削除を確認し、不成立なら対象を変更しません。'
+          : null,
     };
     return {
       revision: config.revision,
@@ -448,17 +484,21 @@ export class R2Service {
       summary,
     };
   }
-  private async execute(actor: ActorContext, id: string, prepared: ExternalFacts) {
+  private async execute(actor: ActorContext, id: string, prepared: ExternalFacts, receipt: string) {
     const target = this.owned(actor, id);
     const current = await this.inspect(actor, id);
     if (current.fingerprint !== prepared.fingerprint || current.revision !== prepared.revision)
       return { state: 'failed' as const };
+    this.owned(actor, id);
     if (target.operation === 'create-bucket')
       await this.port.send('CreateBucket', { Bucket: target.bucket });
     else if (target.operation === 'delete-bucket')
       await this.port.send('DeleteBucket', { Bucket: target.bucket });
     else if (target.operation === 'delete-objects') {
+      await verifyR2ConditionalDelete(this.port, target.bucket, receipt);
+      this.owned(actor, id);
       for (const row of prepared.summary.objects as JsonObject[]) {
+        this.owned(actor, id);
         await this.port.send('DeleteObject', {
           Bucket: target.bucket,
           Key: row.key,
@@ -469,28 +509,98 @@ export class R2Service {
       const source = (prepared.summary.objects as JsonObject[])[0];
       if (Number(source.size) > 5 * 1024 * 1024 * 1024)
         throw new HttpFailure(409, 'MULTIPART_MOVE_REQUIRED');
-      await this.port.send('CopyObject', {
-        Bucket: target.bucket,
-        Key: target.destination,
-        CopySource:
-          encodeURIComponent(target.bucket) +
-          '/' +
-          target.keys[0].split('/').map(encodeURIComponent).join('/'),
-        CopySourceIfMatch: source.etag,
-      });
-      const copied = await this.head(target.bucket, target.destination!);
-      const observed = await this.head(target.bucket, target.keys[0]);
-      if (!copied || copied.size !== source.size || !observed || observed.etag !== source.etag)
-        return { state: 'uncertain' as const };
-      await this.port.send('DeleteObject', {
+      if (target.operation === 'move-object')
+        await verifyR2ConditionalDelete(this.port, target.bucket, receipt);
+      this.owned(actor, id);
+      const response = await this.port.send('GetObject', {
         Bucket: target.bucket,
         Key: target.keys[0],
         IfMatch: source.etag,
       });
+      if (
+        !(response.Body instanceof Readable) ||
+        response.ContentLength !== source.size ||
+        response.ETag !== source.etag
+      ) {
+        response.Body?.destroy?.();
+        throw new HttpFailure(502, 'R2_PROTOCOL');
+      }
+      const controller = new AbortController(),
+        timer = setTimeout(() => controller.abort(), 30 * 60_000);
+      let bytes = 0;
+      const verifier = new Transform({
+        highWaterMark: 64 * 1024,
+        transform(chunk, _encoding, callback) {
+          bytes += chunk.length;
+          if (bytes > Number(source.size)) callback(new HttpFailure(502, 'R2_PROTOCOL'));
+          else callback(null, chunk);
+        },
+        flush(callback) {
+          callback(bytes === Number(source.size) ? null : new HttpFailure(502, 'R2_PROTOCOL'));
+        },
+      });
+      this.owned(actor, id);
+      const streamed = pipeline(response.Body, verifier, { signal: controller.signal });
+      void streamed.catch(() => {});
+      try {
+        await Promise.all([
+          streamed,
+          this.port.send(
+            'PutObject',
+            {
+              Bucket: target.bucket,
+              Key: target.destination,
+              Body: verifier,
+              ContentLength: source.size,
+              IfNoneMatch: '*',
+              Metadata: {
+                'batch-operation': receipt,
+                'batch-source-etag': Buffer.from(String(source.etag)).toString('base64'),
+                'batch-source-size': String(source.size),
+              },
+            },
+            controller.signal,
+          ),
+        ]);
+      } catch (error) {
+        controller.abort();
+        response.Body.destroy();
+        verifier.destroy();
+        await streamed.catch(() => {});
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
+      const copied = await this.port.send('HeadObject', {
+        Bucket: target.bucket,
+        Key: target.destination,
+      });
+      const observed = await this.head(target.bucket, target.keys[0]);
+      if (
+        copied.ContentLength !== source.size ||
+        copied.Metadata?.['batch-operation'] !== receipt ||
+        copied.Metadata?.['batch-source-etag'] !==
+          Buffer.from(String(source.etag)).toString('base64') ||
+        (target.operation === 'move-object' && (!observed || observed.etag !== source.etag))
+      )
+        return { state: 'uncertain' as const };
+      if (target.operation === 'move-object') {
+        this.owned(actor, id);
+        await this.port.send('DeleteObject', {
+          Bucket: target.bucket,
+          Key: target.keys[0],
+          IfMatch: source.etag,
+        });
+      }
     }
     return { state: 'succeeded' as const, result: { bucket: target.bucket } };
   }
-  private async reconcile(actor: ActorContext, id: string, prepared: ExternalFacts) {
+  private async reconcile(
+    actor: ActorContext,
+    id: string,
+    prepared: ExternalFacts,
+    receipt: string,
+  ) {
     const t = this.owned(actor, id);
     if (t.operation === 'create-bucket' || t.operation === 'delete-bucket')
       return { state: 'uncertain' as const }; // Presence alone cannot prove who created/deleted a bucket.
@@ -500,12 +610,19 @@ export class R2Service {
       return { state: 'succeeded' as const };
     }
     const source = (prepared.summary.objects as JsonObject[])[0];
-    const destination = await this.head(t.bucket, t.destination!);
+    let destination;
+    try {
+      destination = await this.port.send('HeadObject', { Bucket: t.bucket, Key: t.destination });
+    } catch (error) {
+      if ((error as any)?.$metadata?.httpStatusCode !== 404) throw error;
+    }
     if (
-      !(await this.head(t.bucket, t.keys[0])) &&
+      (t.operation === 'copy-object' || !(await this.head(t.bucket, t.keys[0]))) &&
       destination &&
-      destination.size === source.size &&
-      destination.etag === source.etag
+      destination.ContentLength === source.size &&
+      destination.Metadata?.['batch-operation'] === receipt &&
+      destination.Metadata?.['batch-source-etag'] ===
+        Buffer.from(String(source.etag)).toString('base64')
     )
       return { state: 'succeeded' as const };
     return { state: 'uncertain' as const };
@@ -516,6 +633,7 @@ export class R2Service {
     const action = ctx.url.pathname.slice('/api/v1/integrations/r2/'.length);
     const params = ctx.url.searchParams;
     const queryFields: Record<string, string[]> = {
+      status: [],
       buckets: [],
       list: ['bucket', 'prefix', 'token'],
       search: ['bucket', 'query', 'token'],
@@ -530,6 +648,13 @@ export class R2Service {
           throw new HttpFailure(400, 'INVALID_INPUT');
       }
     if (ctx.request.method === 'GET') {
+      if (action === 'status') {
+        json(ctx.response, 200, {
+          state: this.settings.providerState('r2'),
+          canManage: ctx.actor.permissions.includes('admin'),
+        });
+        return true;
+      }
       if (action === 'buckets') {
         json(ctx.response, 200, { buckets: await this.buckets() });
         return true;

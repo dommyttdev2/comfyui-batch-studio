@@ -1,25 +1,26 @@
 import {
-  S3Client,
-  ListBucketsCommand,
-  ListObjectsV2Command,
-  HeadObjectCommand,
-  GetObjectCommand,
-  PutObjectCommand,
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CopyObjectCommand,
   CreateBucketCommand,
+  CreateMultipartUploadCommand,
   DeleteBucketCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
-  CopyObjectCommand,
-  CreateMultipartUploadCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  ListBucketsCommand,
+  ListObjectsV2Command,
+  ListPartsCommand,
+  PutObjectCommand,
+  S3Client,
   UploadPartCommand,
   UploadPartCopyCommand,
-  ListPartsCommand,
-  CompleteMultipartUploadCommand,
-  AbortMultipartUploadCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { IntegrationSettings } from './integration-settings.js';
 import { HttpFailure } from './http.js';
+import type { IntegrationSettings } from './integration-settings.js';
+
 const commands = {
   ListBuckets: ListBucketsCommand,
   ListObjectsV2: ListObjectsV2Command,
@@ -85,7 +86,7 @@ export class R2Gateway implements R2Port {
     try {
       return await client.send(new (command as new (input: any) => any)(input), {
         abortSignal: AbortSignal.any([
-          AbortSignal.timeout(name === 'GetObject' ? 30 * 60_000 : 30_000),
+          AbortSignal.timeout(name === 'GetObject' || name === 'PutObject' ? 30 * 60_000 : 30_000),
           ...(signal ? [signal] : []),
         ]),
       });

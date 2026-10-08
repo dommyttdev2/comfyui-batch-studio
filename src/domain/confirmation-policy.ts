@@ -9,6 +9,7 @@ export type ConfirmedOperation =
   | 'delete-bucket'
   | 'delete-objects'
   | 'move-object'
+  | 'copy-object'
   | 'trust-ssh'
   | 'discard-run'
   | 'restore-backup'
