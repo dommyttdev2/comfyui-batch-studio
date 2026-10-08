@@ -14210,8 +14210,8 @@
     },
     {
       "file": "tests/server-agent-jobs.mjs",
-      "lines": 169,
-      "sha256": "5fd496e579e96df5f8bd8d74ffb8d9722003d1597379252c3286ce9d2134ab68",
+      "lines": 223,
+      "sha256": "e7c1ea2a8b87bc44a5e85b25a588967eb5086e40c33f2c3a0df7fd31e766fa2b",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -14226,7 +14226,8 @@
         "node:path",
         "../dist-server/server/agent-runtime.js",
         "../dist-server/server/jobs.js",
-        "./server-project-fixtures.mjs"
+        "./server-project-fixtures.mjs",
+        "./server-agent-fixtures.mjs"
       ],
       "exports": [],
       "bridgeCalls": [],

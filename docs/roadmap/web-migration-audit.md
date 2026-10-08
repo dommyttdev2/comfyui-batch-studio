@@ -503,7 +503,7 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [tests/server-agent-crash-fixtures.mjs](../../tests/server-agent-crash-fixtures.mjs) | 9 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-agent-crash.mjs](../../tests/server-agent-crash.mjs) | 88 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-agent-fixtures.mjs](../../tests/server-agent-fixtures.mjs) | 126 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
-| [tests/server-agent-jobs.mjs](../../tests/server-agent-jobs.mjs) | 169 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-jobs.mjs](../../tests/server-agent-jobs.mjs) | 223 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-agent-registration.mjs](../../tests/server-agent-registration.mjs) | 40 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-agent-store.mjs](../../tests/server-agent-store.mjs) | 91 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-bootstrap.mjs](../../tests/server-bootstrap.mjs) | 34 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
