@@ -22,8 +22,8 @@ execFileSync(
 const source = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
 assert.match(source('src/shared/ipc.ts'), /AGENT_EVENT: 'agent:event'/);
 assert.match(source('src/preload/index.cjs'), /onEvent: \(listener\)[\s\S]*I\.AGENT_EVENT/);
-assert.match(source('src/shared/types.ts'), /export type AgentEvent =/);
-assert.match(source('src/main/agent-cli-adapter.ts'), /export interface AgentCliAdapter/);
+assert.match(source('src/domain/agent-runtime-types.ts'), /export type AgentEvent =/);
+assert.match(source('src/application/agent-cli-port.ts'), /export interface AgentCliAdapter/);
 
 (async () => {
   const { AgentSessionStateStore } = await import(

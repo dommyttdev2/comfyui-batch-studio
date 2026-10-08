@@ -230,8 +230,8 @@ matchCode(
   'concurrent Main process saves must share a per-file lock',
 );
 matchCode(
-  service,
-  /normalized\.saveRevision\s*<\s*lastRevision/,
+  fs.readFileSync(path.join(repo, 'src/domain/editor-save-policy.ts'), 'utf8'),
+  /proposed\.saveRevision.*<.*last/,
   'older save must not overwrite newer editor state',
 );
 matchCode(

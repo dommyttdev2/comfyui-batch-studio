@@ -1,3 +1,4 @@
+import { expectedArtifact } from '../domain/agent-artifact-policy.js';
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -7,23 +8,8 @@ import { readJson, writeJsonAtomic, writeTextAtomic } from './fs-utils.js';
 
 type Stage = GrokTask['stage'];
 
-export interface AgentWorkspace {
-  workspaceId: string;
-  provider: AgentProvider;
-  directory: string;
-  inputDirectory: string;
-  outputDirectory: string;
-  outputPath: string;
-  fileName: string;
-  stage: Stage;
-}
-
-export interface AgentConversationWorkspace {
-  workspaceId: string;
-  provider: AgentProvider;
-  directory: string;
-  inputDirectory: string;
-}
+export type { AgentWorkspace, AgentConversationWorkspace } from '../domain/agent-runtime-types.js';
+import type { AgentWorkspace, AgentConversationWorkspace } from '../domain/agent-runtime-types.js';
 
 type WorkspaceRecord = {
   workspaceId: string;
@@ -36,16 +22,6 @@ type WorkspaceIndex = { schemaVersion: 1; records: WorkspaceRecord[] };
 
 const MAX_REFERENCE_BYTES = 12_000_000;
 const MAX_OUTPUT_BYTES = 10_000_000;
-const OUTPUT_FILES: Partial<Record<Stage, string>> = {
-  'story-finalize': 'story.md',
-  'story-fix': 'story.md',
-  models: 'model_loras.json',
-  'models-fix': 'model_loras.json',
-  'prompt-plan': 'prompt_plan.json',
-  'prompt-plan-fix': 'prompt_plan.json',
-  'prompt-plan-patch': 'prompt_plan_patch.json',
-  caption: 'caption_content.json',
-};
 
 function safeWorkspaceId(value: string) {
   return /^[0-9a-f-]{36}$/i.test(value);
@@ -65,7 +41,7 @@ export function agentWorkspaceFor(
   stage: Stage,
   workspaceId: string,
 ): AgentWorkspace {
-  const fileName = OUTPUT_FILES[stage];
+  const fileName = expectedArtifact(stage);
   if (!fileName || !safeWorkspaceId(workspaceId)) throw new Error('AI作業領域が不正です。');
   const directory = path.join(workspaceBase(userData, provider), workspaceId);
   const inputDirectory = path.join(directory, 'input');
@@ -162,18 +138,7 @@ export async function prepareAgentWorkspace(
   }
 }
 
-export function agentWorkspaceOutputInstruction(workspace: AgentWorkspace): string {
-  return [
-    '## Batch Studio向け成果物出力契約',
-    `回答では ${workspace.fileName} の生成状況だけを短く報告し、JSONやMarkdown全文は会話へ再掲しないでください。`,
-    `作業ディレクトリ内の output/${workspace.fileName} に完成した成果物を直接書き込んでください。`,
-    'input/ 内の参照ファイルは読み取り専用として扱い、変更しないでください。',
-    'input/ や output/ 以外、プロジェクト本体、既存下書き、確定版ファイルを変更しないでください。',
-    '既存成果物がinput/にある場合は修正元として参照し、完成版をoutput/へ別ファイルで保存してください。',
-    'ファイルを書き終える前に完了と報告しないでください。書き込めない場合は理由を報告してください。',
-    'Batch Studioがoutput/を読み込み、Schemaと内容を検証した場合だけ下書きへ反映します。',
-  ].join('\n');
-}
+export { agentWorkspaceOutputInstruction } from '../domain/agent-workspace-policy.js';
 
 async function readIndex(root: string): Promise<WorkspaceIndex> {
   const value = await readJson<WorkspaceIndex>(workspaceIndexPath(root));

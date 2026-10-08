@@ -23,7 +23,8 @@ execFileSync(
 );
 
 const main = source('src/main/main.ts');
-const runner = source('src/main/codex-cli-task-runner.ts');
+const runner =
+  source('src/main/codex-cli-task-runner.ts') + source('src/application/codex-cli-task-runner.ts');
 assert.match(main, /codexCliTaskRunner = new CodexCliTaskRunner/);
 assert.doesNotMatch(main, /BATCH_STUDIO_CODEX_TRANSPORT|CodexAppServer|codexAppServer/);
 assert.match(runner, /adapter\.resumeTask\(saved\.activeSessionId/);

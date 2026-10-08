@@ -89,3 +89,21 @@ export function normalizeBatchTemplateObjects(raw: unknown): NormalizedTemplateO
   }
   return normalized;
 }
+
+export function uniqueDownloadNames(keys: string[]) {
+  const used = new Map<string, number>();
+  return keys.map((key) => {
+    const raw = objectName(key),
+      lower = raw.toLowerCase(),
+      count = (used.get(lower) ?? 0) + 1;
+    used.set(lower, count);
+    if (count === 1) return raw;
+    const dot = raw.lastIndexOf('.');
+    return dot > 0 ? `${raw.slice(0, dot)} (${count})${raw.slice(dot)}` : `${raw} (${count})`;
+  });
+}
+
+export function assertDownloadBatch(keys: readonly string[]) {
+  if (!keys.length || keys.length > 500)
+    throw new Error('一度に生成できるダウンロードURLは1～500件です。');
+}

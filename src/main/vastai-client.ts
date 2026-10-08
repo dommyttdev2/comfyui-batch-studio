@@ -1,3 +1,4 @@
+import { VastOfferUseCases } from '../application/vast-offer-use-cases.js';
 import type {
   CloudInstanceStatus,
   VastAiComfyUiTemplate,
@@ -13,7 +14,6 @@ const DEFAULT_BASE_URL = 'https://console.vast.ai';
 const REQUEST_TIMEOUT_MS = 20_000;
 const LIFECYCLE_TIMEOUT_MS = 15 * 60_000;
 const LIFECYCLE_POLL_MS = 5_000;
-const WEB_DEFAULT_MIN_DURATION_SECONDS = 7 * 24 * 60 * 60;
 const PENDING_CREATION_TTL_MS = 10 * 60_000;
 type PendingInstanceAction = 'start' | 'stop' | 'reboot';
 
@@ -70,20 +70,6 @@ function objectValue(value: unknown): JsonRecord {
     }
   }
   return {};
-}
-function normalizedCountryCodes(values: unknown) {
-  if (!Array.isArray(values)) return [] as string[];
-  const result: string[] = [];
-  for (const value of values) {
-    const code = String(value ?? '')
-      .trim()
-      .toUpperCase();
-    if (!code) continue;
-    if (!/^[A-Z]{2}$/.test(code))
-      throw new Error(`除外地域は2文字の国コードで指定してください: ${code}`);
-    if (!result.includes(code)) result.push(code);
-  }
-  return result;
 }
 function sshKeyItems(payload: unknown): unknown[] {
   const direct = arrayValue(payload);
@@ -276,12 +262,8 @@ function messageFromPayload(payload: unknown) {
   return stringValue(item.msg) ?? stringValue(item.error) ?? stringValue(item.detail);
 }
 
-export class VastAiInstanceNotFoundError extends Error {
-  constructor(public readonly instanceId: number) {
-    super(`Vast.ai Instance ${instanceId} が見つかりません。`);
-    this.name = 'VastAiInstanceNotFoundError';
-  }
-}
+import { VastAiInstanceNotFoundError } from '../domain/vast-instance-errors.js';
+export { VastAiInstanceNotFoundError } from '../domain/vast-instance-errors.js';
 
 export class VastAiClient {
   private readonly pendingInstanceActions = new Map<
@@ -433,152 +415,75 @@ export class VastAiClient {
   async testConnection() {
     await this.request('/api/v1/instances/?limit=1');
   }
-  private async resolveComfyUiTemplate(hashId?: string): Promise<VastAiComfyUiTemplate> {
-    const filters: JsonRecord = {
-      name: { eq: 'ComfyUI' },
-      recommended: { eq: true },
-      use_ssh: { eq: true },
-      ssh_direct: { eq: true },
-    };
-    if (hashId) filters.hash_id = { eq: hashId };
-    const params = new URLSearchParams({ select_filters: JSON.stringify(filters) }),
-      payload = record(await this.request(`/api/v0/template/?${params.toString()}`));
-    const rows = Array.isArray(payload.templates) ? payload.templates : [];
-    if (rows.length === 0)
-      throw new Error(
-        hashId
-          ? '指定したVast.ai ComfyUI Templateが利用できません。'
-          : 'Vast.aiの推奨ComfyUI Template（SSH Direct対応）が見つかりません。',
-      );
-    const templates = rows
-      .map(normalizeComfyUiTemplate)
-      .sort(
-        (a, b) =>
-          (b.countCreated ?? 0) - (a.countCreated ?? 0) ||
-          b.recommendedDiskSpaceGb - a.recommendedDiskSpaceGb,
-      );
-    return templates[0];
+  offerUseCases() {
+    return new VastOfferUseCases({
+      templates: async (hashId) => {
+        const filters: JsonRecord = {
+          name: { eq: 'ComfyUI' },
+          recommended: { eq: true },
+          use_ssh: { eq: true },
+          ssh_direct: { eq: true },
+        };
+        if (hashId) filters.hash_id = { eq: hashId };
+        const params = new URLSearchParams({ select_filters: JSON.stringify(filters) }),
+          payload = record(await this.request(`/api/v0/template/?${params.toString()}`));
+        const rows = Array.isArray(payload.templates) ? payload.templates : [];
+        return rows.map(normalizeComfyUiTemplate);
+      },
+      offers: async (criteria) => {
+        const payload = record(
+          await this.request('/api/v0/bundles', { method: 'POST', body: JSON.stringify(criteria) }),
+        );
+        return (Array.isArray(payload.offers) ? payload.offers : []).map(normalizeVastOffer);
+      },
+      rent: async (offerId, templateHashId, storageGb) => {
+        const template = { hashId: templateHashId };
+        let payload: JsonRecord;
+        try {
+          payload = record(
+            await this.request(`/api/v0/asks/${offerId}/`, {
+              method: 'PUT',
+              body: JSON.stringify({
+                template_hash_id: template.hashId,
+                disk: storageGb,
+                target_state: 'running',
+                label: 'ComfyUI Batch Studio',
+              }),
+            }),
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (/Vast\.ai API (404|410):|no_such_ask/i.test(message))
+            throw new Error(
+              `Vast.ai Offer #${offerId} は現在RENTできません。検索結果を更新してください。`,
+            );
+          throw error;
+        }
+        const instanceId = integerValue(payload.new_contract);
+        if (payload.success === false || instanceId == null || instanceId < 1)
+          throw new Error(
+            messageFromPayload(payload) ?? 'Vast.ai Instanceを作成できませんでした。',
+          );
+        return instanceId;
+      },
+      rememberCreated: (instanceId, offer) =>
+        this.pendingCreatedInstances.set(instanceId, { createdAt: Date.now(), offer }),
+    });
   }
   async comfyUiTemplate() {
-    return this.resolveComfyUiTemplate();
+    return this.offerUseCases().template();
   }
   async comfyUiTemplateByHash(hashId: string) {
-    return this.resolveComfyUiTemplate(hashId);
+    return this.offerUseCases().template(hashId);
   }
-  private normalizeOfferSearchInput(
-    input: VastAiOfferSearchInput,
-    template: VastAiComfyUiTemplate,
-  ) {
-    const storageGb = numberValue(input?.storageGb),
-      minTflops = numberValue(input?.minTflops),
-      gpuCount = integerValue(input?.gpuCount),
-      minReliability = numberValue(input?.minReliability),
-      excludedCountries = normalizedCountryCodes(input?.excludedCountries);
-    if (storageGb == null || storageGb <= 0)
-      throw new Error('Storageは0より大きいGB値を指定してください。');
-    if (storageGb < template.recommendedDiskSpaceGb)
-      throw new Error(
-        `ComfyUI Templateの推奨Storageは ${template.recommendedDiskSpaceGb} GB以上です。`,
-      );
-    if (minTflops == null || minTflops < 0)
-      throw new Error('Minimum TFLOPsは0以上で指定してください。');
-    if (gpuCount == null || gpuCount < 1 || gpuCount > 64)
-      throw new Error('GPU Countは1〜64の整数で指定してください。');
-    if (minReliability == null || minReliability < 0 || minReliability > 100)
-      throw new Error('Reliabilityは0〜100%で指定してください。');
-    return { storageGb, minTflops, gpuCount, minReliability, excludedCountries };
-  }
-  async searchOffers(input: VastAiOfferSearchInput): Promise<VastAiOfferSearchResult> {
-    const template = await this.resolveComfyUiTemplate(),
-      search = this.normalizeOfferSearchInput(input, template);
-    const body: JsonRecord = {
-      ...template.extraFilters,
-      limit: 100,
-      type: 'on-demand',
-      verified: { eq: true },
-      rentable: { eq: true },
-      rented: { eq: false },
-      duration: { gte: WEB_DEFAULT_MIN_DURATION_SECONDS },
-      allocated_storage: search.storageGb,
-      num_gpus: { eq: search.gpuCount },
-      reliability: { gte: search.minReliability / 100 },
-      order: [['dph_total', 'asc']],
-    };
-    if (search.minTflops > 0) body.total_flops = { gte: search.minTflops };
-    if (search.excludedCountries.length > 0) body.geolocation = { notin: search.excludedCountries };
-    const payload = record(
-        await this.request('/api/v0/bundles', { method: 'POST', body: JSON.stringify(body) }),
-      ),
-      rows = Array.isArray(payload.offers) ? payload.offers : [];
-    const offers = rows
-      .map(normalizeVastOffer)
-      .sort(
-        (a, b) =>
-          (a.hourlyCost ?? Number.POSITIVE_INFINITY) - (b.hourlyCost ?? Number.POSITIVE_INFINITY) ||
-          a.id - b.id,
-      );
-    return { template, offers };
+  async searchOffers(input: VastAiOfferSearchInput) {
+    return this.offerUseCases().search(input);
   }
   async getOffer(offerId: number, storageGb: number) {
-    if (!Number.isInteger(offerId) || offerId < 1) throw new Error('Vast.ai Offer IDが不正です。');
-    if (!Number.isFinite(storageGb) || storageGb <= 0) throw new Error('Storageが不正です。');
-    const body = {
-      limit: 1,
-      type: 'on-demand',
-      rentable: { eq: true },
-      rented: { eq: false },
-      id: { eq: offerId },
-      allocated_storage: storageGb,
-    };
-    const payload = record(
-        await this.request('/api/v0/bundles', { method: 'POST', body: JSON.stringify(body) }),
-      ),
-      rows = Array.isArray(payload.offers) ? payload.offers : [];
-    if (rows.length === 0)
-      throw new Error(
-        `Vast.ai Offer #${offerId} は現在RENTできません。検索結果を更新してください。`,
-      );
-    return normalizeVastOffer(rows[0]);
+    return this.offerUseCases().offer(offerId, storageGb);
   }
   async rentOffer(input: VastAiRentRequest, validatedOffer?: VastAiOffer) {
-    const offerId = integerValue(input?.offerId),
-      storageGb = numberValue(input?.storageGb),
-      templateHashId = stringValue(input?.templateHashId);
-    if (offerId == null || offerId < 1) throw new Error('Vast.ai Offer IDが不正です。');
-    if (storageGb == null || storageGb <= 0) throw new Error('Storageが不正です。');
-    if (!templateHashId) throw new Error('ComfyUI Template IDがありません。');
-    const template = await this.resolveComfyUiTemplate(templateHashId);
-    if (storageGb < template.recommendedDiskSpaceGb)
-      throw new Error(
-        `ComfyUI Templateの推奨Storageは ${template.recommendedDiskSpaceGb} GB以上です。`,
-      );
-    const offer = validatedOffer ?? (await this.getOffer(offerId, storageGb));
-    let payload: JsonRecord;
-    try {
-      payload = record(
-        await this.request(`/api/v0/asks/${offerId}/`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            template_hash_id: template.hashId,
-            disk: storageGb,
-            target_state: 'running',
-            label: 'ComfyUI Batch Studio',
-          }),
-        }),
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/Vast\.ai API (404|410):|no_such_ask/i.test(message))
-        throw new Error(
-          `Vast.ai Offer #${offerId} は現在RENTできません。検索結果を更新してください。`,
-        );
-      throw error;
-    }
-    const instanceId = integerValue(payload.new_contract);
-    if (payload.success === false || instanceId == null || instanceId < 1)
-      throw new Error(messageFromPayload(payload) ?? 'Vast.ai Instanceを作成できませんでした。');
-    this.pendingCreatedInstances.set(instanceId, { createdAt: Date.now(), offer });
-    return instanceId;
+    return this.offerUseCases().rent(input, validatedOffer);
   }
   async listInstances(): Promise<VastAiInstance[]> {
     const instances: VastAiInstance[] = [];

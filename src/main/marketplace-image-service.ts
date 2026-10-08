@@ -1,3 +1,6 @@
+import { saveEditorDocument } from '../application/editor-document-persistence.js';
+import { recoverCurrentFormat } from '../application/current-format-recovery.js';
+import { thumbnailSourceFacts } from './thumbnail-service.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -99,61 +102,50 @@ export async function loadMarketplaceImageState(root: string) {
   return normalizeMarketplaceImageState(stored);
 }
 
-export async function restoreMarketplaceImageState(root: string) {
+function currentEditorRecovery(root: string) {
   const file = statePath(root);
-  return withTemplateStoreLock(file, async () => {
-    try {
-      await loadMarketplaceImageState(root);
-    } catch (error) {
-      if (!(error instanceof PersistedJsonError)) throw error;
+  return {
+    exclusive: <T>(work: () => Promise<T>) => withTemplateStoreLock(file, work),
+    load: () => loadMarketplaceImageState(root),
+    corruption: (error: unknown) =>
+      error instanceof PersistedJsonError && error.code === 'PERSISTED_JSON_CORRUPT'
+        ? ('corrupt' as const)
+        : null,
+    restore: async () => {
       await restoreValidatedJsonFromBackup(file, assertMarketplaceState);
-      return loadMarketplaceImageState(root);
-    }
-    throw new Error('編集データは正常です。復元は必要ありません。');
-  });
-}
-
-export async function initializeCorruptMarketplaceImageState(root: string) {
-  const file = statePath(root);
-  return withTemplateStoreLock(file, async () => {
-    try {
-      await loadMarketplaceImageState(root);
-    } catch (error) {
-      if (!(error instanceof PersistedJsonError) || error.code !== 'PERSISTED_JSON_CORRUPT')
-        throw error;
+    },
+    initialize: async () => {
       await initializeCorruptProtectedJson(file, await createDefaultMarketplaceImageState());
-      return loadMarketplaceImageState(root);
-    }
-    throw new Error('編集データは正常です。初期化は必要ありません。');
-  });
+    },
+  };
+}
+export async function restoreMarketplaceImageState(
+  root: string,
+): Promise<MarketplaceImageEditorState> {
+  return recoverCurrentFormat(currentEditorRecovery(root), 'restore');
+}
+export async function initializeCorruptMarketplaceImageState(
+  root: string,
+): Promise<MarketplaceImageEditorState> {
+  return recoverCurrentFormat(currentEditorRecovery(root), 'initialize');
 }
 
-export async function saveMarketplaceImageState(root: string, value: unknown) {
-  const normalized = await normalizeMarketplaceImageState(value);
+export async function saveMarketplaceImageState(
+  root: string,
+  state: unknown,
+): Promise<MarketplaceImageEditorState> {
   const file = statePath(root);
-  return withTemplateStoreLock(file, async () => {
-    const current = await readJson<MarketplaceImageEditorState>(file);
-    if (current !== null) assertMarketplaceState(current, file);
-    const lastRevision = current?.saveRevision ?? 0;
-    if (normalized.saveRevision !== undefined && normalized.saveRevision < lastRevision)
-      return normalizeMarketplaceImageState(current);
-    if (
-      normalized.saveRevision !== undefined &&
-      normalized.saveRevision === lastRevision &&
-      current
-    ) {
-      const proposed = { ...normalized, saveRevision: lastRevision };
-      if (JSON.stringify(proposed) !== JSON.stringify(current))
-        throw new Error('EDITOR_SAVE_CONFLICT: Marketplace state was modified by another editor.');
-      return normalizeMarketplaceImageState(current);
-    }
-    const committed = {
-      ...normalized,
-      saveRevision: normalized.saveRevision ?? Math.max(lastRevision + 1, Date.now() * 1000),
-    };
-    await writeJsonAtomic(file, committed);
-    return committed;
-  });
+  return saveEditorDocument(
+    {
+      exclusive: (work) => withTemplateStoreLock(file, work),
+      read: () => readJson<MarketplaceImageEditorState>(file),
+      write: (value) => writeJsonAtomic(file, value),
+      assertCurrent: (value: unknown) => assertMarketplaceState(value, file),
+      normalize: normalizeMarketplaceImageState,
+      revision: (last) => Math.max(last + 1, Date.now() * 1000),
+    },
+    state,
+  );
 }
 
 function normalizedPngImage(dataUrl: string | undefined) {
@@ -296,6 +288,8 @@ function marketplaceGenerationIO(
   sourcePngDataUrl?: string,
 ): CustomMarketplaceIO<NativeImage> {
   return {
+    thumbnailSourceFacts,
+    resourceName: path.basename,
     targets: getMarketplaceImageTargets,
     writeState: saveMarketplaceImageState,
     readState: loadMarketplaceImageState,
@@ -441,6 +435,8 @@ export async function generateMarketplaceZip(
     format === 'png' || format === 'webp' || format === 'jpeg' ? format : 'jpeg';
   return packageMarketplaceOutputs(
     {
+      thumbnailSourceFacts,
+      resourceName: path.basename,
       targets: getMarketplaceImageTargets,
       readState: loadMarketplaceImageState,
       outputDirectory: marketplaceOutputDirectory,

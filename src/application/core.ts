@@ -26,7 +26,7 @@ export interface CorePorts {
 }
 // Composition boundary. P2 supplies server infrastructure and authenticated controllers.
 export function createBusinessCore(ports: CorePorts) {
-  const preferences = new AgentPreferencesUseCases(ports.projects, ports.clock);
+  const preferences = new AgentPreferencesUseCases(ports.projects, ports.clock, ports.agents);
   return {
     preferences,
     tasks: new AgentTaskUseCases(ports.projects, ports.catalogs, ports.agents, ports.digest),

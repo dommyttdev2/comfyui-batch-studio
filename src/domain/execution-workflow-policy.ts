@@ -3,7 +3,7 @@ import { enumerateImageTasks } from './image-tasks.js';
 import { modelGenerationInputs } from './model-impact.js';
 import type { ApiGraph } from './workflow-graph.js';
 export function verifyExecutionWorkflow(
-  run: ExecutionRun,
+  run: Pick<ExecutionRun, 'runId' | 'snapshot'>,
   observed: { ui: unknown; api: unknown; plan: unknown; models: unknown },
   hash: (value: unknown) => string,
   fallbacks: PromptFallback[] = [],

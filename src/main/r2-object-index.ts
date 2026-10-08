@@ -1,3 +1,4 @@
+import { searchIndexedObjects, resolveIndexedModelKey } from '../domain/r2-object-index-policy.js';
 import path from 'node:path';
 import { ListBucketsCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 import type { R2Object, R2SearchResult } from '../shared/types.js';
@@ -10,7 +11,6 @@ interface R2ObjectIndexState {
   buckets: Record<string, R2Object[]>;
 }
 
-const PAGE_SIZE = 250;
 const syncQueues = new Map<string, Promise<void>>();
 
 function serialize(item: any): R2Object {
@@ -24,7 +24,6 @@ function serialize(item: any): R2Object {
     storageClass: String(item.StorageClass ?? 'STANDARD'),
   };
 }
-const clean = (value: string) => value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 
 export class R2ObjectIndex {
   private readonly filePath: string;
@@ -81,51 +80,14 @@ export class R2ObjectIndex {
       buckets,
     } satisfies R2ObjectIndexState);
   }
+
   async search(bucket: string, query: string, token?: string | null): Promise<R2SearchResult> {
-    const state = await this.read(),
-      all = state.buckets[bucket] ?? [],
-      q = query.trim().normalize('NFKC').toLocaleLowerCase();
-    if (!q) return { objects: [], nextToken: null, scanned: all.length };
-    const matches = all.filter((o) => o.key.normalize('NFKC').toLocaleLowerCase().includes(q)),
-      offset = token?.startsWith('local:') ? Math.max(0, Number(token.slice(6)) || 0) : 0,
-      objects = matches.slice(offset, offset + PAGE_SIZE),
-      next = offset + objects.length;
-    return {
-      objects,
-      nextToken: next < matches.length ? `local:${next}` : null,
-      scanned: all.length,
-    };
+    const state = await this.read();
+    return searchIndexedObjects(state.buckets[bucket] ?? [], query, token);
   }
   async resolveModelKey(bucket: string, relativePath: string, prefix = ''): Promise<string | null> {
-    const state = await this.read(),
-      objects = state.buckets[bucket] ?? [],
-      normalizedPrefix = clean(prefix),
-      wanted = clean(relativePath);
-    if (!wanted) return null;
-    const exact = `${normalizedPrefix ? `${normalizedPrefix}/` : ''}${wanted}`;
-    if (objects.some((o) => o.key === exact)) return exact;
-    const parts = wanted.split('/'),
-      category = parts.length > 1 ? parts[0] : '',
-      fileName = parts[parts.length - 1];
-    const inPrefix = (key: string) =>
-      !normalizedPrefix || key === normalizedPrefix || key.startsWith(`${normalizedPrefix}/`);
-    const candidates = objects
-      .filter((o) => {
-        if (!inPrefix(o.key) || path.posix.basename(o.key) !== fileName) return false;
-        if (!category) return true;
-        const relative =
-          normalizedPrefix && o.key.startsWith(`${normalizedPrefix}/`)
-            ? o.key.slice(normalizedPrefix.length + 1)
-            : o.key;
-        return relative.split('/').slice(0, -1).includes(category);
-      })
-      .map((o) => o.key);
-    if (candidates.length === 1) return candidates[0];
-    if (candidates.length > 1)
-      throw new Error(
-        `R2_MODEL_OBJECT_AMBIGUOUS: ${fileName} matched multiple objects: ${candidates.join(', ')}`,
-      );
-    return null;
+    const state = await this.read();
+    return resolveIndexedModelKey(state.buckets[bucket] ?? [], relativePath, prefix);
   }
   async containsFile(bucket: string, fileName: string, prefix = ''): Promise<boolean> {
     return Boolean(await this.resolveModelKey(bucket, fileName, prefix));

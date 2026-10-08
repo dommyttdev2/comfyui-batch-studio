@@ -17,7 +17,12 @@ import { modelGenerationInputs } from '../domain/model-impact.js';
 import { normalizeWorkflowTemplateText } from '../domain/template-policy.js';
 import { compileImageWorkflow } from '../domain/workflow-compilation.js';
 import { canonical } from '../domain/workflow-graph.js';
-import { assertMutation, nextRevision } from './project-access.js';
+import { assertCurrentProject, assertMutation, nextRevision } from './project-access.js';
+import type { Command } from '../domain/contracts.js';
+import {
+  workflowResourcesChanged,
+  type WorkflowResourceIdentity,
+} from '../domain/workflow-resource-policy.js';
 import {
   type CatalogRepository,
   type Clock,
@@ -38,6 +43,50 @@ export class WorkflowUseCases {
     private readonly digest: Digest,
     private readonly clock: Clock,
   ) {}
+  async status(actor: ActorContext, command: Command) {
+    authorize(actor, command.projectId, 'read');
+    return this.projects.transaction(command.projectId, async (tx) => {
+      const project = await tx.load();
+      assertCurrentProject(project, command.projectId);
+      const artifact = project.artifacts.workflow;
+      if (!artifact) return 'missing' as const;
+      if (artifact.status !== 'confirmed') return 'stale' as const;
+      const modelsArtifact = project.artifacts.models,
+        planArtifact = project.artifacts.promptPlan;
+      if (
+        !modelsArtifact ||
+        !planArtifact ||
+        modelsArtifact.status !== 'confirmed' ||
+        planArtifact.status !== 'confirmed'
+      )
+        return 'stale' as const;
+      const models = parseArtifact(modelsArtifact.content) as ModelsArtifact;
+      const template = await this.templates.read(models.modelFamily!);
+      if (!template || !validateWorkflowManifest(template.manifest).valid) return 'stale' as const;
+      const hash = (value: unknown) => this.digest.text(JSON.stringify(canonical(value)));
+      const current: WorkflowResourceIdentity = {
+        modelsSha256: hash(
+          JSON.parse(modelGenerationInputs(models, modelsArtifact.modelPromptFallbacks ?? [])),
+        ),
+        template: {
+          ...template.manifest.template,
+          sha256: this.digest.text(normalizeWorkflowTemplateText(template.content)),
+        },
+        manifest: {
+          schemaVersion: template.manifest.schemaVersion,
+          version: template.manifest.manifestVersion,
+          sha256: hash(template.manifest),
+        },
+      };
+      const build = parseArtifact(artifact.content) as WorkflowResourceIdentity & {
+        promptPlanSha256: string;
+      };
+      return workflowResourcesChanged(build, current) ||
+        build.promptPlanSha256 !== hash(parseArtifact(planArtifact.content))
+        ? ('stale' as const)
+        : ('current' as const);
+    });
+  }
   async compile(actor: ActorContext, command: MutationCommand) {
     authorize(actor, command.projectId, 'edit');
     return this.projects.transaction(command.projectId, async (tx) => {
@@ -96,6 +145,11 @@ export class WorkflowUseCases {
         apiSha256,
         workflowIdentity: hash({ uiSha256, apiSha256 }),
         template: template.manifest.template,
+        manifest: {
+          schemaVersion: template.manifest.schemaVersion,
+          version: template.manifest.manifestVersion,
+          sha256: hash(template.manifest),
+        },
       };
       project.artifacts.workflow = {
         key: 'workflow',

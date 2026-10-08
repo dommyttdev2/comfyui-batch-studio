@@ -1,3 +1,9 @@
+import {
+  validConversationSessionId,
+  sanitizeMessage,
+  validConversationMessages,
+  upsertConversationMessage,
+} from '../domain/agent-conversation-policy.js';
 import path from 'node:path';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
 import type { AgentConversationMessage, AgentProvider, GrokContextStage } from '../shared/types.js';
@@ -24,20 +30,6 @@ function projectKey(root: string) {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
-function validSessionId(id: string) {
-  if (!id.trim() || id.length > 4096) throw new Error('Invalid agent session ID.');
-}
-
-function sanitizeMessage(value: AgentConversationMessage): AgentConversationMessage {
-  if (!value.id.trim() || value.id.length > 4096)
-    throw new Error('Invalid conversation message ID.');
-  if (value.role !== 'user' && value.role !== 'assistant')
-    throw new Error('Invalid conversation message role.');
-  if (typeof value.text !== 'string' || value.text.length > 2_000_000)
-    throw new Error('Invalid conversation message text.');
-  return { ...value };
-}
-
 export class AgentConversationStore {
   private readonly filePath: string;
   private writes: Promise<void> = Promise.resolve();
@@ -60,20 +52,11 @@ export class AgentConversationStore {
     sessionId: string | null,
   ): Promise<AgentConversationMessage[]> {
     if (!sessionId) return [];
-    validSessionId(sessionId);
+    validConversationSessionId(sessionId);
     await this.writes;
     const record = (await this.read()).projects[projectKey(root)]?.[stage]?.[provider]?.[sessionId];
     if (!record || !Array.isArray(record.messages)) return [];
-    return record.messages
-      .filter(
-        (message) =>
-          message &&
-          typeof message.id === 'string' &&
-          (message.role === 'user' || message.role === 'assistant') &&
-          typeof message.text === 'string' &&
-          typeof message.at === 'number',
-      )
-      .map((message) => ({ ...message }));
+    return validConversationMessages(record.messages);
   }
 
   async upsert(
@@ -83,7 +66,7 @@ export class AgentConversationStore {
     sessionId: string,
     message: AgentConversationMessage,
   ): Promise<void> {
-    validSessionId(sessionId);
+    validConversationSessionId(sessionId);
     const next = sanitizeMessage(message);
     this.writes = this.writes
       .catch(() => {})
@@ -94,13 +77,10 @@ export class AgentConversationStore {
         const stageState = { ...(project[stage] ?? {}) };
         const providerState = { ...(stageState[provider] ?? {}) };
         const current = providerState[sessionId];
-        const messages = Array.isArray(current?.messages) ? [...current.messages] : [];
-        const index = messages.findIndex((item) => item.id === next.id);
-        if (index >= 0) messages[index] = next;
-        else messages.push(next);
+        const messages = upsertConversationMessage(current?.messages, next);
         providerState[sessionId] = {
           updatedAt: Date.now(),
-          messages: messages.slice(-500),
+          messages,
         };
         stageState[provider] = providerState;
         project[stage] = stageState;

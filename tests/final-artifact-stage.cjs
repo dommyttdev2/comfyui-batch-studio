@@ -13,6 +13,7 @@ const service =
   fs.readFileSync(path.resolve(__dirname, '../src/domain/model-draft-policy.ts'), 'utf8');
 const caption =
   fs.readFileSync(path.join(repo, 'src', 'main', 'caption-service.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src', 'application', 'caption-file-service.ts'), 'utf8') +
   fs.readFileSync(path.resolve(__dirname, '../src/domain/caption-build-policy.ts'), 'utf8') +
   fs.readFileSync(path.resolve(__dirname, '../src/domain/caption-import-policy.ts'), 'utf8');
 const main = readMainProcessSource(repo);
@@ -77,7 +78,6 @@ matchCode(
 console.log('Final artifact stage contract tests passed.');
 
 async function testPreviewAuthorizationWithoutDirectoryScans() {
-  const os = require('node:os');
   const promises = require('node:fs/promises');
   const source = fs.readFileSync(
     path.join(repo, 'src', 'main', 'final-artifact-image-service.ts'),

@@ -357,8 +357,11 @@ test('unconfirmed stop and failed remote billing finalization are explicit error
 test('local uncertain Run uses reconciliation-specific stop path', async () => {
   const { core, execution } = await fixture();
   execution.run.recovery = 'uncertain';
+  execution.run.lifecycle = 'FAILED';
   await core.execution.stop(actor, { projectId: 'p1', runId: 'run-1', mode: 'graceful' });
-  assert.deepEqual(execution.calls, ['recover-local', 'wait']);
+  assert.deepEqual(execution.calls, ['wait']);
+  assert.equal(execution.rawRun.error.code, 'LOCAL_OUTPUT_COLLECTION_FAILED');
+  assert.equal(execution.rawRun.current.promptId, 'accepted');
 });
 test('parallel Run stop commands serialize ownership and do not duplicate interrupt', async () => {
   const { core, execution } = await fixture();

@@ -92,8 +92,9 @@ vm.runInNewContext(preload, {
   assert.deepEqual(calls.at(-1), [expected.AGENT_TASK_STOP, 'project-root', 'story-finalize']);
 
   const commonHandler = main.slice(main.indexOf('export function registerAssistantIpc'));
-  assert.match(commonHandler, /grokCliTaskRunner\.run/);
-  assert.match(commonHandler, /grokCliTaskRunner\.stop/);
+  assert.match(commonHandler, /tasks: \{ codex: codexCliTaskRunner, grok: grokCliTaskRunner \}/);
+  assert.match(commonHandler, /commands\.startTask\(/);
+  assert.match(commonHandler, /commands\.stopTask\(/);
   console.log('IPC contract and provider-neutral agent task routing tests passed.');
 })().catch((error) => {
   console.error(error);

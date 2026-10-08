@@ -78,6 +78,16 @@ async function createReservedRun(
     runId = ports.nextId();
   assertPersistSafe(snapshot, 'snapshot');
   const stable = await ports.persistSnapshot(runId, snapshot);
+  if (
+    !sameSnapshot(snapshot, stable) ||
+    JSON.stringify(snapshot.plan) !== JSON.stringify(stable.plan) ||
+    JSON.stringify(snapshot.preflight) !== JSON.stringify(stable.preflight)
+  ) {
+    await ports.removeSnapshot(runId);
+    throw new Error(
+      'EXECUTION_SNAPSHOT_SOURCE_CHANGED: persisted snapshot changed semantic inputs.',
+    );
+  }
   // Compilers and reset operations may not share this project's Run lock.
   // A second provenance capture catches changes during the copy phase.
   const postCopy = await ports.capture(preflight);

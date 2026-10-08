@@ -249,10 +249,9 @@ for (const rule of [
     rule,
     'Shared Grok/Codex Prompt Plan contract must cover recurring validation errors',
   );
-const codexRunnerSrc = fs.readFileSync(
-  path.resolve(__dirname, '../src/main/codex-cli-task-runner.ts'),
-  'utf8',
-);
+const codexRunnerSrc =
+  fs.readFileSync(path.resolve(__dirname, '../src/application/codex-cli-task-runner.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/main/codex-cli-task-runner.ts'), 'utf8');
 matchCode(
   codexRunnerSrc,
   /const task = await buildGrokTask\(root, stage, extra\)/,

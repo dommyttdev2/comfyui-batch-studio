@@ -780,3 +780,11 @@ export interface ImportResult {
   missingRequirements: MissingRequirement[];
   rawResponsePath?: string;
 }
+
+export interface ArtifactReadResult {
+  key: ArtifactKey;
+  source: 'confirmed' | 'draft';
+  content: string | null;
+  exists: boolean;
+  validation: ValidationResult;
+}
