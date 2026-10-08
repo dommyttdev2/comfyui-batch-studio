@@ -69,6 +69,8 @@ export class DockerAgentAdapter implements AgentCliAdapter {
     modelSelection: true,
     reasoningEffort: true,
   };
+  private closed = false;
+  private preparing = new Set<Promise<unknown>>();
   private readonly turns = new Map<string, { name: string; done: Promise<void> }>();
   constructor(private readonly config: AgentRunnerConfig) {
     this.provider = config.provider;
@@ -124,7 +126,17 @@ export class DockerAgentAdapter implements AgentCliAdapter {
       child.stdin.end(input);
     });
   }
-  private async prepare(
+  private async prepare(scope: string, workspace?: string) {
+    if (this.closed) throw new Error('CLI adapter closed.');
+    const work = this.prepareActual(scope, workspace);
+    this.preparing.add(work);
+    try {
+      return await work;
+    } finally {
+      this.preparing.delete(work);
+    }
+  }
+  private async prepareActual(
     scope: string,
     workspace?: string,
   ): Promise<{ name: string; workspace: string; home: string }> {
@@ -151,6 +163,10 @@ export class DockerAgentAdapter implements AgentCliAdapter {
       throw new Error('Invalid runtime job identity.');
     const name = 'batch-agent-' + (this.config.jobId ?? randomUUID());
     await this.capture(containerArguments(this.config, name, home, resolvedWork));
+    if (this.closed) {
+      await this.remove(name);
+      throw new Error('CLI adapter closed.');
+    }
     return { name, workspace: resolvedWork, home };
   }
   private async remove(name: string): Promise<void> {
@@ -299,6 +315,10 @@ export class DockerAgentAdapter implements AgentCliAdapter {
     await writeFile(path.join(container.workspace, 'prompt.txt'), task.prompt + '\n' + task.extra, {
       mode: 0o600,
     });
+    if (this.closed) {
+      await this.remove(container.name);
+      throw new Error('CLI adapter closed.');
+    }
     const args =
       this.provider === 'codex'
         ? [
@@ -451,6 +471,8 @@ export class DockerAgentAdapter implements AgentCliAdapter {
     await turn.done.catch(() => {});
   }
   async shutdown(): Promise<void> {
+    this.closed = true;
+    await Promise.allSettled([...this.preparing]);
     await Promise.all([...this.turns.keys()].map((id) => this.stop(id)));
   }
 }

@@ -387,7 +387,7 @@
     {
       "file": "package.json",
       "lines": 73,
-      "sha256": "3f7239055145beabba7d0c34525ab723ff18c090d87df4b86a4bc3b89945355c",
+      "sha256": "7d18368fe3619dc20afc28b5bba1ff5a945879509f36ba8aa81f6e30115462a9",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9999,8 +9999,8 @@
     },
     {
       "file": "src/server/agent-cli-runtime.ts",
-      "lines": 457,
-      "sha256": "a16a80116e024d61173bb2fa18b918a4b439d170c6cb3329d06cd083d7881879",
+      "lines": 479,
+      "sha256": "e8ecd1b19ca6bedceff3b911320cf25f1ece562af5b710b61a96b1d229f482ca",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10032,55 +10032,55 @@
           "text": "import { spawn } from 'node:child_process';"
         },
         {
-          "line": 88,
-          "text": "PATH: process.env.PATH,"
-        },
-        {
-          "line": 89,
-          "text": "SystemRoot: process.env.SystemRoot,"
-        },
-        {
           "line": 90,
-          "text": "TEMP: process.env.TEMP,"
+          "text": "PATH: process.env.PATH,"
         },
         {
           "line": 91,
-          "text": "HOME: process.env.HOME,"
-        },
-        {
-          "line": 92,
-          "text": "USERPROFILE: process.env.USERPROFILE,"
-        },
-        {
-          "line": 93,
-          "text": "DOCKER_HOST: process.env.DOCKER_HOST,"
-        },
-        {
-          "line": 94,
-          "text": "DOCKER_CONTEXT: process.env.DOCKER_CONTEXT,"
-        },
-        {
-          "line": 356,
-          "text": "PATH: process.env.PATH,"
-        },
-        {
-          "line": 357,
           "text": "SystemRoot: process.env.SystemRoot,"
         },
         {
-          "line": 358,
+          "line": 92,
           "text": "TEMP: process.env.TEMP,"
         },
         {
-          "line": 359,
+          "line": 93,
           "text": "HOME: process.env.HOME,"
         },
         {
-          "line": 360,
+          "line": 94,
           "text": "USERPROFILE: process.env.USERPROFILE,"
         },
         {
-          "line": 369,
+          "line": 95,
+          "text": "DOCKER_HOST: process.env.DOCKER_HOST,"
+        },
+        {
+          "line": 96,
+          "text": "DOCKER_CONTEXT: process.env.DOCKER_CONTEXT,"
+        },
+        {
+          "line": 376,
+          "text": "PATH: process.env.PATH,"
+        },
+        {
+          "line": 377,
+          "text": "SystemRoot: process.env.SystemRoot,"
+        },
+        {
+          "line": 378,
+          "text": "TEMP: process.env.TEMP,"
+        },
+        {
+          "line": 379,
+          "text": "HOME: process.env.HOME,"
+        },
+        {
+          "line": 380,
+          "text": "USERPROFILE: process.env.USERPROFILE,"
+        },
+        {
+          "line": 389,
           "text": "// stdin is never interpreted by a host shell."
         }
       ],
@@ -10088,9 +10088,46 @@
       "entryReachable": false
     },
     {
+      "file": "src/server/agent-runtime.ts",
+      "lines": 336,
+      "sha256": "8e1a585049983564abc1651dada1de3fea1d9ccaff2aa092e645106111c20d30",
+      "workPackage": "W04",
+      "layer": "server-infrastructure",
+      "phase": "P4",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../application/agent-use-cases.js",
+        "../application/agent-task-use-cases.js",
+        "../application/agent-preferences-use-cases.js",
+        "../application/agent-cli-port.js",
+        "../application/project-ports.js",
+        "../domain/agent-model-policy.js",
+        "../domain/contracts.js",
+        "../domain/agent-runtime-types.js",
+        "./http.js",
+        "./jobs.js",
+        "./agent-store.js",
+        "./project-repository.js"
+      ],
+      "exports": [
+        "AgentRuntimeOptions",
+        "AgentRuntime"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "src/server/agent-store.ts",
-      "lines": 372,
-      "sha256": "d428036722310d9401f674b8f6d091928c88c668757bc99edda9bac76cb2658f",
+      "lines": 375,
+      "sha256": "5673bb7ad4f39662f1c485b63f1ad86356f4998b4cd3069d36b4ae406c5b1577",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10346,8 +10383,8 @@
     },
     {
       "file": "src/server/jobs.ts",
-      "lines": 440,
-      "sha256": "ab1977c939afd123a260e9c26d9f31c50d9e7283ab49f0578193fc3d2f4aa4cc",
+      "lines": 501,
+      "sha256": "dfda194dfc314d604b6374f51b3fc9aed36974b83ea4197f01ea953e25a3eb90",
       "workPackage": "W10",
       "layer": "server-infrastructure",
       "phase": "P2",
@@ -13754,6 +13791,33 @@
         "../dist-server/server/codex-cli-events.js",
         "../dist-server/server/grok-cli-events.js",
         "node:path"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-agent-jobs.mjs",
+      "lines": 171,
+      "sha256": "f2bb86df4c4df0dffbbb69e72b61adcb59eef78294fcd30a09c9451b7f7e2856",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "../dist-server/server/agent-runtime.js",
+        "../dist-server/server/jobs.js",
+        "./server-project-fixtures.mjs"
       ],
       "exports": [],
       "bridgeCalls": [],
@@ -18760,6 +18824,18 @@
       "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
     },
     {
+      "file": "tests/server-agent-jobs.mjs",
+      "registration": "agent-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
       "file": "tests/server-agent-store.mjs",
       "registration": "agent-local",
       "treatment": "契約維持・server buildへ適合",
@@ -19473,9 +19549,9 @@
     }
   ],
   "counts": {
-    "files": 487,
-    "source": 340,
-    "tests": 100,
+    "files": 489,
+    "source": 341,
+    "tests": 101,
     "scripts": 16,
     "ipc": 172,
     "resources": 8,
@@ -19484,7 +19560,7 @@
       "W01": 18,
       "W02": 35,
       "W03": 34,
-      "W04": 53,
+      "W04": 54,
       "W05": 33,
       "W06": 55,
       "W07": 15,
@@ -19492,7 +19568,7 @@
       "W09": 47,
       "W10": 26,
       "W11": 29,
-      "W12": 106,
+      "W12": 107,
       "W13": 11,
       "W14": 12
     },
@@ -19513,7 +19589,7 @@
     "testRegistration": {
       "CI-conditional": 2,
       "CI-only": 2,
-      "agent-local": 2,
+      "agent-local": 3,
       "browser-local": 1,
       "core-local": 4,
       "npm-test": 61,
