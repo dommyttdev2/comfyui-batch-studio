@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { IntegrationSettings } from './integration-settings.js';
 import type { ServerConfig } from './config.js';
 import { EventBroker, attachEvents } from './events.js';
 import { webStatic } from './web-static.js';
@@ -60,6 +61,7 @@ export async function createServerRuntime(
   jobs = new JobRegistry(config.dataDir, definitions, broker.append);
   const repository = new DiskProjects(projects, ownership, broker);
   const catalogs = new FixtureCatalog(options.catalogFile);
+  const integrations = new IntegrationSettings(config.dataDir);
   const projectApi = new ProjectApi(repository, catalogs);
   const workflowApi = new WorkflowApi(config, repository, catalogs);
   let agentOptions: AgentRuntimeOptions | undefined;
@@ -99,6 +101,7 @@ export async function createServerRuntime(
   let closing: Promise<void> | undefined;
   let runtime: Awaited<ReturnType<typeof startServer>>;
   try {
+    await integrations.initialize();
     await registration.initialize();
     await broker.initialize();
     await jobs.initialize();
@@ -127,6 +130,7 @@ export async function createServerRuntime(
           json(context.response, 202, { state: 'draining' });
           return true;
         }
+        if (await integrations.route(context)) return true;
         if (await registration.route(context)) return true;
         if (await workflowApi.route(context)) return true;
         if (await projectApi.route(context)) return true;
@@ -165,6 +169,7 @@ export async function createServerRuntime(
           await httpClosed;
           throw new Error('HTTP work deadline exceeded; ownership requires reconciliation.');
         }
+        await integrations.drain();
         await repository.close();
         await lease.release();
         state = 'closed';

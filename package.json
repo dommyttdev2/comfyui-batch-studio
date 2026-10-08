@@ -44,7 +44,9 @@
     "recover:project": "node dist-server/server/project-recover.js",
     "test:agents": "npm run build:server && node --test tests/server-agent-cli.mjs tests/server-agent-store.mjs tests/server-agent-jobs.mjs tests/server-agent-artifacts.mjs tests/server-agent-api.mjs tests/server-agent-crash.mjs tests/server-agent-registration.mjs",
     "init:server-agent": "node dist-server/server/agent-init.js",
-    "test:agents:real": "npm run build:workspace && node scripts/test-web-agent-real.mjs && node scripts/test-web-agent-api-real.mjs"
+    "test:agents:real": "npm run build:workspace && node scripts/test-web-agent-real.mjs && node scripts/test-web-agent-api-real.mjs",
+    "init:server-integrations": "node dist-server/server/integration-init.js",
+    "test:integrations": "npm run build:server && node --test tests/server-integration-*.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
