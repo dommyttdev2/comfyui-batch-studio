@@ -182,14 +182,15 @@ export class JobRegistry {
     authorize(actor, job.projectId, 'read');
     return publicJob(job);
   }
-  async submit(
+  private async accept(
     actor: ActorContext,
     projectId: string,
     kind: string,
     key: string,
     input: JsonObject,
     scope: { stage: string; provider: string; turnId: string },
-  ): Promise<PublicJob> {
+    deferred = false,
+  ): Promise<{ job: PublicJob; acquired: boolean }> {
     authorize(actor, identifier(projectId), 'execute');
     identifier(key);
     identifier(kind);
@@ -250,18 +251,75 @@ export class JobRegistry {
       }
       return { job, fresh: true };
     });
-    if (result.fresh) {
-      const abort = new AbortController();
-      const promise = this.execute(result.job, actor, definition, abort.signal).finally(() =>
-        this.active.delete(result.job.id),
-      );
-      this.active.set(result.job.id, { promise, abort });
-      // Fatal storage/event errors keep the job uncertain and reject further starts.
-      void promise.catch(() => {
+    if (result.fresh && !deferred) this.start(result.job, actor, definition);
+    return { job: publicJob(result.job), acquired: result.fresh };
+  }
+  async submit(
+    actor: ActorContext,
+    projectId: string,
+    kind: string,
+    key: string,
+    input: JsonObject,
+    scope: { stage: string; provider: string; turnId: string },
+  ): Promise<PublicJob> {
+    return (await this.accept(actor, projectId, kind, key, input, scope)).job;
+  }
+  async reserve(
+    actor: ActorContext,
+    projectId: string,
+    kind: string,
+    key: string,
+    input: JsonObject,
+    scope: { stage: string; provider: string; turnId: string },
+  ) {
+    return this.accept(actor, projectId, kind, key, input, scope, true);
+  }
+  private activating = new Set<string>();
+  private owned(actor: ActorContext, id: string) {
+    const job = this.jobs.find((j) => j.id === id);
+    if (!job) throw new BusinessError('NOT_FOUND', 'Job not found.');
+    authorize(actor, job.projectId, 'execute');
+    if (job.userId !== actor.userId) throw new BusinessError('FORBIDDEN', 'Job owner differs.');
+    return job;
+  }
+  reservationInput(actor: ActorContext, id: string): JsonObject {
+    return structuredClone(this.owned(actor, id).input);
+  }
+  async activate(actor: ActorContext, id: string, input: JsonObject): Promise<PublicJob> {
+    const job = this.owned(actor, id);
+    await this.queue.run(async () => {
+      if (job.state !== 'reserved' || this.activating.has(id) || this.active.has(id))
+        throw new BusinessError('RUNTIME_BUSY', 'Reservation already activated.');
+      if (!this.accepting) throw new HttpFailure(503, 'SERVER_DRAINING');
+      this.definitions.get(job.kind)!.validate(input);
+      job.input = input;
+      try {
+        await this.persist();
+      } catch (e) {
+        this.fault = e;
         this.accepting = false;
-      });
-    }
-    return publicJob(result.job);
+        throw e;
+      }
+      this.activating.add(id);
+    });
+    this.start(job, actor, this.definitions.get(job.kind)!);
+    return publicJob(job);
+  }
+  async rejectReservation(actor: ActorContext, id: string, state: 'failed' | 'uncertain') {
+    const job = this.owned(actor, id);
+    if (state === 'failed' && (this.active.has(id) || this.activating.has(id)))
+      throw new BusinessError('RUNTIME_UNCERTAIN', 'Reservation already activated.');
+    await this.update(job, state);
+  }
+  private start(job: StoredJob, actor: ActorContext, definition: JobDefinition) {
+    const abort = new AbortController();
+    const promise = this.execute(job, actor, definition, abort.signal).finally(() =>
+      this.active.delete(job.id),
+    );
+    this.active.set(job.id, { promise, abort });
+    void promise.catch(() => {
+      this.accepting = false;
+    });
   }
   private async update(job: StoredJob, state: JobState, progress = job.progress): Promise<void> {
     await this.queue.run(async () => {
@@ -327,6 +385,8 @@ export class JobRegistry {
     authorize(actor, known.projectId, 'execute');
     const job = this.jobs.find((j) => j.id === id)!;
     if (terminal(job.state)) return publicJob(job);
+    if (job.kind === 'agent' && job.userId !== actor.userId)
+      throw new BusinessError('FORBIDDEN', 'Agent job owner differs.');
     const work = this.active.get(id);
     if (!work) throw new BusinessError('RUNTIME_UNCERTAIN', 'Reconciliation required.');
     await this.update(job, 'cancelling');
@@ -417,6 +477,7 @@ export class JobRegistry {
     }
     const create = /^\/api\/v1\/projects\/([a-zA-Z0-9_-]+)\/jobs\/([a-z0-9-]+)$/.exec(url.pathname);
     if (create && request.method === 'POST') {
+      if (create[2] === 'agent') throw new HttpFailure(400, 'AGENT_API_REQUIRED');
       fields(input, ['input', 'stage', 'provider', 'turnId']);
       json(response, 202, {
         job: await this.submit(

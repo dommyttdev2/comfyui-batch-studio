@@ -349,6 +349,9 @@ export class AgentStore {
       }
     });
   }
+  completion(id: string) {
+    return this.state.records.find((r) => r.jobId === id)?.state ?? 'uncertain';
+  }
   async finish(
     actor: ActorContext,
     scope: AgentScope,
