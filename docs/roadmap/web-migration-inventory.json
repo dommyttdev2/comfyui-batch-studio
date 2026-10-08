@@ -9999,8 +9999,8 @@
     },
     {
       "file": "src/server/agent-cli-runtime.ts",
-      "lines": 461,
-      "sha256": "ab2581749c8f7ca7fb30c24ad60ded979d9f8851e6284dd9ca232046bc5e105c",
+      "lines": 457,
+      "sha256": "a16a80116e024d61173bb2fa18b918a4b439d170c6cb3329d06cd083d7881879",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10060,27 +10060,27 @@
           "text": "DOCKER_CONTEXT: process.env.DOCKER_CONTEXT,"
         },
         {
-          "line": 360,
+          "line": 356,
           "text": "PATH: process.env.PATH,"
         },
         {
-          "line": 361,
+          "line": 357,
           "text": "SystemRoot: process.env.SystemRoot,"
         },
         {
-          "line": 362,
+          "line": 358,
           "text": "TEMP: process.env.TEMP,"
         },
         {
-          "line": 363,
+          "line": 359,
           "text": "HOME: process.env.HOME,"
         },
         {
-          "line": 364,
+          "line": 360,
           "text": "USERPROFILE: process.env.USERPROFILE,"
         },
         {
-          "line": 373,
+          "line": 369,
           "text": "// stdin is never interpreted by a host shell."
         }
       ],
@@ -19235,7 +19235,7 @@
     },
     {
       "file": "docs/contracts/web-agent-runtime.md",
-      "sha256": "b742a8a3a6f727056cacd912e640b35d697404de4182401b41d48ea120d6fd9c",
+      "sha256": "87960c7710469c46e98c520350075fa7efe64b3ee7df1f4ef468965d8484d90d",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"

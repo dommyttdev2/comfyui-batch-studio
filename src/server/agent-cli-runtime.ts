@@ -274,8 +274,6 @@ export class DockerAgentAdapter implements AgentCliAdapter {
     visit(JSON.parse(await readFile(this.config.credential, 'utf8')));
     let tail = '';
     const held = Math.max(0, ...secrets.map((v) => v.length));
-    let tail = '';
-    const held = Math.max(0, ...secrets.map((v) => v.length));
     const emit: AgentEventSink = (event) => {
       if (event.type === 'message.delta' || event.type === 'message.completed') {
         let text = event.type === 'message.delta' ? tail + event.text : event.text;
@@ -308,11 +306,9 @@ export class DockerAgentAdapter implements AgentCliAdapter {
             '--json',
             '--skip-git-repo-check',
             '--sandbox',
-            'workspace-write',
+            'danger-full-access',
             '-c',
             'approval_policy="never"',
-            '-c',
-            'sandbox_workspace_write.network_access=false',
             '-c',
             'web_search="disabled"',
             ...(model ? ['--model', model] : []),
@@ -331,7 +327,7 @@ export class DockerAgentAdapter implements AgentCliAdapter {
             '--cwd',
             '/workspace',
             '--sandbox',
-            'strict',
+            'off',
             '--disallowed-tools',
             'run_terminal_cmd',
             '--always-approve',

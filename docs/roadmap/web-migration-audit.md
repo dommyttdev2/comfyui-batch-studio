@@ -370,7 +370,7 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [src/renderer/thumbnail-stage.css](../../src/renderer/thumbnail-stage.css) | 427 | W02 / P3 / G02 | Web再利用、import/配信を確認 |
 | [src/renderer/ui.tsx](../../src/renderer/ui.tsx) | 143 | W02 / P3 / G02 | Web再利用、import/配信を確認 |
 | [src/renderer/use-editor-autosave.ts](../../src/renderer/use-editor-autosave.ts) | 191 | W02 / P3 / G02 | 時刻採番をserver revision/CASへ |
-| [src/server/agent-cli-runtime.ts](../../src/server/agent-cli-runtime.ts) | 461 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
+| [src/server/agent-cli-runtime.ts](../../src/server/agent-cli-runtime.ts) | 457 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
 | [src/server/auth-init.ts](../../src/server/auth-init.ts) | 38 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
 | [src/server/codex-cli-events.ts](../../src/server/codex-cli-events.ts) | 192 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
 | [src/server/config.ts](../../src/server/config.ts) | 53 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
