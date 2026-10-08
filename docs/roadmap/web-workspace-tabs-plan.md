@@ -112,7 +112,7 @@ close時に実行中の処理があれば「処理は継続し全ジョブから
 
 ## 7. Issue・PRの分割と順序
 
-既存の刷新統合ブランチをbaseとし、各作業を`codex/`付きの個別ブランチ・PRに分け、squash mergeする。計画段階ではIssue・PRを作成しない。刷新PRへのCI追加は行わず、Docker/Linuxでのローカル検証結果を各PRへ記録する。
+既存の刷新統合ブランチをbaseとし、各作業を`codex/`付きの個別ブランチ・PRに分け、squash mergeする。P3着手の管理は[P3実行計画](web-migration-p3-plan.md)へ移し、親Issue #334と子Issue #335–#343を起票済み。刷新PRへのCI追加は行わず、Docker/Linuxでのローカル検証結果を各PRへ記録する。
 
 | 順序 / Issue案 | 所管 | 完了条件 | 依存 |
 | --- | --- | --- | --- |
@@ -139,3 +139,5 @@ T3はjob表示用fixtureでUIを先行できるが、受入には実APIが必要
 10. backendとReactの責務境界を保ち、旧Electronへのfallback、Window依存の認可、非表示を理由とするjob停止を残さない。
 
 計画文書のみの作業であり、コード変更・テスト実行・バージョン更新・リリースは行っていない。
+
+P3ではT1/T2とT4/T5の共通context/Modal Host部分を実装する。T3の実AI/Run接続とT4/T5の実ツール/画像Picker、T6の旧Window経路完全撤去はP4–P9で受け入れる。P3親子Issueの詳細は[P3実行計画](web-migration-p3-plan.md)を正本とする。

@@ -10,6 +10,8 @@ export interface ServerConfig {
   dataDir: string;
   resourceDir: string;
   buildId: string;
+  webBuildId: string;
+  webDir: string;
 }
 export async function loadConfig(input: {
   host?: string;
@@ -37,5 +39,14 @@ export async function loadConfig(input: {
   const build = JSON.parse(await readFile(new URL('../build.json', import.meta.url), 'utf8'));
   if (!/^[a-f0-9]{64}$/.test(build.buildId)) throw new Error('Invalid build manifest.');
   const buildId = createHash('sha256').update(build.buildId).digest('hex');
-  return { host, port, dataDir, resourceDir, buildId };
+  if (!/^[a-f0-9]{64}$/.test(build.webBuildId)) throw new Error('Invalid web build manifest.');
+  return {
+    host,
+    port,
+    dataDir,
+    resourceDir,
+    buildId,
+    webBuildId: build.webBuildId,
+    webDir: path.join(root, 'dist-web'),
+  };
 }

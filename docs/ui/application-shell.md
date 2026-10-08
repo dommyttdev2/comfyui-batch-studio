@@ -1,6 +1,8 @@
 # Application Shell UI
 
-Status: Active
+Status: Active（Desktop未移行機能の既存仕様）
+
+P3の独立Web shellは[Web Workspace契約](../contracts/web-project-workspace.md)と[運用正本](../operations/web-workspace.md)を適用する。画面内Projectタブ・共通Modal Hostは実装済み。実AI/外部ツール/生成/画像処理は対応phaseで接続する。
 
 ## 1. 目的
 

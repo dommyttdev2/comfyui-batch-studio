@@ -15,7 +15,10 @@ function walk(relative) {
 for (const dir of ['src/server', 'src/application', 'src/domain', 'schemas', 'templates'])
   walk(dir);
 digest.update(fs.readFileSync(path.join(root, 'package-lock.json')));
+const webBuildId = require('./web-source-id.cjs')();
+digest.update(webBuildId);
 fs.writeFileSync(
   path.join(root, 'dist-server/build.json'),
-  JSON.stringify({ buildId: digest.digest('hex') }) + '\n',
+  JSON.stringify({ buildId: digest.digest('hex'), webBuildId: require('./web-source-id.cjs')() }) +
+    '\n',
 );

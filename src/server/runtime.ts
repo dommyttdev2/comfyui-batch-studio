@@ -1,9 +1,14 @@
 import path from 'node:path';
 import type { ServerConfig } from './config.js';
 import { EventBroker, attachEvents } from './events.js';
+import { webStatic } from './web-static.js';
 import { fields, HttpFailure, json, type CommandController } from './http.js';
 import { JobRegistry, type JobDefinition } from './jobs.js';
-import { FileLease, Ownership, ProjectRegistry } from './ownership.js';
+import { FileLease, Ownership } from './ownership.js';
+import { FixtureCatalog, WorkflowApi } from './workflow-api.js';
+import { ProjectApi } from './project-api.js';
+import { DiskProjects } from './project-repository.js';
+import { ProjectRegistration } from './project-registration.js';
 import { Security } from './security.js';
 import { startServer } from './server.js';
 
@@ -26,6 +31,7 @@ export async function createServerRuntime(
     commands?: ReadonlyMap<string, CommandController>;
     definitions?: ReadonlyMap<string, JobDefinition>;
     shutdownMs?: number;
+    catalogFile?: string;
   } = {},
 ) {
   const shutdownMs = options.shutdownMs ?? 5000;
@@ -39,18 +45,26 @@ export async function createServerRuntime(
     'server',
     ownership.serverId,
   );
-  const projects = new ProjectRegistry(config.dataDir);
+  const registration = new ProjectRegistration(config.dataDir);
+  const projects = registration.registry;
   let jobs: JobRegistry;
   const broker = new EventBroker(config.dataDir, (actor) => jobs.list(actor));
   jobs = new JobRegistry(config.dataDir, options.definitions ?? new Map(), broker.append);
+  const repository = new DiskProjects(projects, ownership, broker);
+  const catalogs = new FixtureCatalog(options.catalogFile);
+  const projectApi = new ProjectApi(repository, catalogs);
+  const workflowApi = new WorkflowApi(config, repository, catalogs);
   let state: 'running' | 'draining' | 'closed' | 'uncertain' = 'running';
   let closing: Promise<void> | undefined;
   let runtime: Awaited<ReturnType<typeof startServer>>;
   try {
+    await registration.initialize();
     await broker.initialize();
     await jobs.initialize();
+    await repository.initialize();
     runtime = await startServer(config, {
       ...security.http(),
+      staticRoute: webStatic(config.webDir),
       commands: options.commands,
       accepting: () => state === 'running',
       route: async (context) => {
@@ -71,10 +85,14 @@ export async function createServerRuntime(
           json(context.response, 202, { state: 'draining' });
           return true;
         }
+        if (await registration.route(context)) return true;
+        if (await workflowApi.route(context)) return true;
+        if (await projectApi.route(context)) return true;
         return jobs.route(context);
       },
     });
   } catch (error) {
+    await repository.close();
     await lease.release();
     throw error;
   }
@@ -104,6 +122,7 @@ export async function createServerRuntime(
           await httpClosed;
           throw new Error('HTTP work deadline exceeded; ownership requires reconciliation.');
         }
+        await repository.close();
         await lease.release();
         state = 'closed';
       } catch (error) {
@@ -117,5 +136,18 @@ export async function createServerRuntime(
     })();
     return closing;
   }
-  return { ...runtime, close, jobs, broker, ownership, projects, security, state: () => state };
+  return {
+    ...runtime,
+    close,
+    jobs,
+    broker,
+    ownership,
+    projects,
+    registration,
+    repository,
+    projectApi,
+    workflowApi,
+    security,
+    state: () => state,
+  };
 }

@@ -86,6 +86,24 @@ export class ProjectUseCases {
       return project;
     });
   }
+  async renewLease(actor: ActorContext, command: MutationCommand) {
+    return this.changeLease(actor, command, false);
+  }
+  async releaseLease(actor: ActorContext, command: MutationCommand) {
+    return this.changeLease(actor, command, true);
+  }
+  private async changeLease(actor: ActorContext, command: MutationCommand, release: boolean) {
+    return this.repository.transaction(command.projectId, async (tx) => {
+      const project = await tx.load();
+      assertMutation(actor, command, project, this.clock);
+      const before = project.revision;
+      if (release) project.lease = null;
+      else project.lease!.expiresAt = this.clock.now() + 60_000;
+      project.revision = nextRevision(project);
+      await tx.commit(before, project, event(actor, project, 'project.changed', 'lease'));
+      return project;
+    });
+  }
   async beginEdit(actor: ActorContext, command: MutationCommand & { key: ArtifactKey }) {
     return this.mutate(
       actor,

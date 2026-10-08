@@ -51,6 +51,7 @@ export interface HttpOptions {
     mutation: boolean,
   ) => Promise<Omit<ActorContext, 'requestId'>>;
   boundary?: (request: IncomingMessage) => void;
+  staticRoute?: (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean>;
   publicRoute?: (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean>;
   route?: (context: RequestContext) => Promise<boolean>;
   accepting?: () => boolean;
@@ -65,6 +66,9 @@ export function failure(response: ServerResponse, error: unknown): void {
     FORBIDDEN: 403,
     NOT_FOUND: 404,
     REVISION_CONFLICT: 409,
+    TARGET_CHANGED: 409,
+    CONFIRMATION_EXPIRED: 409,
+    CONFIRMATION_REQUIRED: 409,
     LEASE_REQUIRED: 409,
     PROJECT_BUSY: 409,
     RUNTIME_BUSY: 409,
@@ -126,10 +130,17 @@ export function createHttpHandler(config: ServerConfig, options: HttpOptions = {
     try {
       options.boundary?.(request);
       const url = new URL(request.url ?? '/', 'http://localhost');
+      if (
+        options.staticRoute &&
+        !url.pathname.startsWith('/api/') &&
+        (await options.staticRoute(request, response, url))
+      )
+        return;
       if (request.method === 'GET' && url.pathname === '/api/v1/health') {
         json(response, 200, {
           apiVersion: API_VERSION,
           buildId: config.buildId,
+          webBuildId: config.webBuildId,
           ready: options.accepting?.() ?? true,
         });
         return;

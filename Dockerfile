@@ -20,3 +20,12 @@ ENV ELECTRON_OVERRIDE_DIST_PATH=/app/node_modules/electron/dist
 COPY --chown=node:node . .
 
 CMD ["sh", "scripts/docker-test.sh"]
+
+# Standalone Web acceptance: install no Electron binary and run real Chromium.
+FROM node:22.12.0-bookworm@sha256:0e910f435308c36ea60b4cfd7b80208044d77a074d16b768a81901ce938a62dc AS web-local-test
+WORKDIR /app
+COPY package.json package-lock.json ./
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN npm ci --ignore-scripts --no-audit --no-fund && npx playwright install --with-deps chromium
+COPY . .
+CMD ["sh", "scripts/docker-web-test.sh"]

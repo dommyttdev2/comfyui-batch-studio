@@ -5,3 +5,5 @@ dist-electron/
 .DS_Store
 dist-core/
 dist-server/
+
+dist-web/

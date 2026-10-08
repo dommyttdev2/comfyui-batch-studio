@@ -40,3 +40,7 @@ docs/releases/
 **/.env
 **/.env.*
 **/*.log
+
+!vite.web.config.ts
+!web/
+!web/**

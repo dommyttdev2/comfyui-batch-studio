@@ -152,4 +152,10 @@ UI 要望だけで Compiler schema を変えたり、ComfyUI node 内部事情�
 
 Web移行のP2実装・受入は[P2サーバー基盤計画](roadmap/web-migration-p2-plan.md)、画面内Projectタブとツールモーダルは[Workspace UI計画](roadmap/web-workspace-tabs-plan.md)を参照する。
 
-P2の独立Node serverの起動・認証・API・所有権・停止/復旧は[Webサーバー基盤](architecture/web-server-foundation.md)を参照する。次工程はP3のProject/ArtifactとWeb shell。
+P2の独立Node serverの起動・認証・API・所有権・停止/復旧は[Webサーバー基盤](architecture/web-server-foundation.md)を参照する。P3のProject/ArtifactとWeb shellは受入済み。次工程はP4の実CLI会話/task。
+
+P3のbranch・親子Issue・実装責務・依存・ローカル受入は[P3実行計画](roadmap/web-migration-p3-plan.md)を参照する。
+
+P3の新Webデータ・操作・Workspace契約は[Web Project・Workspace](contracts/web-project-workspace.md)、受入境界と所管は[P3受入matrix](quality/web-p3-acceptance.md)を参照する。
+
+P3独立Webの起動・Project/root・保存・fixture Compiler・asset・異常終了後の明示復旧・Docker Chromium受入は[Web Workspace運用](operations/web-workspace.md)を参照する。

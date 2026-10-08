@@ -33,7 +33,15 @@
     "start:server": "node dist-server/server/entry.js",
     "test:server": "npm run build:server && node --test tests/server-bootstrap.mjs tests/server-http.mjs tests/server-security.mjs tests/server-ownership.mjs tests/server-jobs.mjs tests/server-events.mjs tests/server-runtime.mjs",
     "init:server-auth": "node dist-server/server/auth-init.js",
-    "recover:server-lock": "node dist-server/server/recover.js"
+    "recover:server-lock": "node dist-server/server/recover.js",
+    "init:server-root": "node dist-server/server/root-init.js",
+    "test:projects": "npm run build:workspace && node --test tests/server-project-registration.mjs tests/server-project-repository.mjs tests/server-project-api.mjs tests/server-project-workflow.mjs tests/server-project-web.mjs tests/server-project-acceptance.mjs",
+    "build:web": "node scripts/check-web-boundaries.cjs && tsc -p tsconfig.web.json && vite build --config vite.web.config.ts",
+    "build:workspace": "npm run build:web && npm run build:server",
+    "dev:web": "npm run build:workspace && npm run start:server",
+    "typecheck:web": "tsc -p tsconfig.web.json",
+    "test:web": "npm run build:workspace && node --test tests/server-project-browser.mjs",
+    "recover:project": "node dist-server/server/project-recover.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
@@ -46,6 +54,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
+    "@playwright/test": "1.64.0",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
