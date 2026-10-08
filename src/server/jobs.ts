@@ -6,9 +6,9 @@ import {
   fields,
   HttpFailure,
   identifier,
+  type JsonObject,
   json,
   object,
-  type JsonObject,
   type RequestContext,
 } from './http.js';
 import { atomicJson, SerialQueue } from './storage.js';
@@ -307,6 +307,38 @@ export class JobRegistry {
     this.start(job, actor, this.definitions.get(job.kind)!);
     return publicJob(job);
   }
+  async resume(actor: ActorContext, id: string, proof: () => Promise<void>): Promise<PublicJob> {
+    const job = this.owned(actor, id),
+      definition = this.definitions.get(job.kind);
+    if (!definition) throw new HttpFailure(503, 'NOT_IMPLEMENTED');
+    await this.queue.run(async () => {
+      if (
+        !this.accepting ||
+        this.active.has(id) ||
+        this.activating.has(id) ||
+        this.reconciling.has(id) ||
+        job.state !== 'uncertain'
+      )
+        throw new BusinessError('RUNTIME_BUSY', 'Explicit resume requires an idle uncertain job.');
+      await proof();
+      definition.validate(job.input);
+      const previous = job.state;
+      job.state = 'reserved';
+      job.revision++;
+      try {
+        await this.persist();
+        await this.changed(publicJob(job));
+      } catch (error) {
+        job.state = previous;
+        this.fault = error;
+        this.accepting = false;
+        throw error;
+      }
+      this.activating.add(id);
+    });
+    this.start(job, actor, definition);
+    return publicJob(job);
+  }
   async rejectReservation(actor: ActorContext, id: string, state: 'failed' | 'uncertain') {
     const job = this.owned(actor, id);
     if (state === 'failed' && (this.active.has(id) || this.activating.has(id)))
@@ -319,6 +351,7 @@ export class JobRegistry {
       this.active.delete(job.id),
     );
     this.active.set(job.id, { promise, abort });
+    this.activating.delete(job.id);
     void promise.catch(() => {
       this.accepting = false;
     });
@@ -387,7 +420,10 @@ export class JobRegistry {
     authorize(actor, known.projectId, 'execute');
     const job = this.jobs.find((j) => j.id === id)!;
     if (terminal(job.state)) return publicJob(job);
-    if (job.kind === 'agent' && job.userId !== actor.userId)
+    if (
+      (job.kind === 'agent' || job.kind === 'r2-transfer' || job.kind === 'r2-object-copy') &&
+      job.userId !== actor.userId
+    )
       throw new BusinessError('FORBIDDEN', 'Agent job owner differs.');
     const work = this.active.get(id);
     if (!work) throw new BusinessError('RUNTIME_UNCERTAIN', 'Reconciliation required.');
@@ -468,6 +504,9 @@ export class JobRegistry {
   }
   stopAccepting(): void {
     this.accepting = false;
+  }
+  async waitIdle(id: string): Promise<void> {
+    await this.active.get(id)?.promise;
   }
   async drain(): Promise<void> {
     await Promise.allSettled(

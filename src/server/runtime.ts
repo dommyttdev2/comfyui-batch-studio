@@ -1,4 +1,3 @@
-import { R2Service } from './r2-service.js';
 import path from 'node:path';
 import { AgentApi } from './agent-api.js';
 import { AgentArtifacts } from './agent-artifacts.js';
@@ -21,6 +20,9 @@ import { FileLease, Ownership } from './ownership.js';
 import { ProjectApi } from './project-api.js';
 import { ProjectRegistration } from './project-registration.js';
 import { DiskProjects } from './project-repository.js';
+import { R2ObjectTransfers } from './r2-object-transfers.js';
+import { R2Service } from './r2-service.js';
+import { R2Transfers } from './r2-transfers.js';
 import { Security } from './security.js';
 import { startServer } from './server.js';
 import { SshResources } from './ssh-resources.js';
@@ -52,7 +54,12 @@ export async function createServerRuntime(
     agents?: AgentRuntimeOptions;
   } = {},
 ) {
-  if (options.definitions?.has('agent') || options.definitions?.has('civitai-sync'))
+  if (
+    options.definitions?.has('agent') ||
+    options.definitions?.has('civitai-sync') ||
+    options.definitions?.has('r2-transfer') ||
+    options.definitions?.has('r2-object-copy')
+  )
     throw new Error('Agent definition is reserved.');
   const shutdownMs = options.shutdownMs ?? 5000;
   if (!Number.isSafeInteger(shutdownMs) || shutdownMs < 1 || shutdownMs > 60_000)
@@ -106,6 +113,28 @@ export async function createServerRuntime(
     },
     async (actor) => ({ ...(await security.forJob(actor)), sessionId: actor.sessionId }),
   );
+  const transfers = new R2Transfers(
+    config.dataDir,
+    integrations,
+    jobs,
+    externalOperations,
+    staging,
+    files,
+    r2.port,
+    () => r2.invalidateIndex(),
+    (actor) => security.forJob(actor),
+  );
+  const objectTransfers = new R2ObjectTransfers(
+    config.dataDir,
+    integrations,
+    jobs,
+    r2.port,
+    (actor) => security.forJob(actor),
+  );
+  r2.objectTransfers = objectTransfers;
+  definitions.set('r2-object-copy', objectTransfers.definition);
+  definitions.set('r2-transfer', transfers.definition);
+  externalDefinitions.set('upload-object', transfers.externalDefinition);
   const projectApi = new ProjectApi(repository, catalogs);
   const workflowApi = new WorkflowApi(config, repository, catalogs);
   let agentOptions: AgentRuntimeOptions | undefined;
@@ -151,6 +180,8 @@ export async function createServerRuntime(
     await externalOperations.initialize();
     await civitai.initialize();
     await r2.initialize();
+    await transfers.initialize();
+    await objectTransfers.initialize();
     await vast.initialize();
     await ssh.initialize();
     await registration.initialize();
@@ -185,6 +216,7 @@ export async function createServerRuntime(
         if (await files.route(context)) return true;
         if (await staging.route(context)) return true;
         if (await civitai.route(context)) return true;
+        if (await transfers.route(context)) return true;
         if (await r2.route(context)) return true;
         if (await vast.route(context)) return true;
         if (await ssh.route(context)) return true;
@@ -236,6 +268,8 @@ export async function createServerRuntime(
         await staging.drain();
         await integrations.drain();
         await civitai.drain();
+        await transfers.drain();
+        await objectTransfers.drain();
         await r2.drain();
         await vast.drain();
         await ssh.drain();

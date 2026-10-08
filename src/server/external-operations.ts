@@ -30,6 +30,7 @@ export type ExternalOperation = Extract<
   | 'delete-objects'
   | 'move-object'
   | 'copy-object'
+  | 'upload-object'
   | 'trust-ssh'
 >;
 const operations: ExternalOperation[] = [
@@ -43,6 +44,7 @@ const operations: ExternalOperation[] = [
   'delete-objects',
   'move-object',
   'copy-object',
+  'upload-object',
   'trust-ssh',
 ];
 export interface ExternalFacts {
@@ -51,6 +53,7 @@ export interface ExternalFacts {
   summary: JsonObject;
 }
 export interface ExternalDefinition {
+  project?(targetId: string): string;
   scope(targetId: string): string;
   inspect(actor: ActorContext, targetId: string): Promise<ExternalFacts>;
   execute(
@@ -59,6 +62,7 @@ export interface ExternalDefinition {
     receiptId: string,
     facts: ExternalFacts,
   ): Promise<{ state: 'succeeded' | 'failed' | 'uncertain'; result?: JsonObject }>;
+  resume?: ExternalDefinition['execute'];
   reconcile?(
     actor: ActorContext,
     receiptId: string,
@@ -307,6 +311,11 @@ export class ExternalOperations {
       await this.guard(actor, bound);
     }
   }
+  async validateBinding(actor: ActorContext, raw: unknown) {
+    const bound = binding(raw);
+    if (!bound) throw new HttpFailure(400, 'PROJECT_BINDING_REQUIRED');
+    await this.checkBinding(actor, bound);
+  }
   private definition(op: ExternalOperation): ExternalDefinition {
     const result = this.definitions.get(op);
     if (!result) throw new HttpFailure(503, 'INTEGRATION_UNAVAILABLE');
@@ -327,6 +336,8 @@ export class ExternalOperations {
       bound = binding(bound);
       await this.checkBinding(actor, bound);
       const definition = this.definition(op);
+      if (definition.project && bound?.projectId !== definition.project(targetId))
+        throw new HttpFailure(400, 'PROJECT_BINDING_REQUIRED');
       const inspected = facts(await definition.inspect(actor, targetId));
       const scope = definition.scope(targetId);
       if (!/^[a-zA-Z0-9_:/.-]{1,256}$/.test(scope)) throw new HttpFailure(400, 'INVALID_SCOPE');
@@ -435,14 +446,38 @@ export class ExternalOperations {
     });
     return this.public(receipt);
   }
-  private async run(actor: ActorContext, r: Receipt): Promise<void> {
+  async resume(actor: ActorContext, id: string, rawBinding: unknown) {
+    const bound = binding(rawBinding);
+    if (!bound) throw new HttpFailure(400, 'PROJECT_BINDING_REQUIRED');
+    const receipt = await this.queue.run(async () => {
+      this.read(actor, id);
+      admin(actor);
+      if (!this.accepting || this.fault || this.active.has(id) || this.reconciling.has(id))
+        throw new HttpFailure(409, 'EXTERNAL_SCOPE_BUSY');
+      const r = this.value.receipts.find((r) => r.id === id)!;
+      if (r.state !== 'uncertain' || !this.definition(r.operation).resume)
+        throw new HttpFailure(409, 'RESUME_UNAVAILABLE');
+      if (r.projectId !== 'global' && r.projectId !== bound.projectId)
+        throw new HttpFailure(403, 'FORBIDDEN');
+      await this.checkBinding(actor, bound);
+      const next = structuredClone(this.value);
+      next.receipts.find((r) => r.id === id)!.state = 'reserved';
+      await this.save(next);
+      return structuredClone(r);
+    });
+    const work = this.run(actor, receipt, bound).finally(() => this.active.delete(id));
+    this.active.set(id, work);
+    void work.catch(() => {});
+    return this.public(this.value.receipts.find((r) => r.id === id)!);
+  }
+  private async run(actor: ActorContext, r: Receipt, resumedBinding?: Binding): Promise<void> {
     try {
       const granted = await this.reauthorize(actor);
       admin(granted);
       const prepared = this.value.confirmations.find(
         (p) => p.confirmation.id === r.confirmationId,
       )!;
-      await this.checkBinding(granted, prepared.binding);
+      await this.checkBinding(granted, resumedBinding ?? prepared.binding);
       await this.queue.run(async () => {
         if (this.fenced.has(r.id)) return;
         const next = structuredClone(this.value);
@@ -450,12 +485,9 @@ export class ExternalOperations {
         await this.save(next);
       });
       if (this.fenced.has(r.id)) return;
-      const outcome = await this.definition(r.operation).execute(
-        granted,
-        r.targetId,
-        r.id,
-        r.facts,
-      );
+      const definition = this.definition(r.operation);
+      const perform = resumedBinding ? definition.resume! : definition.execute;
+      const outcome = await perform(granted, r.targetId, r.id, r.facts);
       await this.finish(r.id, outcome);
     } catch {
       await this.finish(r.id, { state: 'uncertain' });

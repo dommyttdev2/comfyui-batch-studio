@@ -12,7 +12,22 @@ export async function atomicJson(file: string, value: unknown): Promise<void> {
     await handle.close();
   }
   try {
-    await rename(temp, file);
+    // Windows readers can briefly deny replace. Retry the same fsynced atomic
+    // rename only; never unlink the committed file or repeat external effects.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await rename(temp, file);
+        break;
+      } catch (error) {
+        if (
+          process.platform !== 'win32' ||
+          !['EPERM', 'EACCES', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '') ||
+          attempt >= 5
+        )
+          throw error;
+        await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
+      }
+    }
     if (process.platform !== 'win32') {
       const directory = await open(path.dirname(file), 'r');
       try {

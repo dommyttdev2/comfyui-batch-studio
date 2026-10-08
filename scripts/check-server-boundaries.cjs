@@ -17,7 +17,11 @@ function walk(dir) {
               )
             : !target.startsWith('node:') &&
               target !== 'ws' &&
-              !(target === 'ssh2' && file === path.join(root, 'src/server/ssh-resources.ts')) && !(['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'].includes(target) && file === path.join(root, 'src/server/r2-gateway.ts'))
+              !(target === 'ssh2' && file === path.join(root, 'src/server/ssh-resources.ts')) &&
+              !(
+                ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'].includes(target) &&
+                file === path.join(root, 'src/server/r2-gateway.ts')
+              )
         )
           throw new Error('Forbidden server dependency: ' + file + ': ' + target);
       }

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, readFile, realpath, mkdir, open, unlink } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, realpath, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import type { ActorContext } from '../domain/contracts.js';
 import { authorize } from '../domain/contracts.js';
@@ -406,6 +406,18 @@ export class Staging {
       r.pins = r.pins.filter((p) => p !== jobId);
       await this.save(next);
     });
+  }
+  async previewSource(actor: ActorContext, id: string) {
+    const r = this.owned(actor, id);
+    if (r.state !== 'complete') throw new HttpFailure(409, 'RESOURCE_INCOMPLETE');
+    const handle = await this.handle(r);
+    try {
+      const stat = await handle.stat();
+      if (stat.size !== r.size) throw new HttpFailure(409, 'RESOURCE_CHANGED');
+    } finally {
+      await handle.close();
+    }
+    return { file: path.join(this.root, r.id), name: r.name, size: r.size, sha256: r.sha256! };
   }
   async source(actor: ActorContext, id: string, jobId: string) {
     const r = this.owned(actor, id, true);

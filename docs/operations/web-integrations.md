@@ -74,3 +74,15 @@ GET /api/v1/integrations/r2/status/buckets/list/search/metadata/templates/metric
 targetsは管理者がoperation/bucket/keys/destinationを指定してserver側idを作成する。共通prepare/confirmへtargetIdを渡し、現在のobject etag/size、空bucket、既存destinationと資格情報世代を再確認する。未知結果の排他scopeはaccount/bucketで固定し、Secret差替で迂回できない。streaming move応答消失時は元objectを削除せずuncertainとする。copyはsourceを保持し、moveとobject削除はIf-Matchを要求し、失敗時に条件を除いて再送しない。条件付きdeleteは確認receipt専用の1byte objectを作り、誤ったIf-Matchが412で拒否され、objectが保持されることを検証してから対象を変更する。条件が無視・拒否された場合は対象変更を行わず、未知結果を保持する。probeの応答喪失で内部objectが残る可能性はread-only照合に持ち越す。予約済み内部prefix .batch-studio/ をUI/API対象から除外し、内部objectが残ったbucketの削除を空bucketとして扱わない。bucket作成/削除の結果不明は、存在だけで実施者を断定せずunknownを保持する。
 
 moveはGetObject If-MatchとPutObject If-None-Matchによる64KiB単位のstreamingとlength検証を使い、移動先の競合書込みを上書きしない。receipt/source etag/sizeのmetadataを保存し、移動先を検証してから条件付きsource deleteを行う。現時点では5GiBを超えるobjectをMULTIPART_MOVE_REQUIREDとして拒否する。巨大objectとupload/pause/resume/cancelは #381 のmultipart jobへ接続する。browser staging・server fileの登録は #380、Modalは #384。これらが未完了の間、P5完了とは扱わない。
+
+## Multipart転送
+
+新Webの転送元は完成済みstaging IDまたは明示登録済みserver file IDを指定する。Projectのrevision/leaseに束ねたupload-object確認後にreceiptとjobを保存し、stagingをpinする。Partは最大16MiB、uploadの並列数は3、同時未確定uploadは3件まで。元fileは全体SHA-256、Part SHA-256、file identityで検証する。physical path、multipart ID、Secretを公開しない。
+
+GET /api/v1/integrations/r2/transfers、POST /targets、POST /:id/pause|resume|cancel|reconcileを使う。再開はbinding（projectId/expectedRevision/leaseId）が必要。再起動後はuncertainとし自動再送しない。応答不明のPartはListPartsと保存MD5/sizeで受理済みを証明してから明示再開する。受理されていないという推測で再送しない。完成応答不明はreceipt metadataとsize/SHAをHeadで照合する。
+
+copy/move targetは明示的なprojectIdと確認bindingを必須とする。5GiB超はr2-object-copy jobで16MiBのGetObject IfMatch Range→UploadPartを行う。UploadPartCopyの条件を省略する経路は持たない。完成IfNoneMatchと削除IfMatchはreceipt専用の一時objectで事前検証し、非対応なら対象に書き込まない。移動元はコピー先のreceipt/ETag/size証明後だけ条件付き削除する。大きなcopy/moveの中断・応答不明は保持し、自動abort/再実行/再開しない。照合は読取のみ。
+
+Windowsの保存は同一のfsync済み一時fileのatomic renameが一時的なread lockで拒否された場合だけ、最大6回の限定再試行を行う。確定fileを削除したり外部操作を繰り返したりしない。保存故障はuncertainとして保持する。
+
+P5-7検証: Windows/Linux(Docker、network none)で連携61件、server18件、core102件を通過。Windowsではagents16件とElectron TypeScript検査も通過。新規転送11件にはPart受理後応答消失、完成応答消失、条件無視、pause/resume/cancel、再起動、source変更、Project bindingを含む。実R2条件互換性と実サービス受入はP5-11に残る。
