@@ -11,6 +11,19 @@ import type { AgentRecord } from './agent-store.js';
 import type { AgentRuntime } from './agent-runtime.js';
 import { HttpFailure } from './http.js';
 import type { PublicJob } from './jobs.js';
+export function knownImportFailure(error: unknown): boolean {
+  return (
+    (error instanceof BusinessError || error instanceof HttpFailure) &&
+    [
+      'INVALID_ARTIFACT',
+      'REVISION_CONFLICT',
+      'FORBIDDEN',
+      'AGENT_ARTIFACT_CHANGED',
+      'INVALID_AGENT_OUTPUT',
+      'AGENT_ARTIFACT_UNAVAILABLE',
+    ].includes(error.code)
+  );
+}
 export async function readAgentArtifact(directory: string, jobId: string, name: string) {
   if (!/^[a-f0-9-]{36}$/.test(jobId) || !/^[a-z_]+\.(json|md)$/.test(name))
     throw new HttpFailure(422, 'INVALID_AGENT_OUTPUT');
@@ -109,6 +122,23 @@ export class AgentArtifacts implements AgentJobArtifactSource {
       sha256: file.sha256,
     };
   }
+  async reconcile(job: PublicJob): Promise<'succeeded' | 'failed' | 'uncertain'> {
+    const r = this.runtime.store.reconciliationRecord(job.id);
+    if (!r || r.state !== 'completed' || !r.artifact) return 'uncertain';
+    const actor: ActorContext = {
+      userId: r.userId,
+      sessionId: 'server-reconcile',
+      requestId: 'reconcile-' + job.id,
+      projectIds: [job.projectId],
+      permissions: ['read', 'edit', 'execute'],
+    };
+    try {
+      await this.ingest(actor, r.scope, job.id);
+      return 'succeeded';
+    } catch (e) {
+      return knownImportFailure(e) ? 'failed' : 'uncertain';
+    }
+  }
   async ingest(actor: ActorContext, scope: AgentScope, jobId: string) {
     actor = await this.revalidate(actor);
     authorize(actor, scope.projectId, 'edit');
@@ -137,6 +167,7 @@ export class AgentArtifacts implements AgentJobArtifactSource {
       await this.runtime.store.importResult(actor, scope, jobId, null);
       return result;
     } catch (error) {
+      if (!knownImportFailure(error)) throw error;
       await this.runtime.store.importResult(
         actor,
         scope,

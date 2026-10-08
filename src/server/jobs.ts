@@ -244,6 +244,7 @@ export class JobRegistry {
       // No side effect may occur until this reservation has been persisted.
       try {
         await this.persist();
+        await this.changed(publicJob(job));
       } catch (error) {
         this.fault = error;
         this.accepting = false;
@@ -408,6 +409,53 @@ export class JobRegistry {
     const pending = Promise.resolve().then(async () => {
       const outcome = await definition.reconcile!(publicJob(job), job.input);
       await this.finish(job, outcome.state);
+      return publicJob(job);
+    });
+    this.reconciling.set(id, pending);
+    try {
+      return await pending;
+    } finally {
+      this.reconciling.delete(id);
+    }
+  }
+  async idleAgentScope<T>(
+    actor: ActorContext,
+    projectId: string,
+    stage: string,
+    provider: string,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    authorize(actor, projectId, 'execute');
+    return this.queue.run(async () => {
+      if (!this.accepting) throw new HttpFailure(503, 'SERVER_DRAINING');
+      if (
+        this.jobs.some(
+          (j) =>
+            j.kind === 'agent' &&
+            j.projectId === projectId &&
+            j.stage === stage &&
+            j.provider === provider &&
+            !terminal(j.state),
+        )
+      )
+        throw new BusinessError('RUNTIME_BUSY', 'Agent scope already reserved.');
+      return work();
+    });
+  }
+  assertOwner(actor: ActorContext, id: string): void {
+    this.owned(actor, id);
+  }
+  async abandon(actor: ActorContext, id: string, proof: () => Promise<void>): Promise<PublicJob> {
+    const known = this.get(actor, id);
+    authorize(actor, known.projectId, 'admin');
+    if (!this.accepting) throw new HttpFailure(503, 'SERVER_DRAINING');
+    const job = this.jobs.find((j) => j.id === id)!;
+    if (job.state === 'cancelled') return publicJob(job);
+    if (job.state !== 'uncertain' || this.active.has(id) || this.reconciling.has(id))
+      throw new BusinessError('RUNTIME_BUSY', 'Active or known job cannot be abandoned.');
+    const pending = Promise.resolve().then(async () => {
+      await proof();
+      await this.finish(job, 'cancelled');
       return publicJob(job);
     });
     this.reconciling.set(id, pending);

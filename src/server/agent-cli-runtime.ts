@@ -23,6 +23,7 @@ export interface AgentRunnerConfig {
   provider: AgentProvider;
   version: string;
   jobId?: string;
+  context?: string;
 }
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const token = /^[a-zA-Z0-9][a-zA-Z0-9._:/+-]{0,127}$/;
@@ -83,19 +84,21 @@ export class DockerAgentAdapter implements AgentCliAdapter {
     includeStderr = false,
   ): Promise<string> {
     return new Promise((resolve, reject) => {
-      const child = spawn(this.config.docker, args, {
-        windowsHide: true,
-        shell: false,
-        env: {
-          PATH: process.env.PATH,
-          SystemRoot: process.env.SystemRoot,
-          TEMP: process.env.TEMP,
-          HOME: process.env.HOME,
-          USERPROFILE: process.env.USERPROFILE,
-          DOCKER_HOST: process.env.DOCKER_HOST,
-          DOCKER_CONTEXT: process.env.DOCKER_CONTEXT,
+      const child = spawn(
+        this.config.docker,
+        [...(this.config.context ? ['--context', this.config.context] : []), ...args],
+        {
+          windowsHide: true,
+          shell: false,
+          env: {
+            PATH: process.env.PATH,
+            SystemRoot: process.env.SystemRoot,
+            TEMP: process.env.TEMP,
+            HOME: process.env.HOME,
+            USERPROFILE: process.env.USERPROFILE,
+          },
         },
-      });
+      );
       let output = '';
       let failed = false;
       const timer = setTimeout(() => {
@@ -368,7 +371,14 @@ export class DockerAgentAdapter implements AgentCliAdapter {
     const done = (async () => {
       const child = spawn(
         this.config.docker,
-        ['exec', '-i', container.name, this.provider, ...args],
+        [
+          ...(this.config.context ? ['--context', this.config.context] : []),
+          'exec',
+          '-i',
+          container.name,
+          this.provider,
+          ...args,
+        ],
         {
           windowsHide: true,
           shell: false,
@@ -469,6 +479,23 @@ export class DockerAgentAdapter implements AgentCliAdapter {
     if (!turn) throw new Error('Unknown CLI turn.');
     await this.remove(turn.name);
     await turn.done.catch(() => {});
+  }
+  async absent(jobId: string): Promise<boolean> {
+    if (!uuid.test(jobId)) throw new Error('Invalid job identity.');
+    return !(
+      await this.capture([
+        'ps',
+        '-a',
+        '--filter',
+        'name=^/batch-agent-' + jobId + '$',
+        '--format',
+        '{{.ID}}',
+      ])
+    ).trim();
+  }
+  async terminate(jobId: string): Promise<void> {
+    if (!uuid.test(jobId)) throw new Error('Invalid job identity.');
+    await this.remove('batch-agent-' + jobId);
   }
   async shutdown(): Promise<void> {
     this.closed = true;

@@ -386,8 +386,8 @@
     },
     {
       "file": "package.json",
-      "lines": 73,
-      "sha256": "b43251355e08b6644ec2a07ea990a200517038289fdef732d3c5b94a3a4e6117",
+      "lines": 74,
+      "sha256": "d7e4a3bd09983c10e026952f86f12f489a66123c36950ac56a1811a88517fc03",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -428,7 +428,7 @@
           "text": "\"prebuild:electron\": \"node scripts/check-running-batch-studio.cjs\","
         },
         {
-          "line": 67,
+          "line": 68,
           "text": "\"electron\": \"44.2.0\","
         }
       ],
@@ -1043,7 +1043,7 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
+      "entryReachable": true
     },
     {
       "file": "src/application/agent-runtime-ports.ts",
@@ -1129,7 +1129,7 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
+      "entryReachable": true
     },
     {
       "file": "src/application/agent-use-cases.ts",
@@ -1159,7 +1159,7 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
+      "entryReachable": true
     },
     {
       "file": "src/application/artifact-file-service.ts",
@@ -9999,9 +9999,39 @@
       "entryReachable": true
     },
     {
+      "file": "src/server/agent-api.ts",
+      "lines": 199,
+      "sha256": "1e8118d713eb92baf62d85084ceab2bd2517c2d44d80eb62bf3966552f9a2768",
+      "workPackage": "W04",
+      "layer": "server-infrastructure",
+      "phase": "P4",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../application/agent-preferences-use-cases.js",
+        "./agent-runtime.js",
+        "./agent-artifacts.js",
+        "../domain/contracts.js",
+        "../domain/agent-stage-policy.js",
+        "../application/agent-use-cases.js",
+        "../application/agent-task-planning.js",
+        "./http.js",
+        "./project-api.js"
+      ],
+      "exports": [
+        "AgentApi"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/server/agent-artifacts.ts",
-      "lines": 152,
-      "sha256": "86dc0fdc4f89ff9fd2e03d5c9014f7d39b57c6f270924fc55bcc4e426530d616",
+      "lines": 183,
+      "sha256": "ab99622fd61d9c6a0e45b9d9f27a25a8c17dcbd9ffe20a1814867e8435944965",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10023,6 +10053,7 @@
         "./jobs.js"
       ],
       "exports": [
+        "knownImportFailure",
         "readAgentArtifact",
         "AgentArtifacts"
       ],
@@ -10030,12 +10061,12 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
+      "entryReachable": true
     },
     {
       "file": "src/server/agent-cli-runtime.ts",
-      "lines": 479,
-      "sha256": "e8ecd1b19ca6bedceff3b911320cf25f1ece562af5b710b61a96b1d229f482ca",
+      "lines": 506,
+      "sha256": "98837ad14bbbcc5560b0d7060eb76e3456bd3c754925dd9475a6df9162958fc6",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10067,65 +10098,139 @@
           "text": "import { spawn } from 'node:child_process';"
         },
         {
-          "line": 90,
-          "text": "PATH: process.env.PATH,"
-        },
-        {
-          "line": 91,
-          "text": "SystemRoot: process.env.SystemRoot,"
-        },
-        {
-          "line": 92,
-          "text": "TEMP: process.env.TEMP,"
-        },
-        {
-          "line": 93,
-          "text": "HOME: process.env.HOME,"
-        },
-        {
           "line": 94,
-          "text": "USERPROFILE: process.env.USERPROFILE,"
+          "text": "PATH: process.env.PATH,"
         },
         {
           "line": 95,
-          "text": "DOCKER_HOST: process.env.DOCKER_HOST,"
-        },
-        {
-          "line": 96,
-          "text": "DOCKER_CONTEXT: process.env.DOCKER_CONTEXT,"
-        },
-        {
-          "line": 376,
-          "text": "PATH: process.env.PATH,"
-        },
-        {
-          "line": 377,
           "text": "SystemRoot: process.env.SystemRoot,"
         },
         {
-          "line": 378,
+          "line": 96,
           "text": "TEMP: process.env.TEMP,"
         },
         {
-          "line": 379,
+          "line": 97,
           "text": "HOME: process.env.HOME,"
         },
         {
-          "line": 380,
+          "line": 98,
           "text": "USERPROFILE: process.env.USERPROFILE,"
         },
         {
+          "line": 386,
+          "text": "PATH: process.env.PATH,"
+        },
+        {
+          "line": 387,
+          "text": "SystemRoot: process.env.SystemRoot,"
+        },
+        {
+          "line": 388,
+          "text": "TEMP: process.env.TEMP,"
+        },
+        {
           "line": 389,
+          "text": "HOME: process.env.HOME,"
+        },
+        {
+          "line": 390,
+          "text": "USERPROFILE: process.env.USERPROFILE,"
+        },
+        {
+          "line": 399,
           "text": "// stdin is never interpreted by a host shell."
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/agent-init.ts",
+      "lines": 56,
+      "sha256": "a482518cefe83424cbbb68097845d6111da12092fed265e9f1dda1f740698afe",
+      "workPackage": "W04",
+      "layer": "server-infrastructure",
+      "phase": "P4",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "./config.js",
+        "./ownership.js",
+        "./storage.js",
+        "./agent-registration.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 9,
+          "text": "const config = await loadConfig({ dataDir: process.env.BATCH_STUDIO_DATA_DIR ?? '' });"
+        },
+        {
+          "line": 27,
+          "text": "const credential = process.env['BATCH_STUDIO_' + provider.toUpperCase() + '_CREDENTIAL'];"
+        },
+        {
+          "line": 34,
+          "text": "docker: process.env.BATCH_STUDIO_AGENT_DOCKER,"
+        },
+        {
+          "line": 35,
+          "text": "image: process.env.BATCH_STUDIO_AGENT_IMAGE,"
+        },
+        {
+          "line": 36,
+          "text": "directory: process.env.BATCH_STUDIO_AGENT_DIR,"
+        },
+        {
+          "line": 37,
+          "text": "context: process.env.BATCH_STUDIO_AGENT_CONTEXT,"
         }
       ],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
     },
     {
+      "file": "src/server/agent-registration.ts",
+      "lines": 108,
+      "sha256": "15cf8b91c66666c94752baeaa6dc62a1e611c61c1ddf9b84f80a3a1774508feb",
+      "workPackage": "W04",
+      "layer": "server-infrastructure",
+      "phase": "P4",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:fs/promises",
+        "node:path",
+        "node:crypto",
+        "./agent-cli-runtime.js",
+        "./agent-runtime.js",
+        "../domain/agent-runtime-types.js",
+        "../domain/contracts.js",
+        "./http.js",
+        "./ownership.js",
+        "./agent-store.js"
+      ],
+      "exports": [
+        "loadAgentRegistration"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/server/agent-runtime.ts",
-      "lines": 376,
-      "sha256": "db3359b9dcb0acd28a58cfc2618fdd225ff18bd7151b397163ea453bd87ed189",
+      "lines": 402,
+      "sha256": "ad917b0d943ee4c2ee1f93c9f74b9c68813a1ff759a2e238de4f6ef5931fe951",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10147,6 +10252,7 @@
         "./http.js",
         "./jobs.js",
         "./agent-store.js",
+        "./agent-artifacts.js",
         "./project-repository.js"
       ],
       "exports": [
@@ -10157,12 +10263,12 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
+      "entryReachable": true
     },
     {
       "file": "src/server/agent-store.ts",
-      "lines": 403,
-      "sha256": "12e4497d1e05afd1131650577d31fcb9b6810fa8937a7a74a02bd793f3b7d498",
+      "lines": 441,
+      "sha256": "0a27cedf56b5c4a7a0749ad3eea6c5724ef081d611f086c53ff1b5c7d24afd00",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10190,7 +10296,7 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
+      "entryReachable": true
     },
     {
       "file": "src/server/auth-init.ts",
@@ -10251,7 +10357,7 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
+      "entryReachable": true
     },
     {
       "file": "src/server/config.ts",
@@ -10379,7 +10485,7 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
+      "entryReachable": true
     },
     {
       "file": "src/server/http.ts",
@@ -10418,8 +10524,8 @@
     },
     {
       "file": "src/server/jobs.ts",
-      "lines": 501,
-      "sha256": "dfda194dfc314d604b6374f51b3fc9aed36974b83ea4197f01ea953e25a3eb90",
+      "lines": 549,
+      "sha256": "cb397749fdf1b4d1069d6c79a435a25cda26d8db096f0b7c455e3586d0b1ec00",
       "workPackage": "W10",
       "layer": "server-infrastructure",
       "phase": "P2",
@@ -10688,8 +10794,8 @@
     },
     {
       "file": "src/server/runtime.ts",
-      "lines": 154,
-      "sha256": "4df118abb0ed7676f76dba391a942c5492e9f33adad1960aa01b7fbbf22b9ccd",
+      "lines": 200,
+      "sha256": "b7d51aa3816885cb306f1244dd20f9dee83e7dc9ee0ba026857446f1546f39cc",
       "workPackage": "W10",
       "layer": "server-infrastructure",
       "phase": "P2",
@@ -10708,6 +10814,11 @@
         "./project-api.js",
         "./project-repository.js",
         "./project-registration.js",
+        "./agent-runtime.js",
+        "./agent-api.js",
+        "./agent-artifacts.js",
+        "./agent-store.js",
+        "./agent-registration.js",
         "./security.js",
         "./server.js"
       ],
@@ -10723,8 +10834,8 @@
     },
     {
       "file": "src/server/security.ts",
-      "lines": 218,
-      "sha256": "5a3044b02cf9a28b6a92b67b4eb0ea0bc262aeaa9e6887f203f10b18646a4a09",
+      "lines": 228,
+      "sha256": "7638041176850ddaa9a0c2d469109666fd1a82e7afda00778751ef2460649137",
       "workPackage": "W01",
       "layer": "server-infrastructure",
       "phase": "P2",
@@ -13810,6 +13921,36 @@
       "entryReachable": false
     },
     {
+      "file": "tests/server-agent-api.mjs",
+      "lines": 140,
+      "sha256": "911346b63237278b217784a6e72359a37a2783bc9732f42f79ecc93964012035",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "./server-project-fixtures.mjs",
+        "./server-agent-fixtures.mjs",
+        "./server-project-http-fixtures.mjs",
+        "../dist-server/server/runtime.js",
+        "../dist-server/server/config.js",
+        ", {});\n    assert.equal(repeat.status, 200);\n    assert.equal(repeat.body.project.revision, p.revision);\n    assert.equal(\n      (await f.call("
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "tests/server-agent-artifacts.mjs",
       "lines": 136,
       "sha256": "abc49796fffd1adee4e545956b4df2c668ec64f514ceeb740485b9de03fbeea8",
@@ -13858,6 +13999,33 @@
         "node:path"
       ],
       "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-agent-fixtures.mjs",
+      "lines": 126,
+      "sha256": "46abff24b35dd8d2e3dd5865194ad76b895831f4f764f2e7a368c10b9ff0cd33",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:fs/promises",
+        "node:crypto",
+        "node:path",
+        "../dist-server/domain/agent-artifact-policy.js"
+      ],
+      "exports": [
+        "fixtureAgents",
+        "brief",
+        "seedBrief"
+      ],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
@@ -18877,6 +19045,18 @@
       "requiredAction": "P8までに新test実行経路へ接続"
     },
     {
+      "file": "tests/server-agent-api.mjs",
+      "registration": "agent-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
       "file": "tests/server-agent-artifacts.mjs",
       "registration": "agent-local",
       "treatment": "契約維持・server buildへ適合",
@@ -18899,6 +19079,18 @@
         "G12"
       ],
       "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-agent-fixtures.mjs",
+      "registration": "support",
+      "treatment": "harness/fixture移植",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P8までに新test実行経路へ接続"
     },
     {
       "file": "tests/server-agent-jobs.mjs",
@@ -19626,9 +19818,9 @@
     }
   ],
   "counts": {
-    "files": 491,
-    "source": 342,
-    "tests": 102,
+    "files": 496,
+    "source": 345,
+    "tests": 104,
     "scripts": 16,
     "ipc": 172,
     "resources": 8,
@@ -19637,7 +19829,7 @@
       "W01": 18,
       "W02": 35,
       "W03": 34,
-      "W04": 55,
+      "W04": 58,
       "W05": 33,
       "W06": 55,
       "W07": 15,
@@ -19645,7 +19837,7 @@
       "W09": 47,
       "W10": 26,
       "W11": 29,
-      "W12": 108,
+      "W12": 110,
       "W13": 11,
       "W14": 12
     },
@@ -19666,14 +19858,14 @@
     "testRegistration": {
       "CI-conditional": 2,
       "CI-only": 2,
-      "agent-local": 4,
+      "agent-local": 5,
       "browser-local": 1,
       "core-local": 4,
       "npm-test": 61,
       "project-local": 6,
       "server-local": 7,
       "standalone": 6,
-      "support": 9
+      "support": 10
     }
   }
 }

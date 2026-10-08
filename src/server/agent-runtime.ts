@@ -12,10 +12,13 @@ import type { AgentTaskRequest } from '../domain/agent-runtime-types.js';
 import { fields, HttpFailure, object, type JsonObject } from './http.js';
 import { JobRegistry, type JobDefinition, type PublicJob } from './jobs.js';
 import { AgentStore, agentScopeKey, type AgentRecord } from './agent-store.js';
+import { knownImportFailure } from './agent-artifacts.js';
 import type { DiskProjects } from './project-repository.js';
 
 export interface AgentRuntimeOptions {
   directory: string;
+  configuredProviders?: readonly ('codex' | 'grok')[];
+  terminate?(scope: AgentScope, jobId: string): Promise<void>;
   adapter(scope: AgentScope, jobId?: string): AgentCliAdapter;
   stopped?(scope: AgentScope, jobId: string): Promise<boolean>;
 }
@@ -45,6 +48,7 @@ export class AgentRuntime {
   readonly store: AgentStore;
   readonly preferences: AgentPreferencesUseCases;
   readonly definition: JobDefinition;
+  reconcileArtifact?: (job: PublicJob) => Promise<'succeeded' | 'failed' | 'uncertain'>;
   captureArtifact?: (
     actor: ActorContext,
     scope: AgentScope,
@@ -80,6 +84,11 @@ export class AgentRuntime {
         if (!this.options?.stopped || !(await this.options.stopped(jobScope(job), job.id)))
           return { state: 'uncertain' };
         const record = await this.recordForReconcile(job.id);
+        if (record === 'uncertain' && this.reconcileArtifact) {
+          const completed = this.store.reconciliationRecord(job.id);
+          if (completed?.state === 'completed' && completed.artifact)
+            return { state: await this.reconcileArtifact(job) };
+        }
         return {
           state:
             record === 'completed'
@@ -92,6 +101,18 @@ export class AgentRuntime {
         };
       },
     };
+  }
+  async abandon(actor: ActorContext, scope: AgentScope, id: string) {
+    authorize(actor, scope.projectId, 'admin');
+    if (!this.options?.terminate)
+      throw new BusinessError('DEPENDENCY_UNAVAILABLE', 'Container termination unavailable.');
+    return this.jobs.abandon(actor, id, async () => {
+      await this.options!.terminate!(scope, id);
+      if (!this.options?.stopped || !(await this.options.stopped(scope, id)))
+        throw new BusinessError('RUNTIME_UNCERTAIN', 'Container stop unverified.');
+      const r = this.store.reconciliationRecord(id);
+      if (r) await this.store.abandonRecord(actor, scope, id);
+    });
   }
   private async recordForReconcile(id: string) {
     return this.store.completion(id);
@@ -110,7 +131,11 @@ export class AgentRuntime {
     return this.options.adapter(scope, id);
   }
   async availability(scope: AgentScope) {
-    if (!this.options)
+    if (
+      !this.options ||
+      (this.options.configuredProviders &&
+        !this.options.configuredProviders.includes(scope.provider))
+    )
       return {
         provider: scope.provider,
         state: 'missing',
@@ -332,6 +357,7 @@ export class AgentRuntime {
           try {
             await this.importArtifact(actor, scope, job.id);
           } catch (error) {
+            if (!knownImportFailure(error)) return { state: 'uncertain' };
             await this.store.importResult(
               actor,
               scope,
