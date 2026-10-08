@@ -67,6 +67,7 @@ export class ProjectApi {
       'prepare-reset': ['target', 'stage'],
       'configure-models': ['family', 'base', 'textEncoder', 'vae'],
       'replace-models': ['expected', 'next'],
+      'import-loras': ['payload', 'stage'],
       'patch-prompt-plan': ['raw'],
     };
     if (!shape[action]) return false;
@@ -142,6 +143,11 @@ export class ProjectApi {
             return this.projects.configureModels(
               actor,
               command as Parameters<ProjectUseCases['configureModels']>[1],
+            );
+          case 'import-loras':
+            return this.projects.importLoras(
+              actor,
+              command as Parameters<ProjectUseCases['importLoras']>[1],
             );
           case 'replace-models':
             return this.projects.replaceModels(

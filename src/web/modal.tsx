@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { workspace, type Workspace } from './workspace';
+import {
+  IntegrationTool,
+  Observation,
+  type ToolConfirmation,
+  type ToolState,
+} from './integration-tools';
+import { type Workspace, workspace } from './workspace';
 export interface ModalContext {
   id: string;
   projectId: string;
@@ -90,7 +96,7 @@ export function Dialog({
   );
 }
 const names = ['Civitai Explorer', 'R2 Browser', 'Vast.ai', 'サービス連携', '環境設定'];
-const states = new Map<string, { search: string; bucket: string; path: string; scroll: number }>();
+const states = new Map<string, ToolState>();
 export function ModalHost() {
   useSyncExternalStore(workspace.subscribe, workspace.snapshot);
   const [open, setOpen] = useState(false);
@@ -98,6 +104,9 @@ export function ModalHost() {
   const [mode, setMode] = useState('manage');
   const [origin, setOrigin] = useState<{ name: string; context: ModalContext } | null>(null);
   const [confirm, setConfirm] = useState(false);
+  const [external, setExternal] = useState<ToolConfirmation | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
   const [, render] = useState(0);
   const stateKey = workspace.user + ':' + tool;
   const body = useRef<HTMLDivElement>(null);
@@ -121,6 +130,9 @@ export function ModalHost() {
             }
           : null,
       );
+      setConfirm(false);
+      setExternal(null);
+      setConfirmError('');
       setMode('manage');
       setOpen(true);
     };
@@ -158,8 +170,14 @@ export function ModalHost() {
     <Dialog
       title={tool}
       onClose={() => {
-        if (confirm) setConfirm(false);
-        else setOpen(false);
+        if (confirm) {
+          if (!confirmBusy) {
+            setConfirm(false);
+            setExternal(null);
+          }
+          return;
+        }
+        setOpen(false);
       }}
     >
       <div
@@ -173,7 +191,14 @@ export function ModalHost() {
               <option key={name}>{name}</option>
             ))}
           </select>
-          <button ref={cancel} onClick={() => setConfirm(true)}>
+          <button
+            ref={cancel}
+            onClick={() => {
+              setExternal(null);
+              setConfirmError('');
+              setConfirm(true);
+            }}
+          >
             表示状態をリセット
           </button>
         </nav>
@@ -209,32 +234,63 @@ export function ModalHost() {
             <input value={state.search} onChange={(e) => update('search', e.target.value)} />
           </label>
         )}
-        <div className="unavailable">
-          <h3>外部サービスは未接続です</h3>
-          <p>検索・同期・管理・転送はP5で接続します。表示条件はモーダルを閉じても保持されます。</p>
-          <button disabled>
-            {mode === 'select' ? 'Projectへ選択を確定' : '操作を実行'}（未接続）
-          </button>
-        </div>
+        <IntegrationTool
+          key={stateKey}
+          tool={tool}
+          state={state}
+          mode={mode}
+          origin={origin?.context ?? null}
+          onOrigin={(context) =>
+            setOrigin((previous) => (previous ? { ...previous, context } : null))
+          }
+          onConfirm={(request) => {
+            setExternal(request);
+            setConfirmError('');
+            setConfirm(true);
+          }}
+        />
       </div>
       {confirm && (
         <div
           ref={confirmation}
           role="alertdialog"
           aria-modal="true"
-          aria-label="表示状態リセット確認"
+          aria-label={external ? '外部操作の確認' : '表示状態リセット確認'}
         >
-          <h3>表示条件をリセットしますか？</h3>
+          <h3>{external ? external.title : '表示条件をリセットしますか？'}</h3>
+          {external && <Observation value={external.summary} />}
+          {confirmError && <p role="alert">{confirmError}</p>}
           <p>開始済みjobは停止しません。</p>
-          <button onClick={() => setConfirm(false)}>取消</button>
           <button
+            disabled={confirmBusy}
             onClick={() => {
+              setConfirm(false);
+              setExternal(null);
+            }}
+          >
+            取消
+          </button>
+          <button
+            disabled={confirmBusy}
+            onClick={() => {
+              if (external) {
+                setConfirmBusy(true);
+                void external
+                  .submit()
+                  .then(() => {
+                    setConfirm(false);
+                    setExternal(null);
+                  })
+                  .catch((e) => setConfirmError(e.message))
+                  .finally(() => setConfirmBusy(false));
+                return;
+              }
               states.set(stateKey, { search: '', bucket: '', path: '', scroll: 0 });
               setConfirm(false);
               render((v) => v + 1);
             }}
           >
-            表示条件をリセット
+            {external ? '確認して実行' : '表示条件をリセット'}
           </button>
         </div>
       )}

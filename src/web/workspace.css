@@ -251,3 +251,55 @@ div[role="alertdialog"] {
   padding: 0.5rem 0;
   border-top: 1px solid #555;
 }
+.tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.integration-tool label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0;
+}
+.integration-tool input,
+.integration-tool select {
+  max-width: 100%;
+  min-width: 0;
+}
+.tool-result {
+  overflow-wrap: anywhere;
+  padding: 12px;
+  background: #101925;
+  border-radius: 8px;
+}
+.tool-result dl,
+.tool-modal [role="alertdialog"] dl {
+  margin: 8px 0;
+}
+.tool-result dl > div,
+.tool-modal [role="alertdialog"] dl > div {
+  display: grid;
+  grid-template-columns: minmax(90px, 30%) 1fr;
+  gap: 12px;
+  margin: 6px 0;
+}
+.tool-result dt {
+  color: #99b3d1;
+}
+.tool-result dd {
+  margin: 0;
+  min-width: 0;
+}
+.tool-modal [role="alertdialog"] {
+  max-height: 65vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.integration-tool article {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid #415064;
+  border-radius: 6px;
+}
