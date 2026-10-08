@@ -71,19 +71,19 @@ P1は[移行計画](web-migration-plan.md) 3.1/3.2に従う実際の業務規則
 - [x] 実際のモデル/PromptPlan/Template fixtureでcanonical validation、モデルidentity競合、下流reset条件、Workflow生成、Preflight、Run作成/復旧、captionと画素処理を検証。
 - [x] validator/start/recoveryを丸ごと外部portへ委譲せず、業務判断をcoreで実行。
 - [x] WindowsとDocker/Linuxでcore検証・型検査を実行し、既存Node回帰も通過。
-- [x] 新fileの主担当と層、core-local test経路を調査索引へ登録。
+- [x] 追加分を含む全fileの主担当と層、core-local test経路、Thumbnail document削除IPCを調査索引へ登録し、`--check`で照合。
 
-G01-G14全体の機能受入は完了扱いにしない。HTTP/認証/Origin/CSRFはP2、登録済みProjectと実永続化・新画面からの操作接続はP3以降、実CLIはP4、実Secret/外部clientはP5、実生成はP6、実codecはP7、browser E2EはP8で検証する。既存Node回帰は抽出の影響確認に使う。旧Desktopの実操作・全app build・実外部接続は未検証。通常実装のためapp versionは0.82.0を維持する。
+G01-G14全体の機能受入は完了扱いにしない。HTTP/認証/Origin/CSRFはP2、登録済みProjectと実永続化・新画面からの操作接続はP3以降、実CLIはP4、実Secret/外部clientはP5、実生成はP6、実codecはP7、browser E2EはP8で検証する。既存Node回帰は抽出の影響確認に使う。Desktopの実操作・実外部接続は未検証。Renderer/Electron buildは検証済み。通常実装のためapp versionは0.82.0を維持する。
 
 ## ローカル検証
 
-Windows: Node v24.16.0。境界検査、Node/DOM型なしのcore compile、domain 5件・業務38件・実fixture 41件（計84件）が通過。failure/cancel/skipは0。
+Windows: Node v24.16.0。境界検査、Node/DOM型なしのcore compile、domain 5件・業務38件・実fixture 42件・追加分離回帰17件（計102件）が通過。failure/cancel/skipは0。型検査、Renderer/Electron build、format/lintも成功。
 
-Docker/Linux: Node v22.12.0。npm run test:core（84件）、npm run typecheck、npm test、npm run checkを実行。checkの6 unused-variable警告は既存codeだけで、errorなし。実サービス接続やdisk durabilityの受入を、この結果から推測しない。
+Docker/Linux: Node v22.12.0。npm run test:core（102件、失敗・skip 0）、npm run typecheck、npm test（既存61テストファイル）、Grok CLI追加2テストファイルが成功。npm run checkは全体検査で成功し、既存codeのunused-variable警告4件が残る。実サービス接続やdisk durabilityの受入を、この結果から推測しない。
 
 Date.parseによる既存入力日時の検証は純粋な検証として許可する。現在時刻の取得（Date.now / new Date）と乱数はportから注入し、禁止依存検査で直接取得を拒否する。domain型の移動は業務データ定義の共有であり、旧Project/Electron APIの互換読み込みを新Webの入口に追加しない。
 
-検証logは作業ツリーのp1-separation-linux.log（Git対象外）。Windowsのcore結果は実行出力に記録。索引はnode docs/roadmap/web-migration-audit.cjs --checkで照合する。
+最新の[分離実装・検証結果](business-core-separation-verification.md)に調査方法、全入口・関数の集計、検証の範囲を記録した。ログと固定snapshotは元ワークスペースのreview-artifacts/pr309/（Git対象外）に保持し、過去のp1-separation-linux.logとは区別する。索引はnode docs/roadmap/web-migration-audit.cjs --checkで照合する。
 
 ## 再調査の範囲と結果
 
