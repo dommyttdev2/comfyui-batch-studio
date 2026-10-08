@@ -106,7 +106,11 @@ test('real authenticated Project API edits, confirms, consumes scoped reset and 
     const no = await fetch(runtime.origin + '/api/v1/projects/unknown', { headers });
     assert.equal(no.status, 403);
     const publicRead = await fetch(runtime.origin + '/api/v1/projects/' + f.id, {
-      headers: { 'x-batch-api-version': '1', 'x-batch-build-id': config.buildId },
+      headers: {
+        'x-batch-api-version': '1',
+        'x-batch-build-id': config.buildId,
+        'x-request-id': 'unauthenticated',
+      },
     });
     assert.equal(publicRead.status, 401);
   } finally {
