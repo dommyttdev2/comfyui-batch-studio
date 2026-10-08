@@ -14,7 +14,10 @@ export interface EditLease {
   sessionId: string;
   expiresAt: number;
 }
+
+import type { ResourceBindings } from '../domain/resource-bindings.js';
 export interface ProjectState {
+  resourceBindings?: ResourceBindings;
   schema: 'web-project/1';
   id: string;
   revision: Revision;

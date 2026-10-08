@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, realpath, open } from 'node:fs/promises';
+import { lstat, open, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import type { ActorContext } from '../domain/contracts.js';
 import { authorize } from '../domain/contracts.js';
 import { fields, HttpFailure, identifier, json, object, type RequestContext } from './http.js';
 import { atomicJson } from './storage.js';
+
 type Resource = {
   id: string;
   root: string;
@@ -182,6 +183,52 @@ export class FileResources {
       await atomicJson(this.store, store);
       this.resources = store.resources;
       this.registered = true;
+    } finally {
+      await handle.close();
+    }
+  }
+  rootId(root: string) {
+    return createHash('sha256').update(root).digest('hex');
+  }
+  roots(actor: ActorContext, projectId: string) {
+    authorize(actor, projectId, 'read');
+    return [
+      ...new Map(
+        this.resources
+          .filter((r) => r.projectIds.includes(projectId))
+          .map((r) => [
+            this.rootId(r.root),
+            { id: this.rootId(r.root), name: path.basename(r.root) },
+          ]),
+      ).values(),
+    ];
+  }
+  async observe(actor: ActorContext, projectId: string, rootId: string, relative: string) {
+    authorize(actor, projectId, 'read');
+    const resource = this.resources.find(
+      (r) =>
+        r.projectIds.includes(projectId) &&
+        this.rootId(r.root) === rootId &&
+        r.file === path.join(r.root, ...relative.split('/')),
+    );
+    if (!resource) return null;
+    const handle = await this.verifiedHandle(resource.root, resource.file);
+    try {
+      const stat = await handle.stat();
+      if (
+        ['size', 'dev', 'ino', 'mtimeMs', 'ctimeMs'].some(
+          (field) => stat[field as keyof typeof stat] !== resource[field as keyof Resource],
+        )
+      )
+        throw new HttpFailure(409, 'RESOURCE_CHANGED');
+      return {
+        id: resource.id,
+        size: resource.size,
+        sha256: resource.sha256,
+        identity: createHash('sha256')
+          .update(JSON.stringify([stat.dev, stat.ino, stat.mtimeMs, stat.ctimeMs]))
+          .digest('hex'),
+      };
     } finally {
       await handle.close();
     }

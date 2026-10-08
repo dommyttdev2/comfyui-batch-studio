@@ -33,6 +33,7 @@ import {
   restoreModelSelection,
 } from '../domain/model-reset-policy.js';
 import { applyPromptPlanDifference } from '../domain/prompt-plan-patch-policy.js';
+import { resourceBindings } from '../domain/resource-bindings.js';
 import { utf8Size } from '../domain/text-policy.js';
 import { assertCurrentProject, assertMutation, nextRevision } from './project-access.js';
 import {
@@ -75,6 +76,18 @@ export class ProjectUseCases {
       const project = await tx.load();
       assertCurrentProject(project, command.projectId);
       return project;
+    });
+  }
+  async configureResources(actor: ActorContext, command: MutationCommand & { bindings: unknown }) {
+    const bindings = resourceBindings(command.bindings);
+    return this.repository.transaction(command.projectId, async (tx) => {
+      const p = await tx.load();
+      assertMutation(actor, command, p, this.clock);
+      const before = p.revision;
+      p.resourceBindings = bindings;
+      p.revision = nextRevision(p);
+      await tx.commit(before, p, event(actor, p, 'project.changed', 'resources'));
+      return p;
     });
   }
   leave(actor: ActorContext, command: Command) {
