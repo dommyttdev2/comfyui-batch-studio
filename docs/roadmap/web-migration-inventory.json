@@ -387,7 +387,7 @@
     {
       "file": "package.json",
       "lines": 73,
-      "sha256": "2dfb4c7eb88516b67afc64dc6c94ee3ed56d776c8a3cccabbb3b901c931e1965",
+      "sha256": "3f7239055145beabba7d0c34525ab723ff18c090d87df4b86a4bc3b89945355c",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10088,6 +10088,39 @@
       "entryReachable": false
     },
     {
+      "file": "src/server/agent-store.ts",
+      "lines": 372,
+      "sha256": "d428036722310d9401f674b8f6d091928c88c668757bc99edda9bac76cb2658f",
+      "workPackage": "W04",
+      "layer": "server-infrastructure",
+      "phase": "P4",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../domain/agent-state-policy.js",
+        "../domain/agent-runtime-types.js",
+        "../domain/contracts.js",
+        "../application/agent-use-cases.js",
+        "./http.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "AgentRecord",
+        "agentScopeKey",
+        "validateAgentStore",
+        "AgentStore"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "src/server/auth-init.ts",
       "lines": 38,
       "sha256": "740067c0b4f7361bc1b70a6801c90cd681af18bb865efbd7b5cd3e9da7111203",
@@ -13721,6 +13754,31 @@
         "../dist-server/server/codex-cli-events.js",
         "../dist-server/server/grok-cli-events.js",
         "node:path"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-agent-store.mjs",
+      "lines": 66,
+      "sha256": "aeb05b33a91e1294fde435a5f7c14c6fb9d1d13b890b013c7602d8953345b37d",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "../dist-server/server/agent-store.js"
       ],
       "exports": [],
       "bridgeCalls": [],
@@ -18702,6 +18760,18 @@
       "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
     },
     {
+      "file": "tests/server-agent-store.mjs",
+      "registration": "agent-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
       "file": "tests/server-bootstrap.mjs",
       "registration": "server-local",
       "treatment": "契約維持・server buildへ適合",
@@ -19403,9 +19473,9 @@
     }
   ],
   "counts": {
-    "files": 485,
-    "source": 339,
-    "tests": 99,
+    "files": 487,
+    "source": 340,
+    "tests": 100,
     "scripts": 16,
     "ipc": 172,
     "resources": 8,
@@ -19414,7 +19484,7 @@
       "W01": 18,
       "W02": 35,
       "W03": 34,
-      "W04": 52,
+      "W04": 53,
       "W05": 33,
       "W06": 55,
       "W07": 15,
@@ -19422,7 +19492,7 @@
       "W09": 47,
       "W10": 26,
       "W11": 29,
-      "W12": 105,
+      "W12": 106,
       "W13": 11,
       "W14": 12
     },
@@ -19443,7 +19513,7 @@
     "testRegistration": {
       "CI-conditional": 2,
       "CI-only": 2,
-      "agent-local": 1,
+      "agent-local": 2,
       "browser-local": 1,
       "core-local": 4,
       "npm-test": 61,
