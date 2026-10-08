@@ -1,30 +1,32 @@
 import path from 'node:path';
-import { FileResources } from './file-resources.js';
-import { Staging } from './staging.js';
-import { CivitaiService } from './civitai-service.js';
-import {
-  ExternalOperations,
-  type ExternalDefinition,
-  type ExternalOperation,
-} from './external-operations.js';
-import { IntegrationSettings } from './integration-settings.js';
-import type { ServerConfig } from './config.js';
-import { EventBroker, attachEvents } from './events.js';
-import { webStatic } from './web-static.js';
-import { fields, HttpFailure, json, type CommandController } from './http.js';
-import { JobRegistry, type JobDefinition } from './jobs.js';
-import { FileLease, Ownership } from './ownership.js';
-import { FixtureCatalog, WorkflowApi } from './workflow-api.js';
-import { ProjectApi } from './project-api.js';
-import { DiskProjects } from './project-repository.js';
-import { ProjectRegistration } from './project-registration.js';
-import { AgentRuntime, type AgentRuntimeOptions } from './agent-runtime.js';
 import { AgentApi } from './agent-api.js';
 import { AgentArtifacts } from './agent-artifacts.js';
-import type { AgentRecord } from './agent-store.js';
 import { loadAgentRegistration } from './agent-registration.js';
+import { AgentRuntime, type AgentRuntimeOptions } from './agent-runtime.js';
+import type { AgentRecord } from './agent-store.js';
+import { CivitaiService } from './civitai-service.js';
+import type { ServerConfig } from './config.js';
+import { attachEvents, EventBroker } from './events.js';
+import {
+  type ExternalDefinition,
+  type ExternalOperation,
+  ExternalOperations,
+} from './external-operations.js';
+import { FileResources } from './file-resources.js';
+import { type CommandController, fields, HttpFailure, json } from './http.js';
+import { IntegrationSettings } from './integration-settings.js';
+import { type JobDefinition, JobRegistry } from './jobs.js';
+import { FileLease, Ownership } from './ownership.js';
+import { ProjectApi } from './project-api.js';
+import { ProjectRegistration } from './project-registration.js';
+import { DiskProjects } from './project-repository.js';
 import { Security } from './security.js';
 import { startServer } from './server.js';
+import { SshResources } from './ssh-resources.js';
+import { Staging } from './staging.js';
+import { VastService } from './vast-service.js';
+import { webStatic } from './web-static.js';
+import { FixtureCatalog, WorkflowApi } from './workflow-api.js';
 
 export async function within(work: Promise<void>, milliseconds: number): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -79,6 +81,11 @@ export async function createServerRuntime(
   const catalogs =
     options.catalogFile !== undefined ? new FixtureCatalog(options.catalogFile) : civitai;
   const externalDefinitions = new Map<ExternalOperation, ExternalDefinition>();
+  const vast = new VastService(config.dataDir, integrations);
+  for (const [operation, definition] of vast.definitions())
+    externalDefinitions.set(operation, definition);
+  const ssh = new SshResources(config.dataDir, integrations);
+  externalDefinitions.set('trust-ssh', ssh.definition);
   const externalOperations = new ExternalOperations(
     config.dataDir,
     externalDefinitions,
@@ -141,6 +148,8 @@ export async function createServerRuntime(
     await integrations.initialize();
     await externalOperations.initialize();
     await civitai.initialize();
+    await vast.initialize();
+    await ssh.initialize();
     await registration.initialize();
     await broker.initialize();
     await jobs.initialize();
@@ -173,6 +182,8 @@ export async function createServerRuntime(
         if (await files.route(context)) return true;
         if (await staging.route(context)) return true;
         if (await civitai.route(context)) return true;
+        if (await vast.route(context)) return true;
+        if (await ssh.route(context)) return true;
         if (await externalOperations.route(context)) return true;
         if (await integrations.route(context)) return true;
         if (await registration.route(context)) return true;
@@ -221,6 +232,8 @@ export async function createServerRuntime(
         await staging.drain();
         await integrations.drain();
         await civitai.drain();
+        await vast.drain();
+        await ssh.drain();
         await repository.close();
         await lease.release();
         state = 'closed';

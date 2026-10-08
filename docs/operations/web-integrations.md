@@ -33,7 +33,7 @@ confirmは同user/sessionと対象・世代・期限を再確認し、token消�
 
 storeは4MiB・1000confirmation・1000receiptを上限とする。期限切れ未消費tokenのみ新規prepare時に除去する。結果とconfirmationの関連を維持し、上限到達時は拒否する。停止時は新規予約を拒否して実行/照合をdrainし、期限超過はuncertainとfenceを保存してserver filesystem ownershipを保持する。遅延応答で成功へ書き換えない。旧形式・重複id/scope・壊れたbindingは読み込まない。
 
-現時点は共通基盤のみ。サービス別inspect/execute/reconcileは後続子Issueで接続する。未接続operationはINTEGRATION_UNAVAILABLEを返す。
+サービス別inspect/execute/reconcileは子Issueで接続する。未接続operationはINTEGRATION_UNAVAILABLEを返す。
 
 ## Civitai catalog
 
@@ -52,3 +52,15 @@ POST /api/v1/resources/stagingでname/sizeと任意のprojectId/sha256を指定�
 completeは全体を1MiB単位でhash計算しsize・stat・指定hashを検証する。上限はresource100GiB、全体200GiB、128resource、metadata64KiB、期限24時間。resourceをjobへpinすると削除を拒否し、再起動でもpinを保持する。unknown jobのpinを自動解除しない。expired resourceはownerの明示deleteでcleanupする。ブラウザはpath・argv・Secretを指定しない。
 
 管理者がserverを停止し、BATCH_STUDIO_FILE_ID、BATCH_STUDIO_FILE_ROOT、BATCH_STUDIO_FILE_PATH、BATCH_STUDIO_FILE_PROJECTS（許可Project idのカンマ区切り）を明示してnpm run init:server-fileを実行する。dataDir外の許可root/実fileだけを登録し、現在のsize/stat/SHA-256をstreaming計算する。files.jsonはweb-files/1、128resource、128KiB。既存resource idの上書き・旧storeの読替は行わない。GET /resources/filesは許可Projectのresource id/name/size/hashだけ返す。転送時はgrant・realpath・hard link/statを再確認する。R2への転送接続とfull source再検証は #381。
+
+## Vast.aiとSSH（P5-8）
+
+Vast APIはconsole.vast.aiだけを使い、現行v1 instances paginationとv0 templates/bundles/instance lifecycleへ接続する。Authorization headerにのみSecretを渡し、redirect、alternate endpoint、pending instance補完、旧設定を使わない。要求全体20秒、response4MiB、一覧100pageを上限とし、変更操作をretryしない。P1 offer use case/観測policyを共用し、新Webは現行id/actual_status/portsを検証する。
+
+GET /integrations/vast/status|instances|template、POST search/targetsを提供する。RENT targetはoffer/template/disk/price、instance targetはid/state/設定世代をimmutableに保存する。外部操作は共通prepare/confirm/receiptを使う。料金・状態・資格情報変更とoperationの取り違えを拒否する。RENT応答消失はuncertainを維持し、別offerのRENTも拒否する。RENT/rebootを一覧状態から成功と推測しない。start/stopは目的状態、destroyはinstance不在だけをread-only照合する。
+
+管理者が停止中serverでBATCH_STUDIO_SSH_ID、BATCH_STUDIO_SSH_ROOT、BATCH_STUDIO_SSH_PRIVATE_FILE、BATCH_STUDIO_SSH_PUBLIC_FILE、BATCH_STUDIO_SSH_USER、BATCH_STUDIO_SSH_DIRECTORYを明示し、npm run init:server-sshで新しいresourceを登録する。SSH鍵を自動探索しない。独立Web dataDir外のcanonical root/file、最大64KiB、matching pairとhashを検証する。Unix秘密鍵は0600相当を要求し、serverのCLI containerへ渡さない。公開APIはresource id/user/remote directoryだけを返す。
+
+POST /integrations/ssh/targetsは実running instanceと登録key idから認証前のhost keyをprobeする。DNSと鍵交換は各10秒以内、loopback/private networkを拒否し、解決済みIPへ接続する。prepareはendpoint/fingerprint/以前のfingerprint/public-key hashを束ねる。trust-sshのconfirm後にVastへの公開鍵登録とtrustのatomic保存を行う。鍵変更、設定変更、公開鍵登録の未知結果は無条件再送しない。POST endpointは現在のhost fingerprint/登録鍵/公開鍵provision状態とP1 SSH endpoint policyを再検証し、秘密鍵pathを返さない。生成・remote commandはP6。
+
+現行endpointは[Vast公式CLI](https://github.com/vast-ai/vast-cli/blob/master/vast.py)と[公式REST案内](https://vast.ai/developers/api)で照合した。fixtureの管理/確認/未知結果とnative ssh2鍵交換は子Issue #382、実account/SSH hostへの接続は #385、画面操作は #384の受入対象。
