@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { readFile, stat } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import path from 'node:path';
-import type { ActorContext, Permission } from '../domain/contracts.js';
+import { type ActorContext, type Permission, BusinessError } from '../domain/contracts.js';
 import {
   fields,
   HttpFailure,
@@ -89,6 +89,16 @@ export class Security {
     } catch {
       throw new HttpFailure(503, 'AUTH_UNAVAILABLE');
     }
+  }
+  async forJob(actor: ActorContext): Promise<ActorContext> {
+    const principal = (await this.principals()).find((p) => p.userId === actor.userId);
+    if (!principal) throw new BusinessError('FORBIDDEN', 'Job grant revoked.');
+    return {
+      ...actor,
+      sessionId: 'server-job',
+      projectIds: principal.projectIds,
+      permissions: principal.permissions,
+    };
   }
   boundary = (request: IncomingMessage): void => {
     const expected = new URL(this.origin);

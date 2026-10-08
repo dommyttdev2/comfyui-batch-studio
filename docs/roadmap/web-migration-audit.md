@@ -4,7 +4,7 @@ Status: Planning evidence / 再照合: 2026-10-08
 
 [移行計画](web-migration-plan.md)のW01–W14とG01–G14を正本とする。後方互換性なし・旧データマイグレーションなし・fallback禁止を全項目へ適用する。新dataDir/現行schema/明示設定で開始し、対応外・失敗はerrorとする。各code fileとIPCは主担当を一つだけ持つ。phaseは主実装受入段階。desktopRemovalPhase=P9は旧sourceの残存確認・撤去段階であり、互換adapterを提供する期間ではない。依存・横断条件は計画側を参照する。
 
-基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全479コード・設定（src 336、tests 98、scripts 14）、8 binary asset、37仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
+基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全503コード・設定（src 347、tests 108、scripts 17）、8 binary asset、40仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
 
 [機械可読索引](web-migration-inventory.json)にhash・import・根拠行・分類・test実行経路を保存する。[再照合ツール](web-migration-audit.cjs)は`node docs/roadmap/web-migration-audit.cjs --check`で検証し、`--write`で再生成する。現索引との差分、未分類file/IPC、主担当重複、IPC方向/handler不整合は失敗する。新file/IPCの処置をレビューしてから再生成する。
 
@@ -21,17 +21,17 @@ Status: Planning evidence / 再照合: 2026-10-08
 | 主担当 | file数 | 完成phase | 検証gate |
 | --- | ---: | --- | --- |
 | W01 通信契約・認可境界 | 18 | P2 | G01 |
-| W02 Web shell・共通UI状態 | 35 | P3 | G02 |
+| W02 Web shell・共通UI状態 | 37 | P3 | G02 |
 | W03 Project・Artifact永続化 | 34 | P3 | G03 |
-| W04 AI会話・工程task | 49 | P4 | G04 |
+| W04 AI会話・工程task | 58 | P4 | G04 |
 | W05 モデル解決・Compiler・Preflight | 33 | P5 | G05 |
 | W06 生成runtime・SSH・復旧 | 55 | P6 | G06 |
 | W07 Civitai catalog・Vast.ai操作 | 15 | P5 | G07 |
 | W08 R2転送・object管理 | 13 | P5 | G08 |
 | W09 画像・Caption・成果物・Picker | 47 | P7 | G09 |
-| W10 起動・OS・Secret基盤 | 25 | P5 | G10 |
+| W10 起動・OS・Secret基盤 | 26 | P5 | G10 |
 | W11 build・起動配布・更新 | 29 | P8 | G11 |
-| W12 検証・test harness | 103 | P8 | G12 |
+| W12 検証・test harness | 115 | P8 | G12 |
 | W13 schema・runtime resource | 11 | P8 | G13 |
 | W14 旧実装整理 | 12 | P9 | G14 |
 
@@ -51,12 +51,13 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [compose.yaml](../../compose.yaml) | 21 | W11 / P8 / G11 | 配布設定をWeb/server構成へ適合 |
 | [index.html](../../index.html) | 13 | W11 / P8 / G11 | Web/server配布設定として確認 |
 | [package-lock.json](../../package-lock.json) | 3082 | W11 / P8 / G11 | 依存変更時に同期、今回version変更なし |
-| [package.json](../../package.json) | 72 | W11 / P8 / G11 | server scripts/依存へ移行、Electron削除は最終段階 |
+| [package.json](../../package.json) | 75 | W11 / P8 / G11 | server scripts/依存へ移行、Electron削除は最終段階 |
 | [run.bat](../../run.bat) | 130 | W11 / P8 / G11 | Node serverとbrowser起動、既存server確認 |
 | [schemas/caption-content.schema.json](../../schemas/caption-content.schema.json) | 130 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
 | [schemas/models.schema.json](../../schemas/models.schema.json) | 191 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
 | [schemas/prompt-plan.schema.json](../../schemas/prompt-plan.schema.json) | 395 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
 | [schemas/workflow-template-manifest.schema.json](../../schemas/workflow-template-manifest.schema.json) | 61 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
+| [scripts/Dockerfile.agent](../../scripts/Dockerfile.agent) | 10 | W10 / P5 / G10 | 配布設定をWeb/server構成へ適合 |
 | [scripts/check-core-boundaries.cjs](../../scripts/check-core-boundaries.cjs) | 55 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [scripts/check-running-batch-studio.cjs](../../scripts/check-running-batch-studio.cjs) | 62 | W11 / P8 / G11 | server lock/health/build ID確認へ |
 | [scripts/check-server-boundaries.cjs](../../scripts/check-server-boundaries.cjs) | 33 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
@@ -64,10 +65,12 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [scripts/copy-runtime.cjs](../../scripts/copy-runtime.cjs) | 23 | W11 / P8 / G11 | server resources/Web staticの配置へ |
 | [scripts/create_thumbnail_psd_templates.py](../../scripts/create_thumbnail_psd_templates.py) | 331 | W11 / P8 / G11 | 生成/検証ツール維持、新resource配置を確認 |
 | [scripts/docker-test.sh](../../scripts/docker-test.sh) | 17 | W11 / P8 / G11 | 配布設定をWeb/server構成へ適合 |
-| [scripts/docker-web-test.sh](../../scripts/docker-web-test.sh) | 12 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [scripts/docker-web-test.sh](../../scripts/docker-web-test.sh) | 13 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [scripts/generate-preload-ipc.cjs](../../scripts/generate-preload-ipc.cjs) | 43 | W11 / P8 / G11 | Web API契約検証へ置換 |
 | [scripts/make_psd_text_editable.cjs](../../scripts/make_psd_text_editable.cjs) | 112 | W11 / P8 / G11 | 生成/検証ツール維持、新resource配置を確認 |
 | [scripts/server-build-manifest.cjs](../../scripts/server-build-manifest.cjs) | 25 | W11 / P8 / G11 | 配布設定をWeb/server構成へ適合 |
+| [scripts/test-web-agent-api-real.mjs](../../scripts/test-web-agent-api-real.mjs) | 126 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [scripts/test-web-agent-real.mjs](../../scripts/test-web-agent-real.mjs) | 89 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [scripts/update-release.ps1](../../scripts/update-release.ps1) | 116 | W11 / P8 / G11 | 新版停止/更新/起動/health。schema移行・旧版自動切戻しなし |
 | [scripts/verify-comfyui-api.mjs](../../scripts/verify-comfyui-api.mjs) | 162 | W12 / P8 / G12 | 生成/検証ツール維持、新resource配置を確認 |
 | [scripts/web-source-id.cjs](../../scripts/web-source-id.cjs) | 22 | W11 / P8 / G11 | 配布設定をWeb/server構成へ適合 |
@@ -117,7 +120,7 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [src/application/project-observation.ts](../../src/application/project-observation.ts) | 178 | W03 / P1 / G03 | P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証 |
 | [src/application/project-ports.ts](../../src/application/project-ports.ts) | 75 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
 | [src/application/project-reset-confirmation.ts](../../src/application/project-reset-confirmation.ts) | 39 | W03 / P1 / G03 | P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証 |
-| [src/application/project-use-cases.ts](../../src/application/project-use-cases.ts) | 578 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
+| [src/application/project-use-cases.ts](../../src/application/project-use-cases.ts) | 647 | W03 / P1 / G03 | 配布設定をWeb/server構成へ適合 |
 | [src/application/prompt-plan-patch.ts](../../src/application/prompt-plan-patch.ts) | 56 | W03 / P1 / G03 | P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証 |
 | [src/application/r2-connection-use-cases.ts](../../src/application/r2-connection-use-cases.ts) | 83 | W08 / P1 / G08 | P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証 |
 | [src/application/r2-transfer-runtime.ts](../../src/application/r2-transfer-runtime.ts) | 567 | W08 / P1 / G08 | P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証 |
@@ -368,12 +371,21 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [src/renderer/thumbnail-stage.css](../../src/renderer/thumbnail-stage.css) | 427 | W02 / P3 / G02 | Web再利用、import/配信を確認 |
 | [src/renderer/ui.tsx](../../src/renderer/ui.tsx) | 143 | W02 / P3 / G02 | Web再利用、import/配信を確認 |
 | [src/renderer/use-editor-autosave.ts](../../src/renderer/use-editor-autosave.ts) | 191 | W02 / P3 / G02 | 時刻採番をserver revision/CASへ |
+| [src/server/agent-api.ts](../../src/server/agent-api.ts) | 199 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
+| [src/server/agent-artifacts.ts](../../src/server/agent-artifacts.ts) | 183 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
+| [src/server/agent-cli-runtime.ts](../../src/server/agent-cli-runtime.ts) | 507 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
+| [src/server/agent-init.ts](../../src/server/agent-init.ts) | 56 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
+| [src/server/agent-registration.ts](../../src/server/agent-registration.ts) | 117 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
+| [src/server/agent-runtime.ts](../../src/server/agent-runtime.ts) | 406 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
+| [src/server/agent-store.ts](../../src/server/agent-store.ts) | 472 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
 | [src/server/auth-init.ts](../../src/server/auth-init.ts) | 38 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
+| [src/server/codex-cli-events.ts](../../src/server/codex-cli-events.ts) | 192 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
 | [src/server/config.ts](../../src/server/config.ts) | 53 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
 | [src/server/entry.ts](../../src/server/entry.ts) | 25 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
 | [src/server/events.ts](../../src/server/events.ts) | 423 | W01 / P2 / G01 | 配布設定をWeb/server構成へ適合 |
+| [src/server/grok-cli-events.ts](../../src/server/grok-cli-events.ts) | 172 | W04 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
 | [src/server/http.ts](../../src/server/http.ts) | 188 | W01 / P2 / G01 | 配布設定をWeb/server構成へ適合 |
-| [src/server/jobs.ts](../../src/server/jobs.ts) | 440 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
+| [src/server/jobs.ts](../../src/server/jobs.ts) | 549 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
 | [src/server/ownership.ts](../../src/server/ownership.ts) | 248 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
 | [src/server/project-api.ts](../../src/server/project-api.ts) | 167 | W01 / P3 / G01 | 配布設定をWeb/server構成へ適合 |
 | [src/server/project-recover.ts](../../src/server/project-recover.ts) | 80 | W10 / P3 / G10 | 配布設定をWeb/server構成へ適合 |
@@ -381,8 +393,8 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [src/server/project-repository.ts](../../src/server/project-repository.ts) | 359 | W03 / P3 / G03 | 配布設定をWeb/server構成へ適合 |
 | [src/server/recover.ts](../../src/server/recover.ts) | 14 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
 | [src/server/root-init.ts](../../src/server/root-init.ts) | 37 | W10 / P3 / G10 | 配布設定をWeb/server構成へ適合 |
-| [src/server/runtime.ts](../../src/server/runtime.ts) | 154 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
-| [src/server/security.ts](../../src/server/security.ts) | 218 | W01 / P2 / G01 | 配布設定をWeb/server構成へ適合 |
+| [src/server/runtime.ts](../../src/server/runtime.ts) | 200 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
+| [src/server/security.ts](../../src/server/security.ts) | 228 | W01 / P2 / G01 | 配布設定をWeb/server構成へ適合 |
 | [src/server/server.ts](../../src/server/server.ts) | 37 | W01 / P2 / G01 | 配布設定をWeb/server構成へ適合 |
 | [src/server/storage.ts](../../src/server/storage.ts) | 41 | W10 / P2 / G10 | 配布設定をWeb/server構成へ適合 |
 | [src/server/web-static.ts](../../src/server/web-static.ts) | 45 | W01 / P3 / G01 | 配布設定をWeb/server構成へ適合 |
@@ -400,13 +412,15 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [src/shared/r2-download-utils.ts](../../src/shared/r2-download-utils.ts) | 39 | W08 / P5 / G08 | 共通型/純粋処理/定数を再利用 |
 | [src/shared/r2-manager-utils.ts](../../src/shared/r2-manager-utils.ts) | 2 | W08 / P5 / G08 | 共通型/純粋処理/定数を再利用 |
 | [src/shared/types.ts](../../src/shared/types.ts) | 965 | W01 / P2 / G01 | domain型維持、API DTOとDesktop global API型を分離 |
-| [src/web/api.ts](../../src/web/api.ts) | 147 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
+| [src/web/api.ts](../../src/web/api.ts) | 149 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
+| [src/web/assistant-pane.tsx](../../src/web/assistant-pane.tsx) | 267 | W02 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
+| [src/web/assistant.ts](../../src/web/assistant.ts) | 268 | W02 / P4 / G04 | 配布設定をWeb/server構成へ適合 |
 | [src/web/drafts.ts](../../src/web/drafts.ts) | 92 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
-| [src/web/main.tsx](../../src/web/main.tsx) | 496 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
+| [src/web/main.tsx](../../src/web/main.tsx) | 459 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
 | [src/web/modal.tsx](../../src/web/modal.tsx) | 244 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
 | [src/web/vite-env.d.ts](../../src/web/vite-env.d.ts) | 2 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
-| [src/web/workspace.css](../../src/web/workspace.css) | 241 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
-| [src/web/workspace.ts](../../src/web/workspace.ts) | 316 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
+| [src/web/workspace.css](../../src/web/workspace.css) | 254 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
+| [src/web/workspace.ts](../../src/web/workspace.ts) | 324 | W02 / P3 / G02 | 配布設定をWeb/server構成へ適合 |
 | [templates/anima-scene-batch/manifest.json](../../templates/anima-scene-batch/manifest.json) | 10 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
 | [templates/anima-scene-batch/template.json](../../templates/anima-scene-batch/template.json) | 14 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
 | [templates/default-scene-batch/manifest.json](../../templates/default-scene-batch/manifest.json) | 10 | W13 / P8 / G13 | 内容・独立version維持、server runtimeへ配置 |
@@ -482,6 +496,16 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [tests/remote-instance-lifecycle.cjs](../../tests/remote-instance-lifecycle.cjs) | 521 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/remote-model-staging.cjs](../../tests/remote-model-staging.cjs) | 589 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/run.cjs](../../tests/run.cjs) | 581 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
+| [tests/server-agent-api.mjs](../../tests/server-agent-api.mjs) | 213 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-artifacts.mjs](../../tests/server-agent-artifacts.mjs) | 136 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-browser.mjs](../../tests/server-agent-browser.mjs) | 121 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-cli.mjs](../../tests/server-agent-cli.mjs) | 48 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-crash-fixtures.mjs](../../tests/server-agent-crash-fixtures.mjs) | 9 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-crash.mjs](../../tests/server-agent-crash.mjs) | 88 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-fixtures.mjs](../../tests/server-agent-fixtures.mjs) | 126 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-jobs.mjs](../../tests/server-agent-jobs.mjs) | 223 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-registration.mjs](../../tests/server-agent-registration.mjs) | 40 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-store.mjs](../../tests/server-agent-store.mjs) | 91 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-bootstrap.mjs](../../tests/server-bootstrap.mjs) | 34 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-events.mjs](../../tests/server-events.mjs) | 157 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-fixtures.mjs](../../tests/server-fixtures.mjs) | 67 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
@@ -775,6 +799,16 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [tests/remote-instance-lifecycle.cjs](../../tests/remote-instance-lifecycle.cjs) | npm-test | 契約維持・server buildへ適合 | G06 | P8までに新test実行経路へ接続 (G12) |
 | [tests/remote-model-staging.cjs](../../tests/remote-model-staging.cjs) | npm-test | 契約維持・server buildへ適合 | G06 | P8までに新test実行経路へ接続 (G12) |
 | [tests/run.cjs](../../tests/run.cjs) | npm-test | 契約維持・server buildへ適合 | G03, G05 | P8までに新test実行経路へ接続 (G12) |
+| [tests/server-agent-api.mjs](../../tests/server-agent-api.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-artifacts.mjs](../../tests/server-agent-artifacts.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-browser.mjs](../../tests/server-agent-browser.mjs) | browser-local | 契約維持・server buildへ適合 | G01, G02, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-cli.mjs](../../tests/server-agent-cli.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-crash-fixtures.mjs](../../tests/server-agent-crash-fixtures.mjs) | support | harness/fixture移植 | G01, G03, G04, G10, G12 | P8までに新test実行経路へ接続 (G12) |
+| [tests/server-agent-crash.mjs](../../tests/server-agent-crash.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-fixtures.mjs](../../tests/server-agent-fixtures.mjs) | support | harness/fixture移植 | G01, G03, G04, G10, G12 | P8までに新test実行経路へ接続 (G12) |
+| [tests/server-agent-jobs.mjs](../../tests/server-agent-jobs.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-registration.mjs](../../tests/server-agent-registration.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-store.mjs](../../tests/server-agent-store.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
 | [tests/server-bootstrap.mjs](../../tests/server-bootstrap.mjs) | server-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
 | [tests/server-events.mjs](../../tests/server-events.mjs) | server-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
 | [tests/server-fixtures.mjs](../../tests/server-fixtures.mjs) | support | harness/fixture移植 | G01, G10, G12 | P8までに新test実行経路へ接続 (G12) |
@@ -836,6 +870,7 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [docs/contracts/agent-contract.md](../../docs/contracts/agent-contract.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/contracts/project-artifacts.md](../../docs/contracts/project-artifacts.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/contracts/prompt-plan.md](../../docs/contracts/prompt-plan.md) | 移行完了時に該当仕様を更新 (W11/G11) |
+| [docs/contracts/web-agent-runtime.md](../../docs/contracts/web-agent-runtime.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/contracts/web-project-workspace.md](../../docs/contracts/web-project-workspace.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/decisions/decision-log.md](../../docs/decisions/decision-log.md) | 過去判断を保持し新判断を追記 (W11/G11) |
 | [docs/decisions/model-family-and-base-model-selection.md](../../docs/decisions/model-family-and-base-model-selection.md) | 過去判断を保持し新判断を追記 (W11/G11) |
@@ -844,11 +879,13 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [docs/operations/docker-local-tests.md](../../docs/operations/docker-local-tests.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/operations/thumbnail-picker-performance-logs.md](../../docs/operations/thumbnail-picker-performance-logs.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/operations/versioning.md](../../docs/operations/versioning.md) | 移行完了時に該当仕様を更新 (W11/G11) |
+| [docs/operations/web-agent-runtime.md](../../docs/operations/web-agent-runtime.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/operations/web-workspace.md](../../docs/operations/web-workspace.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/product/scope-and-flow.md](../../docs/product/scope-and-flow.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/quality/standard-image-execution-validation.md](../../docs/quality/standard-image-execution-validation.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/quality/validation-and-security.md](../../docs/quality/validation-and-security.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/quality/web-p3-acceptance.md](../../docs/quality/web-p3-acceptance.md) | 移行完了時に該当仕様を更新 (W11/G11) |
+| [docs/quality/web-p4-acceptance.md](../../docs/quality/web-p4-acceptance.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/requirements/requirements.md](../../docs/requirements/requirements.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/roadmap/business-core-separation-verification.md](../../docs/roadmap/business-core-separation-verification.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/roadmap/implementation-phases.md](../../docs/roadmap/implementation-phases.md) | 移行完了時に該当仕様を更新 (W11/G11) |

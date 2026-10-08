@@ -7,6 +7,8 @@ ComfyUI Batch Studio は、ComfyUI を使った大量画像生成プロジェク
 > [!IMPORTANT]
 > Local / Remote Execution、進捗監視・停止・再開、Remote Worker、R2 経由の成果物回収、後工程はコード上実装されています。`実行前チェック` の `READY` は入力・配置など開始前条件の判定で、ComfyUI / SSH / Vast.ai / R2 の稼働状況や全工程の成功を保証しません。公開環境での一連の実機 E2E 成功を、この README は保証しません。実行と復旧の既知の課題は [Open Issues](https://github.com/dommyttdev2/comfyui-batch-studio/issues) を確認してください。
 
+独立Web版は刷新branchでP4まで受入済みです。画面内Projectタブと共通Modal、Codex/Grok CLIの会話・履歴・工程task・下書き取り込みを利用できます。[Web起動](docs/operations/web-workspace.md)と[CLI登録](docs/operations/web-agent-runtime.md)を参照してください。実catalog/R2・実生成・画像後工程のWeb移行はP5以降で扱います。
+
 ## 主な機能
 
 バージョン付番は[プロジェクトの付番ルール](docs/operations/versioning.md)で定義します。開発版 `0.x.y` の x は機能追加・機能拡張、y はバグ修正・互換性を保つ改善を表します。互換性のない変更も x を増やし、影響と移行方法をリリースノートに記載します。

@@ -22,8 +22,9 @@ import {
   type Command,
   type MutationCommand,
   requireId,
+  requireRevision,
 } from '../domain/contracts.js';
-import { leaveProject } from '../domain/execution-policy.js';
+import { assertProjectWritable, leaveProject } from '../domain/execution-policy.js';
 import { mergeLoraImport, splitModelDraft } from '../domain/model-draft-policy.js';
 import { configureBaseModels, replaceModelSelection } from '../domain/model-editing.js';
 import {
@@ -43,6 +44,23 @@ import {
   type ProjectState,
 } from './project-ports.js';
 import type { Digest } from './workflow-use-cases.js';
+export interface AgentJobArtifactSource {
+  read(
+    actor: ActorContext,
+    projectId: string,
+    jobId: string,
+  ): Promise<{
+    jobId: string;
+    userId: string;
+    projectId: string;
+    stage: ArtifactStage;
+    provider: 'codex' | 'grok';
+    projectRevision: number;
+    completed: true;
+    raw: string;
+    sha256: string;
+  }>;
+}
 export class ProjectUseCases {
   constructor(
     private readonly repository: ProjectRepository,
@@ -287,6 +305,57 @@ export class ProjectUseCases {
       raw: string;
     },
   ) {
+    return this.importAgentArtifactChecked(actor, command, (p) =>
+      assertMutation(actor, command, p, this.clock),
+    );
+  }
+  async importAgentJobArtifact(
+    actor: ActorContext,
+    command: Command & { jobId: string; expectedRevision: number },
+    source: AgentJobArtifactSource,
+  ) {
+    authorize(actor, command.projectId, 'execute');
+    authorize(actor, command.projectId, 'edit');
+    requireId(command.jobId, 'Job');
+    requireRevision(command.expectedRevision);
+    const value = await source.read(actor, command.projectId, command.jobId);
+    if (
+      !value.completed ||
+      value.jobId !== command.jobId ||
+      value.userId !== actor.userId ||
+      value.projectId !== command.projectId ||
+      value.projectRevision !== command.expectedRevision ||
+      value.sha256 !== this.requireDigest().text(value.raw)
+    )
+      throw new BusinessError('INVALID_ARTIFACT', 'Agent job artifact source differs.');
+    return this.importAgentArtifactChecked(
+      actor,
+      {
+        projectId: command.projectId,
+        expectedRevision: command.expectedRevision,
+        leaseId: 'server-job',
+        provider: value.provider,
+        stage: value.stage,
+        sourceId: value.jobId,
+        raw: value.raw,
+      },
+      (project) => {
+        if (project.revision !== value.projectRevision)
+          throw new BusinessError('REVISION_CONFLICT', 'Task input revision changed.');
+        assertProjectWritable(project.runs);
+      },
+    );
+  }
+  private async importAgentArtifactChecked(
+    actor: ActorContext,
+    command: MutationCommand & {
+      provider: 'codex' | 'grok';
+      stage: ArtifactStage;
+      sourceId: string;
+      raw: string;
+    },
+    guard: (project: ProjectState) => void,
+  ) {
     authorize(actor, command.projectId, 'edit');
     requireId(command.sourceId, 'Source');
     if (
@@ -314,7 +383,7 @@ export class ProjectUseCases {
       const project = await tx.load();
       assertCurrentProject(project, command.projectId);
       if (project.agentImports?.some((record) => record.key === key)) return project;
-      assertMutation(actor, command, project, this.clock);
+      guard(project);
       const artifactKey = command.stage.startsWith('story-')
         ? 'story'
         : command.stage.startsWith('models')

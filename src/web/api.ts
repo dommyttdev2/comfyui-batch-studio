@@ -20,6 +20,8 @@ export interface Job {
   kind: string;
   state: string;
   progress: number;
+  stage?: string | null;
+  provider?: string | null;
 }
 export interface Packet {
   type: string;
@@ -59,7 +61,7 @@ export class Api {
   async request<T>(
     path: string,
     body?: unknown,
-    operationId = crypto.randomUUID(),
+    operationId: string = crypto.randomUUID(),
     extra: Record<string, string> = {},
   ): Promise<T> {
     const response = await fetch('/api/v1' + path, {

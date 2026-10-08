@@ -1,0 +1,9 @@
+FROM node:22.12.0-bookworm-slim@sha256:35531c52ce27b6575d69755c73e65d4468dba93a25644eed56dc12879cae9213
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep bubblewrap && rm -rf /var/lib/apt/lists/*
+RUN npm install -g @openai/codex@0.155.1
+RUN curl --fail --silent --show-error --location https://x.ai/cli/grok-1.0.46-linux-x86_64 --output /usr/local/bin/grok && echo '41626a53292324140b92556b9d42ff5542e3dcd04aff85eafb8689dd4adb44fc  /usr/local/bin/grok' | sha256sum --check --strict && chmod 755 /usr/local/bin/grok && grok --version
+RUN mkdir -p /home/node/.codex /home/node/.grok /workspace && chown -R node:node /home/node /workspace
+USER node
+WORKDIR /workspace
+ENV HOME=/home/node CODEX_HOME=/home/node/.codex GROK_HOME=/home/node/.grok
+CMD ["sleep", "infinity"]
