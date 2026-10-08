@@ -1,6 +1,8 @@
 import { loadConfig } from './config.js';
 import { startServer } from './server.js';
 import { Security } from './security.js';
+import { FileLease, Ownership } from './ownership.js';
+import path from 'node:path';
 
 try {
   const config = await loadConfig({
@@ -11,14 +13,29 @@ try {
   });
   const security = new Security(config.dataDir);
   await security.initialize();
-  const runtime = await startServer(config, security.http());
+  const ownership = new Ownership();
+  const lease = await FileLease.acquire(
+    path.join(config.dataDir, 'server.lock'),
+    'server',
+    ownership.serverId,
+  );
+  let runtime;
+  try {
+    runtime = await startServer(config, security.http());
+  } catch (error) {
+    await lease.release();
+    throw error;
+  }
   security.setOrigin(runtime.origin);
   console.log(`Batch Studio server listening at ${runtime.origin}`);
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.once(signal, () => {
-      void runtime.close().catch(() => {
-        process.exitCode = 1;
-      });
+      void runtime
+        .close()
+        .then(() => lease.release())
+        .catch(() => {
+          process.exitCode = 1;
+        });
     });
 } catch {
   console.error('Server startup failed. Check configuration, resources and ownership.');
