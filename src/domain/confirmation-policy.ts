@@ -10,6 +10,7 @@ export type ConfirmedOperation =
   | 'delete-objects'
   | 'move-object'
   | 'copy-object'
+  | 'upload-object'
   | 'trust-ssh'
   | 'discard-run'
   | 'restore-backup'

@@ -3,7 +3,7 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import type { ActorContext } from '../domain/contracts.js';
+import { type ActorContext, authorize } from '../domain/contracts.js';
 import type { R2BatchDownloadTemplate } from '../domain/integration-types.js';
 import { searchIndexedObjects } from '../domain/r2-object-index-policy.js';
 import {
@@ -37,6 +37,7 @@ import {
 import type { IntegrationSettings } from './integration-settings.js';
 import { r2InternalPrefix, verifyR2ConditionalDelete } from './r2-conditions.js';
 import { R2Gateway, type R2Port } from './r2-gateway.js';
+import type { R2ObjectTransfers } from './r2-object-transfers.js';
 import { atomicJson, SerialQueue } from './storage.js';
 
 type Target = {
@@ -48,6 +49,7 @@ type Target = {
   bucket: string;
   keys: string[];
   destination?: string;
+  projectId: string | null;
 };
 type Store = {
   schema: 'web-r2/1';
@@ -88,6 +90,7 @@ function admin(actor: ActorContext): void {
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export class R2Service {
   readonly port: R2Port;
+  objectTransfers?: R2ObjectTransfers;
   private value: Store | undefined;
   private readonly file: string;
   private readonly queue = new SerialQueue();
@@ -102,6 +105,9 @@ export class R2Service {
     this.port = port ?? new R2Gateway(settings);
     for (const op of mutations)
       definitions.set(op, {
+        ...(['copy-object', 'move-object'].includes(op)
+          ? { project: (id: string) => this.target(id).projectId! }
+          : {}),
         scope: (id) => {
           const target = this.target(id);
           return 'r2:' + digest({ account: target.account, bucket: target.bucket });
@@ -195,6 +201,7 @@ export class R2Service {
           'bucket',
           'keys',
           'destination',
+          'projectId',
         ]);
         identifier(row.id);
         identifier(row.userId);
@@ -222,6 +229,9 @@ export class R2Service {
           (row.destination !== undefined && row.destination === row.keys[0])
         )
           throw new Error('Invalid target shape');
+        if (['copy-object', 'move-object'].includes(String(row.operation)))
+          identifier(row.projectId);
+        else if (row.projectId !== null) throw Error('Invalid target project');
         row.keys.forEach(key);
         if (row.destination !== undefined) normalizeR2ObjectKey(key(row.destination));
         seen.add(row.id);
@@ -366,6 +376,14 @@ export class R2Service {
       };
     });
   }
+  async invalidateIndex(): Promise<void> {
+    await this.queue.run(async () => {
+      const next = this.current();
+      next.indexedAt = null;
+      next.buckets = {};
+      await this.save(next);
+    });
+  }
   indexedObjects(name: string): R2Object[] {
     const current = this.current();
     if (!current.indexedAt || !current.buckets[bucket(name)])
@@ -379,7 +397,7 @@ export class R2Service {
   }
   async createTarget(actor: ActorContext, input: JsonObject) {
     admin(actor);
-    fields(input, ['operation', 'bucket', 'keys', 'destination']);
+    fields(input, ['operation', 'bucket', 'keys', 'destination', 'projectId']);
     if (
       !mutations.includes(input.operation as ExternalOperation) ||
       !Array.isArray(input.keys) ||
@@ -402,6 +420,11 @@ export class R2Service {
         : undefined;
     if (destination !== undefined && destination === keys[0])
       throw new HttpFailure(400, 'INVALID_INPUT');
+    const projectId = ['copy-object', 'move-object'].includes(op)
+      ? identifier(input.projectId)
+      : null;
+    if (projectId) authorize(actor, projectId, 'execute');
+    else if (input.projectId !== undefined) throw new HttpFailure(400, 'INVALID_INPUT');
     return this.queue.run(async () => {
       const next = this.current();
       if (next.targets.length >= 1000) throw new HttpFailure(409, 'R2_STORE_LIMIT');
@@ -411,6 +434,7 @@ export class R2Service {
         sourceFingerprint: next.sourceFingerprint,
         account: this.settings.resolve('r2').account!,
         operation: op,
+        projectId,
         bucket: bucket(input.bucket),
         keys,
         ...(destination ? { destination } : {}),
@@ -442,6 +466,7 @@ export class R2Service {
   private owned(actor: ActorContext, id: string): Target {
     admin(actor);
     const target = this.target(id);
+    if (target.projectId) authorize(actor, target.projectId, 'execute');
     if (target.userId !== actor.userId) throw new HttpFailure(404, 'NOT_FOUND');
     if (target.sourceFingerprint !== this.settings.resolve('r2').fingerprint)
       throw new HttpFailure(409, 'TARGET_CHANGED');
@@ -490,6 +515,8 @@ export class R2Service {
     if (current.fingerprint !== prepared.fingerprint || current.revision !== prepared.revision)
       return { state: 'failed' as const };
     this.owned(actor, id);
+    await this.invalidateIndex();
+    this.owned(actor, id);
     if (target.operation === 'create-bucket')
       await this.port.send('CreateBucket', { Bucket: target.bucket });
     else if (target.operation === 'delete-bucket')
@@ -507,8 +534,23 @@ export class R2Service {
       }
     } else {
       const source = (prepared.summary.objects as JsonObject[])[0];
-      if (Number(source.size) > 5 * 1024 * 1024 * 1024)
-        throw new HttpFailure(409, 'MULTIPART_MOVE_REQUIRED');
+      if (Number(source.size) > 5 * 1024 * 1024 * 1024) {
+        if (!this.objectTransfers) throw new HttpFailure(503, 'TRANSFER_UNAVAILABLE');
+        return this.objectTransfers.execute(
+          actor,
+          {
+            projectId: target.projectId!,
+            bucket: target.bucket,
+            source: target.keys[0],
+            destination: target.destination!,
+            size: Number(source.size),
+            etag: String(source.etag),
+            move: target.operation === 'move-object',
+            fingerprint: target.sourceFingerprint,
+          },
+          receipt,
+        );
+      }
       if (target.operation === 'move-object')
         await verifyR2ConditionalDelete(this.port, target.bucket, receipt);
       this.owned(actor, id);
@@ -610,6 +652,7 @@ export class R2Service {
       return { state: 'succeeded' as const };
     }
     const source = (prepared.summary.objects as JsonObject[])[0];
+    if (Number(source.size) > 5 * 1024 ** 3) await this.objectTransfers?.reconcile(actor, receipt);
     let destination;
     try {
       destination = await this.port.send('HeadObject', { Bucket: t.bucket, Key: t.destination });

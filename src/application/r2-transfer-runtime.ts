@@ -1,11 +1,12 @@
 import type { R2UploadJob, R2UploadSourceFingerprint } from '../domain/integration-types.js';
 import { normalizeR2ObjectKey, objectName } from '../domain/r2-storage-policy.js';
-import { utf8Size } from '../domain/text-policy.js';
 import {
+  assertUploadSourceBinding,
   SOURCE_CHANGED,
   sourceChanged,
-  assertUploadSourceBinding,
 } from '../domain/r2-transfer-policy.js';
+import { utf8Size } from '../domain/text-policy.js';
+
 const MIB = 1024 * 1024,
   DEFAULT_PART = 16 * MIB,
   MAX_PARTS = 10000,
@@ -53,7 +54,8 @@ export interface R2TransferPorts {
   now(): string;
   nextId(): string;
   sleep(ms: number): Promise<void>;
-  syncIndex(): void;
+  syncIndex(): void | Promise<void>;
+  failure?(error: unknown): void | Promise<void>;
 }
 interface UploadControl {
   paused: boolean;
@@ -190,7 +192,7 @@ export class R2TransferRuntime {
       job.transferredBytes = size;
       job.completedAt = this.ports.now();
       await this.saveUpload(job);
-      this.ports.syncIndex();
+      await this.ports.syncIndex();
     } catch (e) {
       if (multipartUploadId)
         await client
@@ -238,7 +240,13 @@ export class R2TransferRuntime {
           : j,
     );
   }
-  async beginUpload(bucket: string, prefix: string, filePath: string, overwrite = false) {
+  async beginUpload(
+    bucket: string,
+    prefix: string,
+    filePath: string,
+    overwrite = false,
+    start = true,
+  ) {
     if (!(await this.ports.exists(filePath)))
       throw new Error('アップロード元ファイルが見つかりません。');
     const st = await this.ports.stat(filePath),
@@ -288,7 +296,7 @@ export class R2TransferRuntime {
       createdAt: this.ports.now(),
     };
     await this.saveUpload(job);
-    void this.resumeUpload(job.id);
+    if (start) void this.resumeUpload(job.id);
     return job;
   }
   async resumeUpload(id: string): Promise<R2UploadJob> {
@@ -335,11 +343,17 @@ export class R2TransferRuntime {
       job.startedAt = this.ports.now();
       job.initialTransferredBytes = job.transferredBytes;
       await this.saveUpload(job);
-      const worker = this.runUpload(job, control).finally(() => {
-        if (this.activeUploads.get(id) === worker) this.activeUploads.delete(id);
-        if (this.controls.get(id) === control) this.controls.delete(id);
-      });
+      const worker = this.runUpload(job, control)
+        .catch(async (error) => {
+          await this.ports.failure?.(error);
+          throw error;
+        })
+        .finally(() => {
+          if (this.activeUploads.get(id) === worker) this.activeUploads.delete(id);
+          if (this.controls.get(id) === control) this.controls.delete(id);
+        });
       this.activeUploads.set(id, worker);
+      void worker.catch(() => {});
       return job;
     } catch (error) {
       if (this.controls.get(id) === control) this.controls.delete(id);
@@ -428,7 +442,7 @@ export class R2TransferRuntime {
         job.status = 'complete';
         job.completedAt = this.ports.now();
         await this.saveUpload(job);
-        this.ports.syncIndex();
+        await this.ports.syncIndex();
         return;
       }
       if (!job.uploadId) throw new Error('Upload IDがありません。');
@@ -485,7 +499,7 @@ export class R2TransferRuntime {
       job.transferredBytes = job.size;
       job.completedAt = this.ports.now();
       await this.saveUpload(job);
-      this.ports.syncIndex();
+      await this.ports.syncIndex();
     } catch (e) {
       if (control.cancelled) return;
       job.status = 'failed';
@@ -509,6 +523,11 @@ export class R2TransferRuntime {
         }
       }
     }
+  }
+  async drainUpload(id: string): Promise<void> {
+    await this.startingUploads.get(id)?.catch(() => {});
+    await this.activeUploads.get(id)?.catch(() => {});
+    await this.saveQueue;
   }
   async pauseUpload(id: string) {
     const control = this.controls.get(id);

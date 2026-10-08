@@ -14,8 +14,8 @@ const actor = {
   userId: 'operator',
   sessionId: 'session',
   requestId: 'request',
-  projectIds: [],
-  permissions: ['read', 'admin'],
+  projectIds: ['A'],
+  permissions: ['read', 'edit', 'execute', 'admin'],
 };
 const environment = {
   BATCH_STUDIO_SECRET_R2_ACCESS_KEY_ID: 'fixture-r2-id',
@@ -104,7 +104,7 @@ async function setup(dir) {
   const definitions = new Map();
   const service = new R2Service(dir, settings, definitions, port);
   await service.initialize();
-  const operations = new ExternalOperations(dir, definitions);
+  const operations = new ExternalOperations(dir, definitions, async () => {});
   await operations.initialize();
   return {
     service,
@@ -158,7 +158,14 @@ test('R2 delete target requires confirmation, rechecks etag and never deletes ch
         (row) => row.name === 'DeleteObject' && row.input.Key === 'models/a.safetensors',
       ),
     );
-    const p = await f.operations.prepare(actor, target.operation, target.targetId);
+    const p = await f.operations.prepare(
+      actor,
+      target.operation,
+      target.targetId,
+      ['copy-object', 'move-object'].includes(target.operation)
+        ? { projectId: 'A', expectedRevision: 0, leaseId: 'lease' }
+        : null,
+    );
     f.objects.get('models/a.safetensors').etag = 'changed';
     await assert.rejects(
       f.operations.confirm(actor, target.operation, target.targetId, p.confirmationId),
@@ -169,7 +176,14 @@ test('R2 delete target requires confirmation, rechecks etag and never deletes ch
         (row) => row.name === 'DeleteObject' && row.input.Key === 'models/a.safetensors',
       ),
     );
-    const fresh = await f.operations.prepare(actor, target.operation, target.targetId);
+    const fresh = await f.operations.prepare(
+      actor,
+      target.operation,
+      target.targetId,
+      ['copy-object', 'move-object'].includes(target.operation)
+        ? { projectId: 'A', expectedRevision: 0, leaseId: 'lease' }
+        : null,
+    );
     const r = await f.operations.confirm(
       actor,
       target.operation,
@@ -186,11 +200,19 @@ test('R2 lost streamed move response keeps source, persists uncertainty and does
     f.loseMove();
     const target = await f.service.createTarget(actor, {
       operation: 'move-object',
+      projectId: 'A',
       bucket: 'bucket',
       keys: ['models/a.safetensors'],
       destination: 'models/b.safetensors',
     });
-    const p = await f.operations.prepare(actor, target.operation, target.targetId);
+    const p = await f.operations.prepare(
+      actor,
+      target.operation,
+      target.targetId,
+      ['copy-object', 'move-object'].includes(target.operation)
+        ? { projectId: 'A', expectedRevision: 0, leaseId: 'lease' }
+        : null,
+    );
     const r = await f.operations.confirm(
       actor,
       target.operation,
@@ -216,11 +238,19 @@ test('credential rotation cannot bypass bucket scope exclusion of uncertain prio
     f.loseMove();
     const first = await f.service.createTarget(actor, {
       operation: 'move-object',
+      projectId: 'A',
       bucket: 'bucket',
       keys: ['models/a.safetensors'],
       destination: 'models/b.safetensors',
     });
-    const p = await f.operations.prepare(actor, first.operation, first.targetId);
+    const p = await f.operations.prepare(
+      actor,
+      first.operation,
+      first.targetId,
+      ['copy-object', 'move-object'].includes(first.operation)
+        ? { projectId: 'A', expectedRevision: 0, leaseId: 'lease' }
+        : null,
+    );
     await f.operations.confirm(actor, first.operation, first.targetId, p.confirmationId);
     await f.operations.drain();
     f.source.BATCH_STUDIO_SECRET_R2_SECRET_ACCESS_KEY = 'rotated-secret';
@@ -286,6 +316,7 @@ test('unknown R2 store and invalid object paths reject without overwrite or exte
     await assert.rejects(
       f.service.createTarget(actor, {
         operation: 'move-object',
+        projectId: 'A',
         bucket: 'bucket',
         keys: ['models/a.safetensors'],
         destination: '../escape',
@@ -322,6 +353,7 @@ test('R2 confirmation operation must match the immutable server target action', 
     const f = await setup(dir);
     const target = await f.service.createTarget(actor, {
       operation: 'move-object',
+      projectId: 'A',
       bucket: 'bucket',
       keys: ['models/a.safetensors'],
       destination: 'models/b.safetensors',
@@ -345,7 +377,14 @@ test('R2 condition capability is proved on an operation-owned object; ignored De
       bucket: 'bucket',
       keys: ['models/a.safetensors'],
     });
-    const prepared = await f.operations.prepare(actor, target.operation, target.targetId);
+    const prepared = await f.operations.prepare(
+      actor,
+      target.operation,
+      target.targetId,
+      ['copy-object', 'move-object'].includes(target.operation)
+        ? { projectId: 'A', expectedRevision: 0, leaseId: 'lease' }
+        : null,
+    );
     const receipt = await f.operations.confirm(
       actor,
       target.operation,
@@ -366,11 +405,19 @@ test('R2 destination created after confirmation is preserved; source is never de
     const f = await setup(dir);
     const target = await f.service.createTarget(actor, {
       operation: 'move-object',
+      projectId: 'A',
       bucket: 'bucket',
       keys: ['models/a.safetensors'],
       destination: 'models/b.safetensors',
     });
-    const prepared = await f.operations.prepare(actor, target.operation, target.targetId);
+    const prepared = await f.operations.prepare(
+      actor,
+      target.operation,
+      target.targetId,
+      ['copy-object', 'move-object'].includes(target.operation)
+        ? { projectId: 'A', expectedRevision: 0, leaseId: 'lease' }
+        : null,
+    );
     f.destinationRace();
     const receipt = await f.operations.confirm(
       actor,
@@ -393,11 +440,19 @@ test('R2 successful move streams bytes with source/destination conditions and bi
     const f = await setup(dir);
     const target = await f.service.createTarget(actor, {
       operation: 'move-object',
+      projectId: 'A',
       bucket: 'bucket',
       keys: ['models/a.safetensors'],
       destination: 'models/b.safetensors',
     });
-    const prepared = await f.operations.prepare(actor, target.operation, target.targetId);
+    const prepared = await f.operations.prepare(
+      actor,
+      target.operation,
+      target.targetId,
+      ['copy-object', 'move-object'].includes(target.operation)
+        ? { projectId: 'A', expectedRevision: 0, leaseId: 'lease' }
+        : null,
+    );
     const receipt = await f.operations.confirm(
       actor,
       target.operation,
@@ -433,7 +488,14 @@ test('R2 copy retains the source and never invokes delete; bucket create/delete 
     const f = await setup(dir);
     const perform = async (input) => {
       const target = await f.service.createTarget(actor, input);
-      const prepared = await f.operations.prepare(actor, target.operation, target.targetId);
+      const prepared = await f.operations.prepare(
+        actor,
+        target.operation,
+        target.targetId,
+        ['copy-object', 'move-object'].includes(target.operation)
+          ? { projectId: 'A', expectedRevision: 0, leaseId: 'lease' }
+          : null,
+      );
       const receipt = await f.operations.confirm(
         actor,
         target.operation,
@@ -445,6 +507,7 @@ test('R2 copy retains the source and never invokes delete; bucket create/delete 
     };
     await perform({
       operation: 'copy-object',
+      projectId: 'A',
       bucket: 'bucket',
       keys: ['models/a.safetensors'],
       destination: 'models/b.safetensors',
@@ -461,9 +524,19 @@ test('R2 copy retains the source and never invokes delete; bucket create/delete 
       bucket: 'bucket',
       keys: [],
     });
-    await assert.rejects(f.operations.prepare(actor, target.operation, target.targetId), {
-      code: 'BUCKET_NOT_EMPTY',
-    });
+    await assert.rejects(
+      f.operations.prepare(
+        actor,
+        target.operation,
+        target.targetId,
+        ['copy-object', 'move-object'].includes(target.operation)
+          ? { projectId: 'A', expectedRevision: 0, leaseId: 'lease' }
+          : null,
+      ),
+      {
+        code: 'BUCKET_NOT_EMPTY',
+      },
+    );
     const store = JSON.parse(await readFile(path.join(dir, 'r2.json'), 'utf8'));
     store.targets[0].keys = [];
     await writeFile(path.join(dir, 'r2.json'), JSON.stringify(store), { mode: 0o600 });
