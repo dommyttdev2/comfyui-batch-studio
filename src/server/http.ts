@@ -93,13 +93,24 @@ export async function readJson(
   if (!Number.isFinite(size) || size > maxBytes) throw new HttpFailure(413, 'BODY_TOO_LARGE');
   let bytes = 0;
   const chunks: Buffer[] = [];
-  for await (const chunk of request) {
-    bytes += chunk.length;
-    if (bytes > maxBytes) throw new HttpFailure(413, 'BODY_TOO_LARGE');
-    chunks.push(chunk);
-  }
+  await new Promise<void>((resolve, reject) => {
+    const onData = (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > maxBytes) {
+        request.removeListener('data', onData);
+        request.resume();
+        reject(new HttpFailure(413, 'BODY_TOO_LARGE'));
+      } else chunks.push(chunk);
+    };
+    request.on('data', onData);
+    request.once('end', resolve);
+    request.once('aborted', () => reject(new HttpFailure(400, 'REQUEST_ABORTED')));
+    request.once('error', reject);
+  });
   try {
-    return object(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+    return object(
+      JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))),
+    );
   } catch (error) {
     if (error instanceof HttpFailure) throw error;
     throw new HttpFailure(400, 'INVALID_JSON');
@@ -128,6 +139,12 @@ export function createHttpHandler(config: ServerConfig, options: HttpOptions = {
         request.headers['x-batch-build-id'] !== config.buildId
       )
         throw new HttpFailure(409, 'BUILD_MISMATCH');
+      if (
+        !['GET', 'HEAD'].includes(request.method ?? '') &&
+        options.accepting &&
+        !options.accepting()
+      )
+        throw new HttpFailure(503, 'SERVER_DRAINING');
       if (options.publicRoute && (await options.publicRoute(request, response, url))) return;
       if (!options.authenticate) throw new HttpFailure(503, 'AUTH_NOT_CONFIGURED');
       const requestId = identifier(request.headers['x-request-id']);

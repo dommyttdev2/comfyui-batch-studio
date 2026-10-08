@@ -1,5 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, realpath, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rmdir,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { homedir, hostname } from 'node:os';
 import path from 'node:path';
 import { ExecutionResourceLockManager } from '../application/execution-coordinator.js';
@@ -38,6 +47,12 @@ export class FileLease {
   static async acquire(directory: string, subject: string, serverId: string): Promise<FileLease> {
     await mkdir(path.dirname(directory), { recursive: true, mode: 0o700 });
     try {
+      await stat(directory + '.recover');
+      throw new BusinessError('RUNTIME_BUSY', 'Recovery in progress.');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
       await mkdir(directory, { mode: 0o700 });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
@@ -70,34 +85,64 @@ export class FileLease {
     await unlink(path.join(this.directory, 'owner.json'));
     await rmdir(this.directory);
   }
-  // Explicit administrative reconciliation of the server lock only. Resource locks remain.
-  static async reconcileDeadServer(directory: string): Promise<void> {
+  static async releaseVerified(
+    directory: string,
+    subject: string,
+    verify: (owner: Owner) => Promise<boolean>,
+  ): Promise<void> {
     const owner = JSON.parse(await readFile(path.join(directory, 'owner.json'), 'utf8')) as Owner;
     if (
       owner.schema !== 'web-owner/1' ||
-      owner.subject !== 'server' ||
+      owner.subject !== subject ||
       owner.host !== hostname() ||
+      typeof owner.serverId !== 'string' ||
       !Number.isSafeInteger(owner.pid) ||
-      owner.pid < 1
+      owner.pid < 1 ||
+      !(await verify(owner))
     )
-      throw new BusinessError('RUNTIME_UNCERTAIN', 'Unknown owner.');
+      throw new BusinessError('RUNTIME_UNCERTAIN', 'Resource outcome is not verified.');
+    // Only a trusted runtime reconciliation adapter can provide this proof.
+    await new FileLease(directory, owner).release();
+  }
+  // Explicit administrative reconciliation of the server lock only. Resource locks remain.
+  static async reconcileDeadServer(directory: string): Promise<void> {
+    const mutex = directory + '.recover';
     try {
-      process.kill(owner.pid, 0);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ESRCH')
-        throw new BusinessError('RUNTIME_UNCERTAIN', 'Owner cannot be verified.');
-      // Atomic rename claims this reconciliation; competing startup never sees a half-written owner.
-      const claim = directory + '.reconcile-' + randomUUID();
-      const { rename } = await import('node:fs/promises');
-      await rename(directory, claim);
-      const check = JSON.parse(await readFile(path.join(claim, 'owner.json'), 'utf8')) as Owner;
-      if (JSON.stringify(check) !== JSON.stringify(owner))
-        throw new BusinessError('RUNTIME_UNCERTAIN', 'Owner changed during reconciliation.');
-      await unlink(path.join(claim, 'owner.json'));
-      await rmdir(claim);
-      return;
+      await mkdir(mutex, { mode: 0o700 });
+    } catch {
+      throw new BusinessError('RUNTIME_BUSY', 'Recovery already in progress.');
     }
-    throw new BusinessError('RUNTIME_BUSY', 'Owner is still alive.');
+    let preserve = false;
+    try {
+      const owner = JSON.parse(await readFile(path.join(directory, 'owner.json'), 'utf8')) as Owner;
+      if (
+        owner.schema !== 'web-owner/1' ||
+        owner.subject !== 'server' ||
+        owner.host !== hostname() ||
+        !Number.isSafeInteger(owner.pid) ||
+        owner.pid < 1
+      )
+        throw new BusinessError('RUNTIME_UNCERTAIN', 'Unknown owner.');
+      try {
+        process.kill(owner.pid, 0);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH')
+          throw new BusinessError('RUNTIME_UNCERTAIN', 'Owner cannot be verified.');
+        const claim = directory + '.reconcile-' + randomUUID();
+        await rename(directory, claim);
+        const check = JSON.parse(await readFile(path.join(claim, 'owner.json'), 'utf8')) as Owner;
+        if (JSON.stringify(check) !== JSON.stringify(owner)) {
+          preserve = true;
+          throw new BusinessError('RUNTIME_UNCERTAIN', 'Owner changed during reconciliation.');
+        }
+        await unlink(path.join(claim, 'owner.json'));
+        await rmdir(claim);
+        return;
+      }
+      throw new BusinessError('RUNTIME_BUSY', 'Owner is still alive.');
+    } finally {
+      if (!preserve) await rmdir(mutex);
+    }
   }
 }
 export class Ownership {

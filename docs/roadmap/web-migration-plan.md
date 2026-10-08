@@ -395,6 +395,6 @@ mainの必要な業務修正は同期専用Issue/PRで新契約へ適合する�
 - P0の索引再照合、未接続testの採否、UI/画像/Run/AIの受入checklistを[開始基準と受入チェックリスト](web-migration-baseline-checklist.md)へ整理した。P1の層分離・core単独検証は[業務coreの境界と受入](web-migration-core-design.md)へ記録した。Web機能受入は各後続phaseで行う。
 
 
-## 12. P2着手管理（2026-10-08）
+## 12. P2完了と次工程（2026-10-08）
 
-P1は親Issue #305 / PR #309が完了し、刷新branchのf221c1799a668e757e6f4de141100588c2547a6bに統合済み。次は[P2親Issue #313](https://github.com/dommyttdev2/comfyui-batch-studio/issues/313)のserver基盤を進める。ブランチ・子Issue・依存・受入条件は[P2実行計画](web-migration-p2-plan.md)を参照する。今回の計画追加はP2実装完了を意味しない。
+P1は親Issue #305 / PR #309が完了し、刷新branchのf221c1799a668e757e6f4de141100588c2547a6bに統合済み。[P2親Issue #313](https://github.com/dommyttdev2/comfyui-batch-studio/issues/313)のserver基盤は実装・ローカル受入を完了した。ブランチ・子Issue・依存・受入条件は[P2実行計画](web-migration-p2-plan.md)を参照する。親PR #323は刷新branch向け。次はP3のProject/ArtifactとWeb shellを進める。運用契約は[Web server foundation](../architecture/web-server-foundation.md)を参照する。

@@ -1,6 +1,6 @@
 # P2: Webサーバー基盤の実行計画
 
-Status: Planned / 起票済み（2026-10-08）。実装未着手。
+Status: Complete / 実装・ローカル受入完了（2026-10-08）。親PR #323で刷新ブランチへ統合する。
 
 ## 前提と目的
 
@@ -13,7 +13,7 @@ P1の親Issue #305とPR #309は完了済み。刷新ブランチのmerge commit�
 ## ブランチとPR
 
 - P2統合ブランチ: `codex/web-p2-313-server-foundation`。
-- 親draft PRのbase: `codex/web-migration`。今回の最初の差分は計画文書のみ。
+- 親PR [#323](https://github.com/dommyttdev2/comfyui-batch-studio/pull/323)のbase: `codex/web-migration`。bootstrapから統合受入までの全P2差分を含む。
 - 子作業ブランチ: P2統合ブランチの最新commitから `codex/web-p2-<子Issue番号>-<topic>` を作る。
 - 子PRのbase: `codex/web-p2-313-server-foundation`。子Issue単位でローカル検証後にsquash mergeする。
 - 依存する子PRを取り込んでから次の子ブランチを作る。独立作業でもshared contract/package/lockの編集を競合させない。
@@ -52,3 +52,11 @@ P1の親Issue #305とPR #309は完了済み。刷新ブランチのmerge commit�
 複数Projectのjob/event隔離、未認証/越権/偽Origin/CSRF、競合予約、開始前後の障害、snapshot中のevent、再接続と履歴不足、slow client、二重server、graceful/force/restartの各ケースが通過し、P3が利用できるAPI/context/event契約を確定したら親PRをreadyにする。
 
 実Project/Artifact操作とUIはP3、実CLIはP4、Secret/外部連携はP5、実生成はP6、画像はP7。P2はfake/portと実serverで基盤を受け入れ、後続phaseの実機検証を済んだことにしない。
+
+## 実装・受入結果
+
+子Issue #314/#315/#317/#318/#319/#320はそれぞれPR #325/#326/#327/#328/#329/#331でP2 branchにsquash統合済み。#321は終了・統合受入、運用文書と全コード索引更新を担当する。全子PRの後に親PR #323を刷新branchへsquash統合する。
+
+WindowsおよびDocker/Linuxで npm run test:server（18件、失敗/skipなし）、npm run test:core（102ケース）、npm run check、npm run typecheckを成功確認した。Docker/Linuxでは既存 npm test（登録61ファイル）と npm run buildも成功。最後のserver照合競合・HTTP drain修正後に両OSのtest:serverを再実行した。checkの既存4件のunused-variable警告と既存buildのag-psd/util警告は残る。CI追加・version変更・mainへの統合は実施しない。
+
+依存禁止検査、実HTTP/WS、P1 use case接続、実Node起動/crash/restart、保存失敗、同時予約/照合、force後の遅延結果を受け入れた。実CLI、実生成、製品Web UI、停電耐久性は未検証で後続phaseの範囲。運用/API契約は[Web server foundation](../architecture/web-server-foundation.md)に一本化する。次はP3のProject/Artifact操作と画面内タブ・ツールモーダルを進める。

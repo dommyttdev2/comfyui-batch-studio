@@ -29,10 +29,11 @@
     "ipc:check": "node scripts/generate-preload-ipc.cjs --check",
     "build:core": "node scripts/check-core-boundaries.cjs && tsc -p tsconfig.core.json",
     "test:core": "npm run build:core && node tests/core-policy.cjs && node tests/business-core.cjs && node tests/core-artifacts.cjs && node tests/core-separation.cjs",
-    "build:server": "npm run build:core && tsc -p tsconfig.server.json && node scripts/server-build-manifest.cjs",
+    "build:server": "npm run build:core && node scripts/check-server-boundaries.cjs && tsc -p tsconfig.server.json && node scripts/server-build-manifest.cjs",
     "start:server": "node dist-server/server/entry.js",
-    "test:server": "npm run build:server && node --test tests/server-bootstrap.mjs tests/server-http.mjs tests/server-security.mjs tests/server-ownership.mjs tests/server-jobs.mjs tests/server-events.mjs",
-    "init:server-auth": "node dist-server/server/auth-init.js"
+    "test:server": "npm run build:server && node --test tests/server-bootstrap.mjs tests/server-http.mjs tests/server-security.mjs tests/server-ownership.mjs tests/server-jobs.mjs tests/server-events.mjs tests/server-runtime.mjs",
+    "init:server-auth": "node dist-server/server/auth-init.js",
+    "recover:server-lock": "node dist-server/server/recover.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",

@@ -3,7 +3,14 @@ import type { ServerConfig } from './config.js';
 import { createHttpHandler, type HttpOptions } from './http.js';
 
 export async function startServer(config: ServerConfig, options: HttpOptions = {}) {
-  const server = createServer(createHttpHandler(config, options));
+  const handler = createHttpHandler(config, options);
+  const pending = new Set<Promise<void>>();
+  const server = createServer((request, response) => {
+    const work = handler(request, response);
+    pending.add(work);
+    void work.finally(() => pending.delete(work)).catch(() => response.destroy());
+  });
+  let closing: Promise<void> | undefined;
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
   await new Promise<void>((resolve, reject) => {
@@ -18,9 +25,12 @@ export async function startServer(config: ServerConfig, options: HttpOptions = {
   return {
     server,
     origin: `http://${config.host === '::1' ? '[::1]' : config.host}:${address.port}`,
+    drainRequests: async () => {
+      await Promise.allSettled([...pending]);
+    },
     close: () =>
-      new Promise<void>((resolve, reject) =>
+      (closing ??= new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
-      ),
+      )),
   };
 }

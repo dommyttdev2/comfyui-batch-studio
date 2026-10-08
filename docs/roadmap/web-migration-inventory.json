@@ -23,7 +23,6 @@
       ".dockerignore",
       ".gitattributes",
       ".gitignore",
-      ".release-pr-body.md",
       "Dockerfile",
       "biome.json",
       "compose.yaml",
@@ -34,6 +33,7 @@
       "tsconfig.core.json",
       "tsconfig.electron.json",
       "tsconfig.json",
+      "tsconfig.server.json",
       "update.bat",
       "vite.config.ts"
     ],
@@ -212,8 +212,8 @@
     },
     {
       "file": ".gitignore",
-      "lines": 7,
-      "sha256": "b4f041b56b1ae152fc656c70322e3ac9268eb861feccdc105c502bb01c3493a0",
+      "lines": 8,
+      "sha256": "f067eb492cf23a0eea7325664b16d0bceb7ca642b8ee21ea7c4a3311afaed832",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -230,24 +230,6 @@
           "text": "dist-electron/"
         }
       ],
-      "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
-    },
-    {
-      "file": ".release-pr-body.md",
-      "lines": 5,
-      "sha256": "73e3fc123b0fa47b0749c7dcc5b1c9450d146f6723891193676e583085050693",
-      "workPackage": "W11",
-      "layer": "existing-reference",
-      "phase": "P8",
-      "gate": "G11",
-      "desktopRemovalPhase": null,
-      "electronDependencyRemovalPhase": null,
-      "imports": [],
-      "exports": [],
-      "bridgeCalls": [],
-      "registeredChannels": [],
-      "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
     },
@@ -334,8 +316,8 @@
     },
     {
       "file": "package-lock.json",
-      "lines": 3003,
-      "sha256": "efa7956186d60678c6367a70286095298252b6ab7707c5a60adf8ebccbc791a8",
+      "lines": 3036,
+      "sha256": "7b0a9d95e73b1750c47ac25d5912ad9bcb89358a441f8935e1298532ce2905a6",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -348,51 +330,51 @@
       "registeredChannels": [],
       "risks": [
         {
-          "line": 27,
+          "line": 29,
           "text": "\"electron\": \"44.2.0\","
         },
         {
-          "line": 536,
+          "line": 538,
           "text": "\"node_modules/@electron-internal/extract-zip\": {"
         },
         {
-          "line": 538,
+          "line": 540,
           "text": "\"resolved\": \"https://registry.npmjs.org/@electron-internal/extract-zip/-/extract-zip-1.0.5.tgz\","
         },
         {
-          "line": 546,
+          "line": 548,
           "text": "\"node_modules/@electron/get\": {"
         },
         {
-          "line": 548,
+          "line": 550,
           "text": "\"resolved\": \"https://registry.npmjs.org/@electron/get/-/get-5.1.0.tgz\","
         },
         {
-          "line": 1661,
+          "line": 1673,
           "text": "\"cross-env-shell\": \"dist/bin/cross-env-shell.js\""
         },
         {
-          "line": 1742,
+          "line": 1754,
           "text": "\"node_modules/electron\": {"
         },
         {
-          "line": 1744,
+          "line": 1756,
           "text": "\"resolved\": \"https://registry.npmjs.org/electron/-/electron-44.2.0.tgz\","
         },
         {
-          "line": 1749,
+          "line": 1761,
           "text": "\"@electron-internal/extract-zip\": \"^1.0.1\","
         },
         {
-          "line": 1750,
+          "line": 1762,
           "text": "\"@electron/get\": \"^5.0.0\","
         },
         {
-          "line": 1754,
+          "line": 1766,
           "text": "\"electron\": \"cli.js\","
         },
         {
-          "line": 1755,
+          "line": 1767,
           "text": "\"install-electron\": \"install.js\""
         }
       ],
@@ -401,8 +383,8 @@
     },
     {
       "file": "package.json",
-      "lines": 56,
-      "sha256": "c7b379983d6fdc873e85f9f8f1b78b3871db496dbacc6d84465f24cb6f92f3f4",
+      "lines": 63,
+      "sha256": "b1e2beab1954c36c310fe8adfb37a39f099428ef281f153bb67ccdde783c691e",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -443,7 +425,7 @@
           "text": "\"prebuild:electron\": \"node scripts/check-running-batch-studio.cjs\","
         },
         {
-          "line": 50,
+          "line": 57,
           "text": "\"electron\": \"44.2.0\","
         }
       ],
@@ -614,6 +596,32 @@
       "entryReachable": false
     },
     {
+      "file": "scripts/check-server-boundaries.cjs",
+      "lines": 33,
+      "sha256": "52bd1c69937e9c3d2a1a8db26c0897e5428cbba9f2cfd90a72bea3c0b797014b",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:fs",
+        "node:path"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 23,
+          "text": "/\\b(?:ipcMain|WebContentsView|BrowserWindow|nativeImage|safeStorage)\\b|import\\s*\\(|require\\s*\\(/.test("
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "scripts/copy-runtime.cjs",
       "lines": 23,
       "sha256": "5db5baf6ee796e76c79a6ada4fff9f5b658ba9b1e84ff09e7bf89dd46028ff8e",
@@ -750,6 +758,28 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "生成/検証ツール維持、新resource配置を確認",
+      "entryReachable": false
+    },
+    {
+      "file": "scripts/server-build-manifest.cjs",
+      "lines": 22,
+      "sha256": "f36df2ebad81d8fc201c019856423ff3e980f3e4f57285d91c35fdc0b5b95422",
+      "workPackage": "W11",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G11",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:fs",
+        "node:path",
+        "node:crypto"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
     },
     {
@@ -9824,6 +9854,375 @@
       "entryReachable": true
     },
     {
+      "file": "src/server/auth-init.ts",
+      "lines": 38,
+      "sha256": "740067c0b4f7361bc1b70a6801c90cd681af18bb865efbd7b5cd3e9da7111203",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "./config.js",
+        "./http.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 9,
+          "text": "const token = process.env.BATCH_STUDIO_ADMIN_TOKEN ?? '';"
+        },
+        {
+          "line": 11,
+          "text": "const config = await loadConfig({ dataDir: process.env.BATCH_STUDIO_DATA_DIR ?? '' });"
+        },
+        {
+          "line": 12,
+          "text": "const projectIds = (process.env.BATCH_STUDIO_PROJECT_IDS ?? '')"
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/config.ts",
+      "lines": 42,
+      "sha256": "01bc5b2e05a9cb402174f2e6e9f53258455faf247563ebd8f2b6dd7c4ccc766c",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "node:url"
+      ],
+      "exports": [
+        "API_VERSION",
+        "ServerConfig",
+        "loadConfig"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/entry.ts",
+      "lines": 23,
+      "sha256": "5ee6c493e409f1a818335d61442f2b29478e4e17fbe0b2d7c7a0b3e6b2911521",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./config.js",
+        "./runtime.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 5,
+          "text": "dataDir: process.env.BATCH_STUDIO_DATA_DIR ?? '',"
+        },
+        {
+          "line": 6,
+          "text": "resourceDir: process.env.BATCH_STUDIO_RESOURCE_DIR,"
+        },
+        {
+          "line": 7,
+          "text": "host: process.env.BATCH_STUDIO_HOST,"
+        },
+        {
+          "line": 8,
+          "text": "port: process.env.BATCH_STUDIO_PORT ? Number(process.env.BATCH_STUDIO_PORT) : undefined,"
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/events.ts",
+      "lines": 322,
+      "sha256": "2e26722ea1b03b06260ac431ee975a19b70cddd45c726a2dcc2cf8d987e4930d",
+      "workPackage": "W01",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G01",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:http",
+        "node:path",
+        "ws",
+        "../domain/contracts.js",
+        "./config.js",
+        "./http.js",
+        "./jobs.js",
+        "./security.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "JobEvent",
+        "EventBroker",
+        "attachEvents"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/http.ts",
+      "lines": 177,
+      "sha256": "f1507dedd127bd86a37d5753b133a8c516402e6161946eda583b200eb104e693",
+      "workPackage": "W01",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G01",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:http",
+        "../domain/contracts.js",
+        "./config.js"
+      ],
+      "exports": [
+        "HttpFailure",
+        "JsonObject",
+        "object",
+        "fields",
+        "identifier",
+        "CommandController",
+        "RequestContext",
+        "HttpOptions",
+        "json",
+        "failure",
+        "readJson",
+        "createHttpHandler"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/jobs.ts",
+      "lines": 440,
+      "sha256": "ab1977c939afd123a260e9c26d9f31c50d9e7283ab49f0578193fc3d2f4aa4cc",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../domain/contracts.js",
+        "./http.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "JobState",
+        "PublicJob",
+        "JobDefinition",
+        "publicJob",
+        "JobRegistry"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/ownership.ts",
+      "lines": 248,
+      "sha256": "a278100bdd75cccf08c69c2bfe18244895989681c44bfb7227c9e7efb5c5a64c",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "../application/execution-coordinator.js",
+        "../domain/contracts.js",
+        "./http.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "Owner",
+        "normalizeEndpoint",
+        "FileLease",
+        "Ownership",
+        "ProjectRegistry"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/recover.ts",
+      "lines": 14,
+      "sha256": "832ba98afbef15be28a549b142fd77b077b2a9cba4c8901755e014a19c4f48f4",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:path",
+        "./config.js",
+        "./ownership.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 5,
+          "text": "const config = await loadConfig({ dataDir: process.env.BATCH_STUDIO_DATA_DIR ?? '' });"
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/runtime.ts",
+      "lines": 122,
+      "sha256": "987bfbf0c16c4f3030d5b7df894e41fa9cfa01ca4790e58e21091643828a1145",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:path",
+        "./config.js",
+        "./events.js",
+        "./http.js",
+        "./jobs.js",
+        "./ownership.js",
+        "./security.js",
+        "./server.js"
+      ],
+      "exports": [
+        "within",
+        "createServerRuntime"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/security.ts",
+      "lines": 201,
+      "sha256": "fdbdc367d0ad43bfce4746fad7c8b4f6e9c6d9feed6c6cc1cb0996d2c6235f35",
+      "workPackage": "W01",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G01",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:http",
+        "node:path",
+        "../domain/contracts.js",
+        "./http.js"
+      ],
+      "exports": [
+        "Principal",
+        "Security"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/server.ts",
+      "lines": 37,
+      "sha256": "68b6bf648ba2a73cabe1c448a06f2a11ae955298a90503f3cb8d90b8cd421b2c",
+      "workPackage": "W01",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G01",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:http",
+        "./config.js",
+        "./http.js"
+      ],
+      "exports": [
+        "startServer"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/storage.ts",
+      "lines": 41,
+      "sha256": "22e99f8af1874192595300306ac1dbdb41fed8de7c01a74e107311c2f5d46c31",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P2",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path"
+      ],
+      "exports": [
+        "atomicJson",
+        "SerialQueue"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "src/shared/codex-activity.ts",
       "lines": 230,
       "sha256": "b2bbddfd2becf62aab025948777b25d4d14ae6d601bacb394d61945b40b5994a",
@@ -12616,6 +13015,240 @@
       "entryReachable": false
     },
     {
+      "file": "tests/server-bootstrap.mjs",
+      "lines": 34,
+      "sha256": "9a4a53a6a1047e36b699c8840a1a88c139f7e226bab195e603c62f3ea309dba6",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:test",
+        "../dist-server/server/config.js",
+        "../dist-server/server/server.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-events.mjs",
+      "lines": 157,
+      "sha256": "0ad760885c16ded69a7fae5bf265f850cf0f5eb8f5bbec4e05ba37203b89dce9",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:events",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:test",
+        "ws",
+        "../dist-server/server/events.js",
+        "./server-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-fixtures.mjs",
+      "lines": 67,
+      "sha256": "e2cc8a9cc5ec261d56fcd4cdbde0b75147933f00321879285fecc9b911d6753b",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "../dist-server/server/config.js",
+        "../dist-server/server/security.js",
+        "../dist-server/server/server.js"
+      ],
+      "exports": [
+        "token",
+        "writeAuth",
+        "fixture"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-http.mjs",
+      "lines": 100,
+      "sha256": "8205764ac5edba819e7dd27dee7964377fe9cf7179ef7ccfb7fd5bb088f33828",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:test",
+        "../dist-server/server/config.js",
+        "../dist-server/server/server.js",
+        "../dist-server/server/http.js",
+        "../dist-server/domain/contracts.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-jobs.mjs",
+      "lines": 236,
+      "sha256": "d090c7a5c451d35bc0a147235b973975a4f02419ea2a7da948a0adb9530312ac",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:test",
+        "../dist-server/server/jobs.js",
+        "../dist-server/server/http.js",
+        "./server-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-ownership.mjs",
+      "lines": 92,
+      "sha256": "3358a0a7316c435dd364ca43eb9f15e21111c3f84d182b676bd305fa3a534880",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:child_process",
+        "node:events",
+        "node:test",
+        "../dist-server/server/ownership.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 5,
+          "text": "import { spawn } from 'node:child_process';"
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-runtime.mjs",
+      "lines": 317,
+      "sha256": "afb0ec20e4d624c3e4d878ff9cf0990574f61fd42688e56f6052dcf6893c9b8f",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:events",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:child_process",
+        "node:test",
+        "../dist-server/server/runtime.js",
+        "../dist-server/server/config.js",
+        "../dist-server/server/http.js",
+        "../dist-server/application/confirmation-use-cases.js",
+        "./server-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 6,
+          "text": "import { spawn } from 'node:child_process';"
+        },
+        {
+          "line": 235,
+          "text": "const env = { ...process.env, BATCH_STUDIO_DATA_DIR: e.dir, BATCH_STUDIO_PORT: '0' };"
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-security.mjs",
+      "lines": 102,
+      "sha256": "a9332eb5925b3f64c04194fd28120a37db223c151b1f1136faf3b05fab277132",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:http",
+        "./server-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "tests/service-integrations-ui.cjs",
       "lines": 290,
       "sha256": "3ab9cd5800682f1aad3736cdb02353f9b8b081349302a68a84e0844565ea4e51",
@@ -12995,6 +13628,24 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "Web/server配布設定として確認",
+      "entryReachable": false
+    },
+    {
+      "file": "tsconfig.server.json",
+      "lines": 16,
+      "sha256": "733397b030f980eb631a3835737f0cdf58255c002570ac8295e552b614dd92b0",
+      "workPackage": "W11",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G11",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
     },
     {
@@ -16875,6 +17526,102 @@
       "requiredAction": "P8までに新test実行経路へ接続"
     },
     {
+      "file": "tests/server-bootstrap.mjs",
+      "registration": "server-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-events.mjs",
+      "registration": "server-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-fixtures.mjs",
+      "registration": "support",
+      "treatment": "harness/fixture移植",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P8までに新test実行経路へ接続"
+    },
+    {
+      "file": "tests/server-http.mjs",
+      "registration": "server-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-jobs.mjs",
+      "registration": "server-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-ownership.mjs",
+      "registration": "server-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-runtime.mjs",
+      "registration": "server-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-security.mjs",
+      "registration": "server-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
       "file": "tests/service-integrations-ui.cjs",
       "registration": "npm-test",
       "treatment": "挙動検証へ置換/補完",
@@ -17064,7 +17811,7 @@
   "documents": [
     {
       "file": "docs/README.md",
-      "sha256": "880e923c2f89fd14da3cf13b17417ff8c4c6348ddc2a1f248698783fd1d84424",
+      "sha256": "545e8b28c26ff20282878c9f70479f95bbea3dc858a9f08b56f00e42b3418ba7",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -17121,6 +17868,13 @@
     {
       "file": "docs/architecture/system-architecture.md",
       "sha256": "959a8524283da3d636d17797aae6341e5a905a44787bfb7c746b3c9e30bea5a6",
+      "workPackage": "W11",
+      "gate": "G11",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
+      "file": "docs/architecture/web-server-foundation.md",
+      "sha256": "f3a54737fcac6cf2cb2964b94689ea5e32d92fb1126158b88d3a7d4e05b76eb0",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -17295,15 +18049,15 @@
     }
   ],
   "counts": {
-    "files": 426,
-    "source": 309,
-    "tests": 80,
-    "scripts": 9,
+    "files": 448,
+    "source": 321,
+    "tests": 88,
+    "scripts": 11,
     "ipc": 172,
     "resources": 8,
-    "documents": 33,
+    "documents": 34,
     "ownership": {
-      "W01": 12,
+      "W01": 16,
       "W02": 27,
       "W03": 31,
       "W04": 49,
@@ -17312,9 +18066,9 @@
       "W07": 15,
       "W08": 13,
       "W09": 47,
-      "W10": 15,
-      "W11": 25,
-      "W12": 82,
+      "W10": 23,
+      "W11": 26,
+      "W12": 91,
       "W13": 11,
       "W14": 12
     },
@@ -17337,8 +18091,9 @@
       "CI-only": 2,
       "core-local": 4,
       "npm-test": 61,
+      "server-local": 7,
       "standalone": 6,
-      "support": 5
+      "support": 6
     }
   }
 }
