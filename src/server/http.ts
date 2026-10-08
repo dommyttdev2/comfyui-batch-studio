@@ -54,6 +54,7 @@ export interface HttpOptions {
   staticRoute?: (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean>;
   publicRoute?: (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean>;
   route?: (context: RequestContext) => Promise<boolean>;
+  binaryRoute?: (context: Omit<RequestContext, 'input'>) => Promise<boolean>;
   accepting?: () => boolean;
 }
 export function json(response: ServerResponse, status: number, value: unknown): void {
@@ -163,6 +164,8 @@ export function createHttpHandler(config: ServerConfig, options: HttpOptions = {
       const actor = { ...(await options.authenticate(request, mutation)), requestId };
       if (mutation && options.accepting && !options.accepting())
         throw new HttpFailure(503, 'SERVER_DRAINING');
+      if (options.binaryRoute && (await options.binaryRoute({ request, response, url, actor })))
+        return;
       const input = mutation ? await readJson(request) : {};
       if (options.route && (await options.route({ request, response, url, actor, input }))) return;
       const match = /^\/api\/v1\/projects\/([a-zA-Z0-9_-]+)\/commands\/([a-z0-9-]+)$/.exec(

@@ -44,3 +44,11 @@ storeは4MiB・1000confirmation・1000receiptを上限とする。期限切れ�
 Civitai endpointはcivitai.comとcivitai.redの固定先。redirectを追わず、SecretはAuthorization headerのみ。429はRetry-Afterを扱い、最大3retry・要求全体20秒・response4MiB、collection1000page/32MiB、cache/store32MiBとする。collection API形式変更・cursor反復・期限/容量超過は失敗する。外部レスポンスにcredentialが含まれる場合は保存・公開を拒否する。cacheは30分の有効期限内だけ使用し、expired cacheを失敗時に返さない。現在のcredential世代を再確認してcache/catalogをatomic公開する。中断/restartで同期を自動再開しない。
 
 公開APIの現行正本は[Civitai developer reference](https://developer.civitai.com/site/reference)、collection手順は[公式router](https://github.com/civitai/civitai/blob/main/src/server/routers/collection.router.ts)と[公式schema](https://github.com/civitai/civitai/blob/main/src/server/schema/collection.schema.ts)で照合した。実設定の疎通/catalog受入は #385、画面操作は #384で追跡する。
+
+## browser stagingとserver file（P5-6）
+
+POST /api/v1/resources/stagingでname/sizeと任意のprojectId/sha256を指定する。Project scopeはexecute grant、global scopeはadminを要求する。返却resource idだけで操作し、nameは表示名として扱う。PUT /resources/staging/:idはapplication/octet-stream、Content-Length、X-Upload-Offset、X-Upload-Sha256を要求し、通常APIと同じsession/Origin/CSRF/build検証を通る。8MiB以下のchunkをstreamingし、fsync・metadata保存後のoffsetを返す。chunk hash不一致・切断時は未確定tailをtruncateする。再起動もdurable offsetを超えたtailだけを破棄する。
+
+completeは全体を1MiB単位でhash計算しsize・stat・指定hashを検証する。上限はresource100GiB、全体200GiB、128resource、metadata64KiB、期限24時間。resourceをjobへpinすると削除を拒否し、再起動でもpinを保持する。unknown jobのpinを自動解除しない。expired resourceはownerの明示deleteでcleanupする。ブラウザはpath・argv・Secretを指定しない。
+
+管理者がserverを停止し、BATCH_STUDIO_FILE_ID、BATCH_STUDIO_FILE_ROOT、BATCH_STUDIO_FILE_PATH、BATCH_STUDIO_FILE_PROJECTS（許可Project idのカンマ区切り）を明示してnpm run init:server-fileを実行する。dataDir外の許可root/実fileだけを登録し、現在のsize/stat/SHA-256をstreaming計算する。files.jsonはweb-files/1、128resource、128KiB。既存resource idの上書き・旧storeの読替は行わない。GET /resources/filesは許可Projectのresource id/name/size/hashだけ返す。転送時はgrant・realpath・hard link/statを再確認する。R2への転送接続とfull source再検証は #381。

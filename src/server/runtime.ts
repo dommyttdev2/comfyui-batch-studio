@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { FileResources } from './file-resources.js';
+import { Staging } from './staging.js';
 import { CivitaiService } from './civitai-service.js';
 import {
   ExternalOperations,
@@ -67,6 +69,8 @@ export async function createServerRuntime(
   const definitions = new Map(options.definitions ?? []);
   jobs = new JobRegistry(config.dataDir, definitions, broker.append);
   const repository = new DiskProjects(projects, ownership, broker);
+  const staging = new Staging(config.dataDir);
+  const files = new FileResources(config.dataDir);
   const integrations = new IntegrationSettings(config.dataDir);
   const civitai = new CivitaiService(config.dataDir, integrations, jobs, (actor) =>
     security.forJob(actor),
@@ -132,6 +136,8 @@ export async function createServerRuntime(
   let closing: Promise<void> | undefined;
   let runtime: Awaited<ReturnType<typeof startServer>>;
   try {
+    await staging.initialize();
+    await files.initialize();
     await integrations.initialize();
     await externalOperations.initialize();
     await civitai.initialize();
@@ -144,6 +150,7 @@ export async function createServerRuntime(
       ...security.http(),
       staticRoute: webStatic(config.webDir),
       commands: options.commands,
+      binaryRoute: staging.binaryRoute,
       accepting: () => state === 'running',
       route: async (context) => {
         if (
@@ -163,6 +170,8 @@ export async function createServerRuntime(
           json(context.response, 202, { state: 'draining' });
           return true;
         }
+        if (await files.route(context)) return true;
+        if (await staging.route(context)) return true;
         if (await civitai.route(context)) return true;
         if (await externalOperations.route(context)) return true;
         if (await integrations.route(context)) return true;
@@ -209,6 +218,7 @@ export async function createServerRuntime(
           await httpClosed;
           throw new Error('HTTP work deadline exceeded; ownership requires reconciliation.');
         }
+        await staging.drain();
         await integrations.drain();
         await civitai.drain();
         await repository.close();
