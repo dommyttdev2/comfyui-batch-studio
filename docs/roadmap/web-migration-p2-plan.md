@@ -55,8 +55,18 @@ P1の親Issue #305とPR #309は完了済み。刷新ブランチのmerge commit�
 
 ## 実装・受入結果
 
-子Issue #314/#315/#317/#318/#319/#320はそれぞれPR #325/#326/#327/#328/#329/#331でP2 branchにsquash統合済み。#321は終了・統合受入、運用文書と全コード索引更新を担当する。全子PRの後に親PR #323を刷新branchへsquash統合する。
+子Issue #314/#315/#317/#318/#319/#320はそれぞれPR #325/#326/#327/#328/#329/#331でP2 branchにsquash統合済み。#321はPR #333で終了・統合受入、運用文書と全コード索引更新を完成した。P2統合SHAは54a53aa03de53cab8f174d71708f12a12d8824ef。検証対象21d12f2a8638757258c641d8a1cede1ed659dd71と統合SHAの実装/test/build入力の差分はない。全子PRの後に親PR #323を刷新branchへsquash統合する。
 
 WindowsおよびDocker/Linuxで npm run test:server（18件、失敗/skipなし）、npm run test:core（102ケース）、npm run check、npm run typecheckを成功確認した。Docker/Linuxでは既存 npm test（登録61ファイル）と npm run buildも成功。最後のserver照合競合・HTTP drain修正後に両OSのtest:serverを再実行した。checkの既存4件のunused-variable警告と既存buildのag-psd/util警告は残る。CI追加・version変更・mainへの統合は実施しない。
 
 依存禁止検査、実HTTP/WS、P1 use case接続、実Node起動/crash/restart、保存失敗、同時予約/照合、force後の遅延結果を受け入れた。実CLI、実生成、製品Web UI、停電耐久性は未検証で後続phaseの範囲。運用/API契約は[Web server foundation](../architecture/web-server-foundation.md)に一本化する。次はP3のProject/Artifact操作と画面内タブ・ツールモーダルを進める。
+
+| 完了Issue | squash統合PR |
+| --- | --- |
+| #314 | [#325](https://github.com/dommyttdev2/comfyui-batch-studio/pull/325) |
+| #315 | [#326](https://github.com/dommyttdev2/comfyui-batch-studio/pull/326) |
+| #317 | [#327](https://github.com/dommyttdev2/comfyui-batch-studio/pull/327) |
+| #318 | [#328](https://github.com/dommyttdev2/comfyui-batch-studio/pull/328) |
+| #319 | [#329](https://github.com/dommyttdev2/comfyui-batch-studio/pull/329) |
+| #320 | [#331](https://github.com/dommyttdev2/comfyui-batch-studio/pull/331) |
+| #321 | [#333](https://github.com/dommyttdev2/comfyui-batch-studio/pull/333) |
