@@ -87,6 +87,14 @@ async function fixture() {
     },
   };
   const core = createBusinessCore({
+    outputFacts: {
+      caption: async () => {
+        throw new Error('Not configured');
+      },
+      marketplace: async () => {
+        throw new Error('Not configured');
+      },
+    },
     templates: { read: async () => null },
     digest: { text: (value) => value },
     projects,
@@ -349,8 +357,11 @@ test('unconfirmed stop and failed remote billing finalization are explicit error
 test('local uncertain Run uses reconciliation-specific stop path', async () => {
   const { core, execution } = await fixture();
   execution.run.recovery = 'uncertain';
+  execution.run.lifecycle = 'FAILED';
   await core.execution.stop(actor, { projectId: 'p1', runId: 'run-1', mode: 'graceful' });
-  assert.deepEqual(execution.calls, ['recover-local', 'wait']);
+  assert.deepEqual(execution.calls, ['wait']);
+  assert.equal(execution.rawRun.error.code, 'LOCAL_OUTPUT_COLLECTION_FAILED');
+  assert.equal(execution.rawRun.current.promptId, 'accepted');
 });
 test('parallel Run stop commands serialize ownership and do not duplicate interrupt', async () => {
   const { core, execution } = await fixture();
@@ -400,6 +411,12 @@ test('provider availability failure releases reservation; no provider fallback',
 });
 test('resume is explicit and job cancellation verifies provider/stage ownership', async () => {
   const { core, agents } = await fixture();
+  await core.preferences.update(actor, {
+    ...mutation,
+    stage: 'story',
+    provider: 'codex',
+    change: { kind: 'remember', sessionId: 'session-1' },
+  });
   const job = await core.agents.start(actor, { ...agentCommand, sessionId: 'session-1' });
   assert.equal(agents.launches[0].input.sessionId, 'session-1');
   await rejects(
@@ -651,4 +668,49 @@ test('core recovery uses persisted submission intent rather than delegating its 
   const result = await core.execution.recover(actor, { projectId: 'p1', runId: 'new-run' });
   assert.equal(result.lifecycle, 'PAUSED');
   assert.ok(!execution.calls.includes('recover-submitted'));
+});
+
+test('AI session membership is checked by the core inside the reserved launch path', async () => {
+  const { core, agents, projects } = await fixture();
+  await assert.rejects(core.agents.start(actor, { ...agentCommand, sessionId: 'foreign' }));
+  assert.equal(agents.launches.length, 0);
+  await core.preferences.update(actor, {
+    ...mutation,
+    stage: 'models',
+    provider: 'codex',
+    change: { kind: 'remember', sessionId: 'models-session' },
+  });
+  await assert.rejects(
+    core.agents.start(
+      { ...actor, requestId: 'r2' },
+      { ...agentCommand, sessionId: 'models-session' },
+    ),
+  );
+  assert.equal(agents.launches.length, 0);
+  const saved = structuredClone(projects.state);
+  await assert.rejects(
+    core.preferences.update(actor, {
+      ...mutation,
+      expectedRevision: projects.state.revision,
+      stage: 'models',
+      provider: 'codex',
+      change: { kind: 'model', value: { model: '   ' } },
+    }),
+  );
+  assert.deepEqual(projects.state, saved);
+});
+
+test('AI launch uses only the persisted model preference for its provider and stage', async () => {
+  const { core, agents } = await fixture();
+  await core.preferences.update(actor, {
+    ...mutation,
+    stage: 'story',
+    provider: 'codex',
+    change: { kind: 'model', value: { model: 'selected-model', reasoningEffort: 'high' } },
+  });
+  await core.agents.start(actor, { ...agentCommand, model: { model: 'client-forged' } });
+  assert.deepEqual(agents.launches[0].input.model, {
+    model: 'selected-model',
+    reasoningEffort: 'high',
+  });
 });

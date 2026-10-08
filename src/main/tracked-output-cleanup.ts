@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
 import { lstat, readFile, rm } from 'node:fs/promises';
+import {
+  CHANGED_OUTPUT_WARNING,
+  sameObservedFile,
+  trackedOutputMatches,
+} from '../domain/output-tracking-policy.js';
 
 // Only an unchanged output recorded by a previous successful export can be removed.
 export async function cleanupTrackedOutput(
@@ -8,21 +13,21 @@ export async function cleanupTrackedOutput(
 ): Promise<string | null> {
   try {
     const info = await lstat(file);
-    if (!info.isFile() || info.size !== expected.size)
-      return '以前の成果物が手動変更されたため、削除せず保持しました。';
+    if (!info.isFile() || info.size !== expected.size) return CHANGED_OUTPUT_WARNING;
     const bytes = await readFile(file);
-    if (createHash('sha256').update(bytes).digest('hex') !== expected.sha256)
-      return '以前の成果物が手動変更されたため、削除せず保持しました。';
+    if (
+      !trackedOutputMatches(expected, {
+        isFile: info.isFile(),
+        size: info.size,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      })
+    )
+      return CHANGED_OUTPUT_WARNING;
     const latest = await lstat(file);
     if (
-      !latest.isFile() ||
-      latest.dev !== info.dev ||
-      latest.ino !== info.ino ||
-      latest.size !== info.size ||
-      latest.mtimeMs !== info.mtimeMs ||
-      latest.ctimeMs !== info.ctimeMs
+      !sameObservedFile({ ...info, isFile: info.isFile() }, { ...latest, isFile: latest.isFile() })
     )
-      return '以前の成果物が手動変更されたため、削除せず保持しました。';
+      return CHANGED_OUTPUT_WARNING;
     await rm(file);
     return null;
   } catch (error) {

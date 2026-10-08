@@ -13,7 +13,11 @@ const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-remote-artif
 const compiled = path.join(runtime, 'compiled');
 // Compiled service modules live outside the repository; link its installed
 // runtime dependencies so ESM can resolve the R2 SDK during integration tests.
-fs.symlinkSync(path.join(repo, 'node_modules'), path.join(runtime, 'node_modules'), 'dir');
+fs.symlinkSync(
+  path.join(repo, 'node_modules'),
+  path.join(runtime, 'node_modules'),
+  process.platform === 'win32' ? 'junction' : 'dir',
+);
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(
   process.execPath,
@@ -208,7 +212,12 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
   assert.equal(fs.existsSync(path.join(sidecarImageDir, '0.lock')), true);
 
   const managerSource = fs.readFileSync(path.join(repo, 'src/main/r2-manager.ts'), 'utf8');
-  const executionSource = fs.readFileSync(path.join(repo, 'src/main/remote-execution.ts'), 'utf8');
+  const executionSource =
+    fs.readFileSync(path.join(repo, 'src/main/remote-execution.ts'), 'utf8') +
+    fs.readFileSync(
+      path.resolve(__dirname, '../src/application/remote-execution-runtime.ts'),
+      'utf8',
+    );
   const executionOutput = await load('execution-output.js');
   assert.equal(
     executionOutput.executionArchiveTimestampJst('2026-09-12T14:45:12.000Z'),
@@ -230,7 +239,7 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
   matchCode(executionSource, /\.part/, 'local download must use a .part file');
   matchCode(
     executionSource,
-    /path\.join\(base,'remote_output',runId\)/,
+    /io\.join\(base,'remote_output',runId\)/,
     'Remote outputs must be stored under <artifact project>/remote_output/<runId>',
   );
   matchCode(
@@ -387,7 +396,7 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
   // Previous cleanup removed R2 and Remote packages; intact local ZIP must
   // complete with zero network operations.
-  await service.collectArtifacts(recoveryRoot, recoveredRunId);
+  await service.runtime.collectArtifacts(recoveryRoot, recoveredRunId);
   assert.equal(
     (await execution.getExecutionRun(recoveryRoot, recoveredRunId)).lifecycle,
     'COMPLETED',
@@ -398,7 +407,7 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
   // CLEANUP_COMPLETED and LOCAL_FILE_VERIFIED evidence are still present.
   fs.writeFileSync(recoveredZip, 'damaged');
   r2Object = Buffer.from(packagedBytes);
-  await service.collectArtifacts(recoveryRoot, recoveredRunId);
+  await service.runtime.collectArtifacts(recoveryRoot, recoveredRunId);
   assert.equal(sha(fs.readFileSync(recoveredZip)), packaged.package.sha256);
   assert.equal(operations.downloads, 1);
   assert.equal(operations.deletes, 1, 'recovered transport object must be cleaned again');
@@ -408,14 +417,14 @@ const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
   // without blindly downloading a missing R2 key or deleting the local file.
   fs.writeFileSync(recoveredZip, 'damaged again');
   await assert.rejects(
-    () => service.collectArtifacts(recoveryRoot, recoveredRunId),
+    () => service.runtime.collectArtifacts(recoveryRoot, recoveredRunId),
     (error) => error.code === 'REMOTE_ARTIFACT_RECOVERY_UNAVAILABLE',
   );
   assert.equal(operations.downloads, 1);
   assert.equal(fs.readFileSync(recoveredZip, 'utf8'), 'damaged again');
   await assert.rejects(
     () =>
-      service.cleanup(
+      service.runtime.cleanup(
         recoveryRoot,
         recoveredRunId,
         'test-bucket',

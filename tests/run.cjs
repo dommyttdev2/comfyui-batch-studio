@@ -356,6 +356,18 @@ function plan() {
   assert.equal(summary.artifacts.find((a) => a.key === 'workflow').state, 'generated');
   let pf = await preflight.runPreflight(root);
   assert.equal(pf.state, 'READY', 'all local model files should be READY');
+  const fallbackPath = path.join(root, '._batch_studio', 'model_prompt_fallbacks.json');
+  writeJson(fallbackPath, {
+    promptFallbacks: [
+      { requirement: 'style', reason: 'Prompt fallback', positiveTags: ['test'], negativeTags: [] },
+    ],
+  });
+  assert.equal(
+    (await preflight.runPreflight(root)).state,
+    'READY',
+    'desktop workflow provenance uses its original model-input hash contract',
+  );
+  fs.unlinkSync(fallbackPath);
   const modelsPath = path.join(root, 'models.json');
   const originalModelsRaw = fs.readFileSync(modelsPath, 'utf8');
   const originalModelsStat = fs.statSync(modelsPath);

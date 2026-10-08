@@ -16,12 +16,17 @@ const vastPanel = read('src/renderer/integrations/VastAiIntegrationPanel.tsx');
 const serviceCss = read('src/renderer/service-integrations.css');
 const execution = read('src/renderer/ExecutionStages.tsx');
 const config = read('src/main/vastai-config.ts');
-const main = readMainProcessSource(repo);
+const main =
+  readMainProcessSource(repo) +
+  read('src/domain/remote-target-policy.ts') +
+  read('src/application/vast-ssh-endpoint.ts');
 const standalone = read('src/renderer/StandaloneToolApp.tsx');
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
 const preflight = read('src/application/preflight.ts');
-const vastClient = read('src/main/vastai-client.ts');
+const vastClient =
+  read('src/main/vastai-client.ts') + read('src/application/vast-offer-use-cases.ts');
+matchCode(vastClient, /new VastOfferUseCases/);
 
 matchCode(app, /サービス連携/);
 matchCode(app, /ServiceIntegrationsStage/);
@@ -192,12 +197,12 @@ matchCode(vastClient, /type:'on-demand'/, 'Offer検索とRENTはOn-demand固定�
 matchCode(vastClient, /verified: \{ eq: true \}/, 'Web版と同様にVerified Offerへ限定する');
 matchCode(
   vastClient,
-  /duration: \{ gte: WEB_DEFAULT_MIN_DURATION_SECONDS \}/,
+  /duration: \{ gte: 7 \* 24 \* 60 \* 60 \}/,
   'Web版既定の7日以上利用可能条件を適用する',
 );
 matchCode(
   vastClient,
-  /WEB_DEFAULT_MIN_DURATION_SECONDS = 7 \* 24 \* 60 \* 60/,
+  /duration: \{ gte: 7 \* 24 \* 60 \* 60 \}/,
   'Web版既定durationを7日として定義する',
 );
 matchCode(vastClient, /order:\[\['dph_total','asc'\]\]/, 'Offer検索は時間単価の安い順を要求する');
@@ -205,12 +210,12 @@ matchCode(vastClient, /allocated_storage:search\.storageGb/, '検索価格計算
 matchCode(vastClient, /num_gpus:\{eq:search\.gpuCount\}/, 'GPU枚数を完全一致で検索する');
 matchCode(
   vastClient,
-  /total_flops=\{gte:search\.minTflops\}|body\.total_flops=\{gte:search\.minTflops\}/,
+  /total_flops=\{gte:search\.minTflops\}|criteria\.total_flops=\{gte:search\.minTflops\}/,
   'Minimum TFLOPsを検索へ反映する',
 );
 matchCode(
   vastClient,
-  /geolocation=\{notin:search\.excludedCountries\}|body\.geolocation=\{notin:search\.excludedCountries\}/,
+  /geolocation=\{notin:search\.excludedCountries\}|criteria\.geolocation=\{notin:search\.excludedCountries\}/,
   '地域ブラックリストをnotinで検索する',
 );
 matchCode(
@@ -225,11 +230,7 @@ matchCode(ipc, /VASTAI_RENT_OFFER/);
 matchCode(preload, /searchOffers/);
 matchCode(preload, /rentOffer/);
 matchCode(main, /RENTするとVast\.aiで課金が開始されます/, '課金開始前に確認ダイアログを表示する');
-matchCode(
-  main,
-  /rentOffer\(\{offerId,storageGb,templateHashId\},offer\)/,
-  '確認済みOfferをCreateへ渡して余分な再検索を避ける',
-);
+matchCode(main, /offerUseCases\(\)\.confirmAndRent\(input/, '確認対象の再照合を共通coreへ委譲する');
 matchCode(
   main,
   /openStandaloneToolWindow\('vastai'\)/,
@@ -259,11 +260,11 @@ matchCode(
   /stored\?\.schemaVersion===2\|\|stored\?\.schemaVersion===3\|\|stored\?\.schemaVersion===4\?text\(stored\.sshPublicKeyPath\):''/,
   'schema v2-v4で保存したSSH公開鍵をstatusで再読込する',
 );
-matchCode(preflight, /remoteTargetCheck/, 'PreflightがRemote target検証hookを持つ');
-matchCode(main, /remoteTargetIssuesFor/, 'Main ProcessがVast.ai Remote targetを検証する');
+matchCode(preflight, /remoteTarget/, 'PreflightがRemote target検証hookを持つ');
+matchCode(main, /remoteTargetFactsFor/, 'Main ProcessがVast.ai Remote targetの観測情報を取得する');
 matchCode(
   main,
-  /runPreflight\(root,await r2LookupFor\(root\),settings\.modelsPath,\(\)=>remoteTargetIssuesFor\(root\)\)/,
+  /runPreflight\(root,await r2LookupFor\(root\),settings\.modelsPath,\(\)=>remoteTargetFactsFor\(root\),?\)/,
   'PREFLIGHT_RUNからRemote target検証を実配線する',
 );
 matchCode(main, /VASTAI_SSH_KEY_MISSING/);
@@ -273,7 +274,7 @@ matchCode(main, /VASTAI_SSH_KEY_PAIR_MISMATCH/);
 matchCode(main, /REMOTE_COMFYUI_INSTALL_PATH_REQUIRED/);
 matchCode(
   main,
-  /appSettings\.remoteComfyUiInstallPath/,
+  /installPath:.*settingsStore\(\).*remoteComfyUiInstallPath/s,
   'SSH endpointは環境設定のRemote ComfyUI pathを使う',
 );
 matchCode(

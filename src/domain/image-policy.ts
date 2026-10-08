@@ -1,5 +1,8 @@
 import { BusinessError } from './contracts.js';
-export const MAX_IMAGE_WORKING_BYTES = 768 * 1024 * 1024;
+
+export { MAX_IMAGE_WORKING_BYTES } from './image-size-policy.js';
+
+import { assertRenderBudget } from './image-size-policy.js';
 export interface RenderSize {
   sourceWidth: number;
   sourceHeight: number;
@@ -19,12 +22,12 @@ export function assertRenderSize(size: RenderSize): void {
   } = size;
   if (!Object.values(size).every((v) => Number.isSafeInteger(v) && v > 0) || cw > sw || ch > sh)
     throw new BusinessError('INVALID_INPUT', 'Image dimensions or crop are invalid.');
-  const bytes = sw * sh * 12 + cw * ch * 8 + Math.min(ow * ch, cw * oh) * 16 + ow * oh * 24;
-  if (
-    sw * sh * 16 > MAX_IMAGE_WORKING_BYTES ||
-    ow * oh * 24 > MAX_IMAGE_WORKING_BYTES ||
-    !Number.isFinite(bytes) ||
-    bytes > MAX_IMAGE_WORKING_BYTES
-  )
-    throw new BusinessError('INVALID_INPUT', 'Image exceeds the working memory budget.');
+  try {
+    assertRenderBudget(sw, sh, cw, ch, ow, oh);
+  } catch (error) {
+    throw new BusinessError(
+      'INVALID_INPUT',
+      error instanceof Error ? error.message : 'Invalid image budget.',
+    );
+  }
 }

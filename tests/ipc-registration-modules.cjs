@@ -20,7 +20,7 @@ const domains = [
     'EXECUTION_RESTART_FROM_SCRATCH',
     19,
   ],
-  ['image.ts', 'registerImageIpc', 'FINAL_ARTIFACT_STATUS', 'MARKETPLACE_PICKER_COMMIT_RESULT', 50],
+  ['image.ts', 'registerImageIpc', 'FINAL_ARTIFACT_STATUS', 'MARKETPLACE_PICKER_COMMIT_RESULT', 51],
   ['storage.ts', 'registerStorageIpc', 'R2_SETTINGS', 'CLIPBOARD_WRITE_TEXT', 25],
   ['assistant.ts', 'registerAssistantIpc', 'ASSISTANT_GET_PROVIDER', 'AGENT_TASK_STOP', 16],
 ];
@@ -54,7 +54,7 @@ for (const [file, registerName, firstChannel, lastChannel, expectedCount] of dom
   allHandlers.push(...handlers);
 }
 
-assert.equal(allHandlers.length, 160, 'all invoke handlers must remain registered');
+assert.equal(allHandlers.length, 161, 'all invoke handlers must remain registered');
 assert.equal(
   new Set(allHandlers).size,
   allHandlers.length,

@@ -1,11 +1,16 @@
 import path from 'node:path';
-import { readJson, writeJsonAtomic } from './fs-utils.js';
+import {
+  activateAgentSession,
+  copySessions,
+  rememberAgentSession,
+  validSessionId,
+} from '../domain/agent-state-policy.js';
 import type { AgentProvider, GrokContextStage } from '../shared/types.js';
+import { readJson, writeJsonAtomic } from './fs-utils.js';
 
-export interface AgentStageSessions {
-  activeSessionId: string | null;
-  sessionIds: string[];
-}
+export type { AgentStageSessions } from '../domain/agent-state-policy.js';
+
+import type { AgentStageSessions } from '../domain/agent-state-policy.js';
 
 interface AgentSessionState {
   schemaVersion: 1;
@@ -20,22 +25,6 @@ const emptyState = (): AgentSessionState => ({ schemaVersion: 1, projects: {} })
 function projectKey(projectPath: string) {
   const resolved = path.resolve(projectPath);
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-}
-
-function copySessions(value: AgentStageSessions | undefined): AgentStageSessions {
-  if (!value) return { activeSessionId: null, sessionIds: [] };
-  const sessionIds = Array.isArray(value.sessionIds)
-    ? [...new Set(value.sessionIds.filter((id) => typeof id === 'string' && id.trim().length > 0))]
-    : [];
-  const activeSessionId =
-    typeof value.activeSessionId === 'string' && sessionIds.includes(value.activeSessionId)
-      ? value.activeSessionId
-      : null;
-  return { activeSessionId, sessionIds };
-}
-
-function validSessionId(sessionId: string) {
-  if (!sessionId.trim() || sessionId.length > 4096) throw new Error('Invalid agent session ID');
 }
 
 export class AgentSessionStateStore {
@@ -75,12 +64,7 @@ export class AgentSessionStateStore {
       .then(async () => {
         const state = await this.read();
         const key = projectKey(projectPath);
-        const sessions = copySessions(state.projects[key]?.[stage]?.[provider]);
-        sessions.sessionIds = [
-          sessionId,
-          ...sessions.sessionIds.filter((existing) => existing !== sessionId),
-        ].slice(0, 100);
-        sessions.activeSessionId = sessionId;
+        const sessions = rememberAgentSession(state.projects[key]?.[stage]?.[provider], sessionId);
         const stageState = { ...(state.projects[key]?.[stage] ?? {}), [provider]: sessions };
         state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: stageState };
         await writeJsonAtomic(this.filePath, state);
@@ -100,10 +84,7 @@ export class AgentSessionStateStore {
       .then(async () => {
         const state = await this.read();
         const key = projectKey(projectPath);
-        const sessions = copySessions(state.projects[key]?.[stage]?.[provider]);
-        if (!sessions.sessionIds.includes(sessionId))
-          throw new Error('Agent session is not part of this stage.');
-        sessions.activeSessionId = sessionId;
+        const sessions = activateAgentSession(state.projects[key]?.[stage]?.[provider], sessionId);
         const stageState = { ...(state.projects[key]?.[stage] ?? {}), [provider]: sessions };
         state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: stageState };
         await writeJsonAtomic(this.filePath, state);

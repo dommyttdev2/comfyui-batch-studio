@@ -6,11 +6,8 @@ type CacheEntry<T> = { fetchedAt: number; value: T };
 type ThumbnailEntry = CacheEntry<string | null> & { imageId: number | null };
 type Lookup<T> = { hit: true; value: T } | { hit: false };
 
-export interface CachedCheckpointEvidence {
-  modelVersionId: number;
-  imageCount: number;
-  evidenceImageIds: number[];
-}
+import type { CachedCheckpointEvidence } from '../domain/civitai-catalog-policy.js';
+export type { CachedCheckpointEvidence } from '../domain/civitai-catalog-policy.js';
 
 interface StoredCache {
   schemaVersion: 1;

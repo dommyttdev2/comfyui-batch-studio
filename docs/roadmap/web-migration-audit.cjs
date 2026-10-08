@@ -29,7 +29,7 @@ const packages = {
 const groups = {
   W01: list('ipc-access ipc-registration'),
   W03: list('artifact-service fs-utils project-meta project-scan project-transaction model-downstream-reset prompt-plan-patch ui-state'),
-  W04: list('agent-artifact-import agent-cli-adapter agent-cli-diagnostic agent-conversation-runner agent-conversation-store agent-model-selection agent-session-state agent-workspace assistant-provider-state codex-cli-adapter codex-cli-events codex-cli-task-runner grok-cli-adapter grok-cli-events grok-cli-task-runner grok-context grok-lora-history'),
+  W04: list('agent-artifact-import agent-cli-adapter agent-cli-diagnostic agent-conversation-runner agent-conversation-store agent-model-selection agent-runtime-ports agent-session-state agent-workspace assistant-provider-state codex-cli-adapter codex-cli-events codex-cli-task-runner grok-cli-adapter grok-cli-events grok-cli-task-runner grok-context grok-lora-history'),
   W05: list('availability compiler image-tasks model-catalog model-file-sources model-placement-paths preflight validation workflow-api workflow-template-integrity workflow-template-paths'),
   W06: list('comfyui-client execution-coordinator execution-output execution-run local-execution remote-control-plane remote-environment-bootstrap remote-execution remote-instance-lifecycle remote-model-stager remote-worker-source remote-worker ssh-client ssh-host-keys ssh-key-pair'),
   W07: list('civitai-cache civitai-catalog civitai-client civitai-request-policy vastai-client'),
@@ -39,6 +39,56 @@ const groups = {
   W14: list('codex-app-server codex-artifact-turn codex-chat-state codex-file-artifact codex-model-selection codex-thread-history codex-turn-monitor grok-artifact-adapter grok-auto-artifact-watcher grok-chat-state grok-navigation-queue grok-navigation'),
 };
 const coreOwners = {
+  ...Object.fromEntries(list('artifact-file-service manual-project-reset model-downstream-file-service project-observation prompt-plan-patch').map((name) => [name, 'W03'])),
+  ...Object.fromEntries(list('agent-cli-port agent-conversation-runner agent-draft-import agent-runtime-ports assistant-commands assistant-provider-preferences auto-artifact-ingestion codex-cli-task-runner grok-cli-task-runner lora-selection-history observed-agent-model-selection agent-conversation-policy agent-model-policy agent-runtime-types agent-stage-policy agent-workspace-policy auto-artifact-selection auto-artifact-types codex-chat-policy').map((name) => [name, 'W04'])),
+  ...Object.fromEntries(list('model-availability-observation workflow-file-compilation resource-observation-types workflow-resource-policy').map((name) => [name, 'W05'])),
+  ...Object.fromEntries(list('execution-commands execution-launch execution-recovery-controller execution-snapshot-observation execution-snapshot-persistence remote-control-preparation remote-environment-bootstrap remote-execution-preparation remote-model-stager execution-error-policy execution-launch-policy execution-record-stamp execution-storage-policy remote-request-policy').map((name) => [name, 'W06'])),
+  ...Object.fromEntries(list('civitai-catalog-sync vast-offer-use-cases vast-ssh-endpoint civitai-catalog-policy integration-types vast-instance-errors vast-offer-policy').map((name) => [name, 'W07'])),
+  ...Object.fromEntries(list('r2-connection-use-cases r2-transfer-runtime r2-connection-policy r2-object-index-policy r2-transfer-policy saved-template-policy').map((name) => [name, 'W08'])),
+  ...Object.fromEntries(list('caption-file-service current-format-recovery editor-document-persistence thumbnail-document-use-cases editor-save-policy thumbnail-source-policy').map((name) => [name, 'W09'])),
+ 'image-size-policy':'W09',
+ 'output-tracking-policy':'W09','thumbnail-output-generation':'W09',
+ 'execution-workflow-policy':'W06',
+ 'execution-snapshot-capture':'W06',
+ 'agent-state-policy':'W04','agent-preferences-use-cases':'W04',
+  'agent-task-planning': 'W04',
+  'agent-task-use-cases': 'W04',
+  'agent-task-policy': 'W04',
+  'agent-artifact-policy': 'W04',
+  'execution-resumption': 'W06',
+  'local-execution-runtime': 'W06',
+  'local-output-verification': 'W06',
+  'remote-execution-runtime': 'W06',
+  'remote-instance-lifecycle': 'W06',
+  'execution-coordinator': 'W06',
+  'execution-finalization-policy': 'W06',
+  'execution-mutation-policy': 'W06',
+  'execution-progress': 'W06',
+  'execution-snapshot-policy': 'W06',
+  'local-output-policy': 'W06',
+  'remote-progress-policy': 'W06',
+  'remote-target-policy': 'W06',
+  'remote-worker-contract': 'W06',
+  'resource-preflight': 'W05',
+  'model-draft-policy': 'W03',
+  'model-reset-policy': 'W03',
+  'brief-impact-policy': 'W03',
+  'prompt-plan-patch-policy': 'W03',
+  'caption-build-policy': 'W09',
+  'caption-import-policy': 'W09',
+  'final-artifact-policy': 'W09',
+  'marketplace-crop-policy': 'W09',
+  'marketplace-editor-policy': 'W09',
+  'marketplace-generation-policy': 'W09',
+  'marketplace-generation': 'W09',
+  'output-use-cases': 'W09',
+  'thumbnail-editor-policy': 'W09',
+  'thumbnail-layout-policy': 'W09',
+  'thumbnail-render-policy': 'W09',
+  'time-policy': 'W10',
+  'text-policy': 'W10',
+  'r2-storage-policy': 'W08',
+
   'execution-record-policy': 'W06',
   'template-policy': 'W05', 'workflow-use-cases': 'W05',
   'execution-evidence': 'W06', 'execution-recovery': 'W06',
@@ -94,7 +144,7 @@ function owner(file) {
 }
 const scanRoots = ['src', 'scripts', 'tests', '.github', 'templates', 'schemas'];
 const rootFiles = fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isFile()
-  && !['AGENTS.md', 'README.md'].includes(entry.name) && !/\.log$/.test(entry.name)).map((entry) => entry.name);
+  && !['.git', 'AGENTS.md', 'README.md'].includes(entry.name) && !/\.log$/.test(entry.name)).map((entry) => entry.name).sort();
 const files = [...scanRoots.flatMap(walk), ...rootFiles].sort();
 const prior = JSON.parse(read('docs/roadmap/web-migration-inventory.json'));
 const priorByFile = new Map(prior.files.map((row) => [row.file, row]));
@@ -128,7 +178,7 @@ const rows = files.map((file) => {
     risks: lines.flatMap((line, i) => /electron|safeStorage|nativeImage|dialog\.|shell\.|webContents|screenX|Date\.now\(\) \* 1000|\.getPath\(|powershell|SystemRoot|dist-electron|process\.env|child_process/.test(line)
       ? [{ line: i + 1, text: line.trim().slice(0, 170) }] : []),
     migrationAction: workPackage === 'W14' ? '旧code/store参照を撤去。互換読込・旧データ移行なし'
-      : policyActions[file] || priorByFile.get(file)?.migrationAction || '配布設定をWeb/server構成へ適合',
+      : policyActions[file] || priorByFile.get(file)?.migrationAction || (/^src\/(domain|application)\//.test(file) ? 'P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証' : '配布設定をWeb/server構成へ適合'),
   };
 });
 // Channels are classified from actual preload direction, not name suffixes.
@@ -146,6 +196,7 @@ const sets = {
   'command': list('APP_SETTINGS_SAVE PROJECT_REMOVE_RECENT PROJECT_CREATE PROJECT_SAVE_SETTINGS PROJECT_SAVE_BRIEF ARTIFACT_BEGIN_EDIT ARTIFACT_SAVE_DRAFT ARTIFACT_IMPORT_GROK ARTIFACT_CONFIRM ARTIFACT_RESET_FROM PROMPT_PLAN_SAVE CATALOG_INTEGRATED_SYNC CATALOG_LINK_PROJECT CATALOG_SAVE_TEMPLATE CATALOG_DELETE_TEMPLATE CIVITAI_SAVE_SETTINGS VASTAI_SAVE_SETTINGS VASTAI_TEST VASTAI_RENT_OFFER VASTAI_START_INSTANCE VASTAI_STOP_INSTANCE VASTAI_DESTROY_INSTANCE VASTAI_REBOOT_INSTANCE WORKFLOW_COMPILE PREFLIGHT_RUN EXECUTION_START EXECUTION_RESTORE_BACKUP EXECUTION_RECONCILE EXECUTION_STOP_FOR_EDIT EXECUTION_DISCARD_FOR_EDIT EXECUTION_STOP_SCHEDULING EXECUTION_FORCE_INTERRUPT EXECUTION_RESUME EXECUTION_RESTART_REMOTE EXECUTION_RESTART_FROM_SCRATCH CAPTION_IMPORT_GROK CAPTION_GENERATE CAPTION_SAVE_PIXIV_TITLE THUMBNAIL_RESTORE_BACKUP THUMBNAIL_INITIALIZE_CORRUPT THUMBNAIL_SAVE THUMBNAIL_DELETE_OUTPUTS MARKETPLACE_RESTORE_BACKUP MARKETPLACE_INITIALIZE_CORRUPT MARKETPLACE_SAVE R2_TEST R2_SAVE_SETTINGS R2_CREATE_BUCKET R2_DELETE_BUCKET R2_DELETE_OBJECTS R2_MOVE R2_BEGIN_UPLOAD R2_RESUME_UPLOAD R2_PAUSE_UPLOAD R2_CANCEL_UPLOAD R2_SAVE_TEMPLATE R2_DELETE_TEMPLATE ASSISTANT_SET_PROVIDER ASSISTANT_SEND ASSISTANT_STOP_TURN ASSISTANT_NEW_CONVERSATION ASSISTANT_RESTORE_CONVERSATION ASSISTANT_SELECT_MODEL AGENT_TASK_START AGENT_TASK_STOP'),
   'event': list('AGENT_EVENT AUTO_ARTIFACT_EVENT'),
 };
+sets.command.push('THUMBNAIL_DELETE_DOCUMENT');
 const confirmation = new Set(list('VASTAI_RENT_OFFER VASTAI_DESTROY_INSTANCE EXECUTION_RESTORE_BACKUP EXECUTION_DISCARD_FOR_EDIT EXECUTION_RESTART_FROM_SCRATCH THUMBNAIL_RESTORE_BACKUP THUMBNAIL_INITIALIZE_CORRUPT MARKETPLACE_RESTORE_BACKUP MARKETPLACE_INITIALIZE_CORRUPT'));
 const definedKeys = new Set(keys.map((item) => item.key));
 for (const [kind, members] of Object.entries(sets)) {
@@ -202,7 +253,7 @@ const testCoverage = rows.filter((r) => r.file.startsWith('tests/')).map((r) => 
   const registration = supports.has(path.basename(r.file)) || r.file.startsWith('tests/core-support/') ? 'support' : pkg.scripts.test.includes(r.file) ? 'npm-test' : (pkg.scripts['test:core'] || '').includes(r.file) ? 'core-local'
     : read('.github/workflows/ci.yml').includes(r.file) ? 'CI-only' : ci.includes(r.file) ? 'CI-conditional' : 'standalone';
   const name = path.basename(r.file);
-  const featurePackages = name === 'core-artifacts.cjs' ? ['W03', 'W05', 'W06', 'W09'] : name === 'core-policy.cjs' ? ['W03', 'W06', 'W09', 'W10'] : name === 'business-core.cjs' ? ['W01', 'W03', 'W04', 'W06', 'W09', 'W10'] : supports.has(name) || r.file.startsWith('tests/core-support/') ? ['W12'] : name === 'run.cjs' ? ['W03', 'W05']
+  const featurePackages = name === 'core-separation.cjs' ? ['W03', 'W04', 'W05', 'W06', 'W07', 'W08', 'W09', 'W10'] : name === 'core-artifacts.cjs' ? ['W03', 'W05', 'W06', 'W09'] : name === 'core-policy.cjs' ? ['W03', 'W06', 'W09', 'W10'] : name === 'business-core.cjs' ? ['W01', 'W03', 'W04', 'W06', 'W09', 'W10'] : supports.has(name) || r.file.startsWith('tests/core-support/') ? ['W12'] : name === 'run.cjs' ? ['W03', 'W05']
     : /service-integrations/.test(name) ? ['W07', 'W08', 'W10'] : /ipc-|marketplace-write-guard/.test(name) ? ['W01']
     : /agent|codex|grok|assistant/.test(name) ? ['W04'] : /r2-/.test(name) ? ['W08']
     : /civitai|vastai/.test(name) ? ['W07'] : /remote|execution|local-comfy/.test(name) ? ['W06']
@@ -220,7 +271,7 @@ const resources = walk('thumbnail/psd-templates').filter((f) => /\.(psd|png)$/.t
 const documents = [...walk('docs').filter((f) => f.endsWith('.md') && !f.startsWith('docs/releases/') && !f.startsWith('docs/roadmap/web-migration-')),
   'README.md', 'AGENTS.md', 'thumbnail/psd-templates/README.md'].map((file) => ({ file, sha256: hash(file), workPackage: 'W11', gate: 'G11',
     treatment: file === 'AGENTS.md' ? '既存rule遵守・変更不要' : file.startsWith('docs/decisions/') ? '過去判断を保持し新判断を追記' : '移行完了時に該当仕様を更新' }));
-const inventory = { date: '2026-10-06', commit: prior.commit, method: 'Regex full-text inventory; text hashes normalize CRLF to LF, binary hashes use exact bytes; actual preload invoke/event direction; exclusive ownership and explicit IPC sets. Reachability includes type imports and is not a deletion proof.',
+const inventory = { date: '2026-10-08', commit: prior.commit, method: 'Regex full-text inventory; text hashes normalize CRLF to LF, binary hashes use exact bytes; actual preload invoke/event direction; exclusive ownership and explicit IPC sets. Reachability includes type imports and is not a deletion proof.',
   policy: { backwardCompatibility: false, legacyDataMigration: false, fallback: false, initialization: 'new dataDir and explicit current-schema settings', failure: 'explicit error; no automatic alternate route' },
   preExistingChanges: prior.preExistingChanges, scope: { codeRoots: scanRoots, rootFiles, resourceRoot: 'thumbnail/psd-templates',
     exclusions: ['node_modules', 'generated dist', '.git/.codex/.agents/.aws', '*.log', 'release evidence/history', 'generated planning evidence (this tool and its outputs)'] },
@@ -229,7 +280,7 @@ const counts = (items, field) => Object.fromEntries([...new Set(items.map((r) =>
 inventory.counts = { files: rows.length, source: rows.filter((r) => r.file.startsWith('src/')).length, tests: testCoverage.length,
   scripts: rows.filter((r) => r.file.startsWith('scripts/')).length, ipc: ipc.length, resources: resources.length, documents: documents.length,
   ownership: counts(rows, 'workPackage'), ipcDisposition: counts(ipc, 'disposition'), ipcDirection: counts(ipc, 'direction'), testRegistration: counts(testCoverage, 'registration') };
-let md = '# Web完全移行: 全コード調査索引\n\nStatus: Planning evidence / 再照合: 2026-10-06\n\n';
+let md = '# Web完全移行: 全コード調査索引\n\nStatus: Planning evidence / 再照合: 2026-10-08\n\n';
 md += '[移行計画](web-migration-plan.md)のW01–W14とG01–G14を正本とする。後方互換性なし・旧データマイグレーションなし・fallback禁止を全項目へ適用する。新dataDir/現行schema/明示設定で開始し、対応外・失敗はerrorとする。各code fileとIPCは主担当を一つだけ持つ。phaseは主実装受入段階。desktopRemovalPhase=P9は旧sourceの残存確認・撤去段階であり、互換adapterを提供する期間ではない。依存・横断条件は計画側を参照する。\n\n';
 md += `基準commit: \`${inventory.commit}\`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全${rows.length}コード・設定（src ${inventory.counts.source}、tests ${testCoverage.length}、scripts ${inventory.counts.scripts}）、${resources.length} binary asset、${documents.length}仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。\n\n`;
 md += '[機械可読索引](web-migration-inventory.json)にhash・import・根拠行・分類・test実行経路を保存する。[再照合ツール](web-migration-audit.cjs)は`node docs/roadmap/web-migration-audit.cjs --check`で検証し、`--write`で再生成する。現索引との差分、未分類file/IPC、主担当重複、IPC方向/handler不整合は失敗する。新file/IPCの処置をレビューしてから再生成する。\n\n';

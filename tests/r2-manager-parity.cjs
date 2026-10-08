@@ -8,10 +8,30 @@ const { execFileSync } = require('node:child_process');
 const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
+function bindSource(file, partSize) {
+  const bytes = fs.readFileSync(file),
+    stat = fs.statSync(file);
+  const hash = (bytes) => require('node:crypto').createHash('sha256').update(bytes).digest('hex');
+  return {
+    size: stat.size,
+    mtimeMs: stat.mtimeMs,
+    ctimeMs: stat.ctimeMs,
+    dev: stat.dev,
+    ino: stat.ino,
+    sha256: hash(bytes),
+    partSha256: Array.from({ length: Math.ceil(bytes.length / partSize) }, (_, i) =>
+      hash(bytes.subarray(i * partSize, (i + 1) * partSize)),
+    ),
+  };
+}
 const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'batch-studio-r2-parity-'));
 // Compiled test modules live outside the repository. Make dependencies available
 // from that location so the imported R2Manager can resolve the AWS SDK.
-fs.symlinkSync(path.join(repo, 'node_modules'), path.join(runtime, 'node_modules'), 'dir');
+fs.symlinkSync(
+  path.join(repo, 'node_modules'),
+  path.join(runtime, 'node_modules'),
+  process.platform === 'win32' ? 'junction' : 'dir',
+);
 const tscBin = path.join(repo, 'node_modules', 'typescript', 'bin', 'tsc');
 execFileSync(
   process.execPath,
@@ -83,7 +103,10 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
   );
   assert.equal(downloadUtils.formatBatchTotalSize(1.5 * 1024 ** 3), '1.50 GB');
 
-  const managerSource = fs.readFileSync(path.join(repo, 'src/main/r2-manager.ts'), 'utf8');
+  const managerSource =
+    fs.readFileSync(path.join(repo, 'src/main/r2-manager.ts'), 'utf8') +
+    fs.readFileSync(path.join(repo, 'src/application/r2-transfer-runtime.ts'), 'utf8');
+  matchCode(managerSource, /new R2TransferRuntime/);
   const indexSource = fs.readFileSync(path.join(repo, 'src/main/r2-object-index.ts'), 'utf8');
   const mainSource = readMainProcessSource(repo);
   const preloadSource = fs.readFileSync(path.join(repo, 'src/preload/index.cjs'), 'utf8');
@@ -237,6 +260,7 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
       createdAt: new Date().toISOString(),
     });
     const original = [makeJob('duplicate'), makeJob('cancel'), makeJob('complete-race')];
+    for (const job of original) job.sourceFingerprint = bindSource(file, job.partSize);
     const statePath = path.join(uploadRoot, 'r2', 'uploads.json');
     fs.mkdirSync(path.dirname(statePath), { recursive: true });
     fs.writeFileSync(statePath, JSON.stringify({ schemaVersion: 1, jobs: original }));
@@ -285,7 +309,10 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
       assert.equal(concurrent.length, 3);
       await waitFor(() => held.filter((item) => item.id === 'duplicate').length === 3);
       assert.deepEqual(
-        calls.parts.filter((item) => item.id === 'duplicate').map((item) => item.part),
+        calls.parts
+          .filter((item) => item.id === 'duplicate')
+          .map((item) => item.part)
+          .sort((a, b) => a - b),
         [1, 2, 3],
         'duplicate Resume calls must not create additional workers for the same parts',
       );
@@ -415,6 +442,12 @@ const load = (relative) => import(pathToFileURL(path.join(runtime, relative)).hr
     };
     const state = async (id) => (await manager.uploads()).find((job) => job.id === id);
     const beginHeld = async (id) => {
+      // A new current-format job is bound explicitly by its creation fixture.
+      // Resume never adopts a legacy job without content evidence.
+      const saved = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+      const job = saved.jobs.find((job) => job.id === id);
+      job.sourceFingerprint = bindSource(source, job.partSize);
+      fs.writeFileSync(statePath, JSON.stringify(saved));
       await manager.resumeUpload(id);
       await poll(() => held.filter((item) => item.id === id).length === 3);
     };

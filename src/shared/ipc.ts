@@ -93,6 +93,7 @@ export const IPC = {
   THUMBNAIL_STORE_WEBP_PREVIEW: 'thumbnail:store-webp-preview',
   THUMBNAIL_READ_TEMPLATE: 'thumbnail:read-template',
   THUMBNAIL_EXPORT: 'thumbnail:export',
+  THUMBNAIL_DELETE_DOCUMENT: 'thumbnail:delete-document',
   THUMBNAIL_DELETE_OUTPUTS: 'thumbnail:delete-outputs',
   THUMBNAIL_PICKER_OPEN: 'thumbnail-picker:open',
   THUMBNAIL_PICKER_CONTEXT: 'thumbnail-picker:context',

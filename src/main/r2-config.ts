@@ -1,49 +1,16 @@
+import { R2ConnectionUseCases } from '../application/r2-connection-use-cases.js';
 import path from 'node:path';
 import { safeStorage } from 'electron';
-import { readJson, writeJsonAtomic } from './fs-utils.js';
+import { withTemplateStoreLock, readJson, writeJsonAtomic } from './fs-utils.js';
 
-export interface R2ConnectionInput {
-  name?: string;
-  accountId: string;
-  accessKeyId: string;
-  secretAccessKey?: string;
-  publicUrl?: string;
-  cloudflareApiToken?: string;
-}
-
-export interface R2ConnectionStatus {
-  configured: boolean;
-  name: string;
-  accountId: string;
-  accessKeyId: string;
-  publicUrl: string;
-  secretConfigured: boolean;
-  metricsTokenConfigured: boolean;
-}
-
-interface StoredR2Config {
-  schemaVersion: 1;
-  name: string;
-  accountId: string;
-  accessKeyId: string;
-  publicUrl: string;
-  encryptedSecret?: string;
-  encryptedMetricsToken?: string;
-}
-
-const ACCOUNT_ID = /^[0-9a-fA-F]{32}$/;
-
-function normalizePublicUrl(value: string | undefined) {
-  return (value ?? '').trim().replace(/\/+$/, '');
-}
-function validate(input: R2ConnectionInput) {
-  if (!ACCOUNT_ID.test(input.accountId.trim()))
-    throw new Error('Account IDは32文字の16進数で入力してください。');
-  if (!input.accessKeyId.trim()) throw new Error('Access Key IDを入力してください。');
-  const publicUrl = normalizePublicUrl(input.publicUrl);
-  if (publicUrl && !/^https?:\/\//i.test(publicUrl))
-    throw new Error('Public URLはhttp://またはhttps://から入力してください。');
-}
+import {
+  type R2ConnectionInput,
+  type R2ConnectionStatus,
+  type StoredR2Config,
+  normalizePublicUrl,
+  validateR2Connection as validate,
+} from '../domain/r2-connection-policy.js';
+export type { R2ConnectionInput, R2ConnectionStatus } from '../domain/r2-connection-policy.js';
 function encrypt(value: string) {
   if (!safeStorage.isEncryptionAvailable())
     throw new Error('OSの安全な暗号化ストレージを利用できないためSecretを保存できません。');
@@ -114,76 +81,22 @@ export class R2ConfigStore {
         cloudflareApiToken: decrypt(c.encryptedMetricsToken),
       };
     }
-    const e = this.environmentDefaults();
-    validate(e);
-    if (!e.secretAccessKey) throw new Error('Secret Access Keyを入力してください。');
-    return {
-      ...e,
-      name: e.name ?? 'Personal R2',
-      publicUrl: normalizePublicUrl(e.publicUrl),
-      cloudflareApiToken: e.cloudflareApiToken ?? '',
-    };
+    throw new Error('R2 connection is not configured. Register credentials explicitly.');
+  }
+  private useCases() {
+    return new R2ConnectionUseCases({
+      exclusive: (work) => withTemplateStoreLock(this.filePath, work),
+      read: () => this.raw(),
+      write: (value) => writeJsonAtomic(this.filePath, value),
+      encrypt,
+      decrypt,
+    });
   }
   async resolveInput(input: R2ConnectionInput) {
-    validate(input);
-    const existing = await this.raw(),
-      submittedSecret = (input.secretAccessKey ?? '').trim(),
-      submittedToken = (input.cloudflareApiToken ?? '').trim();
-    const sameIdentity = Boolean(
-      existing &&
-        existing.accountId === input.accountId.trim() &&
-        existing.accessKeyId === input.accessKeyId.trim(),
-    );
-    const savedSecret = sameIdentity ? decrypt(existing?.encryptedSecret) : '';
-    const secretAccessKey =
-      submittedSecret ||
-      savedSecret ||
-      (!existing ? (this.environmentDefaults().secretAccessKey ?? '') : '');
-    if (!secretAccessKey)
-      throw new Error(
-        sameIdentity
-          ? '保存済みSecret Access Keyを読み取れません。再入力してください。'
-          : 'Account IDまたはAccess Key IDを変更する場合はSecret Access Keyも入力してください。',
-      );
-    const savedToken = decrypt(existing?.encryptedMetricsToken);
-    return {
-      name: (input.name ?? 'Personal R2').trim() || 'Personal R2',
-      accountId: input.accountId.trim(),
-      accessKeyId: input.accessKeyId.trim(),
-      secretAccessKey,
-      publicUrl: normalizePublicUrl(input.publicUrl),
-      cloudflareApiToken: submittedToken || savedToken,
-    };
+    return this.useCases().resolveInput(input);
   }
-  async save(input: R2ConnectionInput) {
-    const resolved = await this.resolveInput(input);
-    const existing = await this.raw(),
-      submittedSecret = (input.secretAccessKey ?? '').trim(),
-      submittedToken = (input.cloudflareApiToken ?? '').trim();
-    const sameIdentity = Boolean(
-      existing &&
-        existing.accountId === resolved.accountId &&
-        existing.accessKeyId === resolved.accessKeyId,
-    );
-    const encryptedSecret = submittedSecret
-      ? encrypt(submittedSecret)
-      : sameIdentity
-        ? existing?.encryptedSecret
-        : encrypt(resolved.secretAccessKey);
-    const encryptedMetricsToken = submittedToken
-      ? encrypt(submittedToken)
-      : existing?.encryptedMetricsToken;
-    if (!encryptedSecret) throw new Error('Secret Access Keyを入力してください。');
-    const next: StoredR2Config = {
-      schemaVersion: 1,
-      name: resolved.name,
-      accountId: resolved.accountId,
-      accessKeyId: resolved.accessKeyId,
-      publicUrl: resolved.publicUrl,
-      encryptedSecret,
-      encryptedMetricsToken,
-    };
-    await writeJsonAtomic(this.filePath, next);
+  async save(input: R2ConnectionInput, verify: (input: R2ConnectionInput) => Promise<void>) {
+    await this.useCases().save(input, verify);
     return this.status();
   }
 }

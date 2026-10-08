@@ -1,11 +1,10 @@
+import { copyChats, rememberCodexThread, clearCodexThread } from '../domain/codex-chat-policy.js';
 import path from 'node:path';
 import { readJson, writeJsonAtomic } from './fs-utils.js';
 import type { GrokContextStage } from '../shared/types.js';
 
-export interface CodexStageChats {
-  activeThreadId: string | null;
-  threadIds: string[];
-}
+export type { CodexStageChats } from '../domain/codex-chat-policy.js';
+import type { CodexStageChats } from '../domain/codex-chat-policy.js';
 interface CodexChatState {
   schemaVersion: 1;
   projects: Record<string, Partial<Record<GrokContextStage, CodexStageChats>>>;
@@ -15,18 +14,6 @@ function rootKey(projectPath: string) {
   const root = path.resolve(projectPath);
   return process.platform === 'win32' ? root.toLowerCase() : root;
 }
-function copyChats(value: CodexStageChats | undefined): CodexStageChats {
-  if (!value) return { activeThreadId: null, threadIds: [] };
-  const threadIds = Array.isArray(value.threadIds)
-    ? [...new Set(value.threadIds.filter((id) => typeof id === 'string' && id.length > 0))]
-    : [];
-  const activeThreadId =
-    typeof value.activeThreadId === 'string' && threadIds.includes(value.activeThreadId)
-      ? value.activeThreadId
-      : null;
-  return { activeThreadId, threadIds };
-}
-
 export class CodexChatStateStore {
   private readonly filePath: string;
   private writeQueue: Promise<void> = Promise.resolve();
@@ -49,15 +36,12 @@ export class CodexChatStateStore {
   }
 
   async remember(projectPath: string, stage: GrokContextStage, threadId: string): Promise<void> {
-    if (!threadId.trim()) throw new Error('Invalid Codex thread ID');
     this.writeQueue = this.writeQueue
       .catch(() => {})
       .then(async () => {
         const state = await this.read();
         const key = rootKey(projectPath);
-        const chats = copyChats(state.projects[key]?.[stage]);
-        chats.threadIds = [threadId, ...chats.threadIds.filter((id) => id !== threadId)];
-        chats.activeThreadId = threadId;
+        const chats = rememberCodexThread(state.projects[key]?.[stage], threadId);
         state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: chats };
         await writeJsonAtomic(this.filePath, state);
       });
@@ -70,8 +54,7 @@ export class CodexChatStateStore {
       .then(async () => {
         const state = await this.read();
         const key = rootKey(projectPath);
-        const chats = copyChats(state.projects[key]?.[stage]);
-        chats.activeThreadId = null;
+        const chats = clearCodexThread(state.projects[key]?.[stage]);
         state.projects[key] = { ...(state.projects[key] ?? {}), [stage]: chats };
         await writeJsonAtomic(this.filePath, state);
       });

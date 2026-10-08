@@ -1,10 +1,22 @@
+import { saveEditorDocument } from '../application/editor-document-persistence.js';
+import { recoverCurrentFormat } from '../application/current-format-recovery.js';
+import { thumbnailSourceFacts } from './thumbnail-service.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { nativeImage } from 'electron';
+import { type NativeImage, nativeImage } from 'electron';
+import {
+  type CustomMarketplaceIO,
+  generateCustomMarketplaceOutput,
+  generateMarketplaceOutputs,
+  packageMarketplaceOutputs,
+} from '../application/marketplace-generation.js';
+import {
+  validateMarketplaceTargets,
+  validMarketplaceState,
+} from '../domain/marketplace-editor-policy.js';
 import { assertInputDimensions, assertOutputDimensions } from '../shared/image-size-limits.js';
-import { encodedImageDimensions } from './image-dimensions.js';
 import type {
   MarketplaceCropRect,
   MarketplaceGenerationResult,
@@ -14,6 +26,11 @@ import type {
   MarketplaceSourceType,
 } from '../shared/types.js';
 import {
+  assertFinalArtifactImage,
+  readImagePreview,
+  readImageSource,
+} from './final-artifact-image-service.js';
+import {
   initializeCorruptProtectedJson,
   PersistedJsonError,
   readJson,
@@ -21,99 +38,33 @@ import {
   withTemplateStoreLock,
   writeJsonAtomic,
 } from './fs-utils.js';
-import {
-  assertFinalArtifactImage,
-  readImageSource,
-  readImagePreview,
-} from './final-artifact-image-service.js';
-import { assertExportedThumbnail } from './thumbnail-service.js';
-import { readProjectMeta } from './project-meta.js';
-import { cleanupTrackedOutput } from './tracked-output-cleanup.js';
-import { readCachedThumbnailImage, type ThumbnailCacheTiming } from './thumbnail-image-cache.js';
-import {
-  fingerprintMarketplaceSource,
-  marketplaceInputSignature,
-  MARKETPLACE_REGENERATION_REQUIRED,
-  sha256Bytes,
-  validateMarketplaceGeneration,
-  verifiedMarketplaceOutput,
-  type MarketplaceGenerationManifest,
-  type MarketplaceGeneratedOutput,
-} from './marketplace-generation-manifest.js';
+import { encodedImageDimensions } from './image-dimensions.js';
 import {
   encodeLanczosImage,
   readOrientedNativeImage,
   renderLanczosCrop,
 } from './image-pipeline.js';
+import {
+  fingerprintMarketplaceSource,
+  MARKETPLACE_REGENERATION_REQUIRED,
+  type MarketplaceGeneratedOutput,
+  type MarketplaceGenerationManifest,
+  marketplaceInputSignature,
+  sha256Bytes,
+  validateMarketplaceGeneration,
+  verifiedMarketplaceOutput,
+} from './marketplace-generation-manifest.js';
+import { readProjectMeta } from './project-meta.js';
+import { readCachedThumbnailImage, type ThumbnailCacheTiming } from './thumbnail-image-cache.js';
+import { assertExportedThumbnail } from './thumbnail-service.js';
+import { cleanupTrackedOutput } from './tracked-output-cleanup.js';
 
 const MAX_INPUT_BYTES = 100 * 1024 * 1024;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const TARGETS_PATH = path.resolve(__dirname, '../marketplace-image-targets.json');
-const FORMAT_EXTENSIONS: Record<MarketplaceOutputFormat, string> = {
-  jpeg: 'jpg',
-  png: 'png',
-  webp: 'webp',
-};
-
-interface MarketplaceTargetCatalog {
-  schemaVersion: 1;
-  targets: MarketplaceImageTarget[];
-}
-
-function finite(value: unknown, fallback: number, min: number, max: number) {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? Math.min(max, Math.max(min, value))
-    : fallback;
-}
-
-function cropFromUnknown(value: unknown): MarketplaceCropRect | null {
-  if (!value || typeof value !== 'object') return null;
-  const candidate = value as Partial<MarketplaceCropRect>;
-  if (
-    typeof candidate.x !== 'number' ||
-    !Number.isFinite(candidate.x) ||
-    typeof candidate.y !== 'number' ||
-    !Number.isFinite(candidate.y) ||
-    typeof candidate.width !== 'number' ||
-    !Number.isFinite(candidate.width) ||
-    typeof candidate.height !== 'number' ||
-    !Number.isFinite(candidate.height) ||
-    candidate.width <= 0 ||
-    candidate.height <= 0
-  )
-    return null;
-  return {
-    x: Math.max(0, candidate.x),
-    y: Math.max(0, candidate.y),
-    width: candidate.width,
-    height: candidate.height,
-  };
-}
-
 export async function getMarketplaceImageTargets(): Promise<MarketplaceImageTarget[]> {
-  const raw = JSON.parse(await readFile(TARGETS_PATH, 'utf8')) as MarketplaceTargetCatalog;
-  if (
-    raw?.schemaVersion !== 1 ||
-    !Array.isArray(raw.targets) ||
-    raw.targets.length < 1 ||
-    raw.targets.some(
-      (target) =>
-        !target ||
-        typeof target.id !== 'string' ||
-        typeof target.service !== 'string' ||
-        typeof target.imageType !== 'string' ||
-        typeof target.label !== 'string' ||
-        !Number.isInteger(target.width) ||
-        target.width < 1 ||
-        !Number.isInteger(target.height) ||
-        target.height < 1 ||
-        typeof target.fileName !== 'string',
-    )
-  )
-    throw new Error('販売サイト用画像のターゲット定義が不正です。');
-  // Read the current catalog when generating or exporting: target dimensions may change.
-  return raw.targets.map((target) => ({ ...target }));
+  return validateMarketplaceTargets(JSON.parse(await readFile(TARGETS_PATH, 'utf8')));
 }
 
 function statePath(root: string) {
@@ -124,21 +75,7 @@ function assertMarketplaceState(
   value: unknown,
   file: string,
 ): asserts value is MarketplaceImageEditorState {
-  const state = value as Partial<MarketplaceImageEditorState> | null;
-  if (
-    !state ||
-    typeof state !== 'object' ||
-    state.schemaVersion !== 1 ||
-    !state.targets ||
-    typeof state.targets !== 'object' ||
-    Array.isArray(state.targets) ||
-    !state.custom ||
-    typeof state.custom !== 'object' ||
-    !Number.isFinite(state.custom.width) ||
-    !Number.isFinite(state.custom.height) ||
-    (state.saveRevision !== undefined &&
-      (!Number.isSafeInteger(state.saveRevision) || state.saveRevision < 0))
-  )
+  if (!validMarketplaceState(value))
     throw new PersistedJsonError(
       'PERSISTED_JSON_CORRUPT',
       file,
@@ -146,74 +83,18 @@ function assertMarketplaceState(
     );
 }
 
-export async function createDefaultMarketplaceImageState(): Promise<MarketplaceImageEditorState> {
-  const targets = await getMarketplaceImageTargets();
-  return {
-    schemaVersion: 1,
-    sourceImagePath: '',
-    sourceType: 'final-artifact',
-    mode: 'marketplace',
-    activeTargetId: targets[0]?.id ?? '',
-    format: 'jpeg',
-    targets: Object.fromEntries(targets.map((target) => [target.id, { crop: null }])),
-    custom: {
-      width: 1024,
-      height: 1024,
-      lockAspect: true,
-      crop: null,
-    },
-  };
+import {
+  clampCrop,
+  createDefaultMarketplaceImageState as defaultState,
+  finite,
+  normalizeMarketplaceImageState as normalizeState,
+} from '../domain/marketplace-editor-policy.js';
+export async function createDefaultMarketplaceImageState() {
+  return defaultState(await getMarketplaceImageTargets());
 }
-
-export async function normalizeMarketplaceImageState(
-  value: unknown,
-): Promise<MarketplaceImageEditorState> {
-  const defaults = await createDefaultMarketplaceImageState();
-  const targets = await getMarketplaceImageTargets();
-  const candidate =
-    value && typeof value === 'object' ? (value as Partial<MarketplaceImageEditorState>) : {};
-  const format: MarketplaceOutputFormat =
-    candidate.format === 'png' || candidate.format === 'webp' || candidate.format === 'jpeg'
-      ? candidate.format
-      : 'jpeg';
-  const normalizedTargets: MarketplaceImageEditorState['targets'] = {};
-  for (const target of targets) {
-    const raw =
-      candidate.targets && typeof candidate.targets === 'object'
-        ? candidate.targets[target.id]
-        : undefined;
-    normalizedTargets[target.id] = {
-      crop:
-        raw && typeof raw === 'object' ? cropFromUnknown((raw as { crop?: unknown }).crop) : null,
-    };
-  }
-  const activeTargetId = targets.some((target) => target.id === candidate.activeTargetId)
-    ? (candidate.activeTargetId as string)
-    : defaults.activeTargetId;
-  const custom =
-    candidate.custom && typeof candidate.custom === 'object' ? candidate.custom : defaults.custom;
-  return {
-    schemaVersion: 1,
-    ...(typeof candidate.saveRevision === 'number' &&
-    Number.isSafeInteger(candidate.saveRevision) &&
-    candidate.saveRevision >= 0
-      ? { saveRevision: candidate.saveRevision }
-      : {}),
-    sourceImagePath: typeof candidate.sourceImagePath === 'string' ? candidate.sourceImagePath : '',
-    sourceType: candidate.sourceType === 'thumbnail' ? 'thumbnail' : 'final-artifact',
-    mode: candidate.mode === 'custom' ? 'custom' : 'marketplace',
-    activeTargetId,
-    format,
-    targets: normalizedTargets,
-    custom: {
-      width: Math.round(finite(custom.width, 1024, 1, 20000)),
-      height: Math.round(finite(custom.height, 1024, 1, 20000)),
-      lockAspect: custom.lockAspect !== false,
-      crop: cropFromUnknown(custom.crop),
-    },
-  };
+export async function normalizeMarketplaceImageState(value: unknown) {
+  return normalizeState(value, await getMarketplaceImageTargets());
 }
-
 export async function loadMarketplaceImageState(root: string) {
   const file = statePath(root);
   const stored = await readJson<unknown>(file);
@@ -221,83 +102,50 @@ export async function loadMarketplaceImageState(root: string) {
   return normalizeMarketplaceImageState(stored);
 }
 
-export async function restoreMarketplaceImageState(root: string) {
+function currentEditorRecovery(root: string) {
   const file = statePath(root);
-  return withTemplateStoreLock(file, async () => {
-    try {
-      await loadMarketplaceImageState(root);
-    } catch (error) {
-      if (!(error instanceof PersistedJsonError)) throw error;
+  return {
+    exclusive: <T>(work: () => Promise<T>) => withTemplateStoreLock(file, work),
+    load: () => loadMarketplaceImageState(root),
+    corruption: (error: unknown) =>
+      error instanceof PersistedJsonError && error.code === 'PERSISTED_JSON_CORRUPT'
+        ? ('corrupt' as const)
+        : null,
+    restore: async () => {
       await restoreValidatedJsonFromBackup(file, assertMarketplaceState);
-      return loadMarketplaceImageState(root);
-    }
-    throw new Error('編集データは正常です。復元は必要ありません。');
-  });
-}
-
-export async function initializeCorruptMarketplaceImageState(root: string) {
-  const file = statePath(root);
-  return withTemplateStoreLock(file, async () => {
-    try {
-      await loadMarketplaceImageState(root);
-    } catch (error) {
-      if (!(error instanceof PersistedJsonError) || error.code !== 'PERSISTED_JSON_CORRUPT')
-        throw error;
+    },
+    initialize: async () => {
       await initializeCorruptProtectedJson(file, await createDefaultMarketplaceImageState());
-      return loadMarketplaceImageState(root);
-    }
-    throw new Error('編集データは正常です。初期化は必要ありません。');
-  });
+    },
+  };
+}
+export async function restoreMarketplaceImageState(
+  root: string,
+): Promise<MarketplaceImageEditorState> {
+  return recoverCurrentFormat(currentEditorRecovery(root), 'restore');
+}
+export async function initializeCorruptMarketplaceImageState(
+  root: string,
+): Promise<MarketplaceImageEditorState> {
+  return recoverCurrentFormat(currentEditorRecovery(root), 'initialize');
 }
 
-export async function saveMarketplaceImageState(root: string, value: unknown) {
-  const normalized = await normalizeMarketplaceImageState(value);
+export async function saveMarketplaceImageState(
+  root: string,
+  state: unknown,
+): Promise<MarketplaceImageEditorState> {
   const file = statePath(root);
-  return withTemplateStoreLock(file, async () => {
-    const current = await readJson<MarketplaceImageEditorState>(file);
-    if (current !== null) assertMarketplaceState(current, file);
-    const lastRevision = current?.saveRevision ?? 0;
-    if (normalized.saveRevision !== undefined && normalized.saveRevision < lastRevision)
-      return normalizeMarketplaceImageState(current);
-    if (
-      normalized.saveRevision !== undefined &&
-      normalized.saveRevision === lastRevision &&
-      current
-    ) {
-      const proposed = { ...normalized, saveRevision: lastRevision };
-      if (JSON.stringify(proposed) !== JSON.stringify(current))
-        throw new Error('EDITOR_SAVE_CONFLICT: Marketplace state was modified by another editor.');
-      return normalizeMarketplaceImageState(current);
-    }
-    const committed = {
-      ...normalized,
-      saveRevision: normalized.saveRevision ?? Math.max(lastRevision + 1, Date.now() * 1000),
-    };
-    await writeJsonAtomic(file, committed);
-    return committed;
-  });
-}
-
-function clampCrop(
-  crop: MarketplaceCropRect | null,
-  sourceWidth: number,
-  sourceHeight: number,
-  outputWidth: number,
-  outputHeight: number,
-) {
-  if (!crop) throw new Error('クロップ範囲が設定されていません。');
-  const expectedAspect = outputWidth / outputHeight;
-  let width = Math.max(1, Math.min(sourceWidth, Math.round(crop.width)));
-  let height = Math.max(1, Math.min(sourceHeight, Math.round(crop.height)));
-  if (Math.abs(width / height - expectedAspect) > 0.01) {
-    if (width / height > expectedAspect) width = Math.max(1, Math.round(height * expectedAspect));
-    else height = Math.max(1, Math.round(width / expectedAspect));
-  }
-  if (width > sourceWidth || height > sourceHeight)
-    throw new Error('クロップ範囲が元画像より大きくなっています。');
-  const x = Math.max(0, Math.min(sourceWidth - width, Math.round(crop.x)));
-  const y = Math.max(0, Math.min(sourceHeight - height, Math.round(crop.y)));
-  return { x, y, width, height };
+  return saveEditorDocument(
+    {
+      exclusive: (work) => withTemplateStoreLock(file, work),
+      read: () => readJson<MarketplaceImageEditorState>(file),
+      write: (value) => writeJsonAtomic(file, value),
+      assertCurrent: (value: unknown) => assertMarketplaceState(value, file),
+      normalize: normalizeMarketplaceImageState,
+      revision: (last) => Math.max(last + 1, Date.now() * 1000),
+    },
+    state,
+  );
 }
 
 function normalizedPngImage(dataUrl: string | undefined) {
@@ -428,99 +276,43 @@ export async function generateMarketplaceImages(
   webpDataUrls?: Record<string, string>,
   sourcePngDataUrl?: string,
 ): Promise<MarketplaceGenerationResult> {
-  const state = await saveMarketplaceImageState(root, value);
-  const targets = await getMarketplaceImageTargets();
-  const { resolved, image, size } = await loadSource(
+  return generateMarketplaceOutputs(
+    marketplaceGenerationIO(webpDataUrls, sourcePngDataUrl),
     root,
-    state.sourceImagePath,
-    sourcePngDataUrl,
-    state.sourceType,
+    value,
   );
-  const source = await fingerprintMarketplaceSource(resolved);
-  const inputSignature = marketplaceInputSignature(state, targets);
-  const outputDirectory = await marketplaceOutputDirectory(root);
-  const previousManifest = await readJson<MarketplaceGenerationManifest>(
-    generationManifestPath(outputDirectory),
-  );
-  const extension = FORMAT_EXTENSIONS[state.format];
-  const outputPaths: string[] = [];
-  const staged: Array<{ outputPath: string; bytes: Buffer }> = [];
-  const outputs: MarketplaceGeneratedOutput[] = [];
+}
 
-  for (const target of targets) {
-    const crop = clampCrop(
-      state.targets[target.id]?.crop ?? null,
-      size.width,
-      size.height,
-      target.width,
-      target.height,
-    );
-    const relativePath = `${target.service}/${target.fileName}.${extension}`;
-    const outputPath = path.join(
-      outputDirectory,
-      target.service,
-      `${target.fileName}.${extension}`,
-    );
-    const bytes =
-      state.format === 'webp'
-        ? webpBuffer(webpDataUrls?.[target.id])
-        : encodeLanczosImage(
-            renderLanczosCrop(image, crop, target.width, target.height),
-            state.format,
-          );
-    staged.push({ outputPath, bytes });
-    outputs.push({
-      targetId: target.id,
-      relativePath,
-      size: bytes.length,
-      sha256: sha256Bytes(bytes),
-    });
-    outputPaths.push(outputPath);
-  }
-
-  // Revalidate after rendering; edits or source replacement during processing cannot
-  // turn four images from an old input into a newly certified generation.
-  const sourceAfter = await fingerprintMarketplaceSource(resolved);
-  const persisted = await loadMarketplaceImageState(root);
-  if (
-    JSON.stringify(source) !== JSON.stringify(sourceAfter) ||
-    marketplaceInputSignature(persisted, targets) !== inputSignature
-  )
-    throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
-  // Keep the old manifest if rendering fails before any output changes.
-  await rm(generationManifestPath(outputDirectory), { force: true });
-  for (const { outputPath, bytes } of staged) await writeAtomic(outputPath, bytes);
-  const manifest: MarketplaceGenerationManifest = {
-    schemaVersion: 1,
-    generationId: randomUUID(),
-    generatedAt: new Date().toISOString(),
-    source,
-    format: state.format,
-    inputSignature,
-    outputs,
-  };
-  // The manifest is the commit marker. ZIP generation accepts only a complete,
-  // content-verified set of outputs with the same generation identity.
-  await writeJsonAtomic(generationManifestPath(outputDirectory), manifest);
-  const cleanupWarnings: string[] = [];
-  if (previousManifest?.schemaVersion === 1 && Array.isArray(previousManifest.outputs)) {
-    const previousExtension = FORMAT_EXTENSIONS[previousManifest.format];
-    for (const target of targets) {
-      const old = previousManifest.outputs.find((entry) => entry.targetId === target.id);
-      const expectedPath = `${target.service}/${target.fileName}.${previousExtension}`;
-      if (!old || old.relativePath !== expectedPath || previousExtension === extension) continue;
-      const warning = await cleanupTrackedOutput(
-        path.join(outputDirectory, target.service, `${target.fileName}.${previousExtension}`),
-        old,
-      );
-      if (warning) cleanupWarnings.push(`${target.label}: ${warning}`);
-    }
-  }
+function marketplaceGenerationIO(
+  webpDataUrls?: Record<string, string>,
+  sourcePngDataUrl?: string,
+): CustomMarketplaceIO<NativeImage> {
   return {
-    outputDirectory,
-    outputPaths,
-    zipPath: null,
-    cleanupWarning: cleanupWarnings.join(' / ') || undefined,
+    thumbnailSourceFacts,
+    resourceName: path.basename,
+    targets: getMarketplaceImageTargets,
+    writeState: saveMarketplaceImageState,
+    readState: loadMarketplaceImageState,
+    loadSource: (projectId, state) =>
+      loadSource(projectId, state.sourceImagePath, sourcePngDataUrl, state.sourceType),
+    fingerprint: fingerprintMarketplaceSource,
+    outputDirectory: marketplaceOutputDirectory,
+    join: path.join,
+    readManifest: (dir) => readJson<MarketplaceGenerationManifest>(generationManifestPath(dir)),
+    removeManifest: (dir) => rm(generationManifestPath(dir), { force: true }),
+    writeManifest: (dir, manifest) => writeJsonAtomic(generationManifestPath(dir), manifest),
+    encode: async (image, crop, target, format) =>
+      format === 'webp'
+        ? webpBuffer(webpDataUrls?.[target.id])
+        : encodeLanczosImage(renderLanczosCrop(image, crop, target.width, target.height), format),
+    writeImage: (file, bytes) => writeAtomic(file, Buffer.from(bytes)),
+    hashBytes: (bytes) => sha256Bytes(Buffer.from(bytes)),
+    nextId: randomUUID,
+    now: () => new Date().toISOString(),
+    cleanupTrackedOutput,
+    readTracked: (file) => readJson(file),
+    writeTracked: writeJsonAtomic,
+    cleanupCustom: cleanupTrackedOutput,
   };
 }
 
@@ -530,55 +322,11 @@ export async function exportCustomMarketplaceImage(
   webpDataUrl?: string,
   sourcePngDataUrl?: string,
 ): Promise<MarketplaceGenerationResult> {
-  const requested = await normalizeMarketplaceImageState(value);
-  assertOutputDimensions(requested.custom.width, requested.custom.height);
-  const state = await saveMarketplaceImageState(root, value);
-  const { image, size } = await loadSource(
+  return generateCustomMarketplaceOutput(
+    marketplaceGenerationIO(webpDataUrl ? { custom: webpDataUrl } : undefined, sourcePngDataUrl),
     root,
-    state.sourceImagePath,
-    sourcePngDataUrl,
-    state.sourceType,
+    value,
   );
-  const crop = clampCrop(
-    state.custom.crop,
-    size.width,
-    size.height,
-    state.custom.width,
-    state.custom.height,
-  );
-  const extension = FORMAT_EXTENSIONS[state.format];
-  const outputDirectory = path.join(await marketplaceOutputDirectory(root), 'custom');
-  const customManifestPath = path.join(outputDirectory, '._custom-output.json');
-  const previous = await readJson<{ fileName: string; size: number; sha256: string }>(
-    customManifestPath,
-  );
-  const outputPath = path.join(outputDirectory, `custom-output.${extension}`);
-  const bytes =
-    state.format === 'webp'
-      ? webpBuffer(webpDataUrl)
-      : encodeLanczosImage(
-          renderLanczosCrop(image, crop, state.custom.width, state.custom.height),
-          state.format,
-        );
-  await writeAtomic(outputPath, bytes);
-  await writeJsonAtomic(customManifestPath, {
-    fileName: path.basename(outputPath),
-    size: bytes.length,
-    sha256: sha256Bytes(bytes),
-  });
-  const trackedOldFormat = Object.values(FORMAT_EXTENSIONS).some(
-    (candidate) => previous?.fileName === `custom-output.${candidate}`,
-  );
-  const cleanupWarning =
-    previous && trackedOldFormat && previous.fileName !== path.basename(outputPath)
-      ? await cleanupTrackedOutput(path.join(outputDirectory, previous.fileName), previous)
-      : null;
-  return {
-    outputDirectory,
-    outputPaths: [outputPath],
-    zipPath: null,
-    cleanupWarning: cleanupWarning ?? undefined,
-  };
 }
 
 const CRC_TABLE = (() => {
@@ -685,52 +433,26 @@ export async function generateMarketplaceZip(
 ): Promise<MarketplaceGenerationResult> {
   const normalizedFormat: MarketplaceOutputFormat =
     format === 'png' || format === 'webp' || format === 'jpeg' ? format : 'jpeg';
-  const state =
-    currentEditorState === undefined
-      ? await loadMarketplaceImageState(root)
-      : await normalizeMarketplaceImageState(currentEditorState);
-  const targets = await getMarketplaceImageTargets();
-  const extension = FORMAT_EXTENSIONS[normalizedFormat];
-  const outputDirectory = await marketplaceOutputDirectory(root);
-  const manifest = await readJson<MarketplaceGenerationManifest>(
-    generationManifestPath(outputDirectory),
-  );
-  if (state.format !== normalizedFormat || !manifest)
-    throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
-  const sourcePath = await assertMarketplaceSource(
+  return packageMarketplaceOutputs(
+    {
+      thumbnailSourceFacts,
+      resourceName: path.basename,
+      targets: getMarketplaceImageTargets,
+      readState: loadMarketplaceImageState,
+      outputDirectory: marketplaceOutputDirectory,
+      join: path.join,
+      readManifest: (dir) => readJson<MarketplaceGenerationManifest>(generationManifestPath(dir)),
+      resolveSource: (root, state) =>
+        assertMarketplaceSource(root, state.sourceImagePath, state.sourceType),
+      fingerprint: fingerprintMarketplaceSource,
+      readBytes: (file) => readFile(file).catch(() => null),
+      hashBytes: (bytes) => sha256Bytes(Buffer.from(bytes)),
+      encodeZip: (entries) =>
+        storedZip(entries.map((entry) => ({ ...entry, bytes: Buffer.from(entry.bytes) }))),
+      writeBytes: (file, bytes) => writeAtomic(file, Buffer.from(bytes)),
+    },
     root,
-    state.sourceImagePath,
-    state.sourceType,
-  ).catch(() => {
-    throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
-  });
-  const source = await fingerprintMarketplaceSource(sourcePath).catch(() => {
-    throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
-  });
-  validateMarketplaceGeneration(manifest, state, targets, source);
-
-  const entries: Array<{ name: string; bytes: Buffer }> = [];
-  const outputPaths: string[] = [];
-  for (const [index, target] of targets.entries()) {
-    const verified = await verifiedMarketplaceOutput(
-      outputDirectory,
-      manifest.outputs[index],
-      target,
-      extension,
-    );
-    entries.push({ name: verified.relativePath, bytes: verified.bytes });
-    outputPaths.push(verified.targetPath);
-  }
-
-  // Source and generation may change while the four files are read.
-  const sourceAfter = await fingerprintMarketplaceSource(sourcePath);
-  const currentManifest = await readJson<MarketplaceGenerationManifest>(
-    generationManifestPath(outputDirectory),
+    normalizedFormat,
+    currentEditorState,
   );
-  validateMarketplaceGeneration(currentManifest, state, targets, sourceAfter);
-  if (currentManifest?.generationId !== manifest.generationId)
-    throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
-  const zipPath = path.join(outputDirectory, 'marketplace-images.zip');
-  await writeAtomic(zipPath, storedZip(entries));
-  return { outputDirectory, outputPaths, zipPath };
 }

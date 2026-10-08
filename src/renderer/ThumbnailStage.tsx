@@ -1,5 +1,25 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Layer } from 'ag-psd';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  HEIGHT,
+  LEFT_BOTTOM_X,
+  LEFT_MID_X,
+  LEFT_TOP_X,
+  LINE_WIDTH,
+  type Point,
+  pointInPolygon,
+  polygonBounds,
+  polygonFor,
+  RIGHT_BOTTOM_X,
+  RIGHT_MID_X,
+  RIGHT_TOP_X,
+  SIDE_SPLIT_INNER_Y,
+  SIDE_SPLIT_OUTER_Y,
+  slotsFor,
+  thumbnailSlotPlacement,
+  WIDTH,
+} from '../domain/thumbnail-layout-policy';
+import { drawThumbnail } from '../domain/thumbnail-render-policy';
 import type {
   ProjectSummary,
   ThumbnailDocument,
@@ -9,28 +29,11 @@ import type {
   ThumbnailSlotKey,
   ThumbnailTextState,
 } from '../shared/types';
-import { useEditorAutosave } from './use-editor-autosave';
 import { cachedEditorImage, resetEditorImageCache } from './thumbnail-image-memory-cache';
 import type { Runner } from './ui';
+import { useEditorAutosave } from './use-editor-autosave';
 import './thumbnail-stage.css';
 
-const WIDTH = 1600;
-const HEIGHT = 1200;
-const LINE_WIDTH = 22;
-const LEFT_TOP_X = 320;
-const LEFT_BOTTOM_X = 560;
-const RIGHT_TOP_X = 1280;
-const RIGHT_BOTTOM_X = 1040;
-const SIDE_SPLIT_OUTER_Y = 490;
-const SIDE_SPLIT_INNER_Y = 590;
-const LEFT_MID_X = Math.round(
-  LEFT_TOP_X + (LEFT_BOTTOM_X - LEFT_TOP_X) * (SIDE_SPLIT_INNER_Y / HEIGHT),
-);
-const RIGHT_MID_X = Math.round(
-  RIGHT_TOP_X + (RIGHT_BOTTOM_X - RIGHT_TOP_X) * (SIDE_SPLIT_INNER_Y / HEIGHT),
-);
-
-type Point = [number, number];
 type LoadedImages = Record<string, HTMLImageElement>;
 type TemplateOverlay = { psdName: string };
 
@@ -50,218 +53,25 @@ const SLOT_LABELS: Record<ThumbnailSlotKey, string> = {
   RIGHT_BOTTOM: '右下',
 };
 
-function slotsFor(pattern: ThumbnailPattern): ThumbnailSlotKey[] {
-  const left: ThumbnailSlotKey[] =
-    pattern === '4-images-left-split' || pattern === '5-images-both-split'
-      ? ['LEFT_TOP', 'LEFT_BOTTOM']
-      : ['LEFT'];
-  const right: ThumbnailSlotKey[] =
-    pattern === '4-images-right-split' || pattern === '5-images-both-split'
-      ? ['RIGHT_TOP', 'RIGHT_BOTTOM']
-      : ['RIGHT'];
-  return [...left, 'CENTER_MAIN', ...right];
-}
-
-function polygonFor(slot: ThumbnailSlotKey): Point[] {
-  const polygons: Record<ThumbnailSlotKey, Point[]> = {
-    LEFT: [
-      [0, 0],
-      [LEFT_TOP_X, 0],
-      [LEFT_BOTTOM_X, HEIGHT],
-      [0, HEIGHT],
-    ],
-    LEFT_TOP: [
-      [0, 0],
-      [LEFT_TOP_X, 0],
-      [LEFT_MID_X, SIDE_SPLIT_INNER_Y],
-      [0, SIDE_SPLIT_OUTER_Y],
-    ],
-    LEFT_BOTTOM: [
-      [0, SIDE_SPLIT_OUTER_Y],
-      [LEFT_MID_X, SIDE_SPLIT_INNER_Y],
-      [LEFT_BOTTOM_X, HEIGHT],
-      [0, HEIGHT],
-    ],
-    CENTER_MAIN: [
-      [LEFT_TOP_X, 0],
-      [RIGHT_TOP_X, 0],
-      [RIGHT_BOTTOM_X, HEIGHT],
-      [LEFT_BOTTOM_X, HEIGHT],
-    ],
-    RIGHT: [
-      [RIGHT_TOP_X, 0],
-      [WIDTH, 0],
-      [WIDTH, HEIGHT],
-      [RIGHT_BOTTOM_X, HEIGHT],
-    ],
-    RIGHT_TOP: [
-      [RIGHT_TOP_X, 0],
-      [WIDTH, 0],
-      [WIDTH, SIDE_SPLIT_OUTER_Y],
-      [RIGHT_MID_X, SIDE_SPLIT_INNER_Y],
-    ],
-    RIGHT_BOTTOM: [
-      [RIGHT_MID_X, SIDE_SPLIT_INNER_Y],
-      [WIDTH, SIDE_SPLIT_OUTER_Y],
-      [WIDTH, HEIGHT],
-      [RIGHT_BOTTOM_X, HEIGHT],
-    ],
-  };
-  return polygons[slot];
-}
-
-function tracePolygon(context: CanvasRenderingContext2D, polygon: Point[]) {
-  context.beginPath();
-  polygon.forEach(([x, y], index) => (index ? context.lineTo(x, y) : context.moveTo(x, y)));
-  context.closePath();
-}
-
-function polygonBounds(points: Point[]) {
-  const xs = points.map(([x]) => x);
-  const ys = points.map(([, y]) => y);
-  const left = Math.min(...xs);
-  const top = Math.min(...ys);
-  return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
-}
-
-function pointInPolygon(point: Point, polygon: Point[]) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    const intersects =
-      yi > point[1] !== yj > point[1] && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
-
-function drawSlot(
-  context: CanvasRenderingContext2D,
-  document: ThumbnailDocument,
-  slot: ThumbnailSlotKey,
-  images: LoadedImages,
-) {
-  const polygon = polygonFor(slot);
-  const bounds = polygonBounds(polygon);
-  context.save();
-  tracePolygon(context, polygon);
-  context.clip();
-  const state = document.slots[slot];
-  const image = state?.imagePath ? images[state.imagePath] : undefined;
-  if (image) {
-    const cover = Math.max(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight);
-    const scale = cover * (state?.scale ?? 1);
-    const width = image.naturalWidth * scale;
-    const height = image.naturalHeight * scale;
-    const centerX = bounds.left + bounds.width / 2 + (state?.offsetX ?? 0);
-    const centerY = bounds.top + bounds.height / 2 + (state?.offsetY ?? 0);
-    context.drawImage(image, centerX - width / 2, centerY - height / 2, width, height);
-  } else {
-    const gradient = context.createLinearGradient(
-      bounds.left,
-      bounds.top,
-      bounds.left + bounds.width,
-      bounds.top + bounds.height,
-    );
-    gradient.addColorStop(0, slot === 'CENTER_MAIN' ? '#713448' : '#3d304a');
-    gradient.addColorStop(1, '#171321');
-    context.fillStyle = gradient;
-    context.fillRect(bounds.left, bounds.top, bounds.width, bounds.height);
-    context.fillStyle = 'rgba(255,255,255,.72)';
-    context.font = '600 32px "Segoe UI", sans-serif';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.fillText(
-      `${SLOT_LABELS[slot]}：画像を選択`,
-      bounds.left + bounds.width / 2,
-      bounds.top + bounds.height / 2,
-    );
-  }
-  context.restore();
-}
-
-function drawText(
-  context: CanvasRenderingContext2D,
-  text: ThumbnailTextState,
-  strokeWidth: number,
-) {
-  if (!text.text) return;
-  context.save();
-  context.font = `${text.fontSize}px "${text.fontFamily}", serif`;
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.lineJoin = 'round';
-  context.strokeStyle = 'rgba(0,0,0,.55)';
-  context.lineWidth = strokeWidth;
-  context.strokeText(text.text, text.x, text.y);
-  context.fillStyle = text.color;
-  context.fillText(text.text, text.x, text.y);
-  context.restore();
-}
-
 export function renderThumbnail(
   canvas: HTMLCanvasElement,
-  document: ThumbnailDocument,
+  item: ThumbnailDocument,
   images: LoadedImages,
   template?: TemplateOverlay,
 ) {
   const context = canvas.getContext('2d');
   if (!context) return;
-  context.clearRect(0, 0, WIDTH, HEIGHT);
-  context.fillStyle = '#0c0c10';
-  context.fillRect(0, 0, WIDTH, HEIGHT);
-  for (const slot of slotsFor(document.pattern)) drawSlot(context, document, slot, images);
-
-  // The PSD is validated before use, while these two overlays are redrawn from
-  // its canonical values. Some PSD readers flatten transparent RGB layers onto
-  // opaque black, which would otherwise cover every image after parsing.
   void template;
-  context.strokeStyle = '#fff';
-  context.lineWidth = LINE_WIDTH;
-  context.lineCap = 'butt';
-  context.beginPath();
-  context.moveTo(LEFT_TOP_X, 0);
-  context.lineTo(LEFT_BOTTOM_X, HEIGHT);
-  context.moveTo(RIGHT_TOP_X, 0);
-  context.lineTo(RIGHT_BOTTOM_X, HEIGHT);
-  if (document.pattern === '4-images-left-split' || document.pattern === '5-images-both-split') {
-    context.moveTo(0, SIDE_SPLIT_OUTER_Y);
-    context.lineTo(LEFT_MID_X, SIDE_SPLIT_INNER_Y);
-  }
-  if (document.pattern === '4-images-right-split' || document.pattern === '5-images-both-split') {
-    context.moveTo(RIGHT_MID_X, SIDE_SPLIT_INNER_Y);
-    context.lineTo(WIDTH, SIDE_SPLIT_OUTER_Y);
-  }
-  context.stroke();
-
-  const gradientStart = Math.round(HEIGHT * 0.67);
-  const overlay = context.createLinearGradient(0, gradientStart, 0, HEIGHT);
-  for (const ratio of [0, 0.25, 0.5, 0.75, 1]) {
-    const alpha = (220 / 255) * ratio ** 1.35;
-    overlay.addColorStop(ratio, `rgba(3,6,14,${alpha})`);
-  }
-  context.fillStyle = overlay;
-  context.fillRect(0, gradientStart, WIDTH, HEIGHT - gradientStart);
-
-  drawText(context, document.title, 7);
-  drawText(context, document.subtitle, 3);
-  if (document.subtitle.text) {
-    context.save();
-    context.font = `${document.subtitle.fontSize}px "${document.subtitle.fontFamily}", serif`;
-    const textWidth = context.measureText(document.subtitle.text).width;
-    const gap = 40;
-    const length = 175;
-    context.strokeStyle = document.subtitle.color;
-    context.lineWidth = 3;
-    context.beginPath();
-    context.moveTo(document.subtitle.x - textWidth / 2 - gap - length, document.subtitle.y);
-    context.lineTo(document.subtitle.x - textWidth / 2 - gap, document.subtitle.y);
-    context.moveTo(document.subtitle.x + textWidth / 2 + gap, document.subtitle.y);
-    context.lineTo(document.subtitle.x + textWidth / 2 + gap + length, document.subtitle.y);
-    context.stroke();
-    context.restore();
-  }
+  drawThumbnail(
+    context,
+    item,
+    Object.fromEntries(
+      Object.entries(images).map(([id, image]) => [
+        id,
+        { source: image, width: image.naturalWidth, height: image.naturalHeight },
+      ]),
+    ),
+  );
 }
 
 function loadBrowserImage(source: ThumbnailImageSource) {
@@ -524,25 +334,22 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   const confirmDeleteDocument = () =>
     void run(async () => {
       if (!state || deletingId === null || state.documents.length <= 1) return;
-      const index = state.documents.findIndex((document) => document.id === deletingId);
-      if (index < 0) return;
-      const documents = state.documents.filter((document) => document.id !== deletingId);
-      const next: ThumbnailEditorState = {
-        ...state,
-        documents,
-        activeDocumentId:
-          state.activeDocumentId === deletingId
-            ? (documents[index]?.id ?? documents[index - 1]?.id ?? documents[0].id)
-            : state.activeDocumentId,
-      };
-      await saveNow(next);
-      setState(next);
-      if (deleteOutputFiles)
-        await window.batchStudio.thumbnail.deleteOutputs(project.rootPath, deletingId);
+      const saved = await saveNow(state);
+      const result = await window.batchStudio.thumbnail.deleteDocument(
+        project.rootPath,
+        deletingId,
+        saved.saveRevision!,
+        deleteOutputFiles,
+      );
+      setState(result.state);
       setDeletingId(null);
       setDeleteOutputFiles(false);
       setDeleteWarning('');
-      setNotice(`サムネイル ${String(deletingId).padStart(2, '0')} を削除しました。`);
+      setNotice(
+        result.cleanupWarning
+          ? '文書を削除しました。出力画像の削除に失敗しました: ' + result.cleanupWarning
+          : `サムネイル ${String(deletingId).padStart(2, '0')} を削除しました。`,
+      );
     });
   const updateDocument = (update: (document: ThumbnailDocument) => ThumbnailDocument) => {
     setState(

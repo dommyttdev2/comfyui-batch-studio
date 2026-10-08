@@ -44,6 +44,12 @@ class MemoryAgent {
     this.isAvailable = true;
     this.counter = 0;
   }
+  async modelCapabilities() {
+    return {
+      models: [{ id: 'selected-model', supportedReasoningEfforts: ['high'] }],
+      defaultModelId: 'selected-model',
+    };
+  }
   key(scope) {
     return JSON.stringify(scope);
   }
@@ -120,6 +126,129 @@ class MemoryExecution {
     if (id !== this.run.id) throw new Error('Run not found');
     return copy(this.run);
   }
+  async withOperationLock(project, work) {
+    const before = this.operationTail ?? Promise.resolve();
+    let release;
+    this.operationTail = new Promise((resolve) => {
+      release = resolve;
+    });
+    await before;
+    try {
+      return await work();
+    } finally {
+      release();
+    }
+  }
+  async commandPorts(project) {
+    const raw = async (id) => {
+      const state = await this.load(project, id);
+      return {
+        ...this.rawRun,
+        projectId: project,
+        runId: state.id,
+        executionTarget: state.target,
+        lifecycle: state.lifecycle,
+        phase: state.phase,
+        error:
+          state.recovery === 'uncertain'
+            ? { code: 'EXECUTION_RECOVERY_UNCERTAIN' }
+            : (this.rawRun?.error ?? null),
+        errorHistory: this.rawRun?.errorHistory ?? [],
+        controls: this.rawRun?.controls ?? {
+          scheduling: 'ACTIVE',
+          interrupt: 'IDLE',
+          stopSchedulingRequestedAt: null,
+          forceInterruptRequestedAt: null,
+        },
+        current: this.rawRun?.current ?? { promptId: 'accepted', branchId: null, leafId: null },
+        remote: state.target === 'remote' ? { provider: 'vastai', instanceId: 99 } : null,
+        remoteLifecycle:
+          state.target === 'remote'
+            ? {
+                initialStatus: 'running',
+                finalizedAt: state.finalization === 'stopped' ? 'now' : null,
+                latest: state.finalization === 'stopped' ? { status: 'stopped' } : null,
+              }
+            : null,
+      };
+    };
+    const mutate = async (_p, id, work) => {
+      const run = await raw(id),
+        before = run.lifecycle;
+      work(run);
+      this.rawRun = copy(run);
+      this.run = {
+        id: run.runId,
+        target: run.executionTarget,
+        lifecycle: run.lifecycle,
+        phase: run.phase,
+        recovery: run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ? 'uncertain' : 'known',
+        finalization:
+          run.executionTarget === 'local'
+            ? 'not-required'
+            : run.remoteLifecycle?.finalizedAt
+              ? 'stopped'
+              : 'pending',
+      };
+      if (before === 'RUNNING' && run.lifecycle === 'PAUSED') this.calls.push('pause');
+      return copy(run);
+    };
+    let providerStopped = this.run.finalization === 'stopped';
+    return {
+      runProjectIdentity: async () => project,
+      getExecutionRun: (_p, id) => raw(id),
+      getCurrentExecutionRun: () => raw(this.run.id),
+      mutateExecutionRun: mutate,
+      listExecutionRuns: async () => [await raw(this.run.id)],
+      reconcilePersistedExecutionRuns: async () => {},
+      requestStopScheduling: async (p, id) => {
+        this.calls.push('schedule-stop');
+        this.stopRequested = true;
+        return raw(id);
+      },
+      requestForceInterrupt: async (_p, id) => raw(id),
+      localExecutor: () => ({
+        forceInterrupt: async () => {
+          this.calls.push('interrupt');
+        },
+        waitForSettled: async () => {},
+      }),
+      remoteImageExecutor: () => ({
+        stopScheduling: async () => {},
+        forceInterrupt: async () => {
+          this.calls.push('interrupt');
+        },
+      }),
+      remoteExecutor: () => ({ disconnect: () => {} }),
+      executionCoordinator: {
+        hasActive: () => false,
+        releaseReservation: () => {},
+        waitForSettled: async () => {
+          this.calls.push('wait');
+        },
+      },
+      vastClient: () => ({
+        getInstance: async () => ({ id: 99, status: providerStopped ? 'stopped' : 'running' }),
+        stopInstance: async () => {
+          this.calls.push('finalize');
+          if (!this.finalizationFails) providerStopped = true;
+        },
+      }),
+      localComfy: async () => ({
+        isPromptRunning: async () => false,
+        isPromptQueued: async () => false,
+        history: async () => ({}),
+        historyState: () => 'success',
+      }),
+      now: () => '2026-10-08T00:00:00Z',
+      sleep: async () => {
+        if (this.stopRequested && !this.stalls) this.run.lifecycle = 'PAUSED';
+      },
+      maybeQuitAfterExecution: () => {},
+      confirmOfflineDiscard: async () => false,
+      confirmRerun: async () => false,
+    };
+  }
   async creation(project) {
     const snapshot = {
       projectId: project,
@@ -133,14 +262,8 @@ class MemoryExecution {
       exclusive: (work) => this.withRunLock(project, 'new', work),
       current: async () => null,
       capture: async () => copy(snapshot),
-      preflight: async () => ({
-        state: 'READY',
-        plannedImages: 1,
-        targetImages: 1,
-        blocking: [],
-        warnings: [],
-        sections: [],
-      }),
+      preflightInputs: async () =>
+        (await require('../core-preflight-fixture.cjs').preflightFixture(project)).ports,
       persistSnapshot: async (id, value) => value,
       removeSnapshot: async () => {},
       setCurrent: async () => {},

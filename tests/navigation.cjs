@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
+const { matchCode } = require('./source-match.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -19,19 +19,25 @@ const executionSource = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'ExecutionStages.tsx'),
   'utf8',
 );
-const remoteExecutionSource = fs.readFileSync(
-  path.join(repo, 'src', 'main', 'remote-execution.ts'),
-  'utf8',
-);
-const localExecutionSource = fs.readFileSync(
-  path.join(repo, 'src', 'main', 'local-execution.ts'),
-  'utf8',
-);
-const progressSource = fs.readFileSync(
-  path.join(repo, 'src', 'shared', 'execution-progress.ts'),
-  'utf8',
-);
+const remoteExecutionSource =
+  fs.readFileSync(path.join(repo, 'src', 'main', 'remote-execution.ts'), 'utf8') +
+  fs.readFileSync(
+    path.resolve(__dirname, '../src/application/remote-execution-runtime.ts'),
+    'utf8',
+  ) +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/remote-progress-policy.ts'), 'utf8');
+const localExecutionSource =
+  fs.readFileSync(path.join(repo, 'src', 'main', 'local-execution.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/application/local-execution-runtime.ts'), 'utf8');
+const progressSource =
+  fs.readFileSync(path.join(repo, 'src', 'shared', 'execution-progress.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/execution-progress.ts'), 'utf8');
 const mainSource = readMainProcessSource(repo);
+const commands =
+  fs.readFileSync(path.join(repo, 'src/application/execution-commands.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/execution-mutation-policy.ts'), 'utf8');
+matchCode(mainSource, /executionCommands\(\)\.stopScheduling\(root, runId\)/);
+matchCode(mainSource, /executionCommands\(\)\.forceInterrupt\(root, runId\)/);
 matchCode(
   uiSource,
   /実行前チェック','実行'/,
@@ -167,17 +173,17 @@ matchCode(
   'Stop scheduling availability must be derived explicitly from Run phase',
 );
 matchCode(
-  mainSource,
+  commands,
   /isRemotePreGenerationPhase\(run\.phase\)/,
   'pre-generation remote Stop scheduling must be handled locally',
 );
 matchCode(
-  mainSource,
+  commands,
   /r\.lifecycle='PAUSED'/,
   'pre-generation remote Stop scheduling must pause the Run',
 );
 matchCode(
-  mainSource,
+  commands,
   /Force interrupt is only available while Remote Execution is EXECUTING/,
   'pre-generation Force interrupt must be rejected without contacting the worker',
 );
@@ -303,22 +309,22 @@ matchCode(
 );
 matchCode(
   remoteExecutionSource,
-  /markGenerationStarted\(run,promptId\)/,
+  /markGenerationStarted\(run,promptId,at\.ticks,at\.iso\)/,
   'Remote generation timing must start from streamed prompt submission',
 );
 matchCode(
   remoteExecutionSource,
-  /markGenerationCompleted\(run\)/,
+  /markGenerationCompleted\(run,at\.ticks\)/,
   'Remote generation timing must finish on prompt success',
 );
 matchCode(
   localExecutionSource,
-  /markGenerationStarted\(r,lastPromptId\)/,
+  /markGenerationStarted\(r,lastPromptId,io\.now\(\)\.ticks,io\.now\(\)\.iso\)/,
   'Local generation timing must start when a prompt is submitted',
 );
 matchCode(
   localExecutionSource,
-  /markGenerationCompleted\(r\)/,
+  /markGenerationCompleted\(r,io\.now\(\)\.ticks\)/,
   'Local generation timing must finish on prompt success',
 );
 matchCode(
@@ -327,12 +333,12 @@ matchCode(
   'Main Process must implement replacement-Run IPC',
 );
 matchCode(
-  mainSource,
+  commands,
   /REMOTE_INSTANCE_REPLACED/,
   'replacement must terminalize the old Run with an explicit history reason',
 );
 matchCode(
-  mainSource,
+  commands,
   /isRemotePreGenerationPhase\(current\.phase\)/,
   'Instance replacement must be limited to pre-generation phases',
 );

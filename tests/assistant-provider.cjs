@@ -23,7 +23,8 @@ execFileSync(
 const read = (relative) => fs.readFileSync(path.join(repo, relative), 'utf8');
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
-const main = read('src/main/main.ts');
+const main = read('src/main/main.ts') + read('src/domain/agent-stage-policy.ts');
+matchCode(main, /agentTaskContexts as codexTaskContexts/, 'Main must use the shared stage policy');
 const assistantIpc = read('src/main/ipc-registration/assistant.ts');
 const stages = read('src/renderer/GrokStages.tsx');
 const pane = read('src/renderer/AssistantPane.tsx');
@@ -76,7 +77,7 @@ matchCode(
 );
 matchCode(
   assistantIpc,
-  /assistantProviderState\.resolve\(root, defaultProvider, async \(\) => \{[\s\S]*?\}, stage\)/,
+  /assistantProviderState\.resolve\(root, defaultProvider, stage\)/,
   'The project-level fallback must resolve into a stage-specific provider',
 );
 matchCode(
@@ -179,37 +180,37 @@ for (const expected of [
 
   assert.equal(await store.get(projectA), null, 'No prior choice should be stored');
   assert.equal(
-    await store.resolve(projectA, 'grok', async () => null),
+    await store.resolve(projectA, 'grok'),
     'grok',
     'New projects must use the configured default',
   );
   assert.equal(
-    await store.resolve(projectB, 'codex', async () => null),
+    await store.resolve(projectB, 'codex'),
     'codex',
     'Different new projects may start with a different global default',
   );
   assert.equal(
-    await store.resolve(projectLegacy, 'codex', async () => 'grok'),
-    'grok',
-    'A migration callback may preserve a prior Grok preference',
+    await store.resolve(projectLegacy, 'codex'),
+    'codex',
+    'Current defaults apply without history inference',
   );
   assert.equal(
-    await store.resolve(projectCodex, 'grok', async () => 'codex'),
-    'codex',
-    'A migration callback may preserve a prior Codex preference',
+    await store.resolve(projectCodex, 'grok'),
+    'grok',
+    'Provider history never overrides the explicit default',
   );
   await store.remember(projectA, 'codex');
   await store.remember(projectB, 'grok');
   assert.equal(
-    await store.resolve(projectA, 'grok', async () => 'grok'),
+    await store.resolve(projectA, 'grok'),
     'codex',
     'An explicit project choice must override the global setting and inferred history',
   );
   const afterRestart = new AssistantProviderStore(userData);
   assert.equal(await afterRestart.get(projectA), 'codex', 'Project choice must survive restart');
   assert.equal(await afterRestart.get(projectB), 'grok', 'Projects must remain isolated');
-  assert.equal(await afterRestart.get(projectLegacy), 'grok');
-  assert.equal(await afterRestart.get(projectCodex), 'codex');
+  assert.equal(await afterRestart.get(projectLegacy), 'codex');
+  assert.equal(await afterRestart.get(projectCodex), 'grok');
   await Promise.all([
     store.remember(projectA, 'grok'),
     store.remember(projectB, 'codex'),
@@ -255,34 +256,26 @@ for (const expected of [
     JSON.stringify(oldState),
   );
   const migrated = new AssistantProviderStore(legacyDirectory);
-  assert.equal(await migrated.get(legacyRoot, 'story'), 'codex');
-  await migrated.resolve(legacyRoot, 'grok', async () => null, 'story');
-  await migrated.remember(legacyRoot, 'grok', 'caption');
-  assert.equal(await migrated.get(legacyRoot, 'story'), 'codex');
-  assert.equal(await migrated.get(legacyRoot, 'caption'), 'grok');
-  const migratedOnDisk = JSON.parse(
-    fs.readFileSync(path.join(legacyDirectory, 'assistant-provider-state.json'), 'utf8'),
+  await assert.rejects(() => migrated.get(legacyRoot, 'story'), /Current assistant/);
+  assert.deepEqual(
+    JSON.parse(
+      fs.readFileSync(path.join(legacyDirectory, 'assistant-provider-state.json'), 'utf8'),
+    ),
+    oldState,
+    'Unsupported schema must remain unchanged',
   );
-  const migratedKey =
-    process.platform === 'win32'
-      ? path.resolve(legacyRoot).toLowerCase()
-      : path.resolve(legacyRoot);
-  assert.equal(migratedOnDisk.schemaVersion, 2);
-  assert.equal(migratedOnDisk.projects[migratedKey].stages.story, 'codex');
-  assert.equal(migratedOnDisk.projects[migratedKey].stages.caption, 'grok');
-
   const firstOpenRoot = path.join(userData, 'project-first-open');
-  const firstProvider = await store.resolve(firstOpenRoot, 'grok', async () => null, 'models');
+  const firstProvider = await store.resolve(firstOpenRoot, 'grok', 'models');
   assert.equal(firstProvider, 'grok');
   await store.remember(firstOpenRoot, 'codex', 'story');
   assert.equal(
-    await store.resolve(firstOpenRoot, 'codex', async () => null, 'models'),
+    await store.resolve(firstOpenRoot, 'codex', 'models'),
     'grok',
     'Opening another stage must not overwrite the first-open choice',
   );
   await assert.rejects(() => store.remember(projectA, 'invalid'), /Invalid assistant provider/);
   console.log(
-    'Assistant provider default, legacy migration, switching and persistence tests passed.',
+    'Assistant provider default, current-schema rejection, switching and persistence tests passed.',
   );
 })().catch((error) => {
   console.error(error);

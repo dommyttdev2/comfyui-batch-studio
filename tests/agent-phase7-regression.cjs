@@ -20,8 +20,16 @@ execFileSync(
 );
 
 const source = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
-const grokRunner = source('src/main/grok-cli-task-runner.ts');
-const codexRunner = source('src/main/codex-cli-task-runner.ts');
+const grokRunner =
+  source('src/main/grok-cli-task-runner.ts') +
+  source('src/application/grok-cli-task-runner.ts') +
+  source('src/domain/agent-stage-policy.ts');
+const codexRunner =
+  source('src/main/codex-cli-task-runner.ts') +
+  source('src/application/codex-cli-task-runner.ts') +
+  source('src/domain/agent-stage-policy.ts');
+assert.match(grokRunner, /agentTaskContexts as TASK_CONTEXTS/);
+assert.match(codexRunner, /agentTaskContexts as TASK_CONTEXTS/);
 const codexAdapter = source('src/main/codex-cli-adapter.ts');
 const grokAdapter = source('src/main/grok-cli-adapter.ts');
 const codexAdapterTest = source('tests/codex-cli-adapter.cjs');

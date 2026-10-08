@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { clampCrop, fitCrop, normalizeCrop } from '../domain/marketplace-crop-policy';
+import { assertInputDimensions, assertOutputDimensions } from '../shared/image-size-limits';
+import { MarketplacePickerGeneration } from '../shared/marketplace-picker-generation';
 import type {
   FinalArtifactImageSource,
   FinalArtifactStatus,
@@ -8,10 +11,8 @@ import type {
   MarketplaceSourceType,
   ProjectSummary,
 } from '../shared/types';
-import { MarketplacePickerGeneration } from '../shared/marketplace-picker-generation';
-import { assertInputDimensions, assertOutputDimensions } from '../shared/image-size-limits';
-import { useEditorAutosave } from './use-editor-autosave';
 import type { Runner } from './ui';
+import { useEditorAutosave } from './use-editor-autosave';
 import './marketplace-image-stage.css';
 
 const PRESETS = [
@@ -24,55 +25,6 @@ const PRESETS = [
 ] as const;
 
 type DragState = { pointerId: number; x: number; y: number };
-
-function fitCrop(
-  sourceWidth: number,
-  sourceHeight: number,
-  outputWidth: number,
-  outputHeight: number,
-): MarketplaceCropRect {
-  const targetAspect = outputWidth / outputHeight;
-  const sourceAspect = sourceWidth / sourceHeight;
-  const width = sourceAspect > targetAspect ? sourceHeight * targetAspect : sourceWidth;
-  const height = sourceAspect > targetAspect ? sourceHeight : sourceWidth / targetAspect;
-  return {
-    x: (sourceWidth - width) / 2,
-    y: (sourceHeight - height) / 2,
-    width,
-    height,
-  };
-}
-
-function clampCrop(
-  crop: MarketplaceCropRect,
-  sourceWidth: number,
-  sourceHeight: number,
-  outputWidth: number,
-  outputHeight: number,
-): MarketplaceCropRect {
-  const fit = fitCrop(sourceWidth, sourceHeight, outputWidth, outputHeight);
-  const aspect = outputWidth / outputHeight;
-  let width = Math.max(fit.width / 5, Math.min(fit.width, crop.width));
-  let height = width / aspect;
-  if (height > fit.height) {
-    height = Math.max(fit.height / 5, Math.min(fit.height, crop.height));
-    width = height * aspect;
-  }
-  const x = Math.max(0, Math.min(sourceWidth - width, crop.x));
-  const y = Math.max(0, Math.min(sourceHeight - height, crop.y));
-  return { x, y, width, height };
-}
-
-function normalizeCrop(
-  crop: MarketplaceCropRect | null,
-  source: FinalArtifactImageSource,
-  outputWidth: number,
-  outputHeight: number,
-) {
-  return crop
-    ? clampCrop(crop, source.width, source.height, outputWidth, outputHeight)
-    : fitCrop(source.width, source.height, outputWidth, outputHeight);
-}
 
 function loadBrowserImage(source: FinalArtifactImageSource) {
   return new Promise<HTMLImageElement>((resolve, reject) => {

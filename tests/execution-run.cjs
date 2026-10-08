@@ -466,7 +466,16 @@ const writeJson = (file, value) => {
     restartHandlerStart >= 0 && restartHandlerEnd > restartHandlerStart,
     'latest Prompt Plan restart handler must exist',
   );
-  const restartHandler = mainSource.slice(restartHandlerStart, restartHandlerEnd);
+  const binding = mainSource.slice(restartHandlerStart, restartHandlerEnd);
+  assert.match(binding, /executionCommands\(\)\.rerunPlan\(root, runId\)/);
+  const commandSource = fs.readFileSync(
+    path.join(repo, 'src/application/execution-commands.ts'),
+    'utf8',
+  );
+  const restartHandler = commandSource.slice(
+    commandSource.indexOf('async rerunPlan('),
+    commandSource.indexOf('async stopVastInstanceForExit('),
+  );
   assert.equal(restartHandler.includes('listExecutionRuns(root)'), true);
   assert.equal(restartHandler.includes("['RUNNING', 'PAUSED', 'INTERRUPTED']"), true);
   assert.equal(restartHandler.includes('localExecutor()'), true);

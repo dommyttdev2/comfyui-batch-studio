@@ -66,6 +66,25 @@ const writeJson = (file, value) => {
   assert.ok(status.build.renderInputSha256);
   assert.ok(status.build.outputSha256);
 
+  // Physical path normalization belongs to the desktop adapter; equivalent
+  // relative and absolute settings must retain the same build fingerprint.
+  writeJson(metaPath, {
+    schemaVersion: 1,
+    createdAt: new Date().toISOString(),
+    settings: { finalArtifactDirectory: path.relative(process.cwd(), finalDir) },
+  });
+  assert.equal((await caption.getCaptionStatus(root)).state, 'generated');
+  const absoluteFingerprint = status.build.renderInputSha256;
+  status = await caption.generateCaption(root);
+  assert.equal(status.state, 'generated');
+  assert.equal(status.build.renderInputSha256, absoluteFingerprint);
+  writeJson(metaPath, {
+    schemaVersion: 1,
+    createdAt: new Date().toISOString(),
+    settings: { finalArtifactDirectory: finalDir },
+  });
+  assert.equal((await caption.getCaptionStatus(root)).state, 'generated');
+
   brief.subject.copyrightedCharacter = true;
   writeJson(briefPath, brief);
   status = await caption.getCaptionStatus(root);

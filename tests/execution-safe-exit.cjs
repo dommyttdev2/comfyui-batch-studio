@@ -6,9 +6,11 @@ const { readMainProcessSource } = require('./main-process-source.cjs');
 const repo = path.resolve(__dirname, '..');
 const read = (name) => fs.readFileSync(path.join(repo, name), 'utf8');
 const main = readMainProcessSource(repo);
+const commands = read('src/application/execution-commands.ts');
+assert.match(main, /new ExecutionCommands/);
 const app = read('src/renderer/App.tsx');
 const execution = read('src/renderer/ExecutionStages.tsx');
-const run = read('src/main/execution-run.ts');
+const run = read('src/main/execution-run.ts') + read('src/domain/execution-workflow-policy.ts');
 const ipc = read('src/shared/ipc.ts');
 const preload = read('src/preload/index.cjs');
 const ipcAccess = read('src/main/ipc-access.ts');
@@ -21,25 +23,28 @@ assert.match(
   main,
   /confirmRunStopBeforeLeave\(\s*state\.projectRoot,\s*state\.window,\s*'アプリケーションを終了する',?\s*\)/,
 );
-assert.match(main, /await executionCoordinator\.waitForSettled/);
-assert.match(main, /await stopVastInstanceForExit/);
-assert.match(main, /instance\.status === 'stopped'/);
+assert.match(commands, /await executionCoordinator\.waitForSettled/);
+assert.match(commands, /await this\.stopVastInstanceForExit/);
+assert.match(commands, /instance\.status === 'stopped'/);
 assert.match(main, /if \(await runRequiresExitGuard\(root\)\)/);
-assert.match(main, /comfy\.isPromptQueued\(promptId\)/);
-assert.match(main, /comfy\.historyState\(history, promptId\) === 'pending'/);
-assert.match(main, /await discardExecutionRun\(root, runId\)/);
+assert.match(commands, /comfy\.isPromptQueued\(promptId\)/);
+assert.match(commands, /comfy\.historyState\(history, promptId\) === 'pending'/);
+assert.match(commands, /await discardExecutionRun\(root, runId\)/);
 assert.match(
-  main,
+  commands,
   /restartable\.some\(\(candidate\) =>[\s\S]*?EXECUTION_RECOVERY_UNCERTAIN[\s\S]*?LOCAL_OUTPUT_COLLECTION_FAILED/,
 );
-assert.match(main, /executionCoordinator\.releaseReservation/);
+assert.match(commands, /executionCoordinator\.releaseReservation/);
 assert.match(main, /isDirectLocalComfyRefused/);
 assert.match(main, /url\.protocol !== 'http:'/);
 assert.match(main, /127\.0\.0\.1/);
 assert.match(main, /\[::1\]/);
-assert.match(main, /run\.lifecycle === 'RUNNING'\s*\|\|\s*executionCoordinator\.hasActive\(ref\)/);
-assert.match(main, /await comfy\.health\(\)/);
-assert.match(main, /confirmOfflineLocalRunDiscard\(root, run, comfy, error, owner\)/);
+assert.match(
+  commands,
+  /run\.lifecycle === 'RUNNING'\s*\|\|\s*executionCoordinator\.hasActive\(ref\)/,
+);
+assert.match(commands, /await comfy\.health\(\)/);
+assert.match(commands, /this\.confirmOfflineLocalRunDiscard\(root, run, comfy, error\)/);
 
 assert.match(app, /await window\.batchStudio\.execution\.leave\(project\.rootPath\)/);
 const leaveHandler = main.slice(

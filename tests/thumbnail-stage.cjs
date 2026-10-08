@@ -4,9 +4,14 @@ const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
 const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const repo = path.resolve(__dirname, '..');
-const ui = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8');
+const ui =
+  fs.readFileSync(path.join(repo, 'src', 'renderer', 'ui.tsx'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/thumbnail-render-policy.ts'), 'utf8');
 const app = fs.readFileSync(path.join(repo, 'src', 'renderer', 'App.tsx'), 'utf8');
-const stage = fs.readFileSync(path.join(repo, 'src', 'renderer', 'ThumbnailStage.tsx'), 'utf8');
+const stage =
+  fs.readFileSync(path.join(repo, 'src', 'renderer', 'ThumbnailStage.tsx'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/thumbnail-render-policy.ts'), 'utf8') +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/thumbnail-layout-policy.ts'), 'utf8');
 const picker = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'ThumbnailPickerWindow.tsx'),
   'utf8',
@@ -27,7 +32,15 @@ const thumbnailCss = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'thumbnail-stage.css'),
   'utf8',
 );
-const service = fs.readFileSync(path.join(repo, 'src', 'main', 'thumbnail-service.ts'), 'utf8');
+const service =
+  fs.readFileSync(path.join(repo, 'src', 'main', 'thumbnail-service.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/thumbnail-editor-policy.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/thumbnail-layout-policy.ts'), 'utf8') +
+  fs.readFileSync(
+    path.resolve(__dirname, '../src/application/thumbnail-output-generation.ts'),
+    'utf8',
+  ) +
+  fs.readFileSync(path.resolve(__dirname, '../src/domain/output-tracking-policy.ts'), 'utf8');
 const autosave = fs.readFileSync(
   path.join(repo, 'src', 'renderer', 'use-editor-autosave.ts'),
   'utf8',
@@ -385,8 +398,8 @@ matchCode(
   'concurrent Main process saves must share a per-file lock',
 );
 matchCode(
-  service,
-  /normalized\.saveRevision\s*<\s*lastRevision/,
+  fs.readFileSync(path.join(repo, 'src/domain/editor-save-policy.ts'), 'utf8'),
+  /proposed\.saveRevision.*<.*last/,
   'older save must not overwrite newer editor state',
 );
 matchCode(
@@ -419,7 +432,7 @@ async function testExportedThumbnailAuthorization() {
     .replace(/readJson<unknown>/g, 'readJson');
   const temp = await promises.mkdtemp(path.join(require('node:os').tmpdir(), 'thumbnail-auth-'));
   const output = path.join(temp, 'thumbnails');
-  let outputManifest = { outputs: {} };
+  let outputManifest = { outputs: { 1: { fileName: 'thumbnail-01.jpg' } } };
   const authorize = new Function(
     'path',
     'thumbnailOutputDirectory',
@@ -430,6 +443,7 @@ async function testExportedThumbnailAuthorization() {
     'realpath',
     'lstat',
     'process',
+    'assertEligibleThumbnailSource',
     `return ${text};`,
   )(
     path,
@@ -441,6 +455,13 @@ async function testExportedThumbnailAuthorization() {
     promises.realpath,
     promises.lstat,
     process,
+    (
+      await import(
+        require('node:url').pathToFileURL(
+          path.join(repo, 'dist-core/domain/thumbnail-source-policy.js'),
+        ).href
+      )
+    ).assertEligibleThumbnailSource,
   );
   try {
     await promises.mkdir(output);
@@ -449,7 +470,7 @@ async function testExportedThumbnailAuthorization() {
     assert.equal(await authorize(temp, selected), selected);
     outputManifest = { outputs: { 1: { fileName: 'thumbnail-01.png' } } };
     await assert.rejects(authorize(temp, selected));
-    outputManifest = { outputs: {} };
+    outputManifest = { outputs: { 1: { fileName: 'thumbnail-01.jpg' } } };
     const invalidId = path.join(output, 'thumbnail-02.jpg');
     await promises.writeFile(invalidId, 'image');
     await assert.rejects(authorize(temp, invalidId));
@@ -517,11 +538,11 @@ matchCode(
 
 matchCode(
   service,
-  /manifest\.outputs\[String\(Number\(match\[1\]\)\)\][\s\S]*tracked\.fileName !== entry\.name/,
+  /isEligibleThumbnailSource\(entry\.name/,
   'downstream thumbnail list must not expose superseded formats',
 );
 matchCode(
   service,
-  /writeJsonAtomic\(manifestPath, manifest\)[\s\S]*cleanupTrackedOutput/,
+  /io\.writeManifest\(projectId,manifest\)[\s\S]*io\.cleanup/,
   'old thumbnail cleanup must follow successful new output tracking',
 );

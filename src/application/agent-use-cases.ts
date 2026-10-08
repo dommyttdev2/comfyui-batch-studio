@@ -1,3 +1,5 @@
+import type { AgentModelCapabilities } from '../domain/agent-model-policy.js';
+import type { AgentModelSelection } from '../domain/agent-state-policy.js';
 import { requireMessage } from '../domain/artifact-policy.js';
 import {
   type ActorContext,
@@ -18,17 +20,46 @@ export interface AgentJob {
   status: 'reserved' | 'running' | 'completed' | 'failed' | 'cancelled' | 'unknown';
 }
 export interface AgentPort {
+  modelCapabilities(scope: AgentScope): Promise<AgentModelCapabilities>;
   // Durable and atomic across chat/task, BEFORE availability/model/workspace awaits.
   reserve(
     scope: AgentScope,
     requestId: string,
-    input: { kind: 'chat' | 'task'; text: string; sessionId: string | null },
+    input: {
+      kind: 'chat' | 'task';
+      text: string;
+      sessionId: string | null;
+      model?: AgentModelSelection;
+      projectRevision?: number;
+      attachments?: {
+        name: string;
+        resourceId: string;
+        purpose: string;
+        exists: boolean;
+        content?: string;
+        sha256?: string;
+      }[];
+    },
   ): Promise<{ job: AgentJob; acquired: boolean }>;
   available(scope: AgentScope): Promise<boolean>;
   launch(
     scope: AgentScope,
     jobId: string,
-    input: { kind: 'chat' | 'task'; text: string; sessionId: string | null },
+    input: {
+      kind: 'chat' | 'task';
+      text: string;
+      sessionId: string | null;
+      model?: AgentModelSelection;
+      projectRevision?: number;
+      attachments?: {
+        name: string;
+        resourceId: string;
+        purpose: string;
+        exists: boolean;
+        content?: string;
+        sha256?: string;
+      }[];
+    },
   ): Promise<AgentJob>;
   fail(scope: AgentScope, jobId: string): Promise<void>;
   markUnknown(scope: AgentScope, jobId: string): Promise<void>;
@@ -38,7 +69,14 @@ export interface AgentPort {
   ): Promise<readonly { id: string; role: 'user' | 'assistant'; text: string }[]>;
 }
 export class AgentUseCases {
-  constructor(private readonly runtime: AgentPort) {}
+  constructor(
+    private readonly runtime: AgentPort,
+    private readonly prepareLaunch?: (
+      actor: ActorContext,
+      scope: AgentScope,
+      id: string | null,
+    ) => Promise<AgentModelSelection | undefined>,
+  ) {}
   private scope(
     actor: ActorContext,
     command: Command & { stage: AgentStage; provider: AgentProvider },
@@ -77,7 +115,11 @@ export class AgentUseCases {
     });
     // An idempotent retry must return its existing job without relaunching it.
     if (!acquired) return job;
+    let model: AgentModelSelection | undefined;
     try {
+      if (this.prepareLaunch) model = await this.prepareLaunch(actor, scope, command.sessionId);
+      else if (command.sessionId !== null)
+        throw new BusinessError('DEPENDENCY_UNAVAILABLE', 'Session ownership reader required.');
       if (!(await this.runtime.available(scope)))
         throw new BusinessError('DEPENDENCY_UNAVAILABLE', 'Configured agent is unavailable.');
     } catch (error) {
@@ -86,6 +128,7 @@ export class AgentUseCases {
     }
     try {
       return await this.runtime.launch(scope, job.id, {
+        model,
         kind: command.kind,
         text,
         sessionId: command.sessionId,

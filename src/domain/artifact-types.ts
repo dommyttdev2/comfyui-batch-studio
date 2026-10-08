@@ -609,3 +609,182 @@ export interface AvailabilityResult {
   executionTarget: ExecutionTarget;
   localModelsRoot: string | null;
 }
+
+export interface MissingRequirement {
+  role: string;
+  requirement: string;
+  reason: string;
+}
+export type ThumbnailPattern =
+  | '3-images'
+  | '4-images-left-split'
+  | '4-images-right-split'
+  | '5-images-both-split';
+
+export type ThumbnailSlotKey =
+  | 'LEFT'
+  | 'LEFT_TOP'
+  | 'LEFT_BOTTOM'
+  | 'CENTER_MAIN'
+  | 'RIGHT'
+  | 'RIGHT_TOP'
+  | 'RIGHT_BOTTOM';
+
+export interface ThumbnailSlotState {
+  imagePath: string;
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+}
+
+export interface ThumbnailTextState {
+  text: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  fontFamily: string;
+  color: string;
+}
+
+export interface ThumbnailDocument {
+  id: number;
+  pattern: ThumbnailPattern;
+  slots: Partial<Record<ThumbnailSlotKey, ThumbnailSlotState>>;
+  title: ThumbnailTextState;
+  subtitle: ThumbnailTextState;
+}
+
+export interface ThumbnailEditorState {
+  schemaVersion: 1;
+  nextDocumentId?: number;
+  saveRevision?: number;
+  activeDocumentId: number;
+  documents: ThumbnailDocument[];
+}
+
+export type MarketplaceOutputFormat = 'jpeg' | 'png' | 'webp';
+export type MarketplaceEditorMode = 'marketplace' | 'custom';
+
+export interface MarketplaceImageTarget {
+  id: string;
+  service: string;
+  imageType: string;
+  label: string;
+  width: number;
+  height: number;
+  fileName: string;
+}
+
+export interface MarketplaceCropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface MarketplaceTargetState {
+  crop: MarketplaceCropRect | null;
+}
+
+export interface MarketplaceCustomState {
+  width: number;
+  height: number;
+  lockAspect: boolean;
+  crop: MarketplaceCropRect | null;
+}
+
+export type MarketplaceSourceType = 'final-artifact' | 'thumbnail';
+
+export interface MarketplaceImageEditorState {
+  schemaVersion: 1;
+  saveRevision?: number;
+  sourceImagePath: string;
+  sourceType: MarketplaceSourceType;
+  mode: MarketplaceEditorMode;
+  activeTargetId: string;
+  format: MarketplaceOutputFormat;
+  targets: Record<string, MarketplaceTargetState>;
+  custom: MarketplaceCustomState;
+}
+
+export interface CaptionBuildInfo {
+  schemaVersion: 1;
+  sourceDirectory: string;
+  imageCount: number;
+  contentSha256: string;
+  generatedAt: string;
+  /** Versioned hash of all inputs that affect deterministic caption rendering. */
+  renderInputSha256?: string;
+  /** SHA-256 of the caption.txt bytes written for this build. */
+  outputSha256?: string;
+}
+export interface CaptionStatus {
+  state:
+    | 'unconfigured'
+    | 'source-missing'
+    | 'missing-content'
+    | 'invalid-content'
+    | 'ready'
+    | 'generated'
+    | 'stale';
+  sourceDirectory: string | null;
+  sourceExists: boolean;
+  imageCount: number;
+  imageExtensions: string[];
+  content: CaptionContent | null;
+  contentValidation: ValidationResult;
+  captionPath: string;
+  captionExists: boolean;
+  stale: boolean;
+  build: CaptionBuildInfo | null;
+  preview: string | null;
+}
+export interface FinalArtifactStatus {
+  state: 'unconfigured' | 'source-missing' | 'empty' | 'ready';
+  directory: string | null;
+  exists: boolean;
+  imageCount: number;
+  imageExtensions: string[];
+}
+
+export type PromptFallback = {
+  requirement: string;
+  positiveTags: string[];
+  negativeTags: string[];
+  reason: string;
+};
+
+export interface VastAiInstance {
+  provider: 'vastai';
+  id: number;
+  label: string | null;
+  status: CloudInstanceStatus;
+  rawStatus: string;
+  intendedStatus: string | null;
+  curState: string | null;
+  nextState: string | null;
+  statusMessage: string | null;
+  gpuName: string | null;
+  gpuCount: number | null;
+  gpuRamMb: number | null;
+  hourlyCost: number | null;
+  sshHost: string | null;
+  sshPort: number | null;
+  comfyUiPort: number | null;
+}
+
+export interface ImportResult {
+  extracted: string;
+  validation: ValidationResult;
+  summary: Record<string, string | number | boolean | null>;
+  missingRequirements: MissingRequirement[];
+  rawResponsePath?: string;
+}
+
+export interface ArtifactReadResult {
+  key: ArtifactKey;
+  source: 'confirmed' | 'draft';
+  content: string | null;
+  exists: boolean;
+  validation: ValidationResult;
+}

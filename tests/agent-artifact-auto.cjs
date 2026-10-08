@@ -20,8 +20,10 @@ execFileSync(
 );
 const source = (name) => fs.readFileSync(path.join(repo, name), 'utf8');
 const main = source('src/main/main.ts');
-const codexRunner = source('src/main/codex-cli-task-runner.ts');
-const grokRunner = source('src/main/grok-cli-task-runner.ts');
+const codexRunner =
+  source('src/main/codex-cli-task-runner.ts') + source('src/application/codex-cli-task-runner.ts');
+const grokRunner =
+  source('src/main/grok-cli-task-runner.ts') + source('src/application/grok-cli-task-runner.ts');
 const stages = source('src/renderer/GrokStages.tsx');
 
 assert.match(main, /notifyAutoArtifact/);
