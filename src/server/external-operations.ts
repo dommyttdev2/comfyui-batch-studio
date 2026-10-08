@@ -6,14 +6,14 @@ import {
   type Confirmation,
   type ConfirmedOperation,
 } from '../domain/confirmation-policy.js';
-import { authorize, type ActorContext } from '../domain/contracts.js';
+import { type ActorContext, authorize } from '../domain/contracts.js';
 import {
   fields,
   HttpFailure,
   identifier,
+  type JsonObject,
   json,
   object,
-  type JsonObject,
   type RequestContext,
 } from './http.js';
 import { atomicJson, SerialQueue } from './storage.js';
@@ -29,6 +29,7 @@ export type ExternalOperation = Extract<
   | 'delete-bucket'
   | 'delete-objects'
   | 'move-object'
+  | 'copy-object'
   | 'trust-ssh'
 >;
 const operations: ExternalOperation[] = [
@@ -41,6 +42,7 @@ const operations: ExternalOperation[] = [
   'delete-bucket',
   'delete-objects',
   'move-object',
+  'copy-object',
   'trust-ssh',
 ];
 export interface ExternalFacts {
