@@ -54,6 +54,7 @@ export interface JobDefinition {
     signal: AbortSignal;
     progress(value: number): Promise<void>;
   }): Promise<{ state: 'succeeded' | 'failed' | 'cancelled' | 'uncertain' }>;
+  interrupt?(job: PublicJob, input: JsonObject): Promise<void>;
   reconcile?(
     job: PublicJob,
     input: JsonObject,
@@ -83,9 +84,11 @@ export class JobRegistry {
   private jobs: StoredJob[] = [];
   private readonly queue = new SerialQueue();
   private readonly active = new Map<string, { promise: Promise<void>; abort: AbortController }>();
+  private readonly reconciling = new Map<string, Promise<PublicJob>>();
   private readonly leases = new Map<string, { release(): Promise<void> }>();
   private accepting = true;
   private readonly forced = new Set<string>();
+  private fault: unknown;
   constructor(
     dataDir: string,
     private readonly definitions: ReadonlyMap<string, JobDefinition>,
@@ -160,6 +163,7 @@ export class JobRegistry {
           job.revision++;
         }
       await this.persist();
+      for (const job of this.jobs) await this.changed(publicJob(job));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
@@ -240,6 +244,7 @@ export class JobRegistry {
       try {
         await this.persist();
       } catch (error) {
+        this.fault = error;
         this.accepting = false;
         throw error;
       }
@@ -260,7 +265,7 @@ export class JobRegistry {
   }
   private async update(job: StoredJob, state: JobState, progress = job.progress): Promise<void> {
     await this.queue.run(async () => {
-      if (terminal(job.state)) return;
+      if (terminal(job.state) || (this.forced.has(job.id) && state !== 'uncertain')) return;
       if (job.state === 'cancelling' && state === 'running') state = 'cancelling';
       job.state = state;
       job.progress = progress;
@@ -269,6 +274,7 @@ export class JobRegistry {
         await this.persist();
         await this.changed(publicJob(job));
       } catch (error) {
+        this.fault = error;
         this.accepting = false;
         job.state = 'uncertain';
         throw error;
@@ -330,31 +336,62 @@ export class JobRegistry {
   async reconcile(actor: ActorContext, id: string): Promise<PublicJob> {
     const known = this.get(actor, id);
     authorize(actor, known.projectId, 'admin');
+    if (!this.accepting) throw new HttpFailure(503, 'SERVER_DRAINING');
     if (this.active.has(id)) throw new BusinessError('RUNTIME_BUSY', 'Job is active.');
     const job = this.jobs.find((j) => j.id === id)!;
     if (job.state !== 'uncertain') return publicJob(job);
     const definition = this.definitions.get(job.kind);
     if (!definition?.reconcile)
       throw new BusinessError('DEPENDENCY_UNAVAILABLE', 'Reconciliation adapter unavailable.');
-    const outcome = await definition.reconcile(publicJob(job), job.input);
-    await this.finish(job, outcome.state);
-    return publicJob(job);
+    const existing = this.reconciling.get(id);
+    if (existing) return existing;
+    const pending = Promise.resolve().then(async () => {
+      const outcome = await definition.reconcile!(publicJob(job), job.input);
+      await this.finish(job, outcome.state);
+      return publicJob(job);
+    });
+    this.reconciling.set(id, pending);
+    try {
+      return await pending;
+    } finally {
+      this.reconciling.delete(id);
+    }
   }
   stopAccepting(): void {
     this.accepting = false;
   }
   async drain(): Promise<void> {
-    await Promise.allSettled([...this.active.values()].map((w) => w.promise));
+    await Promise.allSettled(
+      [...this.active.values()]
+        .map((w) => w.promise)
+        .concat(
+          [...this.reconciling.values()].map(async (p) => {
+            await p;
+          }),
+        ),
+    );
     await this.queue.drain();
+    if (this.fault) throw new Error('Job persistence requires reconciliation.');
+  }
+  requestStopAll(): void {
+    for (const work of this.active.values()) work.abort.abort();
   }
   async forceUncertain(): Promise<void> {
     this.stopAccepting();
+    const interrupts: Promise<void>[] = [];
     for (const [id, work] of this.active) {
       this.forced.add(id);
       work.abort.abort();
       const job = this.jobs.find((j) => j.id === id)!;
       await this.update(job, 'uncertain');
+      const interrupt = this.definitions.get(job.kind)?.interrupt;
+      if (interrupt) interrupts.push(interrupt(publicJob(job), job.input));
     }
+    for (const id of this.reconciling.keys()) {
+      this.forced.add(id);
+      await this.update(this.jobs.find((job) => job.id === id)!, 'uncertain');
+    }
+    await Promise.all(interrupts);
   }
   route = async ({ request, response, url, actor, input }: RequestContext): Promise<boolean> => {
     if (url.pathname === '/api/v1/jobs' && request.method === 'GET') {

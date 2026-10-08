@@ -13,6 +13,14 @@ export async function atomicJson(file: string, value: unknown): Promise<void> {
   }
   try {
     await rename(temp, file);
+    if (process.platform !== 'win32') {
+      const directory = await open(path.dirname(file), 'r');
+      try {
+        await directory.sync();
+      } finally {
+        await directory.close();
+      }
+    }
   } catch (error) {
     await unlink(temp).catch(() => {});
     throw error;
