@@ -64,3 +64,13 @@ GET /integrations/vast/status|instances|template、POST search/targetsを提供�
 POST /integrations/ssh/targetsは実running instanceと登録key idから認証前のhost keyをprobeする。DNSと鍵交換は各10秒以内、loopback/private networkを拒否し、解決済みIPへ接続する。prepareはendpoint/fingerprint/以前のfingerprint/public-key hashを束ねる。trust-sshのconfirm後にVastへの公開鍵登録とtrustのatomic保存を行う。鍵変更、設定変更、公開鍵登録の未知結果は無条件再送しない。POST endpointは現在のhost fingerprint/登録鍵/公開鍵provision状態とP1 SSH endpoint policyを再検証し、秘密鍵pathを返さない。生成・remote commandはP6。
 
 現行endpointは[Vast公式CLI](https://github.com/vast-ai/vast-cli/blob/master/vast.py)と[公式REST案内](https://vast.ai/developers/api)で照合した。fixtureの管理/確認/未知結果とnative ssh2鍵交換は子Issue #382、実account/SSH hostへの接続は #385、画面操作は #384の受入対象。
+
+## R2管理API（P5-5）
+
+S3 clientは登録accountの固定HTTPS endpoint・region autoを使用する。資格情報は新Webの指定元だけから取得し、SDKの自動retryは1attemptに固定する。外部変更操作で応答が消失した場合、無条件再送しない。[現行S3互換表](https://developers.cloudflare.com/r2/api/s3/api/)でListObjectsV2、CopyObject、multipart/ListParts等を照合した。
+
+GET /api/v1/integrations/r2/buckets/list/search/metadata/templates/metrics/download、POST index/targets/download-info/batch-download-info/put-url-info/save-template/delete-templateを提供する。bucket/key/query等は各操作の固定fieldsのみ。検索はP1 index policyを使い、同期前/資格情報世代変更後はR2_INDEX_UNAVAILABLE。binary downloadは認可付きstream、URLは期限付き。R2新storeはweb-r2/1、32MiB、bucket1000、bucket当たりobject100000、target1000を上限とし、旧indexを読み込まない。template更新はcurrent revisionのCAS。
+
+targetsは管理者がoperation/bucket/keys/destinationを指定してserver側idを作成する。共通prepare/confirmへtargetIdを渡し、現在のobject etag/size、空bucket、既存destinationと資格情報世代を再確認する。未知結果の排他scopeはaccount/bucketで固定し、Secret差替で迂回できない。copy応答消失時は元objectを削除せずuncertainとする。object削除はIf-Matchを要求し、失敗時に条件を除いて再送しない。条件付きdeleteの実サービス互換と既存destinationの並行変更保護は #385 の実受入で検証する。bucket作成/削除の結果不明は、存在だけで実施者を断定せずunknownを保持する。
+
+現時点のcopy-based moveは5GiBを超えるobjectをMULTIPART_MOVE_REQUIREDとして拒否する。巨大objectとupload/pause/resume/cancelは #381 のmultipart jobへ接続する。browser staging・server fileの登録は #380、Modalは #384。これらが未完了の間、P5完了とは扱わない。

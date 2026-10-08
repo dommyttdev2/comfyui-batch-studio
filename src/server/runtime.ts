@@ -1,3 +1,4 @@
+import { R2Service } from './r2-service.js';
 import path from 'node:path';
 import { AgentApi } from './agent-api.js';
 import { AgentArtifacts } from './agent-artifacts.js';
@@ -86,6 +87,7 @@ export async function createServerRuntime(
     externalDefinitions.set(operation, definition);
   const ssh = new SshResources(config.dataDir, integrations);
   externalDefinitions.set('trust-ssh', ssh.definition);
+  const r2 = new R2Service(config.dataDir, integrations, externalDefinitions);
   const externalOperations = new ExternalOperations(
     config.dataDir,
     externalDefinitions,
@@ -148,6 +150,7 @@ export async function createServerRuntime(
     await integrations.initialize();
     await externalOperations.initialize();
     await civitai.initialize();
+    await r2.initialize();
     await vast.initialize();
     await ssh.initialize();
     await registration.initialize();
@@ -182,6 +185,7 @@ export async function createServerRuntime(
         if (await files.route(context)) return true;
         if (await staging.route(context)) return true;
         if (await civitai.route(context)) return true;
+        if (await r2.route(context)) return true;
         if (await vast.route(context)) return true;
         if (await ssh.route(context)) return true;
         if (await externalOperations.route(context)) return true;
@@ -232,6 +236,7 @@ export async function createServerRuntime(
         await staging.drain();
         await integrations.drain();
         await civitai.drain();
+        await r2.drain();
         await vast.drain();
         await ssh.drain();
         await repository.close();
