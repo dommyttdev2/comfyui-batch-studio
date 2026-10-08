@@ -1,5 +1,6 @@
 import { loadConfig } from './config.js';
 import { startServer } from './server.js';
+import { Security } from './security.js';
 
 try {
   const config = await loadConfig({
@@ -8,7 +9,10 @@ try {
     host: process.env.BATCH_STUDIO_HOST,
     port: process.env.BATCH_STUDIO_PORT ? Number(process.env.BATCH_STUDIO_PORT) : undefined,
   });
-  const runtime = await startServer(config);
+  const security = new Security(config.dataDir);
+  await security.initialize();
+  const runtime = await startServer(config, security.http());
+  security.setOrigin(runtime.origin);
   console.log(`Batch Studio server listening at ${runtime.origin}`);
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.once(signal, () => {
