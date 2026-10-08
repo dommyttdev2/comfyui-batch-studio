@@ -20,7 +20,7 @@ test('bootstrap resolves resources outside cwd and exposes no paths or secrets',
     assert.equal(body.apiVersion, '1');
     assert.match(body.buildId, /^[a-f0-9]{64}$/);
     assert.equal(JSON.stringify(body).includes(dir), false);
-    assert.equal((await fetch(runtime.origin + '/api/v1/projects')).status, 501);
+    assert.equal((await fetch(runtime.origin + '/api/v1/projects')).status, 409);
     await assert.rejects(loadConfig({ dataDir: dir, host: '0.0.0.0' }));
     await assert.rejects(loadConfig({ dataDir: 'relative' }));
     await assert.rejects(loadConfig({ dataDir: dir, port: -1 }));

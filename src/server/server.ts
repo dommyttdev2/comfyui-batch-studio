@@ -1,27 +1,9 @@
 import { createServer } from 'node:http';
-import { API_VERSION, type ServerConfig } from './config.js';
+import type { ServerConfig } from './config.js';
+import { createHttpHandler, type HttpOptions } from './http.js';
 
-export async function startServer(config: ServerConfig) {
-  const server = createServer((request, response) => {
-    response.setHeader('Cache-Control', 'no-store');
-    response.setHeader('X-Content-Type-Options', 'nosniff');
-    response.setHeader('Content-Type', 'application/json');
-    const health = request.method === 'GET' && request.url === '/api/v1/health';
-    response.statusCode = health ? 200 : 501;
-    response.end(
-      JSON.stringify(
-        health
-          ? { apiVersion: API_VERSION, buildId: config.buildId, ready: true }
-          : {
-              error: {
-                code: 'NOT_IMPLEMENTED',
-                message: 'Operation is unavailable.',
-                retryable: false,
-              },
-            },
-      ),
-    );
-  });
+export async function startServer(config: ServerConfig, options: HttpOptions = {}) {
+  const server = createServer(createHttpHandler(config, options));
   server.requestTimeout = 15_000;
   server.headersTimeout = 10_000;
   await new Promise<void>((resolve, reject) => {
