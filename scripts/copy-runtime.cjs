@@ -1,3 +1,4 @@
+require('./copy-license-notices.cjs').copyLicenseFiles(process.cwd());
 const fs = require('fs');
 const path = require('path');
 fs.mkdirSync('dist-electron/preload', { recursive: true });
