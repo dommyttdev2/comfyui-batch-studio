@@ -398,3 +398,7 @@ mainの必要な業務修正は同期専用Issue/PRで新契約へ適合する�
 ## 12. P2完了と次工程（2026-10-08）
 
 P1は親Issue #305 / PR #309が完了し、刷新branchのf221c1799a668e757e6f4de141100588c2547a6bに統合済み。[P2親Issue #313](https://github.com/dommyttdev2/comfyui-batch-studio/issues/313)のserver基盤は実装・ローカル受入を完了した。ブランチ・子Issue・依存・受入条件は[P2実行計画](web-migration-p2-plan.md)を参照する。親PR #323は刷新branch向け。次はP3のProject/ArtifactとWeb shellを進める。運用契約は[Web server foundation](../architecture/web-server-foundation.md)を参照する。
+
+## 13. P3着手管理（2026-10-08）
+
+P2はPR #323で刷新branchの053cd134920a573179bb99072545b3cd977f0021にsquash統合済み。P3親Issue [#334](https://github.com/dommyttdev2/comfyui-batch-studio/issues/334)と子Issue #335–#343を起票し、codex/web-p3-334-project-workspaceから刷新branch向け親draft PRを作成する。責務・依存と受入は[P3実行計画](web-migration-p3-plan.md)に一本化する。今回は実装未着手。

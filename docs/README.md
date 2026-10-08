@@ -153,3 +153,5 @@ UI 要望だけで Compiler schema を変えたり、ComfyUI node 内部事情�
 Web移行のP2実装・受入は[P2サーバー基盤計画](roadmap/web-migration-p2-plan.md)、画面内Projectタブとツールモーダルは[Workspace UI計画](roadmap/web-workspace-tabs-plan.md)を参照する。
 
 P2の独立Node serverの起動・認証・API・所有権・停止/復旧は[Webサーバー基盤](architecture/web-server-foundation.md)を参照する。次工程はP3のProject/ArtifactとWeb shell。
+
+P3のbranch・親子Issue・実装責務・依存・ローカル受入は[P3実行計画](roadmap/web-migration-p3-plan.md)を参照する。

@@ -17811,7 +17811,7 @@
   "documents": [
     {
       "file": "docs/README.md",
-      "sha256": "545e8b28c26ff20282878c9f70479f95bbea3dc858a9f08b56f00e42b3418ba7",
+      "sha256": "74654e834f5dc4bfc2c82d3773d293a3017ba483a8f7a4f91bee39b8cd386fa4",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -18000,7 +18000,7 @@
     },
     {
       "file": "docs/roadmap/web-workspace-tabs-plan.md",
-      "sha256": "2d4ca8a669b651f3c17e804686a01e13a6ef1d74c1672ef9cc8b97855fc5b31e",
+      "sha256": "895e7bbab6a69b6e379a1db3395044ebe29f4e88883749eaf0fe61cc36ba2240",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
