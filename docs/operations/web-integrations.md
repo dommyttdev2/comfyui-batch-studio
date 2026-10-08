@@ -22,3 +22,15 @@ POSTはadmin、session、Origin/CSRF/buildが必要。bodyはprovider、expected
 未登録はunconfigured、無効設定はdisabled、指定Secret/鍵不足・暗号文不一致はunavailable。未知schema/壊れた登録はserver起動を拒否する。旧Secret、別環境変数、平文、fixtureで復旧しない。CLIのDocker subprocessは固定のOS環境変数だけを渡し、統合Secretやmaster keyを継承しない。
 
 実Civitai/R2/Vast、SSHと転送の操作・受入は後続P5子Issueで接続する。この設定実装だけでP5受入完了とは扱わない。
+
+## 外部操作の確認・receipt
+
+POST /api/v1/integrations/operations/prepareはoperation/targetIdと任意のProject binding（projectId/expectedRevision/leaseId）を受け、server取得factsのsummary、単回confirmationId、60秒のexpiresAtを返す。global管理はadmin、Project bindingはadminに加えてProject edit grant・current revision・owned leaseが必要。confirmはoperation/targetId/confirmationIdだけを受ける。boolean confirmedを受け取らない。
+
+confirmは同user/sessionと対象・世代・期限を再確認し、token消費とreceipt予約を同じatomic storeに保存する。返却は202とreceipt id。GET /api/v1/integrations/operations/receipts/:idで同ownerだけが追跡する。異なるsessionのtoken利用と消費済みtokenの再確認を拒否する。Project receiptの閲覧には現在のread grantも必要。
+
+応答消失/外部例外/再起動でreserved/runningだった操作はuncertainになる。同scopeで別の操作を予約できず、外部APIを自動再送しない。POST /api/v1/integrations/operations/reconcile/:idは対応するread-only照合portがある場合だけ実行できる。結果不明なら引き続きuncertain。料金が発生した可能性があるRENTを照合できないまま再実行しない。
+
+storeは4MiB・1000confirmation・1000receiptを上限とする。期限切れ未消費tokenのみ新規prepare時に除去する。結果とconfirmationの関連を維持し、上限到達時は拒否する。停止時は新規予約を拒否して実行/照合をdrainし、期限超過はuncertainとfenceを保存してserver filesystem ownershipを保持する。遅延応答で成功へ書き換えない。旧形式・重複id/scope・壊れたbindingは読み込まない。
+
+現時点は共通基盤のみ。サービス別inspect/execute/reconcileは後続子Issueで接続する。未接続operationはINTEGRATION_UNAVAILABLEを返す。

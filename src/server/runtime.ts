@@ -1,4 +1,9 @@
 import path from 'node:path';
+import {
+  ExternalOperations,
+  type ExternalDefinition,
+  type ExternalOperation,
+} from './external-operations.js';
 import { IntegrationSettings } from './integration-settings.js';
 import type { ServerConfig } from './config.js';
 import { EventBroker, attachEvents } from './events.js';
@@ -62,6 +67,25 @@ export async function createServerRuntime(
   const repository = new DiskProjects(projects, ownership, broker);
   const catalogs = new FixtureCatalog(options.catalogFile);
   const integrations = new IntegrationSettings(config.dataDir);
+  const externalDefinitions = new Map<ExternalOperation, ExternalDefinition>();
+  const externalOperations = new ExternalOperations(
+    config.dataDir,
+    externalDefinitions,
+    async (actor, binding) => {
+      const project = await repository.transaction(binding.projectId, (tx) => tx.load());
+      if (project.revision !== binding.expectedRevision)
+        throw new HttpFailure(409, 'REVISION_CONFLICT');
+      if (
+        !project.lease ||
+        project.lease.id !== binding.leaseId ||
+        project.lease.userId !== actor.userId ||
+        project.lease.sessionId !== actor.sessionId ||
+        project.lease.expiresAt <= Date.now()
+      )
+        throw new HttpFailure(409, 'LEASE_REQUIRED');
+    },
+    async (actor) => ({ ...(await security.forJob(actor)), sessionId: actor.sessionId }),
+  );
   const projectApi = new ProjectApi(repository, catalogs);
   const workflowApi = new WorkflowApi(config, repository, catalogs);
   let agentOptions: AgentRuntimeOptions | undefined;
@@ -102,6 +126,7 @@ export async function createServerRuntime(
   let runtime: Awaited<ReturnType<typeof startServer>>;
   try {
     await integrations.initialize();
+    await externalOperations.initialize();
     await registration.initialize();
     await broker.initialize();
     await jobs.initialize();
@@ -130,6 +155,7 @@ export async function createServerRuntime(
           json(context.response, 202, { state: 'draining' });
           return true;
         }
+        if (await externalOperations.route(context)) return true;
         if (await integrations.route(context)) return true;
         if (await registration.route(context)) return true;
         if (await workflowApi.route(context)) return true;
@@ -149,12 +175,17 @@ export async function createServerRuntime(
     if (closing) return closing;
     state = 'draining';
     jobs.stopAccepting();
+    externalOperations.stopAccepting();
     closing = (async () => {
       try {
         if (mode === 'stop') jobs.requestStopAll();
         if (mode === 'force' || !(await within(jobs.drain(), shutdownMs))) {
           if (!(await within(jobs.forceUncertain(), shutdownMs)))
             throw new Error('Runtime interrupt deadline exceeded.');
+        }
+        if (!(await within(externalOperations.drain(), shutdownMs))) {
+          await externalOperations.forceUncertain();
+          throw new Error('External operations remain uncertain; retain ownership.');
         }
         await broker.drain();
         await events.close();
@@ -195,6 +226,8 @@ export async function createServerRuntime(
     repository,
     projectApi,
     workflowApi,
+    externalOperations,
+    externalDefinitions,
     agents,
     agentApi,
     artifacts,

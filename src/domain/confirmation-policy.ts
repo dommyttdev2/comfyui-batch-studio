@@ -2,6 +2,13 @@ import { BusinessError } from './contracts.js';
 export type ConfirmedOperation =
   | 'rent-instance'
   | 'delete-instance'
+  | 'start-instance'
+  | 'stop-instance'
+  | 'reboot-instance'
+  | 'create-bucket'
+  | 'delete-bucket'
+  | 'delete-objects'
+  | 'move-object'
   | 'trust-ssh'
   | 'discard-run'
   | 'restore-backup'
