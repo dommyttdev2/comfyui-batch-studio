@@ -73,3 +73,7 @@ Repositoryのatomic outboxとP2 EventBrokerを接続する際は、重複配信�
 8. core/P2回帰・依存禁止検査・server/Web typecheck/build、索引--check、契約/正本対応表を確認し、全子Issue完了後に親PRをreadyへ変える。
 
 今回は計画・起票・branch/親PR作成のみ。製品codeの変更やP3テストの成功を意味しない。
+
+## #335 契約確定
+
+Project/root/asset、lease/CAS/操作再送、atomic outbox/event、Workspace/Modal/draftの正本は[Web Project・Workspace契約](../contracts/web-project-workspace.md)。受入境界は[P3受入matrix](../quality/web-p3-acceptance.md)。P2 job-only eventとlease取得のみの実装との差分を明示し、#336–#343へ割り当てた。これは契約確定であり、P3製品機能の実装完了ではない。

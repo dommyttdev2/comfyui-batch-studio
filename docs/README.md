@@ -155,3 +155,5 @@ Web移行のP2実装・受入は[P2サーバー基盤計画](roadmap/web-migrati
 P2の独立Node serverの起動・認証・API・所有権・停止/復旧は[Webサーバー基盤](architecture/web-server-foundation.md)を参照する。次工程はP3のProject/ArtifactとWeb shell。
 
 P3のbranch・親子Issue・実装責務・依存・ローカル受入は[P3実行計画](roadmap/web-migration-p3-plan.md)を参照する。
+
+P3の新Webデータ・操作・Workspace契約は[Web Project・Workspace](contracts/web-project-workspace.md)、受入境界と所管は[P3受入matrix](quality/web-p3-acceptance.md)を参照する。

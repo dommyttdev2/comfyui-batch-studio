@@ -17811,7 +17811,7 @@
   "documents": [
     {
       "file": "docs/README.md",
-      "sha256": "74654e834f5dc4bfc2c82d3773d293a3017ba483a8f7a4f91bee39b8cd386fa4",
+      "sha256": "3d8a3947e42a01fae96e235bb70f0408227c2e42a633791a5135cbe34d9765d1",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -17908,6 +17908,13 @@
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
+      "file": "docs/contracts/web-project-workspace.md",
+      "sha256": "566fb8932c5c1c94dbde1ace381874f29297f563711802a5d79f3df009ba69c0",
+      "workPackage": "W11",
+      "gate": "G11",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
       "file": "docs/decisions/decision-log.md",
       "sha256": "a33b2e3ff755f4cd5330108a1d1495533cfd867e225812f5ab6aee456d29d83a",
       "workPackage": "W11",
@@ -17973,6 +17980,13 @@
     {
       "file": "docs/quality/validation-and-security.md",
       "sha256": "bac7a62aeddcf69d1556bc086fe13b02e7c2b5388eceb7c9e502ab184a2ae996",
+      "workPackage": "W11",
+      "gate": "G11",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
+      "file": "docs/quality/web-p3-acceptance.md",
+      "sha256": "26a57c2d3fcc2c179a5df8df04ab6cfcbf1ce1cafe695a5de1067279dc8ec55c",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -18055,7 +18069,7 @@
     "scripts": 11,
     "ipc": 172,
     "resources": 8,
-    "documents": 34,
+    "documents": 36,
     "ownership": {
       "W01": 16,
       "W02": 27,
