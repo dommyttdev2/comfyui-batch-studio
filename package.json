@@ -42,7 +42,7 @@
     "typecheck:web": "tsc -p tsconfig.web.json",
     "test:web": "npm run build:workspace && node --test tests/server-project-browser.mjs",
     "recover:project": "node dist-server/server/project-recover.js",
-    "test:agents": "npm run build:server && node --test tests/server-agent-cli.mjs"
+    "test:agents": "npm run build:server && node --test tests/server-agent-cli.mjs tests/server-agent-store.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
