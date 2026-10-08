@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ActorContext } from '../domain/contracts.js';
@@ -211,6 +211,7 @@ export class IntegrationSettings {
   }
   resolve(provider: IntegrationProvider): {
     revision: number;
+    fingerprint: string;
     account?: string;
     publicUrl?: string;
     secrets: Secrets;
@@ -220,10 +221,34 @@ export class IntegrationSettings {
     const secrets = this.readSecrets(provider, config);
     return {
       revision: config.revision,
+      fingerprint: createHash('sha256')
+        .update(
+          JSON.stringify({
+            provider,
+            revision: config.revision,
+            account: config.account ?? null,
+            publicUrl: config.publicUrl ?? null,
+            secrets,
+          }),
+        )
+        .digest('hex'),
       account: config.account,
       publicUrl: config.publicUrl,
       secrets,
     };
+  }
+  providerState(
+    provider: IntegrationProvider,
+  ): 'unconfigured' | 'disabled' | 'unavailable' | 'ready' {
+    const config = this.value?.providers[provider];
+    if (!config) return 'unconfigured';
+    if (!config.enabled) return 'disabled';
+    try {
+      this.resolve(provider);
+      return 'ready';
+    } catch {
+      return 'unavailable';
+    }
   }
   status(actor: ActorContext) {
     if (!actor.permissions.includes('read') && !actor.permissions.includes('admin'))

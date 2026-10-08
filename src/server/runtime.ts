@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { CivitaiService } from './civitai-service.js';
 import {
   ExternalOperations,
   type ExternalDefinition,
@@ -46,7 +47,8 @@ export async function createServerRuntime(
     agents?: AgentRuntimeOptions;
   } = {},
 ) {
-  if (options.definitions?.has('agent')) throw new Error('Agent definition is reserved.');
+  if (options.definitions?.has('agent') || options.definitions?.has('civitai-sync'))
+    throw new Error('Agent definition is reserved.');
   const shutdownMs = options.shutdownMs ?? 5000;
   if (!Number.isSafeInteger(shutdownMs) || shutdownMs < 1 || shutdownMs > 60_000)
     throw new Error('Invalid shutdown deadline.');
@@ -65,8 +67,13 @@ export async function createServerRuntime(
   const definitions = new Map(options.definitions ?? []);
   jobs = new JobRegistry(config.dataDir, definitions, broker.append);
   const repository = new DiskProjects(projects, ownership, broker);
-  const catalogs = new FixtureCatalog(options.catalogFile);
   const integrations = new IntegrationSettings(config.dataDir);
+  const civitai = new CivitaiService(config.dataDir, integrations, jobs, (actor) =>
+    security.forJob(actor),
+  );
+  definitions.set('civitai-sync', civitai.definition);
+  const catalogs =
+    options.catalogFile !== undefined ? new FixtureCatalog(options.catalogFile) : civitai;
   const externalDefinitions = new Map<ExternalOperation, ExternalDefinition>();
   const externalOperations = new ExternalOperations(
     config.dataDir,
@@ -127,6 +134,7 @@ export async function createServerRuntime(
   try {
     await integrations.initialize();
     await externalOperations.initialize();
+    await civitai.initialize();
     await registration.initialize();
     await broker.initialize();
     await jobs.initialize();
@@ -155,6 +163,7 @@ export async function createServerRuntime(
           json(context.response, 202, { state: 'draining' });
           return true;
         }
+        if (await civitai.route(context)) return true;
         if (await externalOperations.route(context)) return true;
         if (await integrations.route(context)) return true;
         if (await registration.route(context)) return true;
@@ -201,6 +210,7 @@ export async function createServerRuntime(
           throw new Error('HTTP work deadline exceeded; ownership requires reconciliation.');
         }
         await integrations.drain();
+        await civitai.drain();
         await repository.close();
         await lease.release();
         state = 'closed';

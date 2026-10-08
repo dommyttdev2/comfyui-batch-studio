@@ -28,7 +28,7 @@ export class WorkflowApi {
   constructor(
     private readonly config: ServerConfig,
     private readonly repository: DiskProjects,
-    readonly catalogs: FixtureCatalog,
+    readonly catalogs: CatalogRepository,
   ) {
     this.workflows = new WorkflowUseCases(
       repository,
@@ -62,7 +62,7 @@ export class WorkflowApi {
       return true;
     }
     if (request.method === 'GET' && match[2] === 'catalog') {
-      const catalog = await this.catalogs.read();
+      const catalog = await this.catalogs.read(projectId);
       if (!catalog) throw new HttpFailure(503, 'DEPENDENCY_UNAVAILABLE');
       json(response, 200, { catalog });
       return true;

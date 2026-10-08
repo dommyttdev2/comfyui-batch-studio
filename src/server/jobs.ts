@@ -41,6 +41,7 @@ interface StoredJob extends PublicJob {
   input: JsonObject;
 }
 export interface JobDefinition {
+  globalExclusive?: boolean;
   validate(input: JsonObject): void;
   reserve?(
     job: PublicJob,
@@ -216,7 +217,7 @@ export class JobRegistry {
       if (
         this.jobs.some(
           (j) =>
-            j.projectId === projectId &&
+            (j.projectId === projectId || definition.globalExclusive === true) &&
             j.kind === kind &&
             j.stage === scope.stage &&
             j.provider === scope.provider &&
