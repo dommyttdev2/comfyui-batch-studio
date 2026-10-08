@@ -1,12 +1,12 @@
 # P4: CLI Agent runtimeとWeb AssistantPane
 
-Status: In progress / 未受入（2026-10-08）。
+Status: Accepted / G04ローカル受入完了（2026-10-08）。親PR #364で刷新branchへ統合する。
 
 親Issue: [#354](https://github.com/dommyttdev2/comfyui-batch-studio/issues/354)。P3統合0d06a4767735d35d061720956f4c7874c7ffb681を起点とする。
 
 ## 管理と順序
 
-統合branch: codex/web-p4-354-agent-runtime。親draft PRはcodex/web-migrationへ出す。子branch/PRは最新統合branchから作成し、依存完了順にsquash mergeする。全受入後だけ親PRをreadyにして刷新branchへsquash mergeする。CI追加、mainへの統合、version変更、releaseは行わない。後方互換、旧データ移行、fallbackは禁止。
+統合branch: codex/web-p4-354-agent-runtime。親PR [#364](https://github.com/dommyttdev2/comfyui-batch-studio/pull/364)はcodex/web-migrationへ出す。子branch/PRは最新統合branchから作成し、依存完了順にsquash mergeする。全受入後だけ親PRをreadyにして刷新branchへsquash mergeする。CI追加、mainへの統合、version変更、releaseは行わない。後方互換、旧データ移行、fallbackは禁止。
 
 | Issue | 主責務 | 所管 | 依存 |
 | --- | --- | --- | --- |
@@ -37,3 +37,17 @@ Status: In progress / 未受入（2026-10-08）。
 7. Windows/Linux/Chromiumでローカル受入し、対象SHA、コマンド、結果と未検証範囲を記録する。
 
 正本契約・運用・受入matrixと全コード調査索引を子Issueに対応させ、未完了は明示する。
+
+## 実装PRと正本の対応
+
+- #355: [PR #365](https://github.com/dommyttdev2/comfyui-batch-studio/pull/365)。
+- #356: [PR #366](https://github.com/dommyttdev2/comfyui-batch-studio/pull/366)。
+- #357: [PR #367](https://github.com/dommyttdev2/comfyui-batch-studio/pull/367)。
+- #358: [PR #368](https://github.com/dommyttdev2/comfyui-batch-studio/pull/368)。
+- #359: [PR #369](https://github.com/dommyttdev2/comfyui-batch-studio/pull/369)。
+- #360: [PR #370](https://github.com/dommyttdev2/comfyui-batch-studio/pull/370)。
+- #361: [PR #371](https://github.com/dommyttdev2/comfyui-batch-studio/pull/371)。
+- #362: [PR #372](https://github.com/dommyttdev2/comfyui-batch-studio/pull/372)。
+- #363: [PR #373](https://github.com/dommyttdev2/comfyui-batch-studio/pull/373)。
+
+要求境界・実装owner・検証・対象SHAは[受入matrix](../quality/web-p4-acceptance.md)、起動/設定/復旧は[運用正本](../operations/web-agent-runtime.md)、API/所有権/隔離は[契約正本](../contracts/web-agent-runtime.md)に分離する。全コード索引ではAssistant presentationはW02/P4/G04、CLI/store/API/taskはW04/P4/G04、DockerfileはW10、testはW12として主所管を一意にした。P4にCI、version/release、旧データ移行、fallbackを追加していない。次のphaseはP5。

@@ -19255,6 +19255,8 @@
       "targetGate": "G12",
       "featureGates": [
         "G01",
+        "G03",
+        "G04",
         "G10",
         "G12"
       ],
@@ -19267,6 +19269,8 @@
       "targetGate": "G12",
       "featureGates": [
         "G01",
+        "G03",
+        "G04",
         "G10",
         "G12"
       ],
@@ -19279,6 +19283,8 @@
       "targetGate": "G12",
       "featureGates": [
         "G01",
+        "G02",
+        "G04",
         "G10",
         "G12"
       ],
@@ -19291,6 +19297,8 @@
       "targetGate": "G12",
       "featureGates": [
         "G01",
+        "G03",
+        "G04",
         "G10",
         "G12"
       ],
@@ -19303,6 +19311,8 @@
       "targetGate": "G12",
       "featureGates": [
         "G01",
+        "G03",
+        "G04",
         "G10",
         "G12"
       ],
@@ -19315,6 +19325,8 @@
       "targetGate": "G12",
       "featureGates": [
         "G01",
+        "G03",
+        "G04",
         "G10",
         "G12"
       ],
@@ -19327,6 +19339,8 @@
       "targetGate": "G12",
       "featureGates": [
         "G01",
+        "G03",
+        "G04",
         "G10",
         "G12"
       ],
@@ -19339,6 +19353,8 @@
       "targetGate": "G12",
       "featureGates": [
         "G01",
+        "G03",
+        "G04",
         "G10",
         "G12"
       ],
@@ -19351,6 +19367,8 @@
       "targetGate": "G12",
       "featureGates": [
         "G01",
+        "G03",
+        "G04",
         "G10",
         "G12"
       ],
@@ -19363,6 +19381,8 @@
       "targetGate": "G12",
       "featureGates": [
         "G01",
+        "G03",
+        "G04",
         "G10",
         "G12"
       ],
@@ -19902,7 +19922,7 @@
     },
     {
       "file": "docs/contracts/web-agent-runtime.md",
-      "sha256": "87960c7710469c46e98c520350075fa7efe64b3ee7df1f4ef468965d8484d90d",
+      "sha256": "717671be34a21b4b4b9ab8232f0ca9c3b1584c661182adde341f05f3ce846a5d",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -19964,8 +19984,15 @@
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
+      "file": "docs/operations/web-agent-runtime.md",
+      "sha256": "f1e122ec85d3a736e1222b8e42bcd4a5097ec23dde06ad14bb84c9c32078fc62",
+      "workPackage": "W11",
+      "gate": "G11",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
       "file": "docs/operations/web-workspace.md",
-      "sha256": "b8ed94eb50cffe3869901ab1300c690294f2d48fd0b8bc9b9c12ead737f64178",
+      "sha256": "a0c4f485c7c1a4e6bbc8ec57ef110fb278b5d57569df9aadbeddffc5415e80df",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -19994,6 +20021,13 @@
     {
       "file": "docs/quality/web-p3-acceptance.md",
       "sha256": "b17185961590ae4286f0c75aba254ae0654d9d6d54ad318ef1d78ae61d841898",
+      "workPackage": "W11",
+      "gate": "G11",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
+      "file": "docs/quality/web-p4-acceptance.md",
+      "sha256": "ca6f7155853efc01e3188e5bcfdbbfd210cb5eec981eaf5eb9e44fe3137d9c34",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -20049,7 +20083,7 @@
     },
     {
       "file": "README.md",
-      "sha256": "9dd1c632dd36700744f336ccc7b7fd9b77a67b0bfcbf8c9f6f4ddc4975998a07",
+      "sha256": "1de76236a25cf36bc58c83b373a68ba7718398793191465f837bf200fdf0aa3e",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -20076,7 +20110,7 @@
     "scripts": 17,
     "ipc": 172,
     "resources": 8,
-    "documents": 38,
+    "documents": 40,
     "ownership": {
       "W01": 18,
       "W02": 37,

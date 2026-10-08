@@ -4,7 +4,7 @@ Status: Planning evidence / 再照合: 2026-10-08
 
 [移行計画](web-migration-plan.md)のW01–W14とG01–G14を正本とする。後方互換性なし・旧データマイグレーションなし・fallback禁止を全項目へ適用する。新dataDir/現行schema/明示設定で開始し、対応外・失敗はerrorとする。各code fileとIPCは主担当を一つだけ持つ。phaseは主実装受入段階。desktopRemovalPhase=P9は旧sourceの残存確認・撤去段階であり、互換adapterを提供する期間ではない。依存・横断条件は計画側を参照する。
 
-基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全503コード・設定（src 347、tests 108、scripts 17）、8 binary asset、38仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
+基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全503コード・設定（src 347、tests 108、scripts 17）、8 binary asset、40仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
 
 [機械可読索引](web-migration-inventory.json)にhash・import・根拠行・分類・test実行経路を保存する。[再照合ツール](web-migration-audit.cjs)は`node docs/roadmap/web-migration-audit.cjs --check`で検証し、`--write`で再生成する。現索引との差分、未分類file/IPC、主担当重複、IPC方向/handler不整合は失敗する。新file/IPCの処置をレビューしてから再生成する。
 
@@ -799,16 +799,16 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [tests/remote-instance-lifecycle.cjs](../../tests/remote-instance-lifecycle.cjs) | npm-test | 契約維持・server buildへ適合 | G06 | P8までに新test実行経路へ接続 (G12) |
 | [tests/remote-model-staging.cjs](../../tests/remote-model-staging.cjs) | npm-test | 契約維持・server buildへ適合 | G06 | P8までに新test実行経路へ接続 (G12) |
 | [tests/run.cjs](../../tests/run.cjs) | npm-test | 契約維持・server buildへ適合 | G03, G05 | P8までに新test実行経路へ接続 (G12) |
-| [tests/server-agent-api.mjs](../../tests/server-agent-api.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
-| [tests/server-agent-artifacts.mjs](../../tests/server-agent-artifacts.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
-| [tests/server-agent-browser.mjs](../../tests/server-agent-browser.mjs) | browser-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
-| [tests/server-agent-cli.mjs](../../tests/server-agent-cli.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
-| [tests/server-agent-crash-fixtures.mjs](../../tests/server-agent-crash-fixtures.mjs) | support | harness/fixture移植 | G01, G10, G12 | P8までに新test実行経路へ接続 (G12) |
-| [tests/server-agent-crash.mjs](../../tests/server-agent-crash.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
-| [tests/server-agent-fixtures.mjs](../../tests/server-agent-fixtures.mjs) | support | harness/fixture移植 | G01, G10, G12 | P8までに新test実行経路へ接続 (G12) |
-| [tests/server-agent-jobs.mjs](../../tests/server-agent-jobs.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
-| [tests/server-agent-registration.mjs](../../tests/server-agent-registration.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
-| [tests/server-agent-store.mjs](../../tests/server-agent-store.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-api.mjs](../../tests/server-agent-api.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-artifacts.mjs](../../tests/server-agent-artifacts.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-browser.mjs](../../tests/server-agent-browser.mjs) | browser-local | 契約維持・server buildへ適合 | G01, G02, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-cli.mjs](../../tests/server-agent-cli.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-crash-fixtures.mjs](../../tests/server-agent-crash-fixtures.mjs) | support | harness/fixture移植 | G01, G03, G04, G10, G12 | P8までに新test実行経路へ接続 (G12) |
+| [tests/server-agent-crash.mjs](../../tests/server-agent-crash.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-fixtures.mjs](../../tests/server-agent-fixtures.mjs) | support | harness/fixture移植 | G01, G03, G04, G10, G12 | P8までに新test実行経路へ接続 (G12) |
+| [tests/server-agent-jobs.mjs](../../tests/server-agent-jobs.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-registration.mjs](../../tests/server-agent-registration.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
+| [tests/server-agent-store.mjs](../../tests/server-agent-store.mjs) | agent-local | 契約維持・server buildへ適合 | G01, G03, G04, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
 | [tests/server-bootstrap.mjs](../../tests/server-bootstrap.mjs) | server-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
 | [tests/server-events.mjs](../../tests/server-events.mjs) | server-local | 契約維持・server buildへ適合 | G01, G10, G12 | P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須 (G12) |
 | [tests/server-fixtures.mjs](../../tests/server-fixtures.mjs) | support | harness/fixture移植 | G01, G10, G12 | P8までに新test実行経路へ接続 (G12) |
@@ -879,11 +879,13 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [docs/operations/docker-local-tests.md](../../docs/operations/docker-local-tests.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/operations/thumbnail-picker-performance-logs.md](../../docs/operations/thumbnail-picker-performance-logs.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/operations/versioning.md](../../docs/operations/versioning.md) | 移行完了時に該当仕様を更新 (W11/G11) |
+| [docs/operations/web-agent-runtime.md](../../docs/operations/web-agent-runtime.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/operations/web-workspace.md](../../docs/operations/web-workspace.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/product/scope-and-flow.md](../../docs/product/scope-and-flow.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/quality/standard-image-execution-validation.md](../../docs/quality/standard-image-execution-validation.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/quality/validation-and-security.md](../../docs/quality/validation-and-security.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/quality/web-p3-acceptance.md](../../docs/quality/web-p3-acceptance.md) | 移行完了時に該当仕様を更新 (W11/G11) |
+| [docs/quality/web-p4-acceptance.md](../../docs/quality/web-p4-acceptance.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/requirements/requirements.md](../../docs/requirements/requirements.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/roadmap/business-core-separation-verification.md](../../docs/roadmap/business-core-separation-verification.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/roadmap/implementation-phases.md](../../docs/roadmap/implementation-phases.md) | 移行完了時に該当仕様を更新 (W11/G11) |
