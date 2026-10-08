@@ -24,7 +24,9 @@ jobs:
         with:
           node-version: '22.12.0'
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: |
+          npm ci --no-audit --no-fund
+          node node_modules/electron/install.js
       - name: Lint and format check
         run: npm run check
       - name: Typecheck
