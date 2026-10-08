@@ -94,7 +94,7 @@ function renderNotices(root) {
   for (const [hash, sources] of [...used].sort(([a], [b]) => a.localeCompare(b))) {
     lines.push('<a id="notice-' + hash + '"></a>', '', '### Notice ' + hash, '');
     for (const source of [...sources].sort()) lines.push('- Source: ' + source);
-    lines.push('', '~~~~text', catalog.texts[hash].trimEnd(), '~~~~', '');
+    lines.push('', '~~~~text', catalog.texts[hash].trimEnd().replace(/[ \t]+$/gm, ''), '~~~~', '');
   }
   return lines.join('\n');
 }

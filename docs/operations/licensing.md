@@ -9,7 +9,7 @@ package.jsonのprivate:trueはnpmへの誤公開防止として維持します�
 ## 第三者通知の正本
 
 - licenses/third-party.jsonはpackage-lock.jsonの全依存（runtime、optional、development）について、バージョン・取得URL・integrity・出典・通知本文を記録する正本です。
-- THIRD_PARTY_NOTICES.mdはこのデータから生成します。同じ本文はSHA-256で集約し、各パッケージから参照します。
+- THIRD_PARTY_NOTICES.mdはこのデータから生成します。同じ本文はSHA-256で集約し、各パッケージから参照します。生成Markdownは行末のスペース・タブを除去しますが、正本データの本文とハッシュは保持します。
 - 通知本文の著作権表示・条件・免責を保持します。本文内の第三者用語を翻訳・書き換えません。
 - ag-psdのJPEG実装のApache本文、bcrypt-pbkdfのOpenBSD由来本文、cpu-features内のApache/BSD本文も含めます。
 - MPLのlightningcssは開発依存です。ツールやそのバイナリを配布する場合はMPL対象ソースの提供・入手案内を含めます。固定npmアーカイブと、その中のpackage.jsonに記載された上流を辿って該当ソースを確認してください。
