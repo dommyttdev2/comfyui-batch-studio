@@ -7,7 +7,9 @@ const { readMainProcessSource } = require('./main-process-source.cjs');
 
 const appSettings = read('src/main/app-settings.ts');
 
-const artifactService = read('src/main/artifact-service.ts');
+const artifactService =
+  read('src/main/artifact-service.ts') + read('src/application/artifact-file-service.ts');
+matchCode(artifactService, /createArtifactFileService/);
 const environmentSettings = read('src/renderer/EnvironmentSettings.tsx');
 const app = read('src/renderer/App.tsx');
 const projectStages = read('src/renderer/ProjectStages.tsx');
@@ -89,7 +91,7 @@ matchCode(
 );
 matchCode(
   artifactService,
-  /mkdir\(artifactOutputPath,\{recursive:true\}\)/,
+  /mkdir\(artifactOutputPath\)/,
   '成果物側のプロジェクトフォルダを作成する',
 );
 matchCode(

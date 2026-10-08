@@ -12,6 +12,7 @@ export function registerImageIpc(dependencies: IpcRegistrationDependencies) {
     IPC,
     app,
     deleteThumbnailOutputs,
+    deleteThumbnailDocument,
     dialog,
     ensureProjectWritable,
     exportCustomMarketplaceImage,
@@ -431,6 +432,20 @@ export function registerImageIpc(dependencies: IpcRegistrationDependencies) {
       if (format !== 'png' && format !== 'jpeg') throw new Error('Invalid thumbnail format');
       if (typeof dataUrl !== 'string') throw new Error('Invalid thumbnail image data');
       return exportThumbnail(root, documentId, format, dataUrl);
+    },
+  );
+  handleIpc(
+    IPC.THUMBNAIL_DELETE_DOCUMENT,
+    async (_e, root: unknown, id: unknown, expectedRevision: unknown, deleteOutputs: unknown) => {
+      validRoot(root);
+      await ensureProjectWritable(root);
+      if (
+        typeof id !== 'number' ||
+        typeof expectedRevision !== 'number' ||
+        typeof deleteOutputs !== 'boolean'
+      )
+        throw new Error('Invalid thumbnail deletion command');
+      return deleteThumbnailDocument(root, id, expectedRevision, deleteOutputs);
     },
   );
   handleIpc(IPC.THUMBNAIL_DELETE_OUTPUTS, async (_e, root: unknown, documentId: unknown) => {

@@ -100,38 +100,25 @@ export function registerIntegrationIpc(dependencies: IpcRegistrationDependencies
     vastClient().searchOffers(input),
   );
   handleIpc(IPC.VASTAI_RENT_OFFER, async (_e, input: VastAiRentRequest) => {
-    if (!input || typeof input !== 'object') throw new Error('Invalid Vast.ai RENT request');
-    const offerId = Number(input.offerId),
-      storageGb = Number(input.storageGb),
-      templateHashId = typeof input.templateHashId === 'string' ? input.templateHashId.trim() : '';
-    if (
-      !Number.isInteger(offerId) ||
-      offerId < 1 ||
-      !Number.isFinite(storageGb) ||
-      storageGb <= 0 ||
-      !templateHashId
-    )
-      throw new Error('Invalid Vast.ai RENT request');
-    const [offer, template] = await Promise.all([
-      vastClient().getOffer(offerId, storageGb),
-      vastClient().comfyUiTemplateByHash(templateHashId),
-    ]);
-    const gpu = `${offer.gpuCount ?? '-'}x ${offer.gpuName ?? 'GPU'}`;
-    const cost = offer.hourlyCost == null ? '不明' : '$' + offer.hourlyCost.toFixed(3) + '/h';
-    const reliability =
-      offer.reliability == null ? '不明' : (offer.reliability * 100).toFixed(2) + '%';
-    const result = await dialog.showMessageBox({
-      type: 'question',
-      title: 'Vast.aiでRENT',
-      message: `${gpu} をRENTしますか？`,
-      detail: `On-demand · ${offer.geolocation ?? 'Location不明'}\n料金: ${cost}\nStorage: ${storageGb} GB\nReliability: ${reliability}\nTemplate: ${template.name}\n\nRENTするとVast.aiで課金が開始されます。`,
-      buttons: ['キャンセル', 'RENT'],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-    if (result.response !== 1) return null;
-    return vastClient().rentOffer({ offerId, storageGb, templateHashId }, offer);
+    return vastClient()
+      .offerUseCases()
+      .confirmAndRent(input, async ({ offer, template, input: { storageGb } }) => {
+        const gpu = `${offer.gpuCount ?? '-'}x ${offer.gpuName ?? 'GPU'}`;
+        const cost = offer.hourlyCost == null ? '不明' : '$' + offer.hourlyCost.toFixed(3) + '/h';
+        const reliability =
+          offer.reliability == null ? '不明' : (offer.reliability * 100).toFixed(2) + '%';
+        const result = await dialog.showMessageBox({
+          type: 'question',
+          title: 'Vast.aiでRENT',
+          message: `${gpu} をRENTしますか？`,
+          detail: `On-demand · ${offer.geolocation ?? 'Location不明'}\n料金: ${cost}\nStorage: ${storageGb} GB\nReliability: ${reliability}\nTemplate: ${template.name}\n\nRENTするとVast.aiで課金が開始されます。`,
+          buttons: ['キャンセル', 'RENT'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        });
+        return result.response === 1;
+      });
   });
   handleIpc(IPC.VASTAI_START_INSTANCE, async (_e, id: unknown) => {
     await vastClient().requestStartInstance(validInstanceId(id));

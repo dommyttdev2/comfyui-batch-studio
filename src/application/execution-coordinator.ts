@@ -1,3 +1,4 @@
+import { ExecutionLaunchFailure } from '../domain/execution-launch-policy.js';
 export type ExecutionRef = { projectRoot: string; runId: string };
 
 function refKey(ref: ExecutionRef) {
@@ -17,7 +18,10 @@ export class ExecutionResourceLockManager {
   private acquire(resource: string, ref: ExecutionRef) {
     const existing = this.resources.get(resource);
     if (existing && refKey(existing) !== refKey(ref))
-      throw new Error(`Execution resource is already in use by Run ${existing.runId}: ${resource}`);
+      throw new ExecutionLaunchFailure(
+        `Execution resource is already in use by Run ${existing.runId}: ${resource}`,
+        'not-started',
+      );
     this.resources.set(resource, ref);
     const key = refKey(ref);
     const owned = this.refs.get(key) ?? new Set<string>();

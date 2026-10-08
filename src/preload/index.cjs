@@ -95,6 +95,7 @@ const I = {
   THUMBNAIL_STORE_WEBP_PREVIEW: 'thumbnail:store-webp-preview',
   THUMBNAIL_READ_TEMPLATE: 'thumbnail:read-template',
   THUMBNAIL_EXPORT: 'thumbnail:export',
+  THUMBNAIL_DELETE_DOCUMENT: 'thumbnail:delete-document',
   THUMBNAIL_DELETE_OUTPUTS: 'thumbnail:delete-outputs',
   THUMBNAIL_PICKER_OPEN: 'thumbnail-picker:open',
   THUMBNAIL_PICKER_CONTEXT: 'thumbnail-picker:context',
@@ -326,6 +327,8 @@ contextBridge.exposeInMainWorld('batchStudio', {
       return () => ipcRenderer.removeListener(I.THUMBNAIL_PICKER_CANCELLED, handler);
     },
     exportImage: (r, i, f, d) => ipcRenderer.invoke(I.THUMBNAIL_EXPORT, r, i, f, d),
+    deleteDocument: (root, id, expectedRevision, deleteOutputs) =>
+      ipcRenderer.invoke(I.THUMBNAIL_DELETE_DOCUMENT, root, id, expectedRevision, deleteOutputs),
     deleteOutputs: (r, i) => ipcRenderer.invoke(I.THUMBNAIL_DELETE_OUTPUTS, r, i),
   },
   marketplace: {

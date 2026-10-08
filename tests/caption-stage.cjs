@@ -3,7 +3,11 @@ const path = require('node:path');
 const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
 
 const service =
-  ['../src/main/caption-service.ts', '../src/domain/caption-policy.ts']
+  [
+    '../src/main/caption-service.ts',
+    '../src/application/caption-file-service.ts',
+    '../src/domain/caption-policy.ts',
+  ]
     .map((p) => fs.readFileSync(path.resolve(__dirname, p), 'utf8'))
     .join('\n') +
   fs.readFileSync(path.resolve(__dirname, '../src/domain/caption-build-policy.ts'), 'utf8') +
@@ -126,5 +130,6 @@ matchCode(
   'Grok must enforce 32 characters',
 );
 matchCode(service, /captionBodyContent\(content\)/, 'Pixiv title must not invalidate caption.txt');
-matchCode(service, /export async function savePixivTitle/, 'Pixiv title edit service must exist');
+matchCode(service, /createCaptionFileService/, 'Caption adapter must bind the core service');
+matchCode(service, /async function savePixivTitle/, 'Pixiv title edit service must exist');
 console.log('Caption stage contract tests passed.');

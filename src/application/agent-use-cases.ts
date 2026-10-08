@@ -1,3 +1,4 @@
+import type { AgentModelCapabilities } from '../domain/agent-model-policy.js';
 import type { AgentModelSelection } from '../domain/agent-state-policy.js';
 import { requireMessage } from '../domain/artifact-policy.js';
 import {
@@ -19,6 +20,7 @@ export interface AgentJob {
   status: 'reserved' | 'running' | 'completed' | 'failed' | 'cancelled' | 'unknown';
 }
 export interface AgentPort {
+  modelCapabilities(scope: AgentScope): Promise<AgentModelCapabilities>;
   // Durable and atomic across chat/task, BEFORE availability/model/workspace awaits.
   reserve(
     scope: AgentScope,

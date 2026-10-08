@@ -1,3 +1,4 @@
+import { selectAvailableAgentModel } from '../domain/agent-model-policy.js';
 import {
   type AgentModelSelection,
   activateAgentSession,
@@ -12,13 +13,14 @@ import {
   type Command,
   type MutationCommand,
 } from '../domain/contracts.js';
-import type { AgentProvider, AgentScope, AgentStage } from './agent-use-cases.js';
+import type { AgentPort, AgentProvider, AgentScope, AgentStage } from './agent-use-cases.js';
 import { assertCurrentProject, assertMutation, nextRevision } from './project-access.js';
 import { type Clock, event, type ProjectRepository } from './project-ports.js';
 export class AgentPreferencesUseCases {
   constructor(
     private readonly projects: ProjectRepository,
     private readonly clock: Clock,
+    private readonly capabilities: Pick<AgentPort, 'modelCapabilities'>,
   ) {}
   private key(command: { stage: AgentStage; provider: AgentProvider }) {
     if (
@@ -48,7 +50,12 @@ export class AgentPreferencesUseCases {
       assertCurrentProject(p, scope.projectId);
       const preference = p.agentPreferences?.[key];
       if (sessionId !== null) activateAgentSession(preference?.sessions, sessionId);
-      return preference?.model ? validateAgentModelSelection(preference.model) : undefined;
+      return preference?.model
+        ? selectAvailableAgentModel(
+            preference.model,
+            await this.capabilities.modelCapabilities(scope),
+          )
+        : undefined;
     });
   }
   async update(
@@ -75,7 +82,10 @@ export class AgentPreferencesUseCases {
         next.sessions = activateAgentSession(previous?.sessions, command.change.sessionId);
       else if (command.change.kind === 'clear') next.sessions.activeSessionId = null;
       else if (command.change.kind === 'model')
-        next.model = validateAgentModelSelection(command.change.value);
+        next.model = selectAvailableAgentModel(
+          command.change.value,
+          await this.capabilities.modelCapabilities(command),
+        );
       else throw new BusinessError('INVALID_INPUT', 'Unknown preference change.');
       p.agentPreferences = { ...p.agentPreferences, [key]: next };
       const before = p.revision;

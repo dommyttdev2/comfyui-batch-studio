@@ -334,25 +334,22 @@ export function ThumbnailStage({ project, run }: { project: ProjectSummary; run:
   const confirmDeleteDocument = () =>
     void run(async () => {
       if (!state || deletingId === null || state.documents.length <= 1) return;
-      const index = state.documents.findIndex((document) => document.id === deletingId);
-      if (index < 0) return;
-      const documents = state.documents.filter((document) => document.id !== deletingId);
-      const next: ThumbnailEditorState = {
-        ...state,
-        documents,
-        activeDocumentId:
-          state.activeDocumentId === deletingId
-            ? (documents[index]?.id ?? documents[index - 1]?.id ?? documents[0].id)
-            : state.activeDocumentId,
-      };
-      await saveNow(next);
-      setState(next);
-      if (deleteOutputFiles)
-        await window.batchStudio.thumbnail.deleteOutputs(project.rootPath, deletingId);
+      const saved = await saveNow(state);
+      const result = await window.batchStudio.thumbnail.deleteDocument(
+        project.rootPath,
+        deletingId,
+        saved.saveRevision!,
+        deleteOutputFiles,
+      );
+      setState(result.state);
       setDeletingId(null);
       setDeleteOutputFiles(false);
       setDeleteWarning('');
-      setNotice(`サムネイル ${String(deletingId).padStart(2, '0')} を削除しました。`);
+      setNotice(
+        result.cleanupWarning
+          ? '文書を削除しました。出力画像の削除に失敗しました: ' + result.cleanupWarning
+          : `サムネイル ${String(deletingId).padStart(2, '0')} を削除しました。`,
+      );
     });
   const updateDocument = (update: (document: ThumbnailDocument) => ThumbnailDocument) => {
     setState(

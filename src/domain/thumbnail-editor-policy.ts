@@ -178,3 +178,23 @@ export function validThumbnailState(value: unknown): boolean {
       (!Number.isSafeInteger(state.saveRevision) || state.saveRevision < 0))
   );
 }
+
+export function removeThumbnailDocument(
+  state: ThumbnailEditorState,
+  id: number,
+): ThumbnailEditorState {
+  if (!validThumbnailState(state)) throw new Error('Current thumbnail editor state required.');
+  const index = state.documents.findIndex((item) => item.id === id);
+  if (index < 0) throw new Error('Thumbnail document was not found.');
+  if (state.documents.length <= 1)
+    throw new Error('The last thumbnail document cannot be removed.');
+  const documents = state.documents.filter((item) => item.id !== id);
+  return {
+    ...state,
+    documents,
+    activeDocumentId:
+      state.activeDocumentId === id
+        ? (documents[index]?.id ?? documents[index - 1]?.id ?? documents[0].id)
+        : state.activeDocumentId,
+  };
+}

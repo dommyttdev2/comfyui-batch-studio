@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
+const { matchCode } = require('./source-match.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -33,6 +33,11 @@ const progressSource =
   fs.readFileSync(path.join(repo, 'src', 'shared', 'execution-progress.ts'), 'utf8') +
   fs.readFileSync(path.join(repo, 'src/domain/execution-progress.ts'), 'utf8');
 const mainSource = readMainProcessSource(repo);
+const commands =
+  fs.readFileSync(path.join(repo, 'src/application/execution-commands.ts'), 'utf8') +
+  fs.readFileSync(path.join(repo, 'src/domain/execution-mutation-policy.ts'), 'utf8');
+matchCode(mainSource, /executionCommands\(\)\.stopScheduling\(root, runId\)/);
+matchCode(mainSource, /executionCommands\(\)\.forceInterrupt\(root, runId\)/);
 matchCode(
   uiSource,
   /実行前チェック','実行'/,
@@ -168,17 +173,17 @@ matchCode(
   'Stop scheduling availability must be derived explicitly from Run phase',
 );
 matchCode(
-  mainSource,
+  commands,
   /isRemotePreGenerationPhase\(run\.phase\)/,
   'pre-generation remote Stop scheduling must be handled locally',
 );
 matchCode(
-  mainSource,
+  commands,
   /r\.lifecycle='PAUSED'/,
   'pre-generation remote Stop scheduling must pause the Run',
 );
 matchCode(
-  mainSource,
+  commands,
   /Force interrupt is only available while Remote Execution is EXECUTING/,
   'pre-generation Force interrupt must be rejected without contacting the worker',
 );
@@ -328,12 +333,12 @@ matchCode(
   'Main Process must implement replacement-Run IPC',
 );
 matchCode(
-  mainSource,
+  commands,
   /REMOTE_INSTANCE_REPLACED/,
   'replacement must terminalize the old Run with an explicit history reason',
 );
 matchCode(
-  mainSource,
+  commands,
   /isRemotePreGenerationPhase\(current\.phase\)/,
   'Instance replacement must be limited to pre-generation phases',
 );

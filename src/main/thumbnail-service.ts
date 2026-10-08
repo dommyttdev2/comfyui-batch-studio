@@ -1,3 +1,10 @@
+import { saveEditorDocument } from '../application/editor-document-persistence.js';
+import { recoverCurrentFormat } from '../application/current-format-recovery.js';
+import { deleteThumbnailDocument as deleteThumbnailDocumentCore } from '../application/thumbnail-document-use-cases.js';
+import {
+  isEligibleThumbnailSource,
+  assertEligibleThumbnailSource,
+} from '../domain/thumbnail-source-policy.js';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readdir, readFile, realpath, rm } from 'node:fs/promises';
@@ -123,64 +130,46 @@ export async function loadThumbnailState(root: string): Promise<ThumbnailEditorS
   );
 }
 
-export async function restoreThumbnailState(root: string): Promise<ThumbnailEditorState> {
+function currentEditorRecovery(root: string) {
   const file = statePath(root);
-  return withTemplateStoreLock(file, async () => {
-    try {
-      await loadThumbnailState(root);
-    } catch (error) {
-      if (!(error instanceof PersistedJsonError)) throw error;
+  return {
+    exclusive: <T>(work: () => Promise<T>) => withTemplateStoreLock(file, work),
+    load: () => loadThumbnailState(root),
+    corruption: (error: unknown) =>
+      error instanceof PersistedJsonError && error.code === 'PERSISTED_JSON_CORRUPT'
+        ? ('corrupt' as const)
+        : null,
+    restore: async () => {
       await restoreValidatedJsonFromBackup(file, assertThumbnailState);
-      return loadThumbnailState(root);
-    }
-    throw new Error('編集データは正常です。復元は必要ありません。');
-  });
-}
-
-export async function initializeCorruptThumbnailState(root: string) {
-  const file = statePath(root);
-  return withTemplateStoreLock(file, async () => {
-    try {
-      await loadThumbnailState(root);
-    } catch (error) {
-      if (!(error instanceof PersistedJsonError) || error.code !== 'PERSISTED_JSON_CORRUPT')
-        throw error;
+    },
+    initialize: async () => {
       await initializeCorruptProtectedJson(file, createDefaultThumbnailState());
-      return loadThumbnailState(root);
-    }
-    throw new Error('編集データは正常です。初期化は必要ありません。');
-  });
+    },
+  };
+}
+export async function restoreThumbnailState(root: string): Promise<ThumbnailEditorState> {
+  return recoverCurrentFormat(currentEditorRecovery(root), 'restore');
+}
+export async function initializeCorruptThumbnailState(root: string): Promise<ThumbnailEditorState> {
+  return recoverCurrentFormat(currentEditorRecovery(root), 'initialize');
 }
 
 export async function saveThumbnailState(
   root: string,
   state: unknown,
 ): Promise<ThumbnailEditorState> {
-  const normalized = normalizeThumbnailState(state);
   const file = statePath(root);
-  return withTemplateStoreLock(file, async () => {
-    const current = await readJson<ThumbnailEditorState>(file);
-    if (current !== null) assertThumbnailState(current, file);
-    const lastRevision = current?.saveRevision ?? 0;
-    if (normalized.saveRevision !== undefined && normalized.saveRevision < lastRevision)
-      return normalizeThumbnailState(current);
-    if (
-      normalized.saveRevision !== undefined &&
-      normalized.saveRevision === lastRevision &&
-      current
-    ) {
-      const proposed = { ...normalized, saveRevision: lastRevision };
-      if (JSON.stringify(proposed) !== JSON.stringify(current))
-        throw new Error('EDITOR_SAVE_CONFLICT: Thumbnail state was modified by another editor.');
-      return normalizeThumbnailState(current);
-    }
-    const committed = {
-      ...normalized,
-      saveRevision: normalized.saveRevision ?? Math.max(lastRevision + 1, Date.now() * 1000),
-    };
-    await writeJsonAtomic(file, committed);
-    return committed;
-  });
+  return saveEditorDocument(
+    {
+      exclusive: (work) => withTemplateStoreLock(file, work),
+      read: () => readJson<ThumbnailEditorState>(file),
+      write: (value) => writeJsonAtomic(file, value),
+      assertCurrent: (value: unknown) => assertThumbnailState(value, file),
+      normalize: normalizeThumbnailState,
+      revision: (last) => Math.max(last + 1, Date.now() * 1000),
+    },
+    state,
+  );
 }
 
 export async function listThumbnailImages(directory: string): Promise<ThumbnailImageItem[]> {
@@ -246,10 +235,13 @@ export async function listExportedThumbnails(root: string): Promise<ThumbnailIma
   const items: ThumbnailImageItem[] = [];
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    const match = /^thumbnail-(\d+)\.(png|jpe?g)$/i.exec(entry.name);
-    if (!match || !allowed.has(Number(match[1]))) continue;
-    const tracked = manifest.outputs[String(Number(match[1]))];
-    if (tracked && tracked.fileName !== entry.name) continue;
+    if (
+      !isEligibleThumbnailSource(entry.name, {
+        documentIds: [...allowed],
+        outputs: manifest.outputs,
+      })
+    )
+      continue;
     items.push({ name: entry.name, path: path.join(directory, entry.name) });
   }
   return items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
@@ -258,19 +250,12 @@ export async function listExportedThumbnails(root: string): Promise<ThumbnailIma
 export async function assertExportedThumbnail(root: string, imagePath: string): Promise<string> {
   const resolved = path.resolve(imagePath);
   const directory = await thumbnailOutputDirectory(root);
-  const match = /^thumbnail-(\d+)\.(png|jpe?g)$/i.exec(path.basename(resolved));
   const raw = await readJson<unknown>(statePath(root));
   const editor = normalizeThumbnailState(raw);
-  const allowed = new Set(editor.documents.map((document) => document.id));
-  const tracked = match
-    ? (await thumbnailOutputManifest(root)).outputs[String(Number(match[1]))]
-    : null;
-  if (
-    !match ||
-    !allowed.has(Number(match[1])) ||
-    (tracked && tracked.fileName !== path.basename(resolved))
-  )
-    throw new Error('現在有効なサムネイルの出力済み画像を選択してください。');
+  assertEligibleThumbnailSource(path.basename(resolved), {
+    documentIds: editor.documents.map((x) => x.id),
+    outputs: (await thumbnailOutputManifest(root)).outputs,
+  });
   try {
     const canonicalDirectory = await realpath(directory);
     const info = await lstat(resolved);
@@ -330,3 +315,29 @@ const thumbnailOutputIO: ThumbnailOutputIO = {
   cleanup: cleanupTrackedOutput,
   remove: (file) => rm(file, { force: true }),
 };
+
+export async function thumbnailSourceFacts(root: string) {
+  const editor = normalizeThumbnailState(await readJson<unknown>(statePath(root)));
+  return {
+    documentIds: editor.documents.map((x) => x.id),
+    outputs: (await thumbnailOutputManifest(root)).outputs,
+  };
+}
+
+export async function deleteThumbnailDocument(
+  root: string,
+  id: number,
+  expectedRevision: number,
+  deleteOutputs: boolean,
+) {
+  return deleteThumbnailDocumentCore(
+    {
+      exclusive: (_p, work) => withTemplateStoreLock(statePath(root), work),
+      load: loadThumbnailState,
+      write: (project, state) => writeJsonAtomic(statePath(project), state),
+      deleteOutputs: deleteThumbnailOutputs,
+    },
+    root,
+    { id, expectedRevision, deleteOutputs },
+  );
+}

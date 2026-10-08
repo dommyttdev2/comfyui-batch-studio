@@ -398,8 +398,8 @@ matchCode(
   'concurrent Main process saves must share a per-file lock',
 );
 matchCode(
-  service,
-  /normalized\.saveRevision\s*<\s*lastRevision/,
+  fs.readFileSync(path.join(repo, 'src/domain/editor-save-policy.ts'), 'utf8'),
+  /proposed\.saveRevision.*<.*last/,
   'older save must not overwrite newer editor state',
 );
 matchCode(
@@ -432,7 +432,7 @@ async function testExportedThumbnailAuthorization() {
     .replace(/readJson<unknown>/g, 'readJson');
   const temp = await promises.mkdtemp(path.join(require('node:os').tmpdir(), 'thumbnail-auth-'));
   const output = path.join(temp, 'thumbnails');
-  let outputManifest = { outputs: {} };
+  let outputManifest = { outputs: { 1: { fileName: 'thumbnail-01.jpg' } } };
   const authorize = new Function(
     'path',
     'thumbnailOutputDirectory',
@@ -443,6 +443,7 @@ async function testExportedThumbnailAuthorization() {
     'realpath',
     'lstat',
     'process',
+    'assertEligibleThumbnailSource',
     `return ${text};`,
   )(
     path,
@@ -454,6 +455,13 @@ async function testExportedThumbnailAuthorization() {
     promises.realpath,
     promises.lstat,
     process,
+    (
+      await import(
+        require('node:url').pathToFileURL(
+          path.join(repo, 'dist-core/domain/thumbnail-source-policy.js'),
+        ).href
+      )
+    ).assertEligibleThumbnailSource,
   );
   try {
     await promises.mkdir(output);
@@ -462,7 +470,7 @@ async function testExportedThumbnailAuthorization() {
     assert.equal(await authorize(temp, selected), selected);
     outputManifest = { outputs: { 1: { fileName: 'thumbnail-01.png' } } };
     await assert.rejects(authorize(temp, selected));
-    outputManifest = { outputs: {} };
+    outputManifest = { outputs: { 1: { fileName: 'thumbnail-01.jpg' } } };
     const invalidId = path.join(output, 'thumbnail-02.jpg');
     await promises.writeFile(invalidId, 'image');
     await assert.rejects(authorize(temp, invalidId));
@@ -530,7 +538,7 @@ matchCode(
 
 matchCode(
   service,
-  /manifest\.outputs\[String\(Number\(match\[1\]\)\)\][\s\S]*tracked\.fileName !== entry\.name/,
+  /isEligibleThumbnailSource\(entry\.name/,
   'downstream thumbnail list must not expose superseded formats',
 );
 matchCode(

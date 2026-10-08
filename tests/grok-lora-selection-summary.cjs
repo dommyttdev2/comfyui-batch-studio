@@ -6,11 +6,17 @@ const { matchCode, doesNotMatchCode } = require('./source-match.cjs');
 const read = (file) => fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8');
 const stages = read('src/renderer/GrokStages.tsx');
 const cards = read('src/renderer/SelectedModelCards.tsx');
-const historyService = read('src/main/grok-lora-history.ts');
-const artifactService = read('src/main/artifact-service.ts');
+const historyService =
+  read('src/main/grok-lora-history.ts') + read('src/application/lora-selection-history.ts');
+matchCode(historyService, /createLoraSelectionHistory/);
+const artifactService =
+  read('src/main/artifact-service.ts') + read('src/application/artifact-file-service.ts');
+matchCode(artifactService, /createArtifactFileService/);
 const notifications = read('src/renderer/ArtifactImportToast.tsx');
 const app = read('src/renderer/App.tsx');
-const autoImport = read('src/main/agent-artifact-import.ts');
+const autoImport =
+  read('src/main/agent-artifact-import.ts') + read('src/application/auto-artifact-ingestion.ts');
+matchCode(autoImport, /ingestAutoArtifact/);
 
 matchCode(stages, /<SelectedModelCards/, 'current model selections must use Civitai cards');
 doesNotMatchCode(

@@ -1,3 +1,6 @@
+import { stampRunMutation, validStoredRunIdentity } from '../domain/execution-record-stamp.js';
+import { persistImmutableRunSnapshot } from '../application/execution-snapshot-persistence.js';
+import { assertRunBackup } from '../domain/execution-storage-policy.js';
 import { randomInt, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { copyFile, readdir, readFile, rm } from 'node:fs/promises';
@@ -14,7 +17,7 @@ import {
 } from '../domain/execution-mutation-policy.js';
 import { assertPersistSafe } from '../domain/execution-record-policy.js';
 import { resumePhase } from '../domain/execution-resume.js';
-import { captureExecutionSnapshot } from '../domain/execution-snapshot-capture.js';
+import { captureProjectExecutionSnapshot } from '../application/execution-snapshot-observation.js';
 import { seedExecutionSnapshot } from '../domain/execution-snapshot-policy.js';
 import { verifyExecutionWorkflow } from '../domain/execution-workflow-policy.js';
 import type {
@@ -98,7 +101,7 @@ async function writeCurrent(root: string, runId: string) {
 export async function getExecutionRun(root: string, runId: string): Promise<ExecutionRun | null> {
   const file = executionRunPath(root, runId);
   const run = await readJson<ExecutionRun>(file);
-  if (run !== null && (!run || run.runId !== runId || typeof run.lifecycle !== 'string'))
+  if (run !== null && !validStoredRunIdentity(run, runId))
     throw new ExecutionRunStorageError([
       { runId, file, backupFile: `${file}.bak`, reason: 'Invalid Run structure' },
     ]);
@@ -265,16 +268,7 @@ export async function restoreExecutionRunBackup(root: string, runId: string | nu
   } catch {
     throw new Error('バックアップが破損しています。元のRunは変更していません。');
   }
-  if (runId === null) {
-    const pointer = value as { schemaVersion?: unknown; runId?: unknown };
-    if (pointer?.schemaVersion !== 1 || typeof pointer.runId !== 'string')
-      throw new Error('バックアップのcurrentポインタが不正です。');
-    assertRunId(pointer.runId);
-  } else {
-    const run = value as Partial<ExecutionRun>;
-    if (run?.runId !== runId || typeof run.lifecycle !== 'string')
-      throw new Error('バックアップのRun IDまたは形式が一致しません。');
-  }
+  assertRunBackup(value, runId);
   try {
     await copyFile(file, `${file}.corrupt-${randomUUID()}`, constants.COPYFILE_EXCL);
   } catch (error) {
@@ -288,42 +282,10 @@ async function captureSnapshot(
   root: string,
   preflight: PreflightResult,
 ): Promise<ExecutionRunSnapshot> {
-  const meta = await readProjectMeta(root),
-    build = meta?.workflowBuild as any;
-  const uiPath = String(build?.outputs?.ui?.path ?? build?.outputPath ?? ''),
-    apiPath = String(build?.outputs?.api?.path ?? build?.apiOutputPath ?? '');
-  const [ui, api, models, plan, brief] = await Promise.all([
-    readJson<unknown>(path.join(root, uiPath)),
-    readJson<unknown>(path.join(root, apiPath)),
-    readJson<ModelsArtifact>(path.join(root, 'models.json')),
-    readJson<PromptPlanArtifact>(path.join(root, 'prompt_plan.json')),
-    readJson<any>(path.join(root, 'project_brief.json')),
-  ]);
-  const target = meta?.settings.executionTarget === 'remote' ? 'remote' : 'local';
-  return captureExecutionSnapshot(
-    {
-      projectId: String(brief?.project?.id ?? ''),
-      target,
-      remote:
-        target === 'remote'
-          ? {
-              provider: meta?.settings.remoteProvider ?? null,
-              instanceId: meta?.settings.remoteInstanceId ?? null,
-            }
-          : null,
-      uiPath,
-      apiPath,
-      expectedUiSha: String(build?.outputs?.ui?.sha256 ?? ''),
-      expectedApiSha: String(build?.outputs?.api?.sha256 ?? ''),
-      expectedIdentity: String(build?.workflowIdentity ?? ''),
-      expectedModelsSha: String(build?.modelsSha256 ?? ''),
-      ui,
-      api,
-      models,
-      plan,
-    },
+  return captureProjectExecutionSnapshot(
+    { readProjectMeta, readJson, path, hashCanonicalJson },
+    root,
     preflight,
-    hashCanonicalJson,
   );
 }
 
@@ -369,56 +331,22 @@ export async function readExecutionWorkflow(root: string, run: ExecutionRun) {
 
 // Capture the validated graph and its semantic inputs into a Run-owned
 // directory. Never re-use a Project output file during Local/Remote execution.
-async function persistRunSnapshot(
-  root: string,
-  runId: string,
-  snapshot: ExecutionRunSnapshot,
-): Promise<ExecutionRunSnapshot> {
-  const paths = runSnapshotPaths(runId);
-  const [ui, api, plan, models] = await Promise.all([
-    readJson<unknown>(path.join(root, snapshot.workflow.uiPath)),
-    readJson<unknown>(path.join(root, snapshot.workflow.apiPath)),
-    readJson<unknown>(path.join(root, 'prompt_plan.json')),
-    readJson<unknown>(path.join(root, 'models.json')),
-  ]);
-  if (
-    !ui ||
-    !api ||
-    !plan ||
-    !models ||
-    hashCanonicalJson(ui) !== snapshot.workflow.uiSha256 ||
-    hashCanonicalJson(api) !== snapshot.workflow.apiSha256 ||
-    hashCanonicalJson(plan) !== snapshot.plan.sha256 ||
-    hashWorkflowModelInputs(models as ModelsArtifact) !== snapshot.workflow.modelsSha256
-  )
-    throw new Error(
-      'EXECUTION_SNAPSHOT_SOURCE_CHANGED: Workflow, Prompt Plan or models changed while the Run was being created.',
-    );
-  const seeded = seedExecutionSnapshot(
-    api,
+async function persistRunSnapshot(root: string, runId: string, snapshot: ExecutionRunSnapshot) {
+  return persistImmutableRunSnapshot(
+    {
+      read: (id) => readJson<unknown>(path.join(root, id)),
+      write: (id, value) => writeJsonAtomic(path.join(root, id), value),
+      paths: runSnapshotPaths,
+      remove: (id) =>
+        rm(path.join(root, RUNS_DIR, id, 'snapshot'), { recursive: true, force: true }),
+      seed: () => randomInt(0, 2 ** 48 - 1),
+      hash: hashCanonicalJson,
+      modelHash: hashWorkflowModelInputs,
+    },
+    runId,
     snapshot,
-    paths,
-    () => randomInt(0, 2 ** 48 - 1),
-    hashCanonicalJson,
   );
-  const dir = path.join(root, RUNS_DIR, runId, 'snapshot');
-  try {
-    await writeJsonAtomic(path.join(root, paths.uiPath), seeded.ui);
-    await writeJsonAtomic(path.join(root, paths.apiPath), seeded.api);
-    await writeJsonAtomic(path.join(root, paths.planPath), plan);
-    await writeJsonAtomic(path.join(root, paths.modelsPath), models);
-    const next = seeded.snapshot;
-    await readExecutionWorkflow(root, {
-      runId,
-      snapshot: next,
-    } as ExecutionRun);
-    return next;
-  } catch (error) {
-    await rm(dir, { recursive: true, force: true });
-    throw error;
-  }
 }
-
 function evidenceFingerprint(runIdentity: string, input: ExecutionEvidenceInput) {
   return hashCanonicalJson({
     runIdentity,
@@ -464,8 +392,7 @@ export async function mutateExecutionRun(
     const working = clone(current),
       result = mutator(working),
       next = (result ?? working) as ExecutionRun;
-    next.updatedAt = new Date().toISOString();
-    if (next.lifecycle === 'COMPLETED' && !next.completedAt) next.completedAt = next.updatedAt;
+    stampRunMutation(next, new Date().toISOString());
     await writeRun(root, next);
     return next;
   });

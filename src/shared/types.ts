@@ -229,30 +229,18 @@ export interface AppSettingsStatus extends Required<AppSettings> {
   modelFiles: { text_encoders: LocalModelDirectory; vae: LocalModelDirectory };
 }
 
-export interface ArtifactReadResult {
-  key: ArtifactKey;
-  source: 'confirmed' | 'draft';
-  content: string | null;
-  exists: boolean;
-  validation: ValidationResult;
-}
+export type { ArtifactReadResult } from '../domain/artifact-types.js';
+import type { ArtifactReadResult } from '../domain/artifact-types.js';
 
 export type { ImportResult } from '../domain/artifact-types.js';
 
 import type { ImportResult } from '../domain/artifact-types.js';
 
 export type GrokLoraSelectionStage = 'models' | 'models-fix';
-export interface GrokLoraSelectionHistoryEntry {
-  id: string;
-  stage: GrokLoraSelectionStage;
-  createdAt: string;
-  loras: LoraSelection[];
-}
-export interface LoraFileAvailability {
-  fileName: string;
-  local: boolean;
-  r2: boolean;
-}
+export type { GrokLoraSelectionHistoryEntry } from '../domain/resource-observation-types.js';
+import type { GrokLoraSelectionHistoryEntry } from '../domain/resource-observation-types.js';
+export type { LoraFileAvailability } from '../domain/resource-observation-types.js';
+import type { LoraFileAvailability } from '../domain/resource-observation-types.js';
 
 export type PromptLeaf = PromptLeafV1 | PromptLeafV2;
 export type PromptBranch = PromptBranchV1 | PromptBranchV2;
@@ -302,97 +290,34 @@ export interface VastAiConnectionStatus {
   sshKeyPairValid: boolean;
   sshUser: string;
 }
-export interface VastAiComfyUiTemplate {
-  id: number | null;
-  hashId: string;
-  name: string;
-  recommendedDiskSpaceGb: number;
-  countCreated: number | null;
-  extraFilters: Record<string, unknown>;
-}
-export interface VastAiOfferSearchInput {
-  storageGb: number;
-  minTflops: number;
-  gpuCount: number;
-  minReliability: number;
-  excludedCountries: string[];
-}
-export interface VastAiOffer {
-  id: number;
-  gpuName: string | null;
-  gpuCount: number | null;
-  gpuRamMb: number | null;
-  gpuTotalRamMb: number | null;
-  totalFlops: number | null;
-  gpuMemBandwidthGbps: number | null;
-  verification: string | null;
-  geolocation: string | null;
-  machineId: number | null;
-  hostId: number | null;
-  motherboard: string | null;
-  pciGen: number | null;
-  gpuLanes: number | null;
-  pcieBandwidthGbps: number | null;
-  cpuName: string | null;
-  cpuCores: number | null;
-  cpuCoresEffective: number | null;
-  cpuRamMb: number | null;
-  diskName: string | null;
-  diskBandwidthMb: number | null;
-  diskSpaceGb: number | null;
-  internetDownMb: number | null;
-  internetUpMb: number | null;
-  directPortCount: number | null;
-  dlperf: number | null;
-  cudaMaxGood: number | null;
-  durationSeconds: number | null;
-  reliability: number | null;
-  dlperfPerDollar: number | null;
-  flopsPerDollar: number | null;
-  hourlyCost: number | null;
-  storageCostPerGbMonth: number | null;
-  internetDownCostPerTb: number | null;
-  internetUpCostPerTb: number | null;
-}
-export interface VastAiOfferSearchResult {
-  template: VastAiComfyUiTemplate;
-  offers: VastAiOffer[];
-}
-export interface VastAiRentRequest {
-  offerId: number;
-  storageGb: number;
-  templateHashId: string;
-}
+import type {
+  VastAiComfyUiTemplate,
+  VastAiOfferSearchInput,
+  VastAiOffer,
+  VastAiOfferSearchResult,
+  VastAiRentRequest,
+} from '../domain/integration-types.js';
+export type {
+  VastAiComfyUiTemplate,
+  VastAiOfferSearchInput,
+  VastAiOffer,
+  VastAiOfferSearchResult,
+  VastAiRentRequest,
+} from '../domain/integration-types.js';
 
-export interface VastAiSshEndpoint {
-  provider: 'vastai';
-  instanceId: number;
-  host: string;
-  port: number;
-  user: string;
-  privateKeyPath: string;
-  publicKeyPath: string;
-  comfyUiDirectory: string;
-  comfyUiPort: number;
-}
+import type { VastAiSshEndpoint } from '../domain/integration-types.js';
+export type { VastAiSshEndpoint } from '../domain/integration-types.js';
 
-export interface CatalogSelectionEntry {
-  collectionId: number;
-  modelId: number;
-  versionId: number;
-}
-export interface CatalogSelectionTemplate {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  selection: CatalogSelectionEntry[];
-}
-export interface CatalogSelectionTemplateInput {
-  id?: string;
-  name: string;
-  selection: CatalogSelectionEntry[];
-}
+import type {
+  CatalogSelectionEntry,
+  CatalogSelectionTemplate,
+  CatalogSelectionTemplateInput,
+} from '../domain/integration-types.js';
+export type {
+  CatalogSelectionEntry,
+  CatalogSelectionTemplate,
+  CatalogSelectionTemplateInput,
+} from '../domain/integration-types.js';
 
 export interface FinalArtifactImageItem {
   path: string;
@@ -456,21 +381,8 @@ export interface MarketplacePickerSelection extends MarketplacePickerSession {
   previewGeneration?: number;
 }
 
-export interface GrokTask {
-  stage:
-    | 'story-initial'
-    | 'story-finalize'
-    | 'story-fix'
-    | 'models'
-    | 'models-fix'
-    | 'prompt-plan'
-    | 'prompt-plan-fix'
-    | 'prompt-plan-patch'
-    | 'caption';
-  title: string;
-  prompt: string;
-  attachments: Array<{ name: string; path: string; purpose: string; exists: boolean }>;
-}
+export type { GrokTask } from '../domain/agent-runtime-types.js';
+import type { GrokTask } from '../domain/agent-runtime-types.js';
 
 export interface CompileResult {
   outputPath: string;
@@ -506,24 +418,15 @@ export interface R2Bucket {
   name: string;
   createdAt?: string | null;
 }
-export interface R2Object {
-  key: string;
-  name: string;
-  size: number;
-  etag: string;
-  lastModified?: string | null;
-  storageClass?: string;
-}
+export type { R2Object } from '../domain/resource-observation-types.js';
+import type { R2Object } from '../domain/resource-observation-types.js';
 export interface R2ListResult {
   folders: Array<{ prefix: string; name: string }>;
   objects: R2Object[];
   nextToken: string | null;
 }
-export interface R2SearchResult {
-  objects: R2Object[];
-  nextToken: string | null;
-  scanned: number;
-}
+export type { R2SearchResult } from '../domain/resource-observation-types.js';
+import type { R2SearchResult } from '../domain/resource-observation-types.js';
 export interface R2DownloadInfo {
   key: string;
   url: string;
@@ -539,153 +442,61 @@ export interface R2PutUrlInfo {
   contentType: string | null;
   commands: { url: string; curl: string };
 }
-export interface R2BatchDownloadTemplate {
-  id: string;
-  name: string;
-  bucket: string;
-  createdAt: string;
-  updatedAt: string;
-  objects: Array<{ key: string; name: string; size?: number }>;
-}
-export interface R2UploadSourceFingerprint {
-  size: number;
-  mtimeMs: number;
-  ctimeMs: number;
-  dev: number;
-  ino: number;
-  sha256: string;
-  partSha256: string[];
-}
-export interface R2UploadJob {
-  id: string;
-  sourceFingerprint?: R2UploadSourceFingerprint;
-  hashProgressBytes?: number;
-  kind?: 'upload' | 'move';
-  startedAt?: string;
-  initialTransferredBytes?: number;
-  completedAt?: string;
-  bucket: string;
-  key: string;
-  filePath: string;
-  fileName: string;
-  size: number;
-  contentType: string;
-  uploadId: string | null;
-  partSize: number;
-  completedParts: Record<string, string>;
-  status: 'paused' | 'uploading' | 'complete' | 'failed' | 'cancelled';
-  transferredBytes: number;
-  error: string;
-  createdAt: string;
-}
+import type {
+  R2BatchDownloadTemplate,
+  R2UploadSourceFingerprint,
+  R2UploadJob,
+} from '../domain/integration-types.js';
+export type {
+  R2BatchDownloadTemplate,
+  R2UploadSourceFingerprint,
+  R2UploadJob,
+} from '../domain/integration-types.js';
+
 export interface R2Metrics {
   configured: boolean;
   payload?: unknown;
 }
-export type GrokContextStage = 'story' | 'models' | 'prompt-plan' | 'caption';
-export type AgentProvider = 'grok' | 'codex';
-export type AssistantPaneProvider = AgentProvider;
-export type AutoArtifactProvider = AgentProvider;
-
-export interface AgentContext {
-  root: string;
-  stage: GrokContextStage;
-}
-
-export interface AgentCapabilities {
-  structuredEvents: boolean;
-  sessionResume: boolean;
-  fileWorkspace: boolean;
-  modelSelection: boolean;
-  reasoningEffort: boolean;
-}
-
-export interface AgentAvailability {
-  provider: AgentProvider;
-  state: 'available' | 'missing' | 'unauthenticated' | 'unsupported' | 'error';
-  version: string | null;
-  message: string | null;
-}
-
-export interface AgentModelOption {
-  id: string;
-  displayName: string;
-  supportedReasoningEfforts?: string[];
-}
-
-export interface AgentModelSelection {
-  model: string | null;
-  reasoningEffort?: string | null;
-}
-
-export interface AgentModelSettings {
-  models: AgentModelOption[];
-  selection: AgentModelSelection;
-}
-
-export interface AgentWorkspaceDescriptor {
-  workspaceId: string;
-  directory: string;
-  inputDirectory: string;
-  outputDirectory: string;
-  outputPath: string;
-  fileName: string;
-}
-
-export interface AgentConversationWorkspaceDescriptor {
-  workspaceId: string;
-  directory: string;
-  inputDirectory: string;
-}
-
-export type AgentTaskWorkspaceDescriptor =
-  | AgentWorkspaceDescriptor
-  | AgentConversationWorkspaceDescriptor;
-
-export interface AgentTaskRequest {
-  context: AgentContext;
-  taskStage: GrokTask['stage'];
-  prompt: string;
-  extra: string;
-  workspace?: AgentTaskWorkspaceDescriptor;
-  model?: AgentModelSelection;
-}
-
-export interface AgentTurn {
-  provider: AgentProvider;
-  sessionId: string;
-  turnId: string;
-}
-
-export type AgentEvent =
-  | { type: 'session.started'; at: number; sessionId: string }
-  | { type: 'turn.started'; at: number; turnId: string }
-  | { type: 'message.delta'; at: number; text: string }
-  | { type: 'message.completed'; at: number; text: string }
-  | { type: 'activity'; at: number; label: string; detail?: string }
-  | { type: 'tool.started'; at: number; name: string }
-  | { type: 'tool.completed'; at: number; name: string; success: boolean }
-  | { type: 'file.changed'; at: number; path: string }
-  | { type: 'artifact.ready'; at: number; fileName: string; path: string }
-  | { type: 'turn.completed'; at: number; turnId: string }
-  | { type: 'turn.failed'; at: number; error: string }
-  | { type: 'turn.cancelled'; at: number; turnId: string };
-
-export interface AgentEventEnvelope {
-  provider: AgentProvider;
-  root: string;
-  stage: GrokContextStage;
-  taskStage: GrokTask['stage'];
-  event: AgentEvent;
-}
-
-export interface AgentConversationMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  text: string;
-  at: number;
-}
-
+export type {
+  GrokContextStage,
+  AgentProvider,
+  AssistantPaneProvider,
+  AutoArtifactProvider,
+  AgentContext,
+  AgentCapabilities,
+  AgentAvailability,
+  AgentModelOption,
+  AgentModelSelection,
+  AgentModelSettings,
+  AgentWorkspaceDescriptor,
+  AgentConversationWorkspaceDescriptor,
+  AgentTaskWorkspaceDescriptor,
+  AgentTaskRequest,
+  AgentTurn,
+  AgentEvent,
+  AgentEventEnvelope,
+  AgentConversationMessage,
+} from '../domain/agent-runtime-types.js';
+import type {
+  GrokContextStage,
+  AgentProvider,
+  AssistantPaneProvider,
+  AutoArtifactProvider,
+  AgentContext,
+  AgentCapabilities,
+  AgentAvailability,
+  AgentModelOption,
+  AgentModelSelection,
+  AgentModelSettings,
+  AgentWorkspaceDescriptor,
+  AgentConversationWorkspaceDescriptor,
+  AgentTaskWorkspaceDescriptor,
+  AgentTaskRequest,
+  AgentTurn,
+  AgentEvent,
+  AgentEventEnvelope,
+  AgentConversationMessage,
+} from '../domain/agent-runtime-types.js';
 export interface AssistantPaneContext extends AgentContext {
   provider: AgentProvider;
 }
@@ -700,27 +511,8 @@ export interface AssistantPaneSnapshot {
   modelSettings: AgentModelSettings | null;
   busy: boolean;
 }
-export type AutoArtifactPhase =
-  | 'waiting'
-  | 'detected'
-  | 'validating'
-  | 'imported'
-  | 'duplicate'
-  | 'invalid'
-  | 'failed';
-export interface AutoArtifactEvent {
-  provider: AutoArtifactProvider;
-  root: string;
-  stage: GrokTask['stage'];
-  fileName: string;
-  phase: AutoArtifactPhase;
-  sourceId: string;
-  filePath?: string;
-  rawResponsePath?: string;
-  message?: string;
-  issues?: ValidationIssue[];
-  summary?: ImportResult['summary'];
-}
+export type { AutoArtifactEvent, AutoArtifactPhase } from '../domain/auto-artifact-types.js';
+import type { AutoArtifactEvent } from '../domain/auto-artifact-types.js';
 export interface CodexMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -973,6 +765,12 @@ export interface BatchStudioApi {
     onPickerPreview: (listener: (selection: ThumbnailPickerSelection) => void) => () => void;
     onPickerCommit: (listener: (selection: ThumbnailPickerSelection) => void) => () => void;
     onPickerCancel: (listener: (session: ThumbnailPickerSession) => void) => () => void;
+    deleteDocument: (
+      root: string,
+      id: number,
+      expectedRevision: number,
+      deleteOutputs: boolean,
+    ) => Promise<{ state: ThumbnailEditorState; cleanupWarning?: string }>;
     deleteOutputs: (root: string, documentId: number) => Promise<void>;
     exportImage: (
       root: string,

@@ -1,3 +1,21 @@
+import { chooseObservedAgentModel } from '../application/observed-agent-model-selection.js';
+import {
+  agentTaskContexts as codexTaskContexts,
+  contextStageForTask,
+} from '../domain/agent-stage-policy.js';
+import { resolveVastSshEndpoint as resolveVastSshEndpointCore } from '../application/vast-ssh-endpoint.js';
+import { deleteThumbnailDocument } from './thumbnail-service.js';
+import { readJson } from './fs-utils.js';
+import { ExecutionRecoveryController } from '../application/execution-recovery-controller.js';
+import { hashCanonicalJson } from './workflow-api.js';
+import { prepareRemoteExecution as prepareRemoteExecutionCore } from '../application/remote-execution-preparation.js';
+import {
+  launchExecution,
+  submitExecution,
+  observeExecutionCompletion,
+} from '../application/execution-launch.js';
+import { ExecutionCommands } from '../application/execution-commands.js';
+import { selectAvailableAgentModel } from '../domain/agent-model-policy.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -219,7 +237,6 @@ const standaloneToolWindows = new Map<StandaloneWindowTool, StandaloneToolWindow
 const thumbnailPickerWindows = new Map<number, ThumbnailPickerWindowState>();
 const marketplacePickerWindows = new Map<number, MarketplacePickerWindowState>();
 const executionCoordinator = new ExecutionCoordinator();
-const executionRecoveryChecks = new Map<string, Promise<void>>();
 const statusReconciliations = new Map<string, Promise<string | null>>();
 const statusSnapshots = new Map<string, { at: number; runId: string | null }>();
 const STATUS_RECONCILE_INTERVAL_MS = 60_000;
@@ -1018,26 +1035,31 @@ function remoteLifecycle() {
     remoteInstanceLifecycleService = new RemoteInstanceLifecycleService(vastClient());
   return remoteInstanceLifecycleService;
 }
-async function finalizeRemoteInstance(root: string, runId: string) {
-  try {
-    await remoteLifecycle().finalize(root, runId);
-  } catch (error) {
-    await mutateExecutionRun(root, runId, (r) => {
-      const e = {
-        code: 'REMOTE_INSTANCE_FINALIZE_FAILED',
-        message: safeExecutionError(error),
-        phase: 'CLOUD_INSTANCE_FINALIZING' as const,
-        at: new Date().toISOString(),
-        retryable: true,
-      };
-      r.error = e;
-      r.errorHistory.push(e);
-      r.lifecycle = 'FAILED';
-      r.completedAt = null;
-      r.controls.scheduling = 'STOPPED';
-    });
-  }
+let executionRecoveryService: ExecutionRecoveryController | null = null;
+function executionRecovery() {
+  return (executionRecoveryService ??= new ExecutionRecoveryController({
+    getExecutionRun,
+    listExecutionRuns,
+    mutateExecutionRun,
+    executionCoordinator,
+    localExecutor,
+    remoteImageExecutor,
+    vastClient,
+    remoteLifecycle,
+    verifyLocalOutputs,
+    safeExecutionError,
+    maybeQuitAfterExecution,
+    settings: () => settingsStore().status(),
+    hash: hashCanonicalJson,
+    now: () => new Date().toISOString(),
+    warn: (...args) => console.warn(...args),
+  }));
 }
+
+async function finalizeRemoteInstance(root: string, runId: string) {
+  return executionRecovery().finalizeRemoteInstance(root, runId);
+}
+
 function remoteImageExecutor() {
   if (!remoteExecutionService)
     remoteExecutionService = new RemoteExecutionService(
@@ -1056,289 +1078,103 @@ function isRemotePreGenerationPhase(phase: string) {
   return isRemotePreparationPhase(phase);
 }
 async function prepareRemoteExecution(root: string, runId: string) {
-  try {
-    const githubToken = await settingsStore().githubPat();
-    await remoteLifecycle().prepare(root, runId);
-    await remoteExecutor().connect(root, runId);
-    await remoteBootstrap().prepare(root, runId, {
-      githubToken,
-    });
-    await remoteStager().stage(root, runId);
-    await remoteImageExecutor().start(root, runId);
-    const settled = await getExecutionRun(root, runId);
-    if (settled?.lifecycle === 'DISCARDED') await finalizeRemoteInstance(root, runId);
-  } catch (error) {
-    const current = await getExecutionRun(root, runId);
-    if (current?.lifecycle === 'PAUSED' || current?.lifecycle === 'INTERRUPTED') {
-      remoteExecutor().disconnect(root, runId);
-      return;
-    }
-    if (current?.lifecycle === 'DISCARDED') {
-      await finalizeRemoteInstance(root, runId);
-      remoteExecutor().disconnect(root, runId);
-      return;
-    }
-    if (current?.lifecycle === 'FAILED' && current.error?.code === 'REMOTE_INSTANCE_REPLACED') {
-      await finalizeRemoteInstance(root, runId);
-      remoteExecutor().disconnect(root, runId);
-      return;
-    }
-    await mutateExecutionRun(root, runId, (r) => {
-      const modelPhase =
-        r.phase === 'REMOTE_MODELS_CHECKING' || r.phase === 'REMOTE_MODELS_DOWNLOADING';
-      const bootstrapPhase = [
-        'REMOTE_DEPENDENCIES_INSTALLING',
-        'REMOTE_GITHUB_AUTHENTICATING',
-        'REMOTE_COMFYUI_UPDATING',
-        'REMOTE_COMFYUI_RELEASE_CHECKING',
-        'REMOTE_COMFYUI_RELEASE_FETCHING',
-        'REMOTE_COMFYUI_CHECKING_OUT',
-        'REMOTE_COMFYUI_REQUIREMENTS_INSTALLING',
-        'REMOTE_COMFYUI_MANAGER_CONFIGURING',
-        'REMOTE_COMFYUI_RESTARTING',
-        'REMOTE_ENVIRONMENT_READY',
-      ].includes(r.phase);
-      const lifecyclePhase = [
-        'CLOUD_INSTANCE_RESOLVING',
-        'CLOUD_INSTANCE_STARTING',
-        'CLOUD_INSTANCE_READY',
-        'CLOUD_INSTANCE_FINALIZING',
-      ].includes(r.phase);
-      const code = lifecyclePhase
-        ? 'REMOTE_INSTANCE_LIFECYCLE_FAILED'
-        : modelPhase
-          ? 'REMOTE_MODEL_STAGING_FAILED'
-          : bootstrapPhase
-            ? 'REMOTE_ENVIRONMENT_BOOTSTRAP_FAILED'
-            : 'REMOTE_CONTROL_PLANE_FAILED';
-      const e = {
-        code,
-        message: safeExecutionError(error),
-        phase: r.phase,
-        at: new Date().toISOString(),
-        retryable: true,
-      };
-      r.error = e;
-      r.errorHistory.push(e);
-      r.lifecycle = 'FAILED';
-      r.controls.scheduling = 'STOPPED';
-    });
-    await finalizeRemoteInstance(root, runId);
-    remoteExecutor().disconnect(root, runId);
-  }
-}
-
-async function markExecutionRecoveryUncertain(root: string, runId: string, reason: unknown) {
-  return mutateExecutionRun(root, runId, (run) => {
-    if (run.lifecycle !== 'RUNNING') return;
-    const failure = {
-      code: 'EXECUTION_RECOVERY_UNCERTAIN',
-      message: `前回の実行状態を確定できません。既存PromptやWorkerが稼働中の可能性があるため、重複投入を防止しました。ComfyUI Queue/HistoryとVast.ai Instanceの状態を確認してください: ${safeExecutionError(reason)}`,
-      phase: run.phase,
-      at: new Date().toISOString(),
-      retryable: false,
-    };
-    run.error = failure;
-    run.errorHistory.push(failure);
-    run.lifecycle = 'FAILED';
-    run.controls.scheduling = 'STOPPED';
-    // Preserve current.promptId, progress and evidence for manual reconciliation.
-  });
+  return prepareRemoteExecutionCore(
+    {
+      githubPat: () => settingsStore().githubPat(),
+      remoteLifecycle,
+      remoteExecutor,
+      remoteBootstrap,
+      remoteStager,
+      remoteImageExecutor,
+      getExecutionRun,
+      mutateExecutionRun,
+      finalizeRemoteInstance,
+      safeExecutionError,
+      now: () => new Date().toISOString(),
+    },
+    root,
+    runId,
+  );
 }
 
 type ExitMode = 'graceful' | 'interrupt';
-const EXIT_SETTLE_POLLS = 240;
 const exitChecks = new Map<string, Promise<boolean>>();
-
-async function stopVastInstanceForExit(run: ExecutionRun, root: string) {
-  const id = Number(run.remote?.instanceId);
-  if (!Number.isInteger(id) || id < 1) throw new Error('Remote Run has no Vast.ai Instance ID.');
-  const client = vastClient();
-  let instance: Awaited<ReturnType<VastAiClient['getInstance']>>;
-  try {
-    instance = await client.getInstance(id);
-  } catch (error) {
-    if (error instanceof VastAiInstanceNotFoundError) return;
-    throw error;
-  }
-  if (instance.id !== id) throw new Error('Vast.ai Instance identity mismatch.');
-  if (instance.status !== 'stopped') await client.stopInstance(id);
-  for (let attempt = 0; attempt < EXIT_SETTLE_POLLS; attempt++) {
-    instance = await client.getInstance(id);
-    if (instance.id !== id) throw new Error('Vast.ai Instance identity mismatch.');
-    if (instance.status === 'stopped') {
-      await mutateExecutionRun(root, run.runId, (current) => {
-        if (!current.remoteLifecycle) return;
-        current.remoteLifecycle.latest = {
-          provider: 'vastai',
-          instanceId: id,
-          status: instance.status,
-          rawStatus: instance.rawStatus,
-          intendedStatus: instance.intendedStatus,
-          curState: instance.curState,
-          nextState: instance.nextState,
-          statusMessage: instance.statusMessage,
-          sshHost: instance.sshHost,
-          sshPort: instance.sshPort,
-          comfyUiPort: instance.comfyUiPort,
-          resolvedAt: new Date().toISOString(),
-        };
-        current.remoteLifecycle.finalizedAt = new Date().toISOString();
-      });
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-  throw new Error(
-    `Vast.ai Instance #${id} の停止完了を確認できません。課金状態を確認してください。`,
-  );
-}
 
 // This is a stop-only reconciliation. Never call /prompt or change progress:
 // a successfully completed but uncollected image must be recovered separately.
-async function stopUncertainLocalRunForEdit(root: string, runId: string, mode: ExitMode) {
-  const ref = { projectRoot: path.resolve(root), runId };
-  await localExecutor().waitForSettled(runId);
-  await executionCoordinator.waitForSettled(ref);
-  const run = await getExecutionRun(root, runId);
-  if (
-    !run ||
-    run.executionTarget !== 'local' ||
-    run.lifecycle !== 'FAILED' ||
-    run.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN'
-  )
-    throw new Error('実行状態が変わりました。Runを再確認してください。');
-  const settings = await settingsStore().status();
-  const comfy = new ComfyUiClient(settings.comfyUiApiEndpoint);
-  let promptId = run.current.promptId ?? run.submission?.promptId ?? null;
-  if (!promptId && run.submission?.status === 'sending')
-    promptId = await comfy.findPromptBySubmissionId(run.submission.attemptId);
-  if (!promptId)
-    throw new Error(
-      '受理された可能性のあるPrompt IDを特定できません。Runの破棄またはQueue/Historyの確認が必要です。',
-    );
-  for (let poll = 0; poll < EXIT_SETTLE_POLLS; poll++) {
-    const running = await comfy.isPromptRunning(promptId);
-    const queued = running || (await comfy.isPromptQueued(promptId));
-    if (queued) {
-      if (mode === 'interrupt') {
-        if (!running)
-          throw new Error(
-            '既存PromptがQueue待機中です。他のPromptを消さずに停止できません。ComfyUI上で対象Promptを取り除いてください。',
-          );
-        await comfy.interrupt();
-      }
-    } else {
-      const history = await comfy.history(promptId);
-      const state = comfy.historyState(history, promptId);
-      if (state === 'success' || state === 'error') {
-        const stopped = await mutateExecutionRun(root, runId, (current) => {
-          if (
-            current.lifecycle !== 'FAILED' ||
-            current.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN'
-          )
-            throw new Error('Run changed during stop verification.');
-          current.current.promptId = promptId;
-          current.controls.scheduling = 'STOPPED';
-          current.controls.interrupt = state === 'error' ? 'INTERRUPTED' : 'IDLE';
-          const code =
-            state === 'success'
-              ? 'LOCAL_OUTPUT_COLLECTION_FAILED'
-              : 'LOCAL_RECOVERED_PROMPT_FAILED';
-          const error = {
-            code,
-            message:
-              state === 'success'
-                ? 'Promptの完了をHistoryで確認しました。保存済み画像は未回収です。「既存Runの状態を再確認」で回収するかRunを破棄してください。'
-                : '既存Promptの失敗をHistoryで確認しました。新しいPromptは送信していません。',
-            phase: current.phase,
-            at: new Date().toISOString(),
-            retryable: false,
-          };
-          current.error = error;
-          current.errorHistory.push(error);
-        });
-        executionCoordinator.releaseReservation(ref);
-        return stopped;
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error(
-    '既存Promptの終了を確認できません。新しいPromptを投入せず、停止操作を中止しました。',
-  );
-}
-
 // The main process owns this guard. Renderer-only navigation checks cannot protect
 // the native window close / File > Quit paths.
 async function stopRunForExit(root: string, runId: string, mode: ExitMode) {
-  let run = await getExecutionRun(root, runId);
-  if (!run) throw new Error('Execution Run disappeared during stop.');
-  const stopPlan = planRunStop(executionState(run));
-  if (stopPlan === 'recover-local') return stopUncertainLocalRunForEdit(root, runId, mode);
-  if (run.lifecycle === 'RUNNING') {
-    if (stopPlan === 'pause-preparation') {
-      await mutateExecutionRun(root, runId, (current) => {
-        if (current.lifecycle !== 'RUNNING') return;
-        current.lifecycle = 'PAUSED';
-        current.controls.scheduling = 'STOPPED';
-        current.controls.interrupt = 'IDLE';
-      });
-      await executionCoordinator.waitForSettled({ projectRoot: path.resolve(root), runId });
-    } else {
-      await requestStopScheduling(root, runId);
-      if (run.executionTarget === 'remote') {
-        await remoteImageExecutor().stopScheduling(root, runId);
-        if (mode === 'interrupt') {
-          await requestForceInterrupt(root, runId);
-          await remoteImageExecutor().forceInterrupt(root, runId);
-        }
-      } else if (mode === 'interrupt') {
-        await requestForceInterrupt(root, runId);
-        await localExecutor().forceInterrupt(root, runId);
-      }
-      for (let attempt = 0; attempt < EXIT_SETTLE_POLLS; attempt++) {
-        run = await getExecutionRun(root, runId);
-        if (!run || run.lifecycle !== 'RUNNING') break;
-        await new Promise((resolve) => setTimeout(resolve, 250));
-      }
-      run = await getExecutionRun(root, runId);
-      if (!run || run.lifecycle === 'RUNNING')
-        throw new Error('Runの停止完了を確認できません。実行画面から停止状態を確認してください。');
-      if (run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
-        throw new Error('Promptの状態が不確定です。自動的に安全な停止と判定できません。');
-      await executionCoordinator.waitForSettled({ projectRoot: path.resolve(root), runId });
-    }
-  }
-  run = await getExecutionRun(root, runId);
-  if (!run || run.lifecycle === 'RUNNING') throw new Error('Run is still running.');
-  if (run.executionTarget === 'remote' && run.lifecycle !== 'DISCARDED')
-    await stopVastInstanceForExit(run, root);
-  return (await getExecutionRun(root, runId))!;
+  return executionCommands().stopRunForExit(root, runId, mode);
+}
+
+function executionCommands(owner?: BaseWindow) {
+  return new ExecutionCommands({
+    abandonExecutionRunForRemoteReplacement,
+    compileWorkflow,
+    discardExecutionRun,
+    executionCoordinator,
+    executionPreflight,
+    finalizeRemoteInstance,
+    getCurrentExecutionRun,
+    getExecutionRun,
+    listExecutionRuns,
+    localExecutor,
+    mutateExecutionRun,
+    readProjectMeta,
+    reconcilePersistedExecutionRuns,
+    remoteExecutor,
+    remoteImageExecutor,
+    requestForceInterrupt,
+    requestStopScheduling,
+    resumeExecutionRun,
+    resumeExecutionRunFinalization,
+    startExecutionRun,
+    startExecutionRuntime,
+    vastClient,
+    maybeQuitAfterExecution,
+    runProjectIdentity: async (root) =>
+      String((await readJson<any>(path.join(root, 'project_brief.json')))?.project?.id ?? ''),
+    localComfy: async () => new ComfyUiClient((await settingsStore().status()).comfyUiApiEndpoint),
+    directLocalRefused: isDirectLocalComfyRefused,
+    confirmRerun: async (runs) =>
+      (
+        await dialog.showMessageBox({
+          type: 'warning',
+          title: '最新のPrompt Planで最初から実行',
+          message: '未完了のRunを停止して、最新のprompt_plan.jsonで最初から実行しますか？',
+          detail: `${runs.length}件の未完了Runを破棄し、最新prompt_plan.jsonからWorkflow/API graphを再生成して、新しいRun IDで0から実行します。旧RunのRemote/R2一時成果物は削除しますが、Localへ回収済みの成果物は削除しません。`,
+          buttons: ['キャンセル', '最新のPrompt Planで実行'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        })
+      ).response === 1,
+    confirmOfflineDiscard: async () => {
+      if (!owner) throw new Error('Offline discard requires explicit confirmation.');
+      return (
+        (
+          await dialog.showMessageBox(owner, {
+            type: 'warning',
+            title: '停止したローカルComfyUIの確認',
+            message: 'ローカルComfyUIのAPI接続が拒否され、Queue/Historyを取得できません。',
+            detail:
+              '設定先のローカルComfyUIが完全に停止し、別ポートや転送先で旧Promptが実行されていないことを確認してください。Runの再開履歴は破棄しますが、ローカル保存済み画像は残します。確認できない場合はキャンセルしてください。',
+            buttons: ['キャンセル', '停止を確認してRunを破棄'],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+          })
+        ).response === 1
+      );
+    },
+    now: () => new Date().toISOString(),
+    sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  });
 }
 
 async function runRequiresExitGuard(root: string) {
-  const runs = await listExecutionRuns(root);
-  for (const run of runs) {
-    if (run.lifecycle === 'RUNNING' || run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
-      return true;
-    if (
-      run.executionTarget === 'remote' &&
-      (['PAUSED', 'INTERRUPTED'].includes(run.lifecycle) ||
-        (run.lifecycle === 'FAILED' && run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED'))
-    ) {
-      if (run.remoteLifecycle?.finalizedAt && run.remoteLifecycle.latest?.status === 'stopped')
-        continue;
-      if (!run.remote?.instanceId) return true;
-      try {
-        const instance = await vastClient().getInstance(Number(run.remote.instanceId));
-        if (instance.status !== 'stopped') return true;
-      } catch (error) {
-        if (!(error instanceof VastAiInstanceNotFoundError)) throw error;
-      }
-    }
-  }
-  return false;
+  return executionRecovery().runRequiresExitGuard(path.resolve(root));
 }
 
 async function ensureProjectWritable(root: string) {
@@ -1414,16 +1250,7 @@ async function confirmRunStopBeforeLeave(root: string, owner: BaseWindow, action
     });
     if (result.response === 0) return false;
     const mode: ExitMode = result.response === 1 ? 'graceful' : 'interrupt';
-    for (const run of await listExecutionRuns(root)) {
-      if (
-        run.lifecycle === 'RUNNING' ||
-        run.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN' ||
-        (run.executionTarget === 'remote' &&
-          (['PAUSED', 'INTERRUPTED'].includes(run.lifecycle) ||
-            (run.lifecycle === 'FAILED' && run.error?.code === 'REMOTE_INSTANCE_FINALIZE_FAILED')))
-      )
-        await stopRunForExit(root, run.runId, mode);
-    }
+    await executionCommands().stopAllForExit(root, mode);
     if (await runRequiresExitGuard(root))
       throw new Error(
         'RunまたはVast.ai Instanceの停止を確認できません。移動・終了を中止しました。',
@@ -1454,269 +1281,86 @@ function isDirectLocalComfyRefused(endpoint: string, error: unknown) {
   return refused(error);
 }
 
-async function confirmOfflineLocalRunDiscard(
-  root: string,
-  run: ExecutionRun,
-  comfy: ComfyUiClient,
-  error: unknown,
-  owner: BaseWindow,
-) {
-  const ref = { projectRoot: path.resolve(root), runId: run.runId };
-  if (
-    !isDirectLocalComfyRefused(comfy.endpoint, error) ||
-    run.lifecycle === 'RUNNING' ||
-    executionCoordinator.hasActive(ref)
-  )
-    throw error;
-  const answer = await dialog.showMessageBox(owner, {
-    type: 'warning',
-    title: '停止したローカルComfyUIの確認',
-    message: 'ローカルComfyUIのAPI接続が拒否され、Queue/Historyを取得できません。',
-    detail:
-      '設定先のローカルComfyUIが完全に停止し、別ポートや転送先で旧Promptが実行されていないことを確認してください。Runの再開履歴は破棄しますが、ローカル保存済み画像は残します。確認できない場合はキャンセルしてください。',
-    buttons: ['キャンセル', '停止を確認してRunを破棄'],
-    defaultId: 0,
-    cancelId: 0,
-    noLink: true,
-  });
-  if (answer.response !== 1) return false;
-  // Recheck at the moment of discard; a newly restarted ComfyUI must be
-  // inspected through Queue/History instead of this offline exception.
-  try {
-    await comfy.health();
-  } catch (retry) {
-    if (isDirectLocalComfyRefused(comfy.endpoint, retry)) return true;
-    throw retry;
-  }
-  throw new Error('ComfyUIが再起動されました。Queue/Historyを再確認してから破棄してください。');
-}
-
 async function discardCurrentExecutionRun(root: string, runId: string, owner: BaseWindow) {
-  const current = await getCurrentExecutionRun(root);
-  if (!current || current.runId !== runId) throw new Error('現在のRunのみ破棄できます。');
-  if (current.lifecycle === 'COMPLETED' || current.lifecycle === 'DISCARDED')
-    throw new Error('既に終了したRunは破棄対象ではありません。');
-  if (current.lifecycle === 'RUNNING') await stopRunForExit(root, runId, 'interrupt');
-  const run = await getExecutionRun(root, runId);
-  if (!run) throw new Error('Execution Run disappeared.');
-  if (run.executionTarget === 'local') {
-    const settings = await settingsStore().status();
-    const comfy = new ComfyUiClient(settings.comfyUiApiEndpoint);
-    try {
-      let promptId = run.current.promptId ?? run.submission?.promptId ?? null;
-      if (!promptId && run.submission?.status === 'sending')
-        promptId = await comfy.findPromptBySubmissionId(run.submission.attemptId);
-      if (!promptId && ['sending', 'acknowledged'].includes(run.submission?.status ?? ''))
-        throw new Error('送信済みPromptのIDを確認できません。Queue/Historyの確認が必要です。');
-      if (promptId) {
-        if (await comfy.isPromptQueued(promptId))
-          throw new Error(
-            `Prompt ${promptId} がComfyUIのQueueに残っています。停止してから破棄してください。`,
-          );
-        const history = await comfy.history(promptId);
-        if (comfy.historyState(history, promptId) === 'pending')
-          throw new Error(
-            `Prompt ${promptId} の完了または失敗をHistoryで確認できません。破棄を中止しました。`,
-          );
-      }
-    } catch (error) {
-      if (!(await confirmOfflineLocalRunDiscard(root, run, comfy, error, owner))) return null;
-    }
-  } else {
-    // Even an unreachable Remote Worker can no longer submit once the provider
-    // confirms that its entire GPU Instance is stopped.
-    await stopVastInstanceForExit(run, root);
-    remoteExecutor().disconnect(root, runId);
-  }
-  const discarded = await discardExecutionRun(root, runId);
-  executionCoordinator.releaseReservation({ projectRoot: path.resolve(root), runId });
-  return discarded;
-}
-
-async function recoverRemoteFinalization(root: string, runId: string) {
-  const run = await getExecutionRun(root, runId);
-  if (!run) return;
-  const evidence = validatedExecutionEvidence(run).valid,
-    kinds = new Set(evidence.map((item) => item.kind));
-  if (!kinds.has('LOCAL_FILE_VERIFIED') || !kinds.has('CLEANUP_COMPLETED'))
-    throw new Error('Completion evidence is incomplete. Refusing a finalize-only recovery.');
-  await finalizeRemoteInstance(root, runId);
-  const latest = await getExecutionRun(root, runId);
-  if (latest?.remoteLifecycle?.finalizedAt && latest.lifecycle === 'RUNNING')
-    await mutateExecutionRun(root, runId, (current) => {
-      current.lifecycle = 'COMPLETED';
-      current.phase = 'COMPLETED';
-      current.completedAt = new Date().toISOString();
-      current.controls.scheduling = 'STOPPED';
-    });
+  return executionCommands(owner).discardCurrentExecutionRun(root, runId);
 }
 
 // Called on project open/status (and before Start/Resume). Persisted RUNNING is
 // not proof that a worker is still active in this Main Process.
 async function reconcilePersistedExecutionRuns(root: string) {
-  const key = path.resolve(root);
-  const pending = executionRecoveryChecks.get(key);
-  if (pending) return pending;
-  const check = (async () => {
-    const runs = await listExecutionRuns(root);
-    const settings = await settingsStore().status();
-    // Claim all pre-existing uncertain resources before starting other Runs.
-    for (const run of [...runs].reverse()) {
-      if (run.error?.code !== 'EXECUTION_RECOVERY_UNCERTAIN') continue;
-      const ref = { projectRoot: key, runId: run.runId };
-      try {
-        if (run.executionTarget === 'local')
-          executionCoordinator.reserveLocal(ref, settings.comfyUiApiEndpoint);
-        else if (run.remote?.provider === 'vastai' && run.remote.instanceId)
-          executionCoordinator.reserveRemote(ref, 'vastai', run.remote.instanceId);
-      } catch (error) {
-        console.warn(
-          'Could not reserve an uncertain Execution Run resource:',
-          safeExecutionError(error),
-        );
-      }
-    }
-    for (const run of [...runs].reverse()) {
-      if (run.lifecycle !== 'RUNNING') continue;
-      const ref = { projectRoot: key, runId: run.runId };
-      if (executionCoordinator.hasActive(ref)) continue;
-      const recovery = planPersistedRecovery(run);
-      try {
-        if (run.executionTarget === 'local') {
-          const endpoint = settings.comfyUiApiEndpoint;
-          if (recovery === 'recover-local') {
-            void executionCoordinator
-              .startLocal(ref, endpoint, async () => {
-                await localExecutor().recover(root, run.runId);
-                const latest = await getExecutionRun(root, run.runId);
-                if (latest?.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
-                  executionCoordinator.retain(ref);
-              })
-              .finally(maybeQuitAfterExecution);
-          } else if (recovery === 'pause-prepared') {
-            // A prepared intent is durably marked before sending; no POST can
-            // have occurred unless the sending transition also persisted.
-            await mutateExecutionRun(root, run.runId, (current) => {
-              if (current.lifecycle !== 'RUNNING' || current.submission?.status !== 'prepared')
-                return;
-              current.lifecycle = 'PAUSED';
-              current.controls.scheduling = 'STOPPED';
-            });
-          } else if (recovery === 'pause-before-submit') {
-            // These phases precede every local POST /prompt.
-            await mutateExecutionRun(root, run.runId, (current) => {
-              if (current.lifecycle !== 'RUNNING' || current.current.promptId) return;
-              current.lifecycle = 'PAUSED';
-              current.controls.scheduling = 'STOPPED';
-              current.error = null;
-            });
-          } else if (recovery === 'verify-local-output') {
-            await verifyLocalOutputs(settings.comfyUiInstallPath, run);
-            await mutateExecutionRun(root, run.runId, (current) => {
-              if (current.lifecycle !== 'RUNNING') return;
-              current.lifecycle = 'COMPLETED';
-              current.completedAt = new Date().toISOString();
-              current.controls.scheduling = 'STOPPED';
-            });
-          } else {
-            executionCoordinator.reserveLocal(ref, endpoint);
-            await markExecutionRecoveryUncertain(
-              root,
-              run.runId,
-              'No persisted prompt ID; a response may have been lost after POST /prompt.',
-            );
-          }
-          continue;
-        }
-        if (run.remote?.provider !== 'vastai' || !run.remote.instanceId)
-          throw new Error('Remote Run has no valid instance identity.');
-        void executionCoordinator
-          .startRemote(ref, 'vastai', run.remote.instanceId, async () => {
-            try {
-              if (recovery === 'finalize-remote') await recoverRemoteFinalization(root, run.runId);
-              else await remoteImageExecutor().recover(root, run.runId);
-            } catch (error) {
-              await markExecutionRecoveryUncertain(root, run.runId, error);
-            }
-            const latest = await getExecutionRun(root, run.runId);
-            if (latest?.error?.code === 'EXECUTION_RECOVERY_UNCERTAIN')
-              executionCoordinator.retain(ref);
-          })
-          .finally(maybeQuitAfterExecution);
-      } catch (error) {
-        await markExecutionRecoveryUncertain(root, run.runId, error);
-      }
-    }
-  })().finally(() => executionRecoveryChecks.delete(key));
-  executionRecoveryChecks.set(key, check);
-  return check;
+  return executionRecovery().reconcilePersistedExecutionRuns(path.resolve(root));
 }
 
 async function startExecutionRuntime(root: string, run: ExecutionRun) {
-  const ref = { projectRoot: path.resolve(root), runId: run.runId };
-  try {
-    if (run.executionTarget === 'local') {
-      const settings = await settingsStore().status();
-      void executionCoordinator
-        .startLocal(ref, settings.comfyUiApiEndpoint, () => localExecutor().start(root, run.runId))
-        .finally(maybeQuitAfterExecution);
-      return;
-    }
-    const provider = run.remote?.provider,
-      instanceId = Number(run.remote?.instanceId);
-    if (provider !== 'vastai' || !Number.isInteger(instanceId) || instanceId < 1)
-      throw new Error('Remote Execution Run has no valid Vast.ai Instance.');
-    void executionCoordinator
-      .startRemote(ref, provider, instanceId, () => prepareRemoteExecution(root, run.runId))
-      .finally(maybeQuitAfterExecution);
-  } catch (error) {
-    await mutateExecutionRun(root, run.runId, (current) => {
-      const failure = {
-        code: 'EXECUTION_RESOURCE_BUSY',
-        message: safeExecutionError(error),
-        phase: current.phase,
-        at: new Date().toISOString(),
-        retryable: true,
-      };
-      current.error = failure;
-      current.errorHistory.push(failure);
-      current.lifecycle = 'FAILED';
-      current.controls.scheduling = 'STOPPED';
-    });
-    throw error;
-  }
+  return launchExecution(
+    {
+      mutate: mutateExecutionRun,
+      now: () => new Date().toISOString(),
+      safeError: safeExecutionError,
+      submit: (root, run) =>
+        submitExecution(
+          {
+            local: async (root, run) => {
+              const ref = { projectRoot: path.resolve(root), runId: run.runId };
+              const settings = await settingsStore().status();
+              void observeExecutionCompletion(
+                {
+                  mutate: mutateExecutionRun,
+                  now: () => new Date().toISOString(),
+                  safeError: safeExecutionError,
+                },
+                root,
+                run,
+                executionCoordinator.startLocal(ref, settings.comfyUiApiEndpoint, () =>
+                  localExecutor().start(root, run.runId),
+                ),
+              )
+                .finally(maybeQuitAfterExecution)
+                .catch((error) =>
+                  console.warn('Execution task failed:', safeExecutionError(error)),
+                );
+              return;
+            },
+            remote: async (root, run, provider, instanceId) => {
+              const ref = { projectRoot: path.resolve(root), runId: run.runId };
+              void observeExecutionCompletion(
+                {
+                  mutate: mutateExecutionRun,
+                  now: () => new Date().toISOString(),
+                  safeError: safeExecutionError,
+                },
+                root,
+                run,
+                executionCoordinator.startRemote(ref, provider, instanceId, () =>
+                  prepareRemoteExecution(root, run.runId),
+                ),
+              )
+                .finally(maybeQuitAfterExecution)
+                .catch((error) =>
+                  console.warn('Execution task failed:', safeExecutionError(error)),
+                );
+            },
+          },
+          root,
+          run,
+        ),
+    },
+    root,
+    run,
+  );
 }
-async function resolveVastSshEndpoint(instanceId: number): Promise<VastAiSshEndpoint> {
-  const instance = await vastClient().getInstance(instanceId),
-    settings = await vastStore().status(),
-    appSettings = await settingsStore().status();
-  if (instance.status !== 'running')
-    throw new Error(`Vast.ai Instance ${instanceId} はrunningではありません。`);
-  if (!instance.sshHost || !instance.sshPort)
-    throw new Error(`Vast.ai Instance ${instanceId} の公開SSH接続先を取得できません。`);
-  if (!instance.comfyUiPort)
-    throw new Error(
-      `Vast.ai Instance ${instanceId} のComfyUI Portをportsから解決できません。18188/tcp または 8188/tcp の公開設定を確認してください。`,
-    );
-  if (!settings.sshPrivateKeyPath || !settings.sshPrivateKeyExists)
-    throw new Error('Vast.ai連携設定でSSH秘密鍵を指定してください。');
-  if (!settings.sshPublicKeyPath || !settings.sshPublicKeyExists)
-    throw new Error('Vast.ai連携設定でSSH公開鍵を指定してください。');
-  if (!appSettings.remoteComfyUiInstallPath)
-    throw new Error('環境設定でRemote ComfyUIのインストール先ディレクトリを指定してください。');
-  const pair = await validateSshKeyPair(settings.sshPrivateKeyPath, settings.sshPublicKeyPath);
-  await vastClient().ensureSshAccess(instanceId, pair.publicKey);
-  return {
-    provider: 'vastai',
+async function resolveVastSshEndpoint(instanceId: number) {
+  return resolveVastSshEndpointCore(
+    {
+      instance: (id) => vastClient().getInstance(id),
+      settings: () => vastStore().status(),
+      installPath: async () => (await settingsStore().status()).remoteComfyUiInstallPath,
+      publicKey: async (privateKey, publicKey) =>
+        (await validateSshKeyPair(privateKey, publicKey)).publicKey,
+      provision: (id, key) => vastClient().ensureSshAccess(id, key),
+    },
     instanceId,
-    host: instance.sshHost,
-    port: instance.sshPort,
-    user: settings.sshUser,
-    privateKeyPath: settings.sshPrivateKeyPath,
-    publicKeyPath: settings.sshPublicKeyPath,
-    comfyUiDirectory: appSettings.remoteComfyUiInstallPath,
-    comfyUiPort: instance.comfyUiPort,
-  };
+  );
 }
 
 function ensureCatalogRuntimePath() {
@@ -1848,26 +1492,12 @@ async function assistantModelSettings(
   if (!adapter.getModels) return { models: [], selection: { model: null } };
   const available = await adapter.getModels();
   const saved = await agentModelSelections.get(root, stage, provider);
-  const requested = available.models.find((model) => model.id === saved?.model);
-  const fallback =
-    available.models.find((model) => model.id === available.selection.model) ?? available.models[0];
-  const model = requested ?? fallback;
-  const requestedEffort = saved?.reasoningEffort;
-  const supported = model?.supportedReasoningEfforts;
-  const defaultEffort =
-    model?.id === available.selection.model
-      ? available.selection.reasoningEffort
-      : (supported?.[0] ?? available.selection.reasoningEffort);
-  const reasoningEffort =
-    requestedEffort && (!supported?.length || supported.includes(requestedEffort))
-      ? requestedEffort
-      : defaultEffort;
   return {
     models: available.models,
-    selection: {
-      model: model?.id ?? null,
-      ...(reasoningEffort != null ? { reasoningEffort } : {}),
-    },
+    selection: selectAvailableAgentModel(saved ?? available.selection, {
+      models: available.models,
+      defaultModelId: available.selection.model,
+    }),
   };
 }
 
@@ -1877,32 +1507,21 @@ async function assistantChooseModel(
   provider: AgentProvider,
   selection: unknown,
 ): Promise<AgentModelSelection> {
-  if (
-    !selection ||
-    typeof selection !== 'object' ||
-    !('model' in selection) ||
-    ((selection as AgentModelSelection).model !== null &&
-      typeof (selection as AgentModelSelection).model !== 'string')
-  )
-    throw new Error('AIモデルを選択してください。');
-  const requested = selection as AgentModelSelection;
-  const settings = await assistantModelSettings(root, stage, provider);
-  const model = settings.models.find((item) => item.id === requested.model);
-  if (requested.model && !model) throw new Error('選択したモデルは利用できません。');
-  if (
-    requested.reasoningEffort &&
-    model?.supportedReasoningEfforts?.length &&
-    !model.supportedReasoningEfforts.includes(requested.reasoningEffort)
-  )
-    throw new Error('選択した推論強度はこのモデルで利用できません。');
-
-  const normalized: AgentModelSelection = {
-    model: requested.model,
-    ...(requested.reasoningEffort != null ? { reasoningEffort: requested.reasoningEffort } : {}),
-  };
-  if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
-  await agentModelSelections.remember(root, stage, provider, normalized);
-  return normalized;
+  return chooseObservedAgentModel(
+    {
+      capabilities: async () => {
+        const adapter = assistantAdapter(provider);
+        if (!adapter.getModels) throw new Error('Provider model capabilities are unavailable.');
+        const settings = await adapter.getModels();
+        return { models: settings.models, defaultModelId: settings.selection.model };
+      },
+      save: async (normalized) => {
+        if (!agentModelSelections) throw new Error('AIモデル設定が初期化されていません。');
+        await agentModelSelections.remember(root, stage, provider, normalized);
+      },
+    },
+    selection,
+  );
 }
 
 function notifyAutoArtifact(event: AutoArtifactEvent) {
@@ -1913,21 +1532,7 @@ function notifyAutoArtifact(event: AutoArtifactEvent) {
     }
   }
 }
-const codexTaskContexts: Record<GrokContextStage, GrokTask['stage'][]> = {
-  story: ['story-initial', 'story-finalize', 'story-fix'],
-  models: ['models', 'models-fix'],
-  'prompt-plan': ['prompt-plan', 'prompt-plan-fix', 'prompt-plan-patch'],
-  caption: ['caption'],
-};
 
-function contextStageForTask(stage: GrokTask['stage']): GrokContextStage {
-  for (const [contextStage, stages] of Object.entries(codexTaskContexts) as Array<
-    [GrokContextStage, GrokTask['stage'][]]
-  >) {
-    if (stages.includes(stage)) return contextStage;
-  }
-  throw new Error('Invalid task stage.');
-}
 function validCivitaiUrl(value: unknown) {
   if (typeof value !== 'string') return false;
   try {
@@ -2025,6 +1630,7 @@ function createIpcRegistrationDependencies() {
     contextStageForTask,
     createProject,
     deleteThumbnailOutputs,
+    deleteThumbnailDocument,
     dialog,
     discardCurrentExecutionRun,
     discardExecutionRun,
@@ -2128,6 +1734,7 @@ function createIpcRegistrationDependencies() {
     stateStore,
     statusSnapshots,
     stopRunForExit,
+    executionCommands,
     storeWebpThumbnailPreview,
     thumbnailPickerForSender,
     thumbnailPickerWindows,

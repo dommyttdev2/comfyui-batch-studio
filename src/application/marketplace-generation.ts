@@ -1,3 +1,7 @@
+import {
+  assertEligibleThumbnailSource,
+  type ThumbnailSourceFacts,
+} from '../domain/thumbnail-source-policy.js';
 import type {
   MarketplaceImageEditorState,
   MarketplaceImageTarget,
@@ -19,6 +23,8 @@ import type { ThumbnailOutputRecord, TrackedOutput } from '../domain/output-trac
 const FORMAT_EXTENSIONS = { png: 'png', jpeg: 'jpg', webp: 'webp' };
 export interface MarketplaceGenerationIO<Image> {
   targets(): Promise<MarketplaceImageTarget[]>;
+  thumbnailSourceFacts(projectId: string): Promise<ThumbnailSourceFacts>;
+  resourceName(resourceId: string): string;
   writeState(projectId: string, state: MarketplaceImageEditorState): Promise<unknown>;
   readState(projectId: string): Promise<MarketplaceImageEditorState>;
   loadSource(
@@ -54,6 +60,11 @@ export async function generateMarketplaceOutputs<Image>(
   const state = normalizeMarketplaceImageState(value, await io.targets());
   await io.writeState(root, state);
   const targets = await io.targets();
+  if (state.sourceType === 'thumbnail' && state.sourceImagePath)
+    assertEligibleThumbnailSource(
+      io.resourceName(state.sourceImagePath),
+      await io.thumbnailSourceFacts(root),
+    );
   const { resolved, image, size } = await io.loadSource(root, state);
   const source = await io.fingerprint(resolved);
   const inputSignature = marketplaceInputSignature(state, targets);
@@ -193,6 +204,8 @@ export async function generateCustomMarketplaceOutput<Image>(
 }
 
 export interface MarketplacePackageIO {
+  thumbnailSourceFacts(projectId: string): Promise<ThumbnailSourceFacts>;
+  resourceName(resourceId: string): string;
   targets(): Promise<MarketplaceImageTarget[]>;
   readState(projectId: string): Promise<MarketplaceImageEditorState>;
   outputDirectory(projectId: string): Promise<string>;
@@ -224,6 +237,11 @@ export async function packageMarketplaceOutputs(
   if (state.format !== format || !manifest) throw new Error(MARKETPLACE_REGENERATION_REQUIRED);
   let sourcePath: string, source: MarketplaceSourceFingerprint;
   try {
+    if (state.sourceType === 'thumbnail')
+      assertEligibleThumbnailSource(
+        io.resourceName(state.sourceImagePath),
+        await io.thumbnailSourceFacts(projectId),
+      );
     sourcePath = await io.resolveSource(projectId, state);
     source = await io.fingerprint(sourcePath);
   } catch {

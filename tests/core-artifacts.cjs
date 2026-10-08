@@ -614,6 +614,18 @@ test('workflow generation refuses tampered templates and stale confirmed inputs'
     (e) => e.code === 'INVALID_ARTIFACT',
   );
 });
+
+test('Workflow status re-observes manifest and template without refreshing stored provenance', async () => {
+  const f = await workflowFixture();
+  await f.app.compile(actor, f.command());
+  assert.equal(await f.app.status(actor, { projectId: 'p' }), 'current');
+  const original = f.projects.state.artifacts.workflow.content;
+  f.template.manifest.manifestVersion += '-changed';
+  assert.equal(await f.app.status(actor, { projectId: 'p' }), 'stale');
+  assert.equal(f.projects.state.artifacts.workflow.content, original);
+  f.template.content += ' ';
+  assert.equal(await f.app.status(actor, { projectId: 'p' }), 'stale');
+});
 test('workflow storage failure rolls back generation result and event together', async () => {
   const f = await workflowFixture();
   f.projects.failCommit = true;

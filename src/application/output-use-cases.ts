@@ -28,6 +28,10 @@ import {
   validateMarketplaceGeneration,
 } from '../domain/marketplace-generation-policy.js';
 import { normalizeThumbnailState, validThumbnailState } from '../domain/thumbnail-editor-policy.js';
+import {
+  assertEligibleThumbnailSource,
+  type ThumbnailSourceFacts,
+} from '../domain/thumbnail-source-policy.js';
 import { formatIsoUtc } from '../domain/time-policy.js';
 import { canonical } from '../domain/workflow-graph.js';
 import { assertCurrentProject, assertMutation, nextRevision } from './project-access.js';
@@ -42,6 +46,8 @@ export interface OutputFactsPort {
     targets: MarketplaceImageTarget[];
     source: MarketplaceSourceFingerprint;
     outputs: { targetId: string; size: number; sha256: string }[];
+    thumbnailSourceFacts?: ThumbnailSourceFacts;
+    sourceFileName?: string;
   }>;
 }
 export class OutputUseCases {
@@ -137,6 +143,11 @@ export class OutputUseCases {
     if (!project.editors?.marketplace)
       throw new BusinessError('INVALID_ARTIFACT', 'Saved marketplace state required.');
     const state = project.editors.marketplace;
+    if (state.sourceType === 'thumbnail') {
+      if (!data.thumbnailSourceFacts || !data.sourceFileName)
+        throw new BusinessError('INVALID_ARTIFACT', 'Current thumbnail source evidence required.');
+      assertEligibleThumbnailSource(data.sourceFileName, data.thumbnailSourceFacts);
+    }
     const targets = validateMarketplaceTargets({ schemaVersion: 1, targets: data.targets });
     validateMarketplaceGeneration(data.manifest, state, targets, data.source);
     const extension = state.format === 'jpeg' ? 'jpg' : state.format;

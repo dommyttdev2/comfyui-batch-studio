@@ -1,5 +1,5 @@
 import { MAX_REFERENCE_BYTES } from '../domain/agent-artifact-policy.js';
-import { validateAgentModelSelection } from '../domain/agent-state-policy.js';
+import { selectAvailableAgentModel } from '../domain/agent-model-policy.js';
 import type { ModelsArtifact } from '../domain/artifact-types.js';
 import { parseArtifact, validateCanonicalArtifact } from '../domain/canonical-artifact.js';
 import { type ActorContext, authorize, BusinessError, type Command } from '../domain/contracts.js';
@@ -197,7 +197,16 @@ export class AgentTaskUseCases {
         ...plan,
         attachments,
         projectRevision: project.revision,
-        model: model ? validateAgentModelSelection(model) : undefined,
+        model: model
+          ? selectAvailableAgentModel(
+              model,
+              await this.runtime.modelCapabilities({
+                projectId: command.projectId,
+                stage: scope,
+                provider: command.provider,
+              }),
+            )
+          : undefined,
       };
     });
   }
