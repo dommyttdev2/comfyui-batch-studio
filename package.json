@@ -42,8 +42,9 @@
     "typecheck:web": "tsc -p tsconfig.web.json",
     "test:web": "npm run build:workspace && node --test tests/server-project-browser.mjs tests/server-agent-browser.mjs",
     "recover:project": "node dist-server/server/project-recover.js",
-    "test:agents": "npm run build:server && node --test tests/server-agent-cli.mjs tests/server-agent-store.mjs tests/server-agent-jobs.mjs tests/server-agent-artifacts.mjs tests/server-agent-api.mjs",
-    "init:server-agent": "node dist-server/server/agent-init.js"
+    "test:agents": "npm run build:server && node --test tests/server-agent-cli.mjs tests/server-agent-store.mjs tests/server-agent-jobs.mjs tests/server-agent-artifacts.mjs tests/server-agent-api.mjs tests/server-agent-crash.mjs tests/server-agent-registration.mjs",
+    "init:server-agent": "node dist-server/server/agent-init.js",
+    "test:agents:real": "npm run build:workspace && node scripts/test-web-agent-real.mjs && node scripts/test-web-agent-api-real.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",

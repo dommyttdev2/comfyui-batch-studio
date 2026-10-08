@@ -137,3 +137,34 @@ test('explicit stop and session gate do not depend on HTTP lifetime', async () =
     await f.close();
   }
 });
+import { readFile, writeFile } from 'node:fs/promises';
+test('revoking execute/edit while CLI is running prevents artifact import', async () => {
+  const f = await fixture({ delay: 300 });
+  try {
+    await seedBrief(f.runtime, f.actor, f.id);
+    const result = await f.call('task', { stage: 'story-finalize', extra: '' });
+    assert.equal(result.status, 202);
+    for (let i = 0; i < 100 && f.agents.state.starts === 0; i++)
+      await new Promise((r) => setTimeout(r, 5));
+    assert.equal(f.agents.state.starts, 1);
+    const authFile = path.join(f.dir, 'auth.json');
+    const auth = JSON.parse(await readFile(authFile, 'utf8'));
+    auth.principals[0].permissions = ['read'];
+    await writeFile(authFile, JSON.stringify(auth));
+    await f.runtime.jobs.drain();
+    assert.equal(f.runtime.jobs.get(f.actor, result.body.job.id).state, 'failed');
+    const project = await f.runtime.projectApi.projects.read(f.actor, { projectId: f.id });
+    assert.equal(project.drafts.story, undefined);
+    const history = await f.call('history');
+    assert.equal(history.status, 401);
+    const records = f.runtime.agents.store.publicRecords(f.actor, {
+      projectId: f.id,
+      stage: 'story',
+      provider: 'codex',
+    });
+    assert.equal(records[0].imported, false);
+    assert.equal(records[0].importError, 'FORBIDDEN');
+  } finally {
+    await f.close();
+  }
+});

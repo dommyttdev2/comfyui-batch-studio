@@ -27,7 +27,6 @@ test('chat/task share a durable reservation before availability and duplicate re
     starts = 0;
   const defs = new Map(),
     jobs = new JobRegistry(f.dir, defs);
-  let sink;
   const adapter = {
     provider: 'codex',
     capabilities: {},
@@ -39,7 +38,6 @@ test('chat/task share a durable reservation before availability and duplicate re
     },
     startTask: async (_task, onEvent) => {
       starts++;
-      sink = onEvent;
       onEvent({ type: 'session.started', at: 1, sessionId: 'cli-session' });
       onEvent({ type: 'turn.started', at: 1, turnId: 'cli-turn' });
       onEvent({ type: 'message.completed', at: 1, text: 'scoped answer' });

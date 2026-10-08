@@ -68,21 +68,33 @@ export function validateAgentStore(raw: unknown): Store {
   )
     throw new HttpFailure(400, 'INVALID_AGENT_STORE');
   object(s.active);
+  if (s.records.length > 10_000 || s.operations.length > 50_000)
+    throw new HttpFailure(400, 'INVALID_AGENT_STORE');
+  const owners = new Map<string, { userId: string; scope: AgentScope }>();
+  const counts = new Map<string, number>();
   const ids = new Set<string>();
   for (const raw of s.conversations) {
     const c = object(raw);
     fields(c, ['id', 'userId', 'scope', 'cliSessionId', 'messages']);
     const id = identifier(c.id);
     identifier(c.userId);
-    validateScope(c.scope);
+    const scope = validateScope(c.scope);
+    owners.set(id, { userId: String(c.userId), scope });
+    const scopeKey = agentScopeKey(String(c.userId), scope);
+    const count = (counts.get(scopeKey) ?? 0) + 1;
+    if (count > 100) throw new HttpFailure(400, 'INVALID_AGENT_STORE');
+    counts.set(scopeKey, count);
     if (ids.has(id)) throw new HttpFailure(400, 'INVALID_AGENT_STORE');
     ids.add(id);
     if (c.cliSessionId !== null) identifier(c.cliSessionId);
     if (!Array.isArray(c.messages)) throw new HttpFailure(400, 'INVALID_AGENT_STORE');
+    const messages = new Set<string>();
     for (const raw of c.messages) {
       const m = object(raw);
       fields(m, ['id', 'role', 'text']);
-      identifier(m.id);
+      const messageId = identifier(m.id);
+      if (messages.has(messageId)) throw new HttpFailure(400, 'INVALID_AGENT_STORE');
+      messages.add(messageId);
       if (!['user', 'assistant'].includes(String(m.role)) || typeof m.text !== 'string')
         throw new HttpFailure(400, 'INVALID_AGENT_STORE');
     }
@@ -110,6 +122,9 @@ export function validateAgentStore(raw: unknown): Store {
     identifier(r.userId);
     validateScope(r.scope);
     if (jobs.has(id) || !ids.has(identifier(r.conversationId)))
+      throw new HttpFailure(400, 'INVALID_AGENT_STORE');
+    const owner = owners.get(String(r.conversationId))!;
+    if (owner.userId !== r.userId || !same(owner.scope, r.scope as unknown as AgentScope))
       throw new HttpFailure(400, 'INVALID_AGENT_STORE');
     jobs.add(id);
     for (const key of ['cliSessionId', 'turnId', 'taskStage'])
@@ -150,10 +165,16 @@ export function validateAgentStore(raw: unknown): Store {
       a.sessionIds.length > 100 ||
       a.sessionIds.some((id) => !ids.has(identifier(id))) ||
       (a.activeSessionId !== null && !a.sessionIds.includes(a.activeSessionId)) ||
-      !key
+      !key ||
+      new Set(a.sessionIds).size !== a.sessionIds.length ||
+      a.sessionIds.some((id) => {
+        const owner = owners.get(String(id));
+        return !owner || agentScopeKey(owner.userId, owner.scope) !== key;
+      })
     )
       throw new HttpFailure(400, 'INVALID_AGENT_STORE');
   }
+  const operations = new Set<string>();
   for (const raw of s.operations) {
     const o = object(raw);
     fields(o, ['key', 'userId', 'scopeKey', 'hash', 'id']);
@@ -166,6 +187,16 @@ export function validateAgentStore(raw: unknown): Store {
       !ids.has(identifier(o.id))
     )
       throw new HttpFailure(400, 'INVALID_AGENT_STORE');
+    const owner = owners.get(String(o.id));
+    const operation = JSON.stringify([o.userId, o.scopeKey, o.key]);
+    if (
+      !owner ||
+      owner.userId !== o.userId ||
+      agentScopeKey(owner.userId, owner.scope) !== o.scopeKey ||
+      operations.has(operation)
+    )
+      throw new HttpFailure(400, 'INVALID_AGENT_STORE');
+    operations.add(operation);
   }
   return s as unknown as Store;
 }

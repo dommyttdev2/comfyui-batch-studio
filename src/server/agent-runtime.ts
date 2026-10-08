@@ -17,6 +17,7 @@ import type { DiskProjects } from './project-repository.js';
 
 export interface AgentRuntimeOptions {
   directory: string;
+  assertIsolation?(): Promise<void>;
   configuredProviders?: readonly ('codex' | 'grok')[];
   terminate?(scope: AgentScope, jobId: string): Promise<void>;
   adapter(scope: AgentScope, jobId?: string): AgentCliAdapter;
@@ -142,9 +143,11 @@ export class AgentRuntime {
         version: null,
         message: 'CLI runtime not configured.',
       };
+    await this.options?.assertIsolation?.();
     return this.driver(scope).checkAvailability();
   }
   async models(scope: AgentScope) {
+    await this.options?.assertIsolation?.();
     return this.driver(scope).getModels!();
   }
   async capabilities(scope: AgentScope) {
@@ -252,6 +255,7 @@ export class AgentRuntime {
     let last = 0;
     try {
       if (input.prepared !== true) throw new Error('Agent preparation absent.');
+      await this.options?.assertIsolation?.();
       actor = await this.currentActor(actor);
       authorize(actor, job.projectId, 'execute');
       const record = await this.store.begin(
