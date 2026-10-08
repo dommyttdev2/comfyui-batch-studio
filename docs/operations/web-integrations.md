@@ -34,3 +34,13 @@ confirmは同user/sessionと対象・世代・期限を再確認し、token消�
 storeは4MiB・1000confirmation・1000receiptを上限とする。期限切れ未消費tokenのみ新規prepare時に除去する。結果とconfirmationの関連を維持し、上限到達時は拒否する。停止時は新規予約を拒否して実行/照合をdrainし、期限超過はuncertainとfenceを保存してserver filesystem ownershipを保持する。遅延応答で成功へ書き換えない。旧形式・重複id/scope・壊れたbindingは読み込まない。
 
 現時点は共通基盤のみ。サービス別inspect/execute/reconcileは後続子Issueで接続する。未接続operationはINTEGRATION_UNAVAILABLEを返す。
+
+## Civitai catalog
+
+新Web専用のcivitai.jsonはweb-civitai/1とsource fingerprintで設定・資格情報世代を束ねる。環境Secretの差替もcache/catalogを無効化する。catalog generationは公開成功ごとに単調増加する。未登録/無効providerはcatalogなし、登録済みのSecret不備は利用不可と区別する。production起動はこのrepositoryを使う。明示catalogFileはローカルfixture受入用の注入で、自動切替先ではない。
+
+同期はPOST /api/v1/integrations/civitai/syncにprojectIdを明示し、Idempotency-Keyを付ける。adminと当該Project execute grantを要求し、Projectをjobの観測元とする。catalog自体はserverの共有resourceでProject本文を変更しない。Projectを跨いでも同時同期は一つ。GET status/catalog/search?query=/collections/models/:id/versions/:idで設定状態・可視job・現行catalog・検索・詳細を取得する。検索は同期済みcatalogを対象にする。
+
+Civitai endpointはcivitai.comとcivitai.redの固定先。redirectを追わず、SecretはAuthorization headerのみ。429はRetry-Afterを扱い、最大3retry・要求全体20秒・response4MiB、collection1000page/32MiB、cache/store32MiBとする。collection API形式変更・cursor反復・期限/容量超過は失敗する。外部レスポンスにcredentialが含まれる場合は保存・公開を拒否する。cacheは30分の有効期限内だけ使用し、expired cacheを失敗時に返さない。現在のcredential世代を再確認してcache/catalogをatomic公開する。中断/restartで同期を自動再開しない。
+
+公開APIの現行正本は[Civitai developer reference](https://developer.civitai.com/site/reference)、collection手順は[公式router](https://github.com/civitai/civitai/blob/main/src/server/routers/collection.router.ts)と[公式schema](https://github.com/civitai/civitai/blob/main/src/server/schema/collection.schema.ts)で照合した。実設定の疎通/catalog受入は #385、画面操作は #384で追跡する。
