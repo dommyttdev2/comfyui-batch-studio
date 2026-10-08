@@ -1,6 +1,7 @@
 import { loadConfig } from './config.js';
 import { startServer } from './server.js';
 import { JobRegistry } from './jobs.js';
+import { EventBroker, attachEvents } from './events.js';
 import { Security } from './security.js';
 import { FileLease, Ownership } from './ownership.js';
 import path from 'node:path';
@@ -20,9 +21,12 @@ try {
     'server',
     ownership.serverId,
   );
-  const jobs = new JobRegistry(config.dataDir, new Map());
+  let jobs: JobRegistry;
+  const broker = new EventBroker(config.dataDir, (actor) => jobs.list(actor));
+  jobs = new JobRegistry(config.dataDir, new Map(), broker.append);
   let runtime;
   try {
+    await broker.initialize();
     await jobs.initialize();
     runtime = await startServer(config, { ...security.http(), route: jobs.route });
   } catch (error) {
@@ -30,12 +34,15 @@ try {
     throw error;
   }
   security.setOrigin(runtime.origin);
+  const events = attachEvents(runtime.server, config, security, broker);
   console.log(`Batch Studio server listening at ${runtime.origin}`);
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.once(signal, () => {
-      void runtime
+      void events
         .close()
+        .then(() => runtime.close())
         .then(() => jobs.drain())
+        .then(() => broker.drain())
         .then(() => lease.release())
         .catch(() => {
           process.exitCode = 1;
