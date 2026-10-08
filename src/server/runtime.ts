@@ -3,7 +3,8 @@ import type { ServerConfig } from './config.js';
 import { EventBroker, attachEvents } from './events.js';
 import { fields, HttpFailure, json, type CommandController } from './http.js';
 import { JobRegistry, type JobDefinition } from './jobs.js';
-import { FileLease, Ownership, ProjectRegistry } from './ownership.js';
+import { FileLease, Ownership } from './ownership.js';
+import { ProjectRegistration } from './project-registration.js';
 import { Security } from './security.js';
 import { startServer } from './server.js';
 
@@ -39,7 +40,8 @@ export async function createServerRuntime(
     'server',
     ownership.serverId,
   );
-  const projects = new ProjectRegistry(config.dataDir);
+  const registration = new ProjectRegistration(config.dataDir);
+  const projects = registration.registry;
   let jobs: JobRegistry;
   const broker = new EventBroker(config.dataDir, (actor) => jobs.list(actor));
   jobs = new JobRegistry(config.dataDir, options.definitions ?? new Map(), broker.append);
@@ -47,6 +49,7 @@ export async function createServerRuntime(
   let closing: Promise<void> | undefined;
   let runtime: Awaited<ReturnType<typeof startServer>>;
   try {
+    await registration.initialize();
     await broker.initialize();
     await jobs.initialize();
     runtime = await startServer(config, {
@@ -71,6 +74,7 @@ export async function createServerRuntime(
           json(context.response, 202, { state: 'draining' });
           return true;
         }
+        if (await registration.route(context)) return true;
         return jobs.route(context);
       },
     });
@@ -117,5 +121,15 @@ export async function createServerRuntime(
     })();
     return closing;
   }
-  return { ...runtime, close, jobs, broker, ownership, projects, security, state: () => state };
+  return {
+    ...runtime,
+    close,
+    jobs,
+    broker,
+    ownership,
+    projects,
+    registration,
+    security,
+    state: () => state,
+  };
 }

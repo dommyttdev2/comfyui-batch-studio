@@ -196,7 +196,7 @@ export class ProjectRegistry {
   constructor(dataDir: string) {
     this.file = path.join(dataDir, 'projects.json');
   }
-  private async records(): Promise<{ id: string; root: string; key: string }[]> {
+  async records(): Promise<{ id: string; root: string; key: string }[]> {
     try {
       const value = JSON.parse(await readFile(this.file, 'utf8'));
       if (

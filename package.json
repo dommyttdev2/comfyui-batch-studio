@@ -33,7 +33,9 @@
     "start:server": "node dist-server/server/entry.js",
     "test:server": "npm run build:server && node --test tests/server-bootstrap.mjs tests/server-http.mjs tests/server-security.mjs tests/server-ownership.mjs tests/server-jobs.mjs tests/server-events.mjs tests/server-runtime.mjs",
     "init:server-auth": "node dist-server/server/auth-init.js",
-    "recover:server-lock": "node dist-server/server/recover.js"
+    "recover:server-lock": "node dist-server/server/recover.js",
+    "init:server-root": "node dist-server/server/root-init.js",
+    "test:projects": "npm run build:server && node --test tests/server-project-registration.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
