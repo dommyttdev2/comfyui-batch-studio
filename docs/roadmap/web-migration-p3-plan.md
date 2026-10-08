@@ -11,7 +11,7 @@ Project表示はブラウザの別tabではなく、[画面内Projectタブ](web
 ## 管理・branch・PR
 
 - P3統合branch: codex/web-p3-334-project-workspace。
-- 親draft PRのbase: codex/web-migration。計画差分で先に作成し、実装・受入が揃うまでdraftを保持する。
+- 親draft PR [#344](https://github.com/dommyttdev2/comfyui-batch-studio/pull/344)のbase: codex/web-migration。計画差分で先に作成し、実装・受入が揃うまでdraftを保持する。
 - 子branch: 最新P3統合commitからcodex/web-p3-<子Issue番号>-<topic>。
 - 子PRのbase: codex/web-p3-334-project-workspace。依存IssueのPRをsquash統合してから着手する。
 - 全P3受入後、親PRをreadyにして刷新branchへsquash merge。mainへは出さない。
