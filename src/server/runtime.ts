@@ -9,6 +9,11 @@ import { FixtureCatalog, WorkflowApi } from './workflow-api.js';
 import { ProjectApi } from './project-api.js';
 import { DiskProjects } from './project-repository.js';
 import { ProjectRegistration } from './project-registration.js';
+import { AgentRuntime, type AgentRuntimeOptions } from './agent-runtime.js';
+import { AgentApi } from './agent-api.js';
+import { AgentArtifacts } from './agent-artifacts.js';
+import type { AgentRecord } from './agent-store.js';
+import { loadAgentRegistration } from './agent-registration.js';
 import { Security } from './security.js';
 import { startServer } from './server.js';
 
@@ -32,8 +37,10 @@ export async function createServerRuntime(
     definitions?: ReadonlyMap<string, JobDefinition>;
     shutdownMs?: number;
     catalogFile?: string;
+    agents?: AgentRuntimeOptions;
   } = {},
 ) {
+  if (options.definitions?.has('agent')) throw new Error('Agent definition is reserved.');
   const shutdownMs = options.shutdownMs ?? 5000;
   if (!Number.isSafeInteger(shutdownMs) || shutdownMs < 1 || shutdownMs > 60_000)
     throw new Error('Invalid shutdown deadline.');
@@ -49,11 +56,45 @@ export async function createServerRuntime(
   const projects = registration.registry;
   let jobs: JobRegistry;
   const broker = new EventBroker(config.dataDir, (actor) => jobs.list(actor));
-  jobs = new JobRegistry(config.dataDir, options.definitions ?? new Map(), broker.append);
+  const definitions = new Map(options.definitions ?? []);
+  jobs = new JobRegistry(config.dataDir, definitions, broker.append);
   const repository = new DiskProjects(projects, ownership, broker);
   const catalogs = new FixtureCatalog(options.catalogFile);
   const projectApi = new ProjectApi(repository, catalogs);
   const workflowApi = new WorkflowApi(config, repository, catalogs);
+  let agentOptions: AgentRuntimeOptions | undefined;
+  try {
+    agentOptions = options.agents ?? (await loadAgentRegistration(config.dataDir));
+  } catch (error) {
+    await lease.release();
+    throw error;
+  }
+  const agents = new AgentRuntime(
+    config.dataDir,
+    repository,
+    catalogs,
+    jobs,
+    agentOptions,
+    (actor) => security.forJob(actor),
+  );
+  definitions.set('agent', agents.definition);
+  const artifacts = agentOptions
+    ? new AgentArtifacts(
+        agents,
+        projectApi.projects,
+        agentOptions.directory,
+        (actor) => security.forJob(actor),
+        'outputGuard' in agentOptions
+          ? (agentOptions.outputGuard as (r: AgentRecord, raw: string) => Promise<void>)
+          : undefined,
+      )
+    : undefined;
+  if (artifacts) {
+    agents.captureArtifact = (actor, scope, job) => artifacts.capture(actor, scope, job);
+    agents.importArtifact = (actor, scope, id) => artifacts.ingest(actor, scope, id);
+    agents.reconcileArtifact = (job) => artifacts.reconcile(job);
+  }
+  const agentApi = new AgentApi(agents, artifacts);
   let state: 'running' | 'draining' | 'closed' | 'uncertain' = 'running';
   let closing: Promise<void> | undefined;
   let runtime: Awaited<ReturnType<typeof startServer>>;
@@ -62,6 +103,7 @@ export async function createServerRuntime(
     await broker.initialize();
     await jobs.initialize();
     await repository.initialize();
+    await agents.initialize();
     runtime = await startServer(config, {
       ...security.http(),
       staticRoute: webStatic(config.webDir),
@@ -88,6 +130,7 @@ export async function createServerRuntime(
         if (await registration.route(context)) return true;
         if (await workflowApi.route(context)) return true;
         if (await projectApi.route(context)) return true;
+        if (await agentApi.route(context)) return true;
         return jobs.route(context);
       },
     });
@@ -147,6 +190,9 @@ export async function createServerRuntime(
     repository,
     projectApi,
     workflowApi,
+    agents,
+    agentApi,
+    artifacts,
     security,
     state: () => state,
   };

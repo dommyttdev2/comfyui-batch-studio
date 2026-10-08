@@ -188,6 +188,13 @@ export class AgentStore {
       const raw = await readFile(this.file);
       if (raw.length > 64 * 1024 * 1024) throw new HttpFailure(503, 'AGENT_STORAGE_LIMIT');
       this.state = validateAgentStore(JSON.parse(raw.toString()));
+      let changed = false;
+      for (const record of this.state.records)
+        if (record.state === 'running') {
+          record.state = 'uncertain';
+          changed = true;
+        }
+      if (changed) await atomicJson(this.file, this.state);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
     }
@@ -359,6 +366,37 @@ export class AgentStore {
         if (Buffer.byteLength(JSON.stringify(c.messages)) > 1024 * 1024)
           throw new HttpFailure(503, 'CONVERSATION_CAPACITY');
       }
+    });
+  }
+  publicRecords(actor: ActorContext, scope: AgentScope) {
+    authorize(actor, scope.projectId, 'read');
+    return this.state.records
+      .filter((r) => r.userId === actor.userId && same(r.scope, scope))
+      .slice(-100)
+      .map((r) => ({
+        jobId: r.jobId,
+        conversationId: r.conversationId,
+        taskStage: r.taskStage,
+        state: r.state,
+        artifact: r.artifact,
+        imported: r.imported,
+        importError: r.importError,
+      }));
+  }
+  reconciliationRecord(id: string) {
+    const record = this.state.records.find((r) => r.jobId === id);
+    return record ? structuredClone(record) : null;
+  }
+  async abandonRecord(actor: ActorContext, scope: AgentScope, id: string) {
+    return this.mutate((s) => {
+      const record = s.records.find(
+        (r) => r.jobId === id && r.userId === actor.userId && same(r.scope, scope),
+      );
+      if (!record) throw new BusinessError('NOT_FOUND', 'Agent record unavailable.');
+      record.state = 'cancelled';
+      record.artifact = null;
+      record.imported = false;
+      record.importError = null;
     });
   }
   completion(id: string) {
