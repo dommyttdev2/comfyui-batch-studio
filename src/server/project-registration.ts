@@ -108,7 +108,11 @@ export class ProjectRegistration {
     if ((await realpath(root.root)) !== root.root) throw new HttpFailure(409, 'ROOT_CHANGED');
     const target = path.join(root.root, segment(directory));
     try {
-      if ((await realpath(target)) !== target) throw new HttpFailure(409, 'ROOT_CHANGED');
+      const actual = await realpath(target);
+      const relative = path.relative(root.root, actual);
+      if (relative.startsWith('..') || path.isAbsolute(relative))
+        throw new HttpFailure(403, 'ROOT_CHANGED');
+      return actual;
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
     }

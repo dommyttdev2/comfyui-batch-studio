@@ -39,7 +39,7 @@ const groups = {
   W14: list('codex-app-server codex-artifact-turn codex-chat-state codex-file-artifact codex-model-selection codex-thread-history codex-turn-monitor grok-artifact-adapter grok-auto-artifact-watcher grok-chat-state grok-navigation-queue grok-navigation'),
 };
 const coreOwners = {
-  ...Object.fromEntries(list('artifact-file-service manual-project-reset model-downstream-file-service project-observation prompt-plan-patch').map((name) => [name, 'W03'])),
+  ...Object.fromEntries(list('artifact-file-service project-reset-confirmation manual-project-reset model-downstream-file-service project-observation prompt-plan-patch').map((name) => [name, 'W03'])),
   ...Object.fromEntries(list('agent-cli-port agent-conversation-runner agent-draft-import agent-runtime-ports assistant-commands assistant-provider-preferences auto-artifact-ingestion codex-cli-task-runner grok-cli-task-runner lora-selection-history observed-agent-model-selection agent-conversation-policy agent-model-policy agent-runtime-types agent-stage-policy agent-workspace-policy auto-artifact-selection auto-artifact-types codex-chat-policy').map((name) => [name, 'W04'])),
   ...Object.fromEntries(list('model-availability-observation workflow-file-compilation resource-observation-types workflow-resource-policy').map((name) => [name, 'W05'])),
   ...Object.fromEntries(list('execution-commands execution-launch execution-recovery-controller execution-snapshot-observation execution-snapshot-persistence remote-control-preparation remote-environment-bootstrap remote-execution-preparation remote-model-stager execution-error-policy execution-launch-policy execution-record-stamp execution-storage-policy remote-request-policy').map((name) => [name, 'W06'])),
@@ -104,7 +104,14 @@ const coreOwners = {
   'agent-use-cases': 'W04', 'confirmation-use-cases': 'W10', 'platform-ports': 'W10', 'platform-use-cases': 'W10', 'core': 'W10',
 };
 function owner(file) {
-  if (file.startsWith('src/server/')) return ['http', 'server', 'security', 'events'].includes(path.basename(file, '.ts')) ? 'W01' : 'W10';
+  if (file.startsWith('src/web/') || file.startsWith('web/')) return 'W02';
+  if (file.startsWith('src/server/')) {
+    const name = path.basename(file, '.ts');
+    if (['project-repository', 'project-registration'].includes(name)) return 'W03';
+    if (name === 'workflow-api') return 'W05';
+    return ['http', 'server', 'security', 'events', 'project-api', 'web-static'].includes(name) ? 'W01' : 'W10';
+  }
+  if (file === 'scripts/check-web-boundaries.cjs' || file === 'scripts/docker-web-test.sh') return 'W12';
   if (file === 'scripts/check-server-boundaries.cjs') return 'W12';
   if (/^src\/(domain|application)\//.test(file)) {
     const assigned = coreOwners[path.basename(file, '.ts')];
@@ -144,7 +151,7 @@ function owner(file) {
   }
   throw new Error(`Unclassified: ${file}`);
 }
-const scanRoots = ['src', 'scripts', 'tests', '.github', 'templates', 'schemas'];
+const scanRoots = ['src', 'scripts', 'tests', '.github', 'templates', 'schemas', 'web'];
 const rootFiles = fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isFile()
   && !['.git', 'AGENTS.md', 'README.md'].includes(entry.name) && !/\.log$/.test(entry.name)).map((entry) => entry.name).sort();
 const files = [...scanRoots.flatMap(walk), ...rootFiles].sort();
@@ -170,7 +177,7 @@ const rows = files.map((file) => {
   const imports = [...source.matchAll(/(?:from\s*|require\s*\(\s*|import\s*\(\s*|import\s*)['"]([^'"]+)['"]/g)].map((m) => m[1]);
   const workPackage = owner(file);
   return {
-    file, lines: lines.length, sha256: hash(file), workPackage, layer: file.startsWith('src/server/') ? 'server-infrastructure' : file.startsWith('src/domain/') ? 'domain' : file.startsWith('src/application/') ? 'application' : 'existing-reference', phase: file.startsWith('src/server/') ? 'P2' : /^src\/(domain|application)\//.test(file) ? 'P1' : packages[workPackage].phase, gate: packages[workPackage].gate,
+    file, lines: lines.length, sha256: hash(file), workPackage, layer: file.startsWith('src/web/') ? 'web-presentation' : file.startsWith('src/server/') ? 'server-infrastructure' : file.startsWith('src/domain/') ? 'domain' : file.startsWith('src/application/') ? 'application' : 'existing-reference', phase: file.startsWith('src/server/') ? (['project-registration', 'project-repository', 'project-api', 'workflow-api', 'web-static', 'root-init', 'project-recover'].includes(path.basename(file, '.ts')) ? 'P3' : 'P2') : /^src\/(domain|application)\//.test(file) ? 'P1' : packages[workPackage].phase, gate: packages[workPackage].gate,
     desktopRemovalPhase: file.startsWith('src/preload/') || file.startsWith('src/main/ipc-registration') || file === 'src/shared/ipc.ts' || file === 'src/main/main.ts' || workPackage === 'W14' ? 'P9' : null,
     electronDependencyRemovalPhase: imports.includes('electron') && !['W01', 'W14'].includes(workPackage) && file !== 'src/main/main.ts' ? packages[workPackage].phase : null,
     imports: [...new Set(imports)],
@@ -246,16 +253,16 @@ function reach(file) {
     if (resolved) reach(resolved);
   }
 }
-reach('src/main/main.ts'); reach('src/renderer/main.tsx');
+reach('src/main/main.ts'); reach('src/renderer/main.tsx'); reach('src/server/entry.ts'); reach('src/web/main.tsx');
 for (const row of rows) row.entryReachable = visited.has(row.file);
 const pkg = JSON.parse(read('package.json'));
 const ci = walk('.github').map(read).join('\n');
 const supports = new Set(list('main-process-source.cjs source-match.cjs standard-graph-fixture.cjs'));
 const testCoverage = rows.filter((r) => r.file.startsWith('tests/')).map((r) => {
-  const registration = supports.has(path.basename(r.file)) || r.file.startsWith('tests/core-support/') || r.file === 'tests/server-fixtures.mjs' ? 'support' : pkg.scripts.test.includes(r.file) ? 'npm-test' : (pkg.scripts['test:core'] || '').includes(r.file) ? 'core-local' : (pkg.scripts['test:server'] || '').includes(r.file) ? 'server-local'
+  const registration = supports.has(path.basename(r.file)) || r.file.startsWith('tests/core-support/') || /fixtures\.mjs$/.test(r.file) ? 'support' : pkg.scripts.test.includes(r.file) ? 'npm-test' : (pkg.scripts['test:core'] || '').includes(r.file) ? 'core-local' : (pkg.scripts['test:server'] || '').includes(r.file) ? 'server-local' : (pkg.scripts['test:projects'] || '').includes(r.file) ? 'project-local' : (pkg.scripts['test:web'] || '').includes(r.file) ? 'browser-local'
     : read('.github/workflows/ci.yml').includes(r.file) ? 'CI-only' : ci.includes(r.file) ? 'CI-conditional' : 'standalone';
   const name = path.basename(r.file);
-  const featurePackages = name.startsWith('server-') ? ['W01', 'W10', 'W12'] : name === 'core-separation.cjs' ? ['W03', 'W04', 'W05', 'W06', 'W07', 'W08', 'W09', 'W10'] : name === 'core-artifacts.cjs' ? ['W03', 'W05', 'W06', 'W09'] : name === 'core-policy.cjs' ? ['W03', 'W06', 'W09', 'W10'] : name === 'business-core.cjs' ? ['W01', 'W03', 'W04', 'W06', 'W09', 'W10'] : supports.has(name) || r.file.startsWith('tests/core-support/') ? ['W12'] : name === 'run.cjs' ? ['W03', 'W05']
+  const featurePackages = name.startsWith('server-project') ? ['W01', 'W02', 'W03', 'W05', 'W10', 'W12'] : name.startsWith('server-') ? ['W01', 'W10', 'W12'] : name === 'core-separation.cjs' ? ['W03', 'W04', 'W05', 'W06', 'W07', 'W08', 'W09', 'W10'] : name === 'core-artifacts.cjs' ? ['W03', 'W05', 'W06', 'W09'] : name === 'core-policy.cjs' ? ['W03', 'W06', 'W09', 'W10'] : name === 'business-core.cjs' ? ['W01', 'W03', 'W04', 'W06', 'W09', 'W10'] : supports.has(name) || r.file.startsWith('tests/core-support/') ? ['W12'] : name === 'run.cjs' ? ['W03', 'W05']
     : /service-integrations/.test(name) ? ['W07', 'W08', 'W10'] : /ipc-|marketplace-write-guard/.test(name) ? ['W01']
     : /agent|codex|grok|assistant/.test(name) ? ['W04'] : /r2-/.test(name) ? ['W08']
     : /civitai|vastai/.test(name) ? ['W07'] : /remote|execution|local-comfy/.test(name) ? ['W06']
@@ -266,7 +273,7 @@ const testCoverage = rows.filter((r) => r.file.startsWith('tests/')).map((r) => 
     : r.imports.includes('electron') ? 'server/browser検証へ置換' : r.imports.includes('./source-match.cjs') || r.imports.includes('./main-process-source.cjs') ? '挙動検証へ置換/補完' : '契約維持・server buildへ適合',
     targetGate: 'G12', featureGates: featurePackages.map((id) => packages[id].gate),
     requiredAction: registration === 'standalone' ? 'P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復'
-      : registration === 'server-local' ? 'P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須' : registration === 'core-local' ? 'P1からcore単独回帰に接続済み。P2以降も必須' : registration === 'CI-conditional' ? '条件付きperformance CIを維持/置換し発火pathも更新' : 'P8までに新test実行経路へ接続' };
+      : ['server-local', 'project-local', 'browser-local'].includes(registration) ? 'P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須' : registration === 'core-local' ? 'P1からcore単独回帰に接続済み。P2以降も必須' : registration === 'CI-conditional' ? '条件付きperformance CIを維持/置換し発火pathも更新' : 'P8までに新test実行経路へ接続' };
 });
 const resources = walk('thumbnail/psd-templates').filter((f) => /\.(psd|png)$/.test(f)).map((file) => ({ file, sha256: hash(file), bytes: fs.statSync(path.join(root, file)).size,
   role: file.endsWith('.psd') ? 'runtime-PSD' : 'reference-preview', workPackage: 'W13', phase: 'P8', gate: 'G13' }));

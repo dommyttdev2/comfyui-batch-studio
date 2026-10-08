@@ -34,6 +34,7 @@ export class Workspace {
   error = '';
   eventStatus = '';
   user = '';
+  authenticated = false;
   private revision = 0;
   private listeners = new Set<() => void>();
   private queues = new Map<string, Promise<unknown>>();
@@ -53,9 +54,13 @@ export class Workspace {
     if (this.user && this.user !== api.userId) {
       await this.drafts.purge(this.user);
       this.tabs = [];
+      this.jobs.clear();
       this.selected = 'home';
     }
     this.user = api.userId;
+    this.authenticated = true;
+    this.tabs = this.tabs.filter((t) => api.projectIds.includes(t.id));
+    if (!this.tabs.some((t) => t.id === this.selected)) this.selected = 'home';
     for (const t of this.tabs) {
       const result = await api.request<{ project: Project }>('/projects/' + t.id);
       t.project = result.project;
@@ -63,6 +68,7 @@ export class Workspace {
     await this.drafts.purge(this.user, api.projectIds);
     await this.refresh();
     const jobs = await api.request<{ jobs: Job[] }>('/jobs');
+    this.jobs.clear();
     for (const j of jobs.jobs) this.jobs.set(j.id, j);
     api.subscribe(api.projectIds, (p) => this.packet(p));
     this.renewal && clearInterval(this.renewal);
@@ -85,6 +91,7 @@ export class Workspace {
     this.projects = (
       await api.request<{ projects: { id: string; displayName: string }[] }>('/projects')
     ).projects;
+    this.roots = [];
     try {
       this.roots = (
         await api.request<{ roots: { id: string; displayName: string }[] }>('/project-roots')
@@ -154,10 +161,18 @@ export class Workspace {
         action === 'acquire-lease'
           ? {}
           : { expectedRevision: t.project.revision, leaseId: t.project.lease?.leaseId, ...extra };
-      const result = await api.request<{ project: Project; eventDelivery?: string }>(
-        '/projects/' + id + '/commands/' + action,
-        input,
-      );
+      let result: { project: Project; eventDelivery?: string };
+      try {
+        result = await api.request('/projects/' + id + '/commands/' + action, input);
+      } catch (error) {
+        const current = this.current(id, generation);
+        if ((error as { code?: string }).code === 'LEASE_REQUIRED' && current?.project.lease) {
+          current.project.lease.ownedByCurrentSession = false;
+          delete current.project.lease.leaseId;
+          this.emit();
+        }
+        throw error;
+      }
       const current = this.current(id, generation);
       if (current) {
         if (result.project.revision >= current.project.revision) current.project = result.project;
@@ -281,6 +296,7 @@ export class Workspace {
     });
   }
   suspend() {
+    this.authenticated = false;
     api.disconnect();
     clearInterval(this.renewal);
     this.emit();

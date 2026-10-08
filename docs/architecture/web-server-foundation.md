@@ -6,7 +6,7 @@ Status: Accepted。P2の実装・運用契約の正本。全体範囲は[移行�
 
 src/serverはHTTP/WS・認証・永続化・所有権・compositionを担当し、src/applicationとsrc/domainの新契約を呼ぶ。Electron、preload、renderer、React、DOMをimportしない。build:serverはcore/server双方の依存境界を検査して独立コンパイルする。旧IPCへの互換経路・fallback・旧schemaの読み替えは存在しない。
 
-createServerRuntime(config, { commands, definitions, shutdownMs })が後続phaseの接続点。CommandControllerはpermission・validation・core呼出しを持ち、JobDefinitionはvalidate/reserve/runと必要に応じinterrupt/reconcileを提供する。ProjectRegistryはbackendがcanonical rootを登録・解決するサービスであり、クライアントから任意rootを受け取る公開routeではない。実Project操作はP3、実CLIはP4、外部連携はP5、生成runtimeはP6で登録する。通常entryのcommands/definitionsは空で、未登録機能は501となる。Web UIや製品全機能の利用開始を意味しない。
+createServerRuntime(config, { commands, definitions, shutdownMs })が後続phaseの接続点。CommandControllerはpermission・validation・core呼出しを持ち、JobDefinitionはvalidate/reserve/runと必要に応じinterrupt/reconcileを提供する。ProjectRegistryはbackendがcanonical rootを登録・解決するサービスであり、クライアントから任意rootを受け取る公開routeではない。実Project操作はP3、実CLIはP4、外部連携はP5、生成runtimeはP6で登録する。P3でProject/Artifact/Workflow routeと独立Web UIを接続した。追加job definitionsは未登録で501となる。現行Project・Workspaceの起動と受入は[Web Workspace運用](../operations/web-workspace.md)を参照する。
 
 ## 起動・設定
 
@@ -25,7 +25,7 @@ BATCH_STUDIO_HOSTは127.0.0.1または::1のみ、BATCH_STUDIO_PORTは既定3210
 
 | 入口 | 契約 |
 | --- | --- |
-| GET /api/v1/health | 公開health/readiness、apiVersion/buildId。path/secretを返さない |
+| GET /api/v1/health | 公開health/readiness、apiVersion/buildId/webBuildId。path/secretを返さない |
 | POST /api/v1/session | Authorization: Bearer token、JSON {}。HttpOnly/SameSite=Strict cookieとcsrfToken/権限/期限を返す |
 | POST /api/v1/projects/:id/commands/:action | 登録controllerのみ。Project scope、permission、validationの後にcoreを呼ぶ。mutation controllerはexpectedRevision/leaseIdを要求 |
 | POST /api/v1/projects/:id/jobs/:kind | 登録jobのみ。Idempotency-Key、JSON {input, stage, provider, turnId}。永続予約後202/job DTO |
@@ -39,7 +39,7 @@ health以外のHTTPはX-Batch-Api-Version: 1、X-Batch-Build-Idを要求する�
 
 sessionはmemory上の30分期限。auth.jsonを各認証で読み直し、principal変更時は既存sessionを失効させる。再起動後は再認証する。cookie資格情報とjob/eventの公開sessionIdは別の値であり、cookieをDTOに含めない。loginはIP単位の試行上限とsession数上限を持つ。
 
-eventは認可済みsnapshot、単調増加seq、job.changedの順序契約を持つ。永続journalは既定512件、最大4096件。snapshot取得と購読境界に隙間を作らない。履歴不足/不正cursorはREPLAY_UNAVAILABLEとして接続を終了し、自動snapshot fallbackしない。WSはcommandを受け付けず、再認可・heartbeat・接続上限・送信256KiB上限を持つ。切断してもjobは継続する。
+eventは認可済みsnapshot、単調増加seq、job.changedの順序契約を持つ。P3の現行journalはweb-events/2でProject revision/outboxのdedupも保持し、旧形式を拒否する。永続journalは既定512件、最大4096件。snapshot取得と購読境界に隙間を作らない。履歴不足/不正cursorはREPLAY_UNAVAILABLEとして接続を終了し、自動snapshot fallbackしない。WSはcommandを受け付けず、再認可・heartbeat・接続上限・送信256KiB上限を持つ。切断してもjobは継続する。
 
 ## 永続化・所有権・再起動
 

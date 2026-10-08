@@ -99,6 +99,7 @@ export function ModalHost() {
   const [origin, setOrigin] = useState<{ name: string; context: ModalContext } | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [, render] = useState(0);
+  const stateKey = workspace.user + ':' + tool;
   const body = useRef<HTMLDivElement>(null);
   const confirmation = useRef<HTMLDivElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
@@ -129,17 +130,17 @@ export function ModalHost() {
   useEffect(() => {
     if (body.current) {
       body.current.inert = confirm;
-      body.current.scrollTop = states.get(tool)?.scroll ?? 0;
+      body.current.scrollTop = states.get(stateKey)?.scroll ?? 0;
     }
     if (confirm) confirmation.current?.querySelector<HTMLButtonElement>('button')?.focus();
     else if (open) cancel.current?.focus();
-  }, [tool, confirm]);
+  }, [stateKey, confirm]);
   useEffect(() => {
-    if (!workspace.user) setOpen(false);
-  }, [workspace.user]);
+    if (!workspace.authenticated) setOpen(false);
+  }, [workspace.authenticated]);
   if (!open) return null;
-  if (!states.has(tool)) states.set(tool, { search: '', bucket: '', path: '', scroll: 0 });
-  const state = states.get(tool)!;
+  if (!states.has(stateKey)) states.set(stateKey, { search: '', bucket: '', path: '', scroll: 0 });
+  const state = states.get(stateKey)!;
   const update = (field: 'search' | 'bucket' | 'path', value: string) => {
     state[field] = value;
     render((v) => v + 1);
@@ -228,7 +229,7 @@ export function ModalHost() {
           <button onClick={() => setConfirm(false)}>取消</button>
           <button
             onClick={() => {
-              states.set(tool, { search: '', bucket: '', path: '', scroll: 0 });
+              states.set(stateKey, { search: '', bucket: '', path: '', scroll: 0 });
               setConfirm(false);
               render((v) => v + 1);
             }}
