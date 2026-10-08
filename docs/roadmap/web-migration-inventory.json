@@ -19013,6 +19013,13 @@
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
+      "file": "docs/contracts/web-agent-runtime.md",
+      "sha256": "ad325963bf75eac9a5e72df837fd32b567cede089f6b852e6574661b6cb55b0f",
+      "workPackage": "W11",
+      "gate": "G11",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
       "file": "docs/contracts/web-project-workspace.md",
       "sha256": "566fb8932c5c1c94dbde1ace381874f29297f563711802a5d79f3df009ba69c0",
       "workPackage": "W11",
@@ -19181,7 +19188,7 @@
     "scripts": 14,
     "ipc": 172,
     "resources": 8,
-    "documents": 37,
+    "documents": 38,
     "ownership": {
       "W01": 18,
       "W02": 35,

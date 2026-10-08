@@ -4,7 +4,7 @@ Status: Planning evidence / 再照合: 2026-10-08
 
 [移行計画](web-migration-plan.md)のW01–W14とG01–G14を正本とする。後方互換性なし・旧データマイグレーションなし・fallback禁止を全項目へ適用する。新dataDir/現行schema/明示設定で開始し、対応外・失敗はerrorとする。各code fileとIPCは主担当を一つだけ持つ。phaseは主実装受入段階。desktopRemovalPhase=P9は旧sourceの残存確認・撤去段階であり、互換adapterを提供する期間ではない。依存・横断条件は計画側を参照する。
 
-基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全479コード・設定（src 336、tests 98、scripts 14）、8 binary asset、37仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
+基準commit: `2d2656d2673209a3330d792520e958296a473b08`。公開済みv0.82.0から作成した刷新統合branchを照合する。元の作業ツリーにある未統合のCLI修正は含めない。旧P1原型は破棄済み。全479コード・設定（src 336、tests 98、scripts 14）、8 binary asset、38仕様文書を別母集団で管理する。生成済dist・依存package・release履歴・秘密設定は除外。全行の手動レビュー/実動作保証ではない。
 
 [機械可読索引](web-migration-inventory.json)にhash・import・根拠行・分類・test実行経路を保存する。[再照合ツール](web-migration-audit.cjs)は`node docs/roadmap/web-migration-audit.cjs --check`で検証し、`--write`で再生成する。現索引との差分、未分類file/IPC、主担当重複、IPC方向/handler不整合は失敗する。新file/IPCの処置をレビューしてから再生成する。
 
@@ -836,6 +836,7 @@ queryは変更なしのGETを保証する名称ではない。caveat項目は復
 | [docs/contracts/agent-contract.md](../../docs/contracts/agent-contract.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/contracts/project-artifacts.md](../../docs/contracts/project-artifacts.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/contracts/prompt-plan.md](../../docs/contracts/prompt-plan.md) | 移行完了時に該当仕様を更新 (W11/G11) |
+| [docs/contracts/web-agent-runtime.md](../../docs/contracts/web-agent-runtime.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/contracts/web-project-workspace.md](../../docs/contracts/web-project-workspace.md) | 移行完了時に該当仕様を更新 (W11/G11) |
 | [docs/decisions/decision-log.md](../../docs/decisions/decision-log.md) | 過去判断を保持し新判断を追記 (W11/G11) |
 | [docs/decisions/model-family-and-base-model-selection.md](../../docs/decisions/model-family-and-base-model-selection.md) | 過去判断を保持し新判断を追記 (W11/G11) |
