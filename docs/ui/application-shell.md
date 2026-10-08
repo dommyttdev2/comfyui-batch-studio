@@ -319,14 +319,14 @@ Vast.ai/SSH/Remote Worker capabilityの実装に応じて次を段階的にblock
 - current public SSH endpoint。
 - private-key SSH authentication。
 - Remote filesystem/runtime/disk。
-- Remote localhost ComfyUI API / Scene Prompt Tools。
+- Remote localhost の標準ComfyUI API。追加custom_nodesや独自APIは不要。
 - required R2 models。
 
 検証未実装のcapabilityを成功したように表示しない。
 
 ## 15. Execution Screen
 
-> Current implementation: `実行` stage、persistent Execution Run、Local ComfyUI連続生成、Remote Vast.ai lifecycle / SSH / bootstrap / model staging / Scene Prompt連続生成 / artifact package・R2 upload・Local download・SHA-256検証まで実装済み。Start / Stop scheduling / Force interrupt / Resume / 別Instanceで新しく実行 / 最初からやり直すと、phase/progress/error/推定残り時間監視を提供する。
+> Current implementation: `実行` stage、persistent Execution Run、Local ComfyUI連続生成、Remote Vast.ai lifecycle / SSH / bootstrap / model staging / 標準ComfyUI APIによるLeaf単位の連続生成 / artifact package・R2 upload・Local download・SHA-256検証まで実装済み。Start / Stop scheduling / Force interrupt / Resume / 別Instanceで新しく実行 / 最初からやり直すと、phase/progress/error/推定残り時間監視を提供する。
 
 Grok paneは非表示とし、Local UIを全幅使用する。
 
@@ -339,7 +339,7 @@ Current phase
 Connection status
 Model preparation status
 Overall generation progress
-Current Scene Prompt branch
+Current Branch / Leaf
 Branch progress
 Current prompt ID
 Artifact packaging status

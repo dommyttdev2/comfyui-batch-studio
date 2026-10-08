@@ -166,7 +166,7 @@ Reroute
 CLIPTextEncode
 KSampler
 VAEDecode
-SceneSaveImage
+SaveImage
 その他 ComfyUI 内部ノード
 ```
 
@@ -184,18 +184,19 @@ Workflow Compiler
        |
        v
 実 ComfyUI Workflow
-  Checkpoint
-  LoRA Stack
-  SceneMatrix
-  ScenePrompter
-  CLIP Encode
-  KSampler
+  CheckpointLoaderSimple または UNETLoader / CLIPLoader / VAELoader
+  LoraLoader（Root -> Branch）
+  CLIPTextEncode（Positive / Negative）
+  EmptyLatentImage または EmptySD3LatentImage（Leafごと、batch_size=1）
+  KSampler（Leafごと）
   VAEDecode
-  SceneSaveImage
+  SaveImage
   ...
 ```
 
 Matrix 内の生成項目一覧や詳細編集をどの UI 技法で表現するかは実装エージェントに任せる。
+
+Matrix はPrompt Plan UIの概念であり、ComfyUIのcustom nodeではない。Compilerは標準ノードだけを生成する。現行のノード構成と実行契約は[標準画像実行契約](../architecture/standard-image-execution.md)に従う。
 
 ---
 

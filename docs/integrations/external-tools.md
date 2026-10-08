@@ -340,7 +340,7 @@ Prompt Plan
   -> model availability
   -> Preflight READY / BLOCKED
   -> Local ComfyUI API
-  -> Scene Prompt continuous execution
+  -> standard ComfyUI per-Leaf image execution
   -> Local output confirmation
 ```
 
@@ -364,13 +364,13 @@ Batch Studio
 - Remote Workerのみ小さいcontrol artifactとしてSSH転送可能。
 - multi-GB model / generated artifacts / ZIPをSSH/SCPで転送しない。
 
-Scene Prompt Tools `ScenePrompterExpand` の「連続生成」はfrontend buttonをremote controlするのではなく、標準ComfyUI APIとScene Prompt Tools custom run-context APIをRemote Workerがlocalhostから呼んで再現する。
+Remote Workerは標準ComfyUI APIをlocalhostから呼び、各LeafのSaveImageとその祖先ノードを POST /prompt へ順次送信する。前の画像がHistoryで終端状態になるまで次の画像を送信しない。追加custom_nodesや独自run-context APIは不要である。画像実行の正本は[標準画像実行契約](../architecture/standard-image-execution.md)とする。
 
 詳細は `../architecture/remote-execution.md` を正本とする。
 
 ### 4.3 Workflow file name
 
-Workflow file名はProject実folderの親、すなわちユーザーが指定したProject作成先folder名を用いる。内部Save pathは`BatchStudio/{project.id}/{branch.id}`を維持する。
+Workflow file名はProject実folderの親、すなわちユーザーが指定したProject作成先folder名を用いる。SaveImageのfilename_prefixはProject previewで `BatchStudio/{project.id}/{encoded branch.id}/{encoded leaf.id}` とし、実行時にはRun単位のprefixを使用する。
 
 ## 5. Local Project Filesystem
 

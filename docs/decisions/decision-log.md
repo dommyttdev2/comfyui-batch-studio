@@ -2,6 +2,8 @@
 
 Status: Active
 
+> 画像実行に関する旧Scene Prompt Tools / custom-node契約は、末尾の#284に関する判断で廃止済みです。過去の判断は履歴として保持し、現行の実装・環境要件には[標準画像実行契約](../architecture/standard-image-execution.md)を適用します。
+
 この文書は、会話や実装で合意した設計判断を後から追跡できるように残す。単なる現行仕様の再掲ではなく「なぜその方式なのか」「何を置き換えたか」を記録する。
 
 Status:
