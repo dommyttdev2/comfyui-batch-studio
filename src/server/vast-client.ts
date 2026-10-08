@@ -82,57 +82,63 @@ export class WebVastClient {
       url.hash
     )
       throw new HttpFailure(400, 'ENDPOINT_REJECTED');
-    const signal = AbortSignal.timeout(this.deadlineMs);
-    const response = await this.fetcher(url, {
-      method,
-      redirect: 'error',
-      signal,
-      headers: {
-        Authorization: 'Bearer ' + this.key,
-        Accept: 'application/json',
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!response.ok) {
-      await response.body?.cancel();
-      if (response.status === 404) throw new HttpFailure(404, 'VAST_NOT_FOUND');
-      throw new HttpFailure(
-        response.status === 401 || response.status === 403 ? 503 : 502,
-        'VAST_REJECTED',
-      );
-    }
-    if (!response.body || !response.headers.get('content-type')?.split(';')[0].endsWith('json')) {
-      await response.body?.cancel();
-      throw new HttpFailure(502, 'VAST_PROTOCOL');
-    }
-    const reader = response.body.getReader(),
-      chunks: Uint8Array[] = [];
-    let bytes = 0;
-    const cancel = () => {
-      void reader.cancel().catch(() => {});
-    };
-    signal.addEventListener('abort', cancel, { once: true });
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const timer = setTimeout(() => controller.abort(), this.deadlineMs);
     try {
-      for (;;) {
-        signal.throwIfAborted();
-        const next = await reader.read();
-        signal.throwIfAborted();
-        if (next.done) break;
-        bytes += next.value.byteLength;
-        if (bytes > 4 * 1024 * 1024) throw new HttpFailure(502, 'VAST_RESPONSE_LIMIT');
-        chunks.push(next.value);
+      const response = await this.fetcher(url, {
+        method,
+        redirect: 'error',
+        signal,
+        headers: {
+          Authorization: 'Bearer ' + this.key,
+          Accept: 'application/json',
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (!response.ok) {
+        await response.body?.cancel();
+        if (response.status === 404) throw new HttpFailure(404, 'VAST_NOT_FOUND');
+        throw new HttpFailure(
+          response.status === 401 || response.status === 403 ? 503 : 502,
+          'VAST_REJECTED',
+        );
       }
-      const raw = Buffer.concat(chunks).toString('utf8');
-      if (raw.includes(this.key)) throw new HttpFailure(502, 'VAST_PROTOCOL');
-      try {
-        return JSON.parse(raw);
-      } catch {
+      if (!response.body || !response.headers.get('content-type')?.split(';')[0].endsWith('json')) {
+        await response.body?.cancel();
         throw new HttpFailure(502, 'VAST_PROTOCOL');
       }
+      const reader = response.body.getReader(),
+        chunks: Uint8Array[] = [];
+      let bytes = 0;
+      const cancel = () => {
+        void reader.cancel().catch(() => {});
+      };
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        for (;;) {
+          signal.throwIfAborted();
+          const next = await reader.read();
+          signal.throwIfAborted();
+          if (next.done) break;
+          bytes += next.value.byteLength;
+          if (bytes > 4 * 1024 * 1024) throw new HttpFailure(502, 'VAST_RESPONSE_LIMIT');
+          chunks.push(next.value);
+        }
+        const raw = Buffer.concat(chunks).toString('utf8');
+        if (raw.includes(this.key)) throw new HttpFailure(502, 'VAST_PROTOCOL');
+        try {
+          return JSON.parse(raw);
+        } catch {
+          throw new HttpFailure(502, 'VAST_PROTOCOL');
+        }
+      } finally {
+        signal.removeEventListener('abort', cancel);
+        await reader.cancel().catch(() => {});
+      }
     } finally {
-      signal.removeEventListener('abort', cancel);
-      await reader.cancel().catch(() => {});
+      clearTimeout(timer);
     }
   }
   async instances() {
