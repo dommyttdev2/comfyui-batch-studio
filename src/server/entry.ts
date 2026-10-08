@@ -7,7 +7,9 @@ try {
     host: process.env.BATCH_STUDIO_HOST,
     port: process.env.BATCH_STUDIO_PORT ? Number(process.env.BATCH_STUDIO_PORT) : undefined,
   });
-  const runtime = await createServerRuntime(config);
+  const runtime = await createServerRuntime(config, {
+    catalogFile: process.env.BATCH_STUDIO_CATALOG_FILE,
+  });
   console.log(`Batch Studio server listening at ${runtime.origin}`);
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.once(signal, () => {
