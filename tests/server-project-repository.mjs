@@ -10,56 +10,7 @@ import { EventBroker } from '../dist-server/server/events.js';
 import { atomicJson } from '../dist-server/server/storage.js';
 import { ProjectUseCases } from '../dist-server/application/project-use-cases.js';
 import { writeAuth } from './server-fixtures.mjs';
-export async function projectFixture() {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'web-project-disk-'));
-  const root = path.join(dir, 'root');
-  await mkdir(root);
-  await writeAuth(dir);
-  await atomicJson(path.join(dir, 'project-roots.json'), {
-    schema: 'web-project-roots/1',
-    roots: [{ id: 'root', name: 'Root', root }],
-  });
-  const registration = new ProjectRegistration(dir);
-  const actor = {
-    userId: 'operator',
-    sessionId: 'session',
-    requestId: 'request',
-    projectIds: [],
-    permissions: ['read', 'edit', 'admin'],
-  };
-  const created = await registration.provision(
-    actor,
-    'create',
-    { rootId: 'root', directoryName: 'Alpha' },
-    'create',
-  );
-  actor.projectIds = [created.id];
-  const broker = new EventBroker(dir, () => []);
-  await broker.initialize();
-  let time = 1000;
-  const repo = new DiskProjects(registration.registry, new Ownership(), broker, () => time);
-  const app = new ProjectUseCases(
-    repo,
-    { read: async () => null },
-    { now: () => time },
-    { next: () => crypto.randomUUID() },
-  );
-  await repo.initialize();
-  return {
-    dir,
-    root,
-    id: created.id,
-    actor,
-    broker,
-    repo,
-    app,
-    time: (v) => (time = v),
-    close: async () => {
-      await repo.close();
-      await rm(dir, { recursive: true, force: true });
-    },
-  };
-}
+import { projectFixture } from './server-project-fixtures.mjs';
 test('disk transactions enforce lease/CAS, receipt identity and atomic scoped Project outbox', async () => {
   const f = await projectFixture();
   try {

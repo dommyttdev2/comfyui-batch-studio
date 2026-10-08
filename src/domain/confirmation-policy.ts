@@ -6,7 +6,9 @@ export type ConfirmedOperation =
   | 'discard-run'
   | 'restore-backup'
   | 'reset-editor'
-  | 'rerun-plan';
+  | 'rerun-plan'
+  | 'artifact-reset'
+  | 'stage-reset';
 export interface Confirmation {
   id: string;
   userId: string;

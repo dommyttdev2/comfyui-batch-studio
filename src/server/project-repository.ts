@@ -1,3 +1,5 @@
+import type { Confirmation } from '../domain/confirmation-policy.js';
+import { assertMutation } from '../application/project-access.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -24,6 +26,7 @@ interface Operation {
 }
 interface Envelope {
   schema: 'web-project-store/1';
+  confirmations: Confirmation[];
   project: ProjectState;
   operations: Operation[];
   outbox: Omit<ProjectEvent, 'sequence'>[];
@@ -83,9 +86,10 @@ export class DiskProjects implements ProjectRepository {
     const data = await readFile(file);
     if (data.length > 64 * 1024 * 1024) throw new HttpFailure(503, 'STORAGE_LIMIT');
     const e = object(JSON.parse(data.toString()));
-    fields(e, ['schema', 'project', 'operations', 'outbox', 'delivery']);
+    fields(e, ['schema', 'project', 'operations', 'outbox', 'delivery', 'confirmations']);
     if (
       e.schema !== 'web-project-store/1' ||
+      !Array.isArray(e.confirmations) ||
       !Array.isArray(e.operations) ||
       !Array.isArray(e.outbox) ||
       !Number.isSafeInteger(e.delivery) ||
@@ -241,6 +245,7 @@ export class DiskProjects implements ProjectRepository {
       };
       e.operations.push(operation);
       await this.persist(id, e);
+      const beforeConfirmations = structuredClone(e.confirmations);
       const beforeProject = structuredClone(e.project);
       const beforeOutbox = structuredClone(e.outbox);
       const ctx: Context = { id, envelope: e, committed: false };
@@ -249,6 +254,7 @@ export class DiskProjects implements ProjectRepository {
         result = await this.context.run(ctx, work);
         if (!ctx.committed) throw new HttpFailure(409, 'OPERATION_UNCERTAIN');
       } catch (error) {
+        e.confirmations = beforeConfirmations;
         e.project = beforeProject;
         e.outbox = beforeOutbox;
         e.operations = e.operations.filter((o) => o !== operation);
@@ -266,6 +272,45 @@ export class DiskProjects implements ProjectRepository {
       }
       return { project: result, eventDelivery };
     });
+  }
+  fingerprint(project: ProjectState) {
+    return createHash('sha256')
+      .update(JSON.stringify(canonical({ artifacts: project.artifacts, drafts: project.drafts })))
+      .digest('hex');
+  }
+  async prepare(
+    actor: ActorContext,
+    id: string,
+    input: { expectedRevision: number; leaseId: string; target: string; stage: boolean },
+  ): Promise<Confirmation> {
+    return this.queue(id).run(async () => {
+      const e = await this.load(id);
+      assertMutation(actor, { projectId: id, ...input }, e.project, { now: this.now });
+      e.confirmations = e.confirmations.filter((c) => c.expiresAt > this.now());
+      if (e.confirmations.length >= 1000) throw new HttpFailure(503, 'STORAGE_LIMIT');
+      const confirmation: Confirmation = {
+        id: randomUUID(),
+        userId: actor.userId,
+        sessionId: actor.sessionId,
+        projectId: id,
+        operation: input.stage ? 'stage-reset' : 'artifact-reset',
+        targetId: input.target,
+        fingerprint: this.fingerprint(e.project),
+        revision: e.project.revision,
+        expiresAt: this.now() + 60000,
+      };
+      e.confirmations.push(confirmation);
+      await this.persist(id, e);
+      return confirmation;
+    });
+  }
+  take(id: string): Confirmation {
+    const ctx = this.context.getStore();
+    if (!ctx) throw new HttpFailure(409, 'OPERATION_REQUIRED');
+    const value = ctx.envelope.confirmations.find((c) => c.id === id);
+    if (!value) throw new HttpFailure(409, 'CONFIRMATION_REQUIRED');
+    ctx.envelope.confirmations = ctx.envelope.confirmations.filter((c) => c.id !== id);
+    return value;
   }
   async close() {
     for (const q of this.queues.values()) await q.drain();
