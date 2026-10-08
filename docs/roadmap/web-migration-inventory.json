@@ -14011,8 +14011,8 @@
     },
     {
       "file": "tests/server-agent-api.mjs",
-      "lines": 171,
-      "sha256": "8195d39c138ad5576cd6757e55c9fedc48fc0fcc9d71be0bd7f808181a1961fe",
+      "lines": 213,
+      "sha256": "bfeeb392031b493592f7015c02eb91fcaf9b0c3daa4889be4e8d02289cdfd631",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",

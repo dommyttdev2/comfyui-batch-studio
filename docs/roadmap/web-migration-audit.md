@@ -496,7 +496,7 @@ IPC分類: binary-command=6 / binary-query=8 / command=66 / event=2 / native-rep
 | [tests/remote-instance-lifecycle.cjs](../../tests/remote-instance-lifecycle.cjs) | 521 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/remote-model-staging.cjs](../../tests/remote-model-staging.cjs) | 589 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
 | [tests/run.cjs](../../tests/run.cjs) | 581 | W12 / P8 / G12 | 回帰契約維持、compile先/import/resource前提を更新 |
-| [tests/server-agent-api.mjs](../../tests/server-agent-api.mjs) | 171 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
+| [tests/server-agent-api.mjs](../../tests/server-agent-api.mjs) | 213 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-agent-artifacts.mjs](../../tests/server-agent-artifacts.mjs) | 136 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-agent-browser.mjs](../../tests/server-agent-browser.mjs) | 121 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |
 | [tests/server-agent-cli.mjs](../../tests/server-agent-cli.mjs) | 48 | W12 / P8 / G12 | 配布設定をWeb/server構成へ適合 |

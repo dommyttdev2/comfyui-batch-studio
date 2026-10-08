@@ -168,3 +168,45 @@ test('revoking execute/edit while CLI is running prevents artifact import', asyn
     await f.close();
   }
 });
+test('model preferences persist per provider and declared reasoning capabilities reach the CLI', async () => {
+  const f = await fixture();
+  let restarted;
+  try {
+    const lease = (await f.call('/api/v1/projects/' + f.id + '/commands/acquire-lease', {})).body
+      .project;
+    const input = {
+      expectedRevision: lease.revision,
+      leaseId: lease.lease.leaseId,
+      model: 'fixture-model',
+      reasoningEffort: 'high',
+    };
+    const saved = await f.call('preferences', input, 'model-selection');
+    assert.equal(saved.status, 200);
+    assert.equal((await f.call('preferences')).body.model.reasoningEffort, 'high');
+    assert.equal(
+      (await f.call('/api/v1/projects/' + f.id + '/agents/story/grok/preferences')).body.model,
+      undefined,
+    );
+    const invalid = await f.call('preferences', {
+      ...input,
+      expectedRevision: saved.body.project.revision,
+      reasoningEffort: 'invented',
+    });
+    assert.equal(invalid.status, 400);
+    await f.call('chat', { text: 'model selection', conversationId: null });
+    await f.runtime.jobs.drain();
+    assert.deepEqual(f.agents.state.tasks[0].model, {
+      model: 'fixture-model',
+      reasoningEffort: 'high',
+    });
+    await f.runtime.close();
+    restarted = await createServerRuntime(f.config, { agents: f.agents });
+    const headers = await login(restarted, f.config);
+    const response = await fetch(restarted.origin + f.base + '/preferences', { headers });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).model.reasoningEffort, 'high');
+  } finally {
+    await restarted?.close('stop');
+    await f.close();
+  }
+});
