@@ -157,6 +157,7 @@ export class ProjectRegistration {
             drafts: {},
             runs: [],
           },
+          confirmations: [],
           operations: [],
           outbox: [],
           delivery: 0,
