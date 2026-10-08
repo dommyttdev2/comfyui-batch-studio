@@ -39,7 +39,8 @@
     "build:web": "tsc -p tsconfig.web.json && vite build --config vite.web.config.ts",
     "build:workspace": "npm run build:web && npm run build:server",
     "dev:web": "npm run build:workspace && npm run start:server",
-    "typecheck:web": "tsc -p tsconfig.web.json"
+    "typecheck:web": "tsc -p tsconfig.web.json",
+    "test:web": "npm run build:workspace && node --test tests/server-project-browser.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
@@ -52,6 +53,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
+    "@playwright/test": "1.64.0",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",

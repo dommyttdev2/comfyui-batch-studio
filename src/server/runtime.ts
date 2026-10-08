@@ -144,6 +144,9 @@ export async function createServerRuntime(
     ownership,
     projects,
     registration,
+    repository,
+    projectApi,
+    workflowApi,
     security,
     state: () => state,
   };
