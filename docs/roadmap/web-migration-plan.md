@@ -25,7 +25,7 @@ Electronを実行時・ビルド時・通常テストから除去し、React Web
 
 公開済み `v0.82.0`（`1e2614aef2ae08fa0c596fa34ac6c2a885aeb621`）から刷新統合branch `codex/web-migration` を作成した。再照合基準は `2d2656d2673209a3330d792520e958296a473b08`。元の `codex/web-p1-execution-core` に残るCLI修正は未統合として保持し、旧P1原型は破棄済みで、このbaselineの受入証拠には含めない。
 
-現在の再照合対象は272コード・設定ファイル（src 164、tests 73、scripts 8）。binary asset 8件、既存仕様・運用文書31件は別の母集団として管理する。ファイル別の主担当・完成phase・検証gate・IPCの処置は[調査索引](web-migration-audit.md)、hash・行番号・依存は[機械可読索引](web-migration-inventory.json)に記録する。
+P0の再照合対象は272コード・設定ファイル（src 164、tests 73、scripts 8）だった。binary asset 8件、既存仕様・運用文書31件は別の母集団として管理した。追加実装後の最新の対象数、ファイル別の主担当・完成phase・検証gate・IPCの処置は[調査索引](web-migration-audit.md)、hash・行番号・依存は[機械可読索引](web-migration-inventory.json)に記録する。P0の件数を現在の実装範囲と読み替えない。
 
 対象はsrc、scripts、tests、.github、schemas、templatesおよびルートのbuild/launch設定。node_modules、生成済dist、binary PSD/画像、release evidenceはコード走査対象から除外した。PSDはcopy-runtime、server読込、rendererのag-psd/Canvas処理の経路を調査した。静的走査は全行の手動レビューや実動作の保証ではなく、動的import・文字列内コード・外部CLIとの互換性は各フェーズで検証する。
 
@@ -236,7 +236,7 @@ gateの判定は下表を正本とする。各file/IPC/testが参照するGは�
 
 ### 6.2 既存testの実行経路
 
-現在の73 test fileをCI-conditional 2、CI-only 2、npm-test 61、standalone 5、support 3へ排他的に分類した。未接続のstandaloneは`assistant-pane.cjs`、`codex-snapshot-race.cjs`、`codex-turn-status.cjs`、`grok-cli-adapter.cjs`、`grok-cli-task-runner.cjs`。P0での実行結果・採否・後続検証は[開始基準と受入チェックリスト](web-migration-baseline-checklist.md)に記録した。新test経路への接続・旧test撤去は対応phaseで行う。CI-onlyとhelperを未登録という理由だけで未検証扱いしない。
+P0時点の73 test fileをCI-conditional 2、CI-only 2、npm-test 61、standalone 5、support 3へ排他的に分類した。当時の未接続standaloneは`assistant-pane.cjs`、`codex-snapshot-race.cjs`、`codex-turn-status.cjs`、`grok-cli-adapter.cjs`、`grok-cli-task-runner.cjs`。P0での実行結果・採否・後続検証は[開始基準と受入チェックリスト](web-migration-baseline-checklist.md)に記録した。追加後のtest母集団とcore-local等の最新分類は調査索引を参照する。新test経路への接続・旧test撤去は対応phaseで行う。CI-onlyとhelperを未登録という理由だけで未検証扱いしない。
 
 `.github/workflows/release-201-performance.yml`はmain向けPRのtest file/workflowのpath変更時だけ発火する。刷新branch向けPRでは実行せず、同等のperformance検証をローカルで実行する。mainへ最終統合する際にWeb版の発火条件を見直す。古いElectron buildの固定baselineを無条件に新Web buildと比較せず、同じ計測条件の新baselineを残す。CI-only/CI-conditionalは現mainの実行経路分類であり、刷新branchで検証を省略する意味ではない。
 

@@ -45,3 +45,9 @@ AI開始の予約は最初のawaitより前に取得し、失敗時に解放す�
 最終Linux runnerは終了コード0。npm testの既存61テストファイル、追加Grok CLI 2テストファイル、コア102テスト（既存84＋追加18、失敗0・skip 0）、typecheckが成功。Windowsで実行不能だったPython fcntlとfile symlinkの経路も含む。Renderer/Electron build、変更139ファイルのformat/lint、git diff --checkも終了コード0。製品buildはag-psdのutil externalization warningを出すが成功。実行コマンド・ログのSHA-256はexecuted-verification.jsonに記録した。
 
 機械的な詳細は元ワークスペースの `review-artifacts/pr309/iterations/separation-10/` に保持する: analysis.json、files/functions/ports.csv、operation-ledger.json、operation-route-traces.json、typed-call-edges.json、non-ipc-function-roots.json、embedded-audit.json、candidate-review.json、finding-resolution.json、completion-evidence.json。台帳の担当/将来phaseは分離不足の除外理由にしていない。
+
+## 正本索引の再照合
+
+2026-10-08、PR #310で追加したcore 61ファイル、Mainのruntime接続、core-separationテスト、THUMBNAIL_DELETE_DOCUMENTを正本の監査ツールに登録した。テストはcore-local、削除操作はW09/G09のcommandとして扱う。共有型・template規則は主担当を一つにし、横断する検証gateはtest側に記録した。
+
+`node docs/roadmap/web-migration-audit.cjs --write`と`--check`が成功。426コード・設定（src 309、tests 80、scripts 9）、172通信定義（161 invoke・11 notification）、8 binary asset、32仕様文書を別母集団として再照合した。上のAST調査はJS/TS・関数を中心とする別集計であり、この件数と合算しない。正本索引の未登録・hash/行番号の不一致も確認対象とし、別途作成した解析台帳だけで受入完了とは判断しない。

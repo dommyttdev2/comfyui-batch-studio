@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-06",
+  "date": "2026-10-08",
   "commit": "2d2656d2673209a3330d792520e958296a473b08",
   "method": "Regex full-text inventory; text hashes normalize CRLF to LF, binary hashes use exact bytes; actual preload invoke/event direction; exclusive ownership and explicit IPC sets. Reachability includes type imports and is not a deletion proof.",
   "policy": {
@@ -141,7 +141,7 @@
     {
       "file": ".git",
       "lines": 2,
-      "sha256": "029bda3aa3c744583216be369d77d08d07e6dcca42695e7907ed74e1538fd11b",
+      "sha256": "b4ada777b4a37eb6d08da24677fce7e9af33fd42c35029b43c0a5f848b523787",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -402,7 +402,7 @@
     {
       "file": "package.json",
       "lines": 56,
-      "sha256": "1746bf853cac9a0f04aa067dd9cda478fc5683b48179a4e63d645a4d0ac31859",
+      "sha256": "c7b379983d6fdc873e85f9f8f1b78b3871db496dbacc6d84465f24cb6f92f3f4",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -797,9 +797,9 @@
       "entryReachable": false
     },
     {
-      "file": "src/application/agent-preferences-use-cases.ts",
-      "lines": 88,
-      "sha256": "4090659537f9b595e0bfad9cd14f53d056ccb51560ef6cd1b1cbf2d06d09adcf",
+      "file": "src/application/agent-cli-port.ts",
+      "lines": 31,
+      "sha256": "9ff45fd249c9122dbbd6dfda618e96b581d3de79fac6b9c602831fb65e1668cb",
       "workPackage": "W04",
       "layer": "application",
       "phase": "P1",
@@ -807,6 +807,83 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/agent-runtime-types.js"
+      ],
+      "exports": [
+        "AgentEventSink",
+        "AgentCliAdapter"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/agent-conversation-runner.ts",
+      "lines": 264,
+      "sha256": "3cd0dad735100b7c5871aa2c5435da9be31761cb03a4243c0ed931cd5952a568",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-runtime-types.js",
+        "../domain/auto-artifact-types.js",
+        "../domain/agent-artifact-policy.js",
+        "../domain/agent-task-policy.js",
+        "./agent-cli-port.js",
+        "./agent-runtime-ports.js"
+      ],
+      "exports": [
+        "AgentConversationRunnerOptions",
+        "AgentConversationRunnerContract",
+        "createAgentConversationRunner"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/agent-draft-import.ts",
+      "lines": 35,
+      "sha256": "4b7bac21e428093f2e26637a426cfaed47d89b5bf32b7183173cbdc6750d619b",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-runtime-types.js",
+        "../domain/artifact-types.js"
+      ],
+      "exports": [
+        "AgentDraftImportPorts",
+        "importAgentDraft"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/agent-preferences-use-cases.ts",
+      "lines": 98,
+      "sha256": "9e6ec72499ad3c05680187a8bb0aef8aab3e0b7d7a70a3b0cb2d96a97f599a50",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-model-policy.js",
         "../domain/agent-state-policy.js",
         "../domain/contracts.js",
         "./agent-use-cases.js",
@@ -821,6 +898,33 @@
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
+    },
+    {
+      "file": "src/application/agent-runtime-ports.ts",
+      "lines": 71,
+      "sha256": "e6cf7a885b640f4e6a4730dc21c0fc98acad48d1320368e57d8677ad77d6dd0d",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-runtime-types.js",
+        "../domain/agent-state-policy.js",
+        "../domain/auto-artifact-types.js",
+        "./prompt-plan-patch.js"
+      ],
+      "exports": [
+        "AgentSessionStatePort",
+        "AgentConversationPort",
+        "AgentRuntimePorts"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
     },
     {
       "file": "src/application/agent-task-planning.ts",
@@ -851,8 +955,8 @@
     },
     {
       "file": "src/application/agent-task-use-cases.ts",
-      "lines": 205,
-      "sha256": "ad73310b1a4ffe67c62641f57a46280fffdcf0a2572a48de76c8ed146fbfa5c0",
+      "lines": 214,
+      "sha256": "960d9008ab5e985746be2826fb8ec040f94baa3b81da775f89dd9982cde43bbe",
       "workPackage": "W04",
       "layer": "application",
       "phase": "P1",
@@ -861,7 +965,7 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "../domain/agent-artifact-policy.js",
-        "../domain/agent-state-policy.js",
+        "../domain/agent-model-policy.js",
         "../domain/artifact-types.js",
         "../domain/canonical-artifact.js",
         "../domain/contracts.js",
@@ -883,8 +987,8 @@
     },
     {
       "file": "src/application/agent-use-cases.ts",
-      "lines": 158,
-      "sha256": "a7ff2f84ab8673057858c02310cbb2bb40b88fe58ffdb86bea0e4ca49eb30f06",
+      "lines": 160,
+      "sha256": "6772756f9519fdc8dc847bf78e8b59f70400168ff91d307237edeb639edaac1b",
       "workPackage": "W04",
       "layer": "application",
       "phase": "P1",
@@ -892,6 +996,7 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/agent-model-policy.js",
         "../domain/agent-state-policy.js",
         "../domain/artifact-policy.js",
         "../domain/contracts.js"
@@ -909,6 +1014,195 @@
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
+    },
+    {
+      "file": "src/application/artifact-file-service.ts",
+      "lines": 527,
+      "sha256": "1f5b267633e2dc1b9f2f987280dddc8bbee906b7ef79401ff51bc9092b767767",
+      "workPackage": "W03",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G03",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/model-draft-policy.js",
+        "../domain/artifact-validation.js",
+        "../domain/catalog-validation.js",
+        "../domain/model-impact.js"
+      ],
+      "exports": [
+        "ArtifactFilePorts",
+        "createArtifactFileService"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/assistant-commands.ts",
+      "lines": 108,
+      "sha256": "acf59e3a3c95c843ff1b1bf507e1d26f36c8a2f84ae7474b9d8fb4719c3e42d8",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-runtime-types.js",
+        "../domain/agent-state-policy.js",
+        "../domain/agent-stage-policy.js",
+        "./agent-conversation-runner.js",
+        "./codex-cli-task-runner.js"
+      ],
+      "exports": [
+        "AssistantCommandContext",
+        "AssistantCommandPorts",
+        "AssistantCommands"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/assistant-provider-preferences.ts",
+      "lines": 90,
+      "sha256": "4ae316e57ef43c9194acba0e12d85e27390b1e34bb8a53ad9786368837c14e57",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "AssistantProvider",
+        "AssistantStage",
+        "AssistantProvidersState",
+        "AssistantPreferencePorts",
+        "isAssistantProvider",
+        "isAssistantStage",
+        "AssistantProviderPreferences"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/auto-artifact-ingestion.ts",
+      "lines": 114,
+      "sha256": "3e48338aba4f2b4f0e59992a6c53ed3b264ff401246f27b04b689a43bd1c1cb2",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/auto-artifact-types.js",
+        "../domain/agent-artifact-policy.js",
+        "../domain/text-policy.js",
+        "../domain/artifact-types.js"
+      ],
+      "exports": [
+        "AutoArtifactLedger",
+        "AutoArtifactPorts",
+        "ingestAutoArtifact"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/caption-file-service.ts",
+      "lines": 189,
+      "sha256": "0ae853ec143da94df4d89e1a4a3bf1c210cf640352340c5b274965193c20e659",
+      "workPackage": "W09",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/caption-build-policy.js",
+        "../domain/caption-import-policy.js",
+        "../domain/artifact-types.js",
+        "../domain/caption-policy.js"
+      ],
+      "exports": [
+        "CaptionFilePorts",
+        "createCaptionFileService"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/civitai-catalog-sync.ts",
+      "lines": 376,
+      "sha256": "e6df5f4b553ea6b47768dd628bbac4e1c0de5f122b16f527beb9d1becad95a4c",
+      "workPackage": "W07",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G07",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/civitai-catalog-policy.js"
+      ],
+      "exports": [
+        "CatalogCollectionMeta",
+        "CivitaiCatalogSyncPorts",
+        "syncCivitaiCatalog"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/codex-cli-task-runner.ts",
+      "lines": 322,
+      "sha256": "de7b6b115b92cf513cce36dadce33c9f230de08650e08438631670613e718d4c",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-stage-policy.js",
+        "../domain/agent-runtime-types.js",
+        "../domain/auto-artifact-types.js",
+        "../domain/agent-artifact-policy.js",
+        "../domain/agent-task-policy.js",
+        "./agent-cli-port.js",
+        "./agent-runtime-ports.js"
+      ],
+      "exports": [
+        "CodexCliTaskRunnerOptions",
+        "CodexCliTaskRunnerContract",
+        "createCodexCliTaskRunner"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
     },
     {
       "file": "src/application/confirmation-use-cases.ts",
@@ -939,7 +1233,7 @@
     {
       "file": "src/application/core.ts",
       "lines": 56,
-      "sha256": "50217163494bc3f381d981c817f8929e08bfa72cb88276e2bca84008d7a3955b",
+      "sha256": "017b1d818085eb63d08ca7b6b5115c31f97cadf9c946f5ab9a0a48b4e08b4149",
       "workPackage": "W10",
       "layer": "application",
       "phase": "P1",
@@ -970,16 +1264,91 @@
       "entryReachable": false
     },
     {
-      "file": "src/application/execution-coordinator.ts",
-      "lines": 122,
-      "sha256": "22c80a918978b6ad2d4bce59622947cc4d80a15b8cfdf9e0337c7b373c17492c",
+      "file": "src/application/current-format-recovery.ts",
+      "lines": 31,
+      "sha256": "9fa9b81240116ee0587d25f0dda335087e8c062ab3a6f64199b9fc03da94c79d",
+      "workPackage": "W09",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "CurrentFormatRecoveryPorts",
+        "recoverCurrentFormat"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/editor-document-persistence.ts",
+      "lines": 27,
+      "sha256": "046f969e941b763dcd7d4913a756464fa608ccf00ec6e60342b8249f9de33571",
+      "workPackage": "W09",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/editor-save-policy.js"
+      ],
+      "exports": [
+        "EditorPersistencePorts",
+        "saveEditorDocument"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/execution-commands.ts",
+      "lines": 778,
+      "sha256": "6f04bc4e5e7b4500a745cd6a2b0c59eaef362032abfaf5e0aab7f7ad8012d73d",
       "workPackage": "W06",
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
-      "imports": [],
+      "imports": [
+        "../domain/contracts.js",
+        "../domain/artifact-types.js",
+        "../domain/execution-policy.js",
+        "../domain/vast-instance-errors.js",
+        "./execution-coordinator.js"
+      ],
+      "exports": [
+        "ExitMode",
+        "LocalStopObserver",
+        "ExecutionCommandPorts",
+        "ExecutionCommands"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/execution-coordinator.ts",
+      "lines": 126,
+      "sha256": "aa85c5e6b8c68fb8a79de5a3f75bfa7ace7b81b6d90a68a0a0c0c1d4fe3e4073",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/execution-launch-policy.js"
+      ],
       "exports": [
         "ExecutionRef",
         "ExecutionResourceLockManager",
@@ -993,8 +1362,8 @@
     },
     {
       "file": "src/application/execution-creation.ts",
-      "lines": 149,
-      "sha256": "2480825e5de46022c86a7556ed8b5190aa6eb4218bc5d8ef74ec9ba45d8cb0d8",
+      "lines": 159,
+      "sha256": "2c7323666d6c8ead2c1e2c83fbc8ab900025e661f63c517e1719bad759862d8c",
       "workPackage": "W06",
       "layer": "application",
       "phase": "P1",
@@ -1015,6 +1384,60 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/execution-launch.ts",
+      "lines": 69,
+      "sha256": "c63bc42138607875b107adedac4556855d2e7a5e96c7a49a85fe6e938828d563",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/execution-launch-policy.js"
+      ],
+      "exports": [
+        "ExecutionSubmissionPorts",
+        "submitExecution",
+        "ExecutionLaunchPorts",
+        "launchExecution",
+        "observeExecutionCompletion"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/execution-recovery-controller.ts",
+      "lines": 222,
+      "sha256": "7083f324c8f737b68812ee5f28240735d4d88c777aff691335ef2923b20ff7f2",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/execution-evidence.js",
+        "../domain/execution-policy.js",
+        "../domain/vast-instance-errors.js",
+        "./execution-coordinator.js"
+      ],
+      "exports": [
+        "RecoveryControllerPorts",
+        "ExecutionRecoveryController"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
       "entryReachable": true
     },
     {
@@ -1071,9 +1494,9 @@
       "entryReachable": true
     },
     {
-      "file": "src/application/execution-use-cases.ts",
-      "lines": 145,
-      "sha256": "a44a4a114821da22915db94995580683b3b2d36b82f0cb1dad35db8f901dd8a7",
+      "file": "src/application/execution-snapshot-observation.ts",
+      "lines": 59,
+      "sha256": "a56647be95e82a26f00b4abbcbb243c26a5578c00e7380ed1a85c44de0fa8397",
       "workPackage": "W06",
       "layer": "application",
       "phase": "P1",
@@ -1081,11 +1504,61 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/execution-snapshot-capture.js",
+        "../domain/artifact-types.js"
+      ],
+      "exports": [
+        "SnapshotObservationPorts",
+        "captureProjectExecutionSnapshot"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/execution-snapshot-persistence.ts",
+      "lines": 74,
+      "sha256": "8157b3daf7edfe4a7d87a9cc3170db38f0230bd19c7e112d48e832e5c6b4c3fd",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/execution-snapshot-policy.js",
+        "../domain/execution-workflow-policy.js"
+      ],
+      "exports": [
+        "SnapshotPersistencePorts",
+        "persistImmutableRunSnapshot"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/execution-use-cases.ts",
+      "lines": 180,
+      "sha256": "8579b7a9dc4300c2c70dbb1b7416154a3830c7dabfcd06e017bc5eb32b9b1b05",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./execution-commands.js",
+        "../domain/execution-launch-policy.js",
         "../domain/contracts.js",
         "../domain/execution-policy.js",
         "./execution-creation.js",
         "./execution-recovery.js",
-        "./execution-resumption.js",
         "./preflight.js"
       ],
       "exports": [
@@ -1097,6 +1570,36 @@
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
+    },
+    {
+      "file": "src/application/grok-cli-task-runner.ts",
+      "lines": 304,
+      "sha256": "240b14eb29751509d5b2c4d00f012677916a8b47588ea5d8cf43d5e617ec5cec",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-stage-policy.js",
+        "../domain/agent-runtime-types.js",
+        "../domain/auto-artifact-types.js",
+        "../domain/agent-artifact-policy.js",
+        "../domain/agent-task-policy.js",
+        "./agent-cli-port.js",
+        "./agent-runtime-ports.js"
+      ],
+      "exports": [
+        "GrokCliTaskRunnerOptions",
+        "GrokCliTaskRunnerContract",
+        "createGrokCliTaskRunner"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
     },
     {
       "file": "src/application/local-execution-runtime.ts",
@@ -1156,9 +1659,58 @@
       "entryReachable": true
     },
     {
+      "file": "src/application/lora-selection-history.ts",
+      "lines": 85,
+      "sha256": "72be1ba203ddaeac3c904cb569627fb6e4819ce3b41f31b7c4a5633ed2172ccd",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/resource-observation-types.js"
+      ],
+      "exports": [
+        "LoraHistoryPorts",
+        "createLoraSelectionHistory"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/manual-project-reset.ts",
+      "lines": 54,
+      "sha256": "e8856d911c67c15e7badfa8059c9fdc80d136c84ec59744ecececffc686debdb",
+      "workPackage": "W03",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G03",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/model-reset-policy.js"
+      ],
+      "exports": [
+        "ManualResetScope",
+        "ManualResetPorts",
+        "resetProjectFrom"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/marketplace-generation.ts",
-      "lines": 258,
-      "sha256": "db1d948261cc5d0b16a5f54df48d76ec96bc42e416c5e1bb9ebac35ba1233a31",
+      "lines": 276,
+      "sha256": "ebad0320fb5060515271eb77eac889b45df86a0644329ae25775d538c0325b78",
       "workPackage": "W09",
       "layer": "application",
       "phase": "P1",
@@ -1166,6 +1718,7 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/thumbnail-source-policy.js",
         "../domain/artifact-types.js",
         "../domain/image-size-policy.js",
         "../domain/marketplace-editor-policy.js",
@@ -1187,9 +1740,84 @@
       "entryReachable": true
     },
     {
+      "file": "src/application/model-availability-observation.ts",
+      "lines": 128,
+      "sha256": "19b1977e5c90bf92d5e35d53e6bec1003c74f7c069abbc3f842d05dcac5188a9",
+      "workPackage": "W05",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G05",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/availability-policy.js",
+        "../domain/model-placement.js",
+        "../domain/artifact-types.js",
+        "../domain/resource-observation-types.js"
+      ],
+      "exports": [
+        "ModelAvailabilityPorts",
+        "createModelAvailabilityObservation"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/model-downstream-file-service.ts",
+      "lines": 242,
+      "sha256": "8e78c43ec10d3d81d7cf8dda80cd557aa5a535443c28b62d8aef42d47f9e2b49",
+      "workPackage": "W03",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G03",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./manual-project-reset.js",
+        "../domain/artifact-types.js"
+      ],
+      "exports": [
+        "ManualResetScope",
+        "ModelDownstreamFilePorts",
+        "createModelDownstreamFileService"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/observed-agent-model-selection.ts",
+      "lines": 27,
+      "sha256": "c6afd5da9bd9eb14b01163364e020ab48556cb78690aebb820f4c925bfb77dbf",
+      "workPackage": "W04",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-model-policy.js",
+        "../domain/agent-state-policy.js"
+      ],
+      "exports": [
+        "ObservedModelSelectionPorts",
+        "chooseObservedAgentModel"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/output-use-cases.ts",
-      "lines": 214,
-      "sha256": "85dee3a076cb8df83be96034096d24545509fed81b728edc28a7a1212e496ff8",
+      "lines": 225,
+      "sha256": "377ddf0b92fd334d68c5a03975d02dcdd083cad92b3938eafd9ec4e2be17d41b",
       "workPackage": "W09",
       "layer": "application",
       "phase": "P1",
@@ -1206,6 +1834,7 @@
         "../domain/marketplace-editor-policy.js",
         "../domain/marketplace-generation-policy.js",
         "../domain/thumbnail-editor-policy.js",
+        "../domain/thumbnail-source-policy.js",
         "../domain/time-policy.js",
         "../domain/workflow-graph.js",
         "./project-access.js",
@@ -1338,6 +1967,30 @@
       "entryReachable": false
     },
     {
+      "file": "src/application/project-observation.ts",
+      "lines": 178,
+      "sha256": "0a48223b3114e45ac1c937c664c5e06066f2de6b496b8d24f80e864244dc2ba3",
+      "workPackage": "W03",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G03",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/brief-impact-policy.js",
+        "../domain/artifact-types.js"
+      ],
+      "exports": [
+        "ProjectObservationPorts",
+        "scanProjectObservation"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/project-ports.ts",
       "lines": 75,
       "sha256": "d4eda41ab13d9110fb8da0faa635920358c5e4b363ee950982a234ad694b403b",
@@ -1407,6 +2060,154 @@
       "entryReachable": false
     },
     {
+      "file": "src/application/prompt-plan-patch.ts",
+      "lines": 56,
+      "sha256": "f2db81238b2442819d6371f9039e2ed2248cc1f7fc08148c3a9c64c5bba11c7c",
+      "workPackage": "W03",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G03",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/prompt-plan-patch-policy.js",
+        "../domain/artifact-validation.js"
+      ],
+      "exports": [
+        "PromptPatchPorts",
+        "promptPatchBase",
+        "applyPromptPatch"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/r2-connection-use-cases.ts",
+      "lines": 83,
+      "sha256": "b9d77857c09ef91eba842dcf199fc20038d601a616ebc44c8a24224c473c6b49",
+      "workPackage": "W08",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G08",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/r2-connection-policy.js"
+      ],
+      "exports": [
+        "R2ConnectionPorts",
+        "R2ConnectionUseCases"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/r2-transfer-runtime.ts",
+      "lines": 567,
+      "sha256": "6b672cecc473f0ad6c5af94a3fc435cc26d1f5d7120b19d6cb77b7b1c099271b",
+      "workPackage": "W08",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G08",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/integration-types.js",
+        "../domain/r2-storage-policy.js",
+        "../domain/text-policy.js",
+        "../domain/r2-transfer-policy.js"
+      ],
+      "exports": [
+        "TransferStorageOperation",
+        "R2TransferPorts",
+        "R2TransferRuntime"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/remote-control-preparation.ts",
+      "lines": 79,
+      "sha256": "62de448668e64f1d65b436cbc6fdd7a541d68e6051cb912c23a46d30171d424e",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/integration-types.js",
+        "./remote-environment-bootstrap.js"
+      ],
+      "exports": [
+        "RemoteConnectionPorts",
+        "connectRemoteControlPlane"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/remote-environment-bootstrap.ts",
+      "lines": 136,
+      "sha256": "398b409877793c4307f6f2519a5324da8d44198dbca7361a841996aeeaaaf1d8",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/remote-worker-contract.js"
+      ],
+      "exports": [
+        "PreparationWorkerPort",
+        "RemotePreparationStore",
+        "RemoteBootstrapConfig",
+        "RemoteEnvironmentBootstrap"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/remote-execution-preparation.ts",
+      "lines": 113,
+      "sha256": "5d9788083cd3596f8ee9c0d56b970fc4472a7895f8fc24730155edb26e24bd79",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js"
+      ],
+      "exports": [
+        "RemoteExecutionPreparationPorts",
+        "prepareRemoteExecution"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/remote-execution-runtime.ts",
       "lines": 1061,
       "sha256": "1f5411e1f115a579b8502c906709e81cf323adcf0970f80aeca145a8e9b8aa86",
@@ -1465,6 +2266,35 @@
       "entryReachable": true
     },
     {
+      "file": "src/application/remote-model-stager.ts",
+      "lines": 435,
+      "sha256": "e1df542e694fb94780a45cec2a2c21be7346c93e8f8051a80bdc20ad3b4188d2",
+      "workPackage": "W06",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/execution-evidence.js",
+        "../domain/model-placement.js",
+        "../domain/remote-worker-contract.js",
+        "./remote-environment-bootstrap.js"
+      ],
+      "exports": [
+        "ModelStageWorkerPort",
+        "ModelStageStoragePort",
+        "ModelStageRunPort",
+        "RemoteModelStager"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/resource-preflight.ts",
       "lines": 214,
       "sha256": "e816db4412fe54486c79cc8c3c4dec2e3459a5e568f4bf5f35a862578547d458",
@@ -1494,6 +2324,31 @@
       "entryReachable": true
     },
     {
+      "file": "src/application/thumbnail-document-use-cases.ts",
+      "lines": 43,
+      "sha256": "cfb3cb52851036ce484e85649f788ee87b5a21f84d97f970b7476cba6a827316",
+      "workPackage": "W09",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/contracts.js",
+        "../domain/thumbnail-editor-policy.js"
+      ],
+      "exports": [
+        "ThumbnailDocumentPorts",
+        "deleteThumbnailDocument"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/thumbnail-output-generation.ts",
       "lines": 60,
       "sha256": "5175d58addf8c47f28a294f77b11de9adfcb1ef6404c530d609520175e8b15e4",
@@ -1518,9 +2373,82 @@
       "entryReachable": true
     },
     {
+      "file": "src/application/vast-offer-use-cases.ts",
+      "lines": 104,
+      "sha256": "39782a690e0d230c9d8b7ec0c87859b6033f99c62aab492d93837613cff82647",
+      "workPackage": "W07",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G07",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/integration-types.js",
+        "../domain/vast-offer-policy.js"
+      ],
+      "exports": [
+        "VastOfferPorts",
+        "VastOfferUseCases"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/vast-ssh-endpoint.ts",
+      "lines": 52,
+      "sha256": "c8251d9c5910a534c546c0e674e3c7dd6fa8dcca37dd8d20403e1b44aba2c8e5",
+      "workPackage": "W07",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G07",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/artifact-types.js",
+        "../domain/integration-types.js"
+      ],
+      "exports": [
+        "VastSshPorts",
+        "resolveVastSshEndpoint"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/application/workflow-file-compilation.ts",
+      "lines": 114,
+      "sha256": "5a8981ae4748a3ca78f8abe378588335bc86b1ee96cb0897142c59dadfaf544c",
+      "workPackage": "W05",
+      "layer": "application",
+      "phase": "P1",
+      "gate": "G05",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/workflow-compilation.js",
+        "../domain/artifact-validation.js",
+        "../domain/artifact-types.js"
+      ],
+      "exports": [
+        "WorkflowFilePorts",
+        "compileWorkflowFiles"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/workflow-use-cases.ts",
-      "lines": 118,
-      "sha256": "60a3b354675079806c3ddc2d8c7c5de50591d9d703ba7083ccd1948c61b1acfc",
+      "lines": 172,
+      "sha256": "7c61304f80aaf7b5a0d5a32f3f3a1d2a35af8f5612041e2162c0a923b62bda57",
       "workPackage": "W05",
       "layer": "application",
       "phase": "P1",
@@ -1538,6 +2466,7 @@
         "../domain/workflow-compilation.js",
         "../domain/workflow-graph.js",
         "./project-access.js",
+        "../domain/workflow-resource-policy.js",
         "./project-ports.js"
       ],
       "exports": [
@@ -1573,6 +2502,118 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/agent-conversation-policy.ts",
+      "lines": 40,
+      "sha256": "ac1a3479caafc432277e08bf6d242855ea0c655507f760506596df4a84e14a2a",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./agent-runtime-types.js"
+      ],
+      "exports": [
+        "validConversationSessionId",
+        "sanitizeMessage",
+        "validConversationMessages",
+        "upsertConversationMessage"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/agent-model-policy.ts",
+      "lines": 25,
+      "sha256": "b168e96b96244880bd5b7cd25fa2a6109758723c3e75e676dfba091bc345681f",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./agent-state-policy.js",
+        "./contracts.js"
+      ],
+      "exports": [
+        "AgentModelCapabilities",
+        "selectAvailableAgentModel"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/agent-runtime-types.ts",
+      "lines": 137,
+      "sha256": "465211929651d6bf9a5d63ebf858b7d05f28ef689953eea8810586ffd3a49bd1",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "GrokTask",
+        "GrokContextStage",
+        "AgentProvider",
+        "AssistantPaneProvider",
+        "AutoArtifactProvider",
+        "AgentContext",
+        "AgentCapabilities",
+        "AgentAvailability",
+        "AgentModelOption",
+        "AgentModelSelection",
+        "AgentModelSettings",
+        "AgentWorkspaceDescriptor",
+        "AgentConversationWorkspaceDescriptor",
+        "AgentTaskWorkspaceDescriptor",
+        "AgentTaskRequest",
+        "AgentTurn",
+        "AgentEvent",
+        "AgentEventEnvelope",
+        "AgentConversationMessage",
+        "AgentWorkspace",
+        "AgentConversationWorkspace"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/agent-stage-policy.ts",
+      "lines": 13,
+      "sha256": "374a775b5836647dea9817d24ff8e9ccf976501a0bb2e97eb5ffcb3b0854d792",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./agent-runtime-types.js"
+      ],
+      "exports": [
+        "agentTaskContexts",
+        "contextStageForTask"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
       "entryReachable": true
     },
     {
@@ -1635,6 +2676,28 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/agent-workspace-policy.ts",
+      "lines": 14,
+      "sha256": "125744f9b9c869f4e9fc2a63f294ccbc72bff224caa34a7ba3b9bd5d974d0e20",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./agent-runtime-types.js"
+      ],
+      "exports": [
+        "agentWorkspaceOutputInstruction"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/artifact-policy.ts",
       "lines": 38,
       "sha256": "7c670d782f59ed0eade6419ccc20e2ea89310f54461c2b29f709306ed77839e5",
@@ -1663,8 +2726,8 @@
     },
     {
       "file": "src/domain/artifact-types.ts",
-      "lines": 783,
-      "sha256": "89cd64353e510edcbe5b21be5eecaa52b05b4c15100b601bc20438e25a42a6b9",
+      "lines": 791,
+      "sha256": "3a842e390f4a0749d4b98fc6f90166fa2ef97d598c34fa1e195898e5c1f66559",
       "workPackage": "W03",
       "layer": "domain",
       "phase": "P1",
@@ -1760,7 +2823,8 @@
         "FinalArtifactStatus",
         "PromptFallback",
         "VastAiInstance",
-        "ImportResult"
+        "ImportResult",
+        "ArtifactReadResult"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -1793,6 +2857,52 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/auto-artifact-selection.ts",
+      "lines": 19,
+      "sha256": "7ef1e6eff5cd37ba7ee31a385ee1041877623d781a0bf897427c7cb1fd0acfb9",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./auto-artifact-types.js"
+      ],
+      "exports": [
+        "selectLatestAutoArtifact"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/auto-artifact-types.ts",
+      "lines": 24,
+      "sha256": "7782900c01efc8b8f447056406f522e0da08e7b03f8482ad44ee5950534dfed7",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./agent-artifact-policy.js",
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "AutoArtifactPhase",
+        "AutoArtifactEvent"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
       "entryReachable": true
     },
     {
@@ -1970,6 +3080,56 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/civitai-catalog-policy.ts",
+      "lines": 174,
+      "sha256": "73d6f46b28b8bbc8a15909239de241d5505817600786e7c27900f8a3ee0e8fbe",
+      "workPackage": "W07",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G07",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "CachedCheckpointEvidence",
+        "numberValue",
+        "calculateStrengthBaseline",
+        "calculateObservedCheckpointReferences",
+        "extractGenerationExamples",
+        "calculateMembershipChanges"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/codex-chat-policy.ts",
+      "lines": 27,
+      "sha256": "4c53791dd36e55af93a249e5c447f72a0351effb2b626ca0d8c1c55a94204a39",
+      "workPackage": "W04",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "CodexStageChats",
+        "copyChats",
+        "rememberCodexThread",
+        "clearCodexThread"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": false
+    },
+    {
       "file": "src/domain/confirmation-policy.ts",
       "lines": 47,
       "sha256": "5913fc76b0a77fb87d04bbce920e5ce5a275c417dadc1a70720214e5a4bdf121",
@@ -2027,6 +3187,47 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/editor-save-policy.ts",
+      "lines": 22,
+      "sha256": "c514e1a9d78756923d6e9588eae07c1f0339043815f918840ff06f23952539ef",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "RevisionedEditor",
+        "editorSaveDecision"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/execution-error-policy.ts",
+      "lines": 6,
+      "sha256": "111f25686817ced0ef83519b00dabb04968d5b2e373877fb992b73393f29a8e6",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "safeExecutionError"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/execution-evidence.ts",
       "lines": 18,
       "sha256": "a9cd7a09a4117fa38ebd0df2e5efc9ec740ec2e5a305a6d53a6818143e84f58e",
@@ -2069,6 +3270,31 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/execution-launch-policy.ts",
+      "lines": 38,
+      "sha256": "16977f532fe6ae46f9a5ad0d22c347ba0d98eea3902f9df86ca0ea796c057a51",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./execution-error-policy.js",
+        "./artifact-types.js",
+        "./contracts.js"
+      ],
+      "exports": [
+        "ExecutionLaunchFailure",
+        "markLaunchFailure"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
       "entryReachable": true
     },
     {
@@ -2179,6 +3405,29 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/execution-record-stamp.ts",
+      "lines": 9,
+      "sha256": "13a03f1b4622589dbbd4fd0ff764eb025e64bc6f83b677610359c7508665f137",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "stampRunMutation",
+        "validStoredRunIdentity"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/execution-resume.ts",
       "lines": 42,
       "sha256": "cc0c9575a4c9bea7a9733fe4a61d9b6460c69c98fb9deb7c705bca62891e3c52",
@@ -2251,9 +3500,32 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/execution-storage-policy.ts",
+      "lines": 33,
+      "sha256": "c95e88749900b9a6a44a452da097ffe71006283d7bdcb1ad606f3d1d89fae07e",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./execution-record-policy.js"
+      ],
+      "exports": [
+        "assertRunBackup"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/execution-workflow-policy.ts",
       "lines": 47,
-      "sha256": "f0c1992d04ecbe84b564fbfe6e66f3ea05ce3cddcc43be0fa1a155234818034c",
+      "sha256": "8fcf052ebb2a86fd3a16e3e3e8843034e70cd6402e71be7ffb77b4d01ba004a0",
       "workPackage": "W06",
       "layer": "domain",
       "phase": "P1",
@@ -2394,6 +3666,37 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/integration-types.ts",
+      "lines": 132,
+      "sha256": "1d0f1eb889db6c883d05e787063de09ba2fb01e9ebe955b035d523f845b2566b",
+      "workPackage": "W07",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G07",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "VastAiComfyUiTemplate",
+        "VastAiOfferSearchInput",
+        "VastAiOffer",
+        "VastAiOfferSearchResult",
+        "VastAiRentRequest",
+        "CatalogSelectionEntry",
+        "CatalogSelectionTemplate",
+        "CatalogSelectionTemplateInput",
+        "R2BatchDownloadTemplate",
+        "R2UploadSourceFingerprint",
+        "R2UploadJob",
+        "VastAiSshEndpoint"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
       "entryReachable": true
     },
     {
@@ -2794,9 +4097,57 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/r2-connection-policy.ts",
+      "lines": 53,
+      "sha256": "6c319b992d6117286e94f8e19bf41d6883fd93732dde769683f1cceaa353e9e5",
+      "workPackage": "W08",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G08",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "R2ConnectionInput",
+        "R2ConnectionStatus",
+        "StoredR2Config",
+        "normalizePublicUrl",
+        "validateR2Connection",
+        "r2CredentialReuse"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/r2-object-index-policy.ts",
+      "lines": 55,
+      "sha256": "21de079958ee358ddfac0559b212c380a4ed74cb39889d5444d26e5cef44b1d7",
+      "workPackage": "W08",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G08",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./resource-observation-types.js"
+      ],
+      "exports": [
+        "searchIndexedObjects",
+        "resolveIndexedModelKey"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/r2-storage-policy.ts",
-      "lines": 92,
-      "sha256": "60cb9762d4cd3cdcc8ce81b5a790ffb133162f34c2450968ff55c8c32b363c49",
+      "lines": 110,
+      "sha256": "83d617a41127b54615f996d01cecd24d93b77b92213a8e485fa5f5138a1aa777",
       "workPackage": "W08",
       "layer": "domain",
       "phase": "P1",
@@ -2819,12 +4170,39 @@
         "normalizeR2PresignedExpiresIn",
         "normalizeR2PutContentType",
         "normalizeBatchTemplateName",
-        "normalizeBatchTemplateObjects"
+        "normalizeBatchTemplateObjects",
+        "uniqueDownloadNames",
+        "assertDownloadBatch"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/r2-transfer-policy.ts",
+      "lines": 35,
+      "sha256": "2bcb4ba7d1ad40d87f63bfb62efcb6f9a4fd75b26b71eea95ded3bf0e52b9f25",
+      "workPackage": "W08",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G08",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./integration-types.js"
+      ],
+      "exports": [
+        "SOURCE_CHANGED",
+        "sourceChanged",
+        "sameSourceStat",
+        "assertUploadSourceBinding"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
       "entryReachable": true
     },
     {
@@ -2850,6 +4228,28 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/remote-request-policy.ts",
+      "lines": 15,
+      "sha256": "296c08776f1c0d26af6541ccc2321d0e6c5af652fb9df39d45fc876ba5cff5f9",
+      "workPackage": "W06",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G06",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "assertRemoteRequestAllowed"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
       "entryReachable": true
     },
     {
@@ -2898,6 +4298,58 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/resource-observation-types.ts",
+      "lines": 27,
+      "sha256": "60616192f8f97c9827fadc1a4236f1196f7231d4a1bba8b82017727c8975b4df",
+      "workPackage": "W05",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G05",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js"
+      ],
+      "exports": [
+        "GrokLoraSelectionStage",
+        "R2Object",
+        "R2SearchResult",
+        "LoraFileAvailability",
+        "GrokLoraSelectionHistoryEntry"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/saved-template-policy.ts",
+      "lines": 84,
+      "sha256": "3b818051301e2c7e46133452010af060664ca329a6f21e30a5921c1bf50ce4ec",
+      "workPackage": "W08",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G08",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./integration-types.js",
+        "./r2-storage-policy.js"
+      ],
+      "exports": [
+        "R2TemplateInput",
+        "saveR2Template",
+        "saveCatalogSelectionTemplate",
+        "deleteSavedTemplate"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/template-policy.ts",
       "lines": 4,
       "sha256": "bf5ea7b64f621d499525b339bbb06e9955d7e6d999b647c180e7f857d425940d",
@@ -2939,8 +4391,8 @@
     },
     {
       "file": "src/domain/thumbnail-editor-policy.ts",
-      "lines": 181,
-      "sha256": "73e05228b926af4b16f4e771ac16695227fc3f5323136fecaff258f48d340506",
+      "lines": 201,
+      "sha256": "508fe994d1f519f27581b726b7fd79bd02b6c74b2e126005fc7d3ab9201ac18d",
       "workPackage": "W09",
       "layer": "domain",
       "phase": "P1",
@@ -2955,7 +4407,8 @@
         "createThumbnailDocument",
         "createDefaultThumbnailState",
         "normalizeThumbnailState",
-        "validThumbnailState"
+        "validThumbnailState",
+        "removeThumbnailDocument"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
@@ -3026,6 +4479,28 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/thumbnail-source-policy.ts",
+      "lines": 17,
+      "sha256": "a7fcce5e60a3724bf09e1d9f27d2a447e1f850135d780125f52ab187f14ba327",
+      "workPackage": "W09",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G09",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "ThumbnailSourceFacts",
+        "isEligibleThumbnailSource",
+        "assertEligibleThumbnailSource"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/time-policy.ts",
       "lines": 29,
       "sha256": "83c692e797a2c577beaf095e59d342bb0724c70bb6b0543e1c4cee3b806c128a",
@@ -3044,6 +4519,52 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/vast-instance-errors.ts",
+      "lines": 7,
+      "sha256": "7f464e25ffd82a49bff15ce5a188d17ad9855ce98c7ff7ee5759155a5c602dc3",
+      "workPackage": "W07",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G07",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "VastAiInstanceNotFoundError"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": true
+    },
+    {
+      "file": "src/domain/vast-offer-policy.ts",
+      "lines": 91,
+      "sha256": "26b6d381f77e8b5a877b7b6b025ac5561d937359a3f2d3fa79b45a5b57ef0bdf",
+      "workPackage": "W07",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G07",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./integration-types.js"
+      ],
+      "exports": [
+        "normalizeOfferSearchInput",
+        "normalizeRentRequest",
+        "assertRentCapacity",
+        "rankTemplates",
+        "rankOffers"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
       "entryReachable": true
     },
     {
@@ -3099,9 +4620,30 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/workflow-resource-policy.ts",
+      "lines": 22,
+      "sha256": "d208f02ed51524875ab11f4b0d5c5b6f987144bc9a234d008166483b2a7e9772",
+      "workPackage": "W05",
+      "layer": "domain",
+      "phase": "P1",
+      "gate": "G05",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "WorkflowResourceIdentity",
+        "workflowResourcesChanged"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証",
+      "entryReachable": false
+    },
+    {
       "file": "src/main/agent-artifact-import.ts",
-      "lines": 153,
-      "sha256": "43b507a0b9f798bea081ba348008c19706b574b1cdfe986e33573b588ca1e834",
+      "lines": 88,
+      "sha256": "c56f47d4addf606c3a3f4397d7a21ed697de4a00c57ed8d548d046182244e5ee",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -3109,6 +4651,9 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../application/agent-draft-import.js",
+        "../domain/auto-artifact-selection.js",
+        "../application/auto-artifact-ingestion.js",
         "node:crypto",
         "node:path",
         "../shared/types.js",
@@ -3130,8 +4675,8 @@
     },
     {
       "file": "src/main/agent-cli-adapter.ts",
-      "lines": 31,
-      "sha256": "77bdff07124d5f4c0d9d6cd6062b40f1452427dfc564966973b9054cda6e0c8a",
+      "lines": 2,
+      "sha256": "3c2ca2d75824819e7ac7250f81d0d05fcb7eacd3ce23e669c801848cc90cd4e9",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -3139,12 +4684,9 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
-        "../shared/types.js"
+        "../application/agent-cli-port.js"
       ],
-      "exports": [
-        "AgentEventSink",
-        "AgentCliAdapter"
-      ],
+      "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
@@ -3185,8 +4727,8 @@
     },
     {
       "file": "src/main/agent-conversation-runner.ts",
-      "lines": 219,
-      "sha256": "7b147e8f0b36ed0dcdc889947aa9bd3bf5fb2f6042846679d71a1490c3d64821",
+      "lines": 9,
+      "sha256": "887df79efa685e1a6c273ead90166bc6078ca8feaa675eab670cebe7c3888ad1",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -3194,14 +4736,11 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
-        "../shared/types.js",
-        "./agent-cli-adapter.js",
-        "./agent-conversation-store.js",
-        "./agent-session-state.js",
-        "./agent-workspace.js"
+        "../application/agent-conversation-runner.js",
+        "./agent-runtime-ports.js"
       ],
       "exports": [
-        "AgentConversationRunnerOptions",
+        "AgentConversationRunner",
         "AgentConversationRunner"
       ],
       "bridgeCalls": [],
@@ -3212,8 +4751,8 @@
     },
     {
       "file": "src/main/agent-conversation-store.ts",
-      "lines": 113,
-      "sha256": "b67cd878fd3e16ae43857eb99058ab7c338ab1ee10adac0a5596487a350cf3c0",
+      "lines": 93,
+      "sha256": "97db6fc66cf155b4d6128efb1bcfa51675619856cf21235b5499095dbc4ff6a3",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -3221,6 +4760,7 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/agent-conversation-policy.js",
         "node:path",
         "./fs-utils.js",
         "../shared/types.js"
@@ -3260,6 +4800,36 @@
       "entryReachable": true
     },
     {
+      "file": "src/main/agent-runtime-ports.ts",
+      "lines": 36,
+      "sha256": "8e98a17234125f627ca60c0a58f900f79d670748835983338aff3f88df332e27",
+      "workPackage": "W04",
+      "layer": "existing-reference",
+      "phase": "P4",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:path",
+        "node:fs/promises",
+        "../application/agent-runtime-ports.js",
+        "./agent-workspace.js",
+        "./grok-context.js",
+        "./agent-artifact-import.js",
+        "./prompt-plan-patch.js",
+        "./codex-cli-adapter.js",
+        "./grok-cli-adapter.js"
+      ],
+      "exports": [
+        "agentRuntimePorts"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": true
+    },
+    {
       "file": "src/main/agent-session-state.ts",
       "lines": 114,
       "sha256": "e506a39d186d376f8b74da37e8a102e37faaed815d53692dc3a277e845098078",
@@ -3286,8 +4856,8 @@
     },
     {
       "file": "src/main/agent-workspace.ts",
-      "lines": 273,
-      "sha256": "589d6a716476c06d0424795118629f2c5938986f0cadb00cb95c59f508156bb2",
+      "lines": 238,
+      "sha256": "40ccea579bfed2a4b8f335596f1f62584939a75f9d7685b9d8e74717fed5c49b",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -3295,22 +4865,22 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/agent-artifact-policy.js",
         "node:crypto",
         "node:fs/promises",
         "node:path",
         "../shared/types.js",
         "./artifact-service.js",
-        "./fs-utils.js"
+        "./fs-utils.js",
+        "../domain/agent-runtime-types.js",
+        "../domain/agent-workspace-policy.js"
       ],
       "exports": [
-        "AgentWorkspace",
-        "AgentConversationWorkspace",
         "agentWorkspaceFor",
         "prepareAgentConversationWorkspace",
         "removeAgentConversationWorkspace",
         "removeAgentWorkspace",
         "prepareAgentWorkspace",
-        "agentWorkspaceOutputInstruction",
         "rememberAgentWorkspace",
         "findAgentWorkspace",
         "readAgentWorkspaceOutput"
@@ -3385,8 +4955,8 @@
     },
     {
       "file": "src/main/artifact-service.ts",
-      "lines": 482,
-      "sha256": "d376badcaea6ced9b560579d233a04a2ca641d15bad91a0c0b960cd82402d10f",
+      "lines": 53,
+      "sha256": "6c84884bf6e9e0a00c3722e3460f3d045968cf8403a27ba571a9d4c46a39b408",
       "workPackage": "W03",
       "layer": "existing-reference",
       "phase": "P3",
@@ -3394,38 +4964,23 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../application/artifact-file-service.js",
         "node:crypto",
         "node:fs/promises",
         "node:path",
-        "../domain/artifact-types.js",
-        "../domain/model-draft-policy.js",
-        "../shared/types.js",
         "./fs-utils.js",
         "./model-catalog.js",
         "./model-downstream-reset.js",
         "./project-meta.js",
-        "./project-transaction.js",
-        "./validation.js"
+        "./project-transaction.js"
       ],
-      "exports": [
-        "internalDir",
-        "draftPath",
-        "confirmedPath",
-        "readArtifact",
-        "saveDraft",
-        "importGrok",
-        "confirmArtifact",
-        "createProject",
-        "savePromptPlan",
-        "beginEditArtifact",
-        "saveProjectBrief"
-      ],
+      "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [
         {
-          "line": 443,
-          "text": "const artifactRoot = (process.env.BATCH_STUDIO_ARTIFACT_ROOT ?? '').trim(),"
+          "line": 49,
+          "text": "artifactRoot: () => process.env.BATCH_STUDIO_ARTIFACT_ROOT ?? '',"
         }
       ],
       "migrationAction": "Node処理再利用、dataDir/権限/排他/復旧との接合を検証",
@@ -3433,8 +4988,8 @@
     },
     {
       "file": "src/main/assistant-provider-state.ts",
-      "lines": 143,
-      "sha256": "c03d25a8e28415764dc5a3521c599316d617211ab2d25108642bef20d87f4fea",
+      "lines": 22,
+      "sha256": "507800119cc5260fbc98fb01176eaeda309aa7f1f1ac23e3f2ecc66799ad3f9a",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -3443,12 +4998,10 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:path",
-        "./fs-utils.js",
-        "../shared/types.js"
+        "../application/assistant-provider-preferences.js",
+        "./fs-utils.js"
       ],
       "exports": [
-        "isAssistantStage",
-        "isAssistantProvider",
         "AssistantProviderStore"
       ],
       "bridgeCalls": [],
@@ -3486,8 +5039,8 @@
     },
     {
       "file": "src/main/availability.ts",
-      "lines": 143,
-      "sha256": "0e6f860301e2bd8f5aaf8f0804a5da6ffc759ddb510138e8ad22c8e8bf77e599",
+      "lines": 34,
+      "sha256": "7791e7680fe8b305429ee84605aa1988a737667bc544bada8d1aa33b018a283d",
       "workPackage": "W05",
       "layer": "existing-reference",
       "phase": "P5",
@@ -3497,26 +5050,17 @@
       "imports": [
         "node:fs/promises",
         "node:path",
-        "../domain/availability-policy.js",
-        "../shared/types.js",
+        "../application/model-availability-observation.js",
         "./fs-utils.js",
-        "./model-placement-paths.js",
         "./project-meta.js"
       ],
-      "exports": [
-        "checkLoraFileAvailability",
-        "checkAvailability"
-      ],
+      "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [
         {
-          "line": 68,
-          "text": "(process.env.BATCH_STUDIO_R2_INDEX_PATH ?? '').trim() ||"
-        },
-        {
-          "line": 112,
-          "text": "(process.env.BATCH_STUDIO_R2_INDEX_PATH ?? '').trim() ||"
+          "line": 32,
+          "text": "r2IndexPath: () => process.env.BATCH_STUDIO_R2_INDEX_PATH ?? '',"
         }
       ],
       "migrationAction": "Node処理再利用、dataDir/権限/排他/復旧との接合を検証",
@@ -3524,8 +5068,8 @@
     },
     {
       "file": "src/main/caption-service.ts",
-      "lines": 190,
-      "sha256": "380316df0aa6e66a070e80812be6c49664a76ae1849263fcedb033d11c00f468",
+      "lines": 23,
+      "sha256": "55748e8069ae931bb1511860c53605168ea0e9001fc4491db88f9843ff5651fa",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -3534,21 +5078,13 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:crypto",
-        "node:fs/promises",
         "node:path",
-        "../domain/caption-build-policy.js",
-        "../domain/caption-import-policy.js",
-        "../shared/types.js",
+        "../application/caption-file-service.js",
         "./final-artifact-service.js",
         "./fs-utils.js",
         "../domain/caption-policy.js"
       ],
-      "exports": [
-        "getCaptionStatus",
-        "importCaptionGrok",
-        "savePixivTitle",
-        "generateCaption"
-      ],
+      "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
@@ -3557,8 +5093,8 @@
     },
     {
       "file": "src/main/civitai-cache.ts",
-      "lines": 149,
-      "sha256": "72403e2d7c96b1ee6744e190eebb76bd5e93a67ab16b5a9d136d69036f2afb9e",
+      "lines": 146,
+      "sha256": "a475226d190cc04a2fe0e7022a02f1b2ee5f644f71fa1f41f861d608d4bbeb60",
       "workPackage": "W07",
       "layer": "existing-reference",
       "phase": "P5",
@@ -3568,10 +5104,10 @@
       "imports": [
         "node:path",
         "node:fs/promises",
-        "../shared/types.js"
+        "../shared/types.js",
+        "../domain/civitai-catalog-policy.js"
       ],
       "exports": [
-        "CachedCheckpointEvidence",
         "CivitaiMetadataCache"
       ],
       "bridgeCalls": [],
@@ -3582,8 +5118,8 @@
     },
     {
       "file": "src/main/civitai-catalog.ts",
-      "lines": 881,
-      "sha256": "5cf62826c7d0247f3ef06ac8abc0491dc85b864c22639ad4cf3b0d7c02a86d08",
+      "lines": 406,
+      "sha256": "f62baca22cfa6defa1d622e82548133e939da1372a1719c77b2663b54245cd87",
       "workPackage": "W07",
       "layer": "existing-reference",
       "phase": "P5",
@@ -3591,6 +5127,9 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../application/civitai-catalog-sync.js",
+        "../domain/civitai-catalog-policy.js",
+        "../domain/saved-template-policy.js",
         "node:path",
         "node:crypto",
         "node:fs/promises",
@@ -3602,37 +5141,33 @@
       ],
       "exports": [
         "CivitaiSyncMetrics",
-        "calculateStrengthBaseline",
-        "calculateObservedCheckpointReferences",
-        "extractGenerationExamples",
-        "calculateMembershipChanges",
         "CivitaiCatalogService"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [
         {
-          "line": 55,
+          "line": 57,
           "text": "const seconds = Number(process.env[name] ?? fallbackSeconds);"
         },
         {
-          "line": 292,
+          "line": 119,
           "text": "this.apiKey = (process.env.CIVIT_API_KEY ?? '').trim();"
         },
         {
-          "line": 293,
+          "line": 120,
           "text": "const baseUrl = (process.env.CIVITAI_BASE_URL ?? 'https://civitai.com').replace(/\\/$/, '');"
         },
         {
-          "line": 294,
+          "line": 121,
           "text": "const matureBaseUrl = (process.env.CIVITAI_MATURE_BASE_URL ?? 'https://civitai.red').replace("
         },
         {
-          "line": 298,
+          "line": 125,
           "text": "const timeoutMs = Math.max(1000, Number(process.env.CIVITAI_TIMEOUT ?? 20) * 1000);"
         },
         {
-          "line": 299,
+          "line": 126,
           "text": "const deadlineSeconds = Number(process.env.CIVITAI_REQUEST_DEADLINE_SECONDS ?? 120);"
         }
       ],
@@ -3831,8 +5366,8 @@
     },
     {
       "file": "src/main/codex-chat-state.ts",
-      "lines": 81,
-      "sha256": "cda09214a59e7dab264d45759bac11aa30fd8e75066ce036486eaef208ad0962",
+      "lines": 64,
+      "sha256": "d10490aa61a61143412617ae9b88a9b39c0344570f5b0d7a581ba01612cd091f",
       "workPackage": "W14",
       "layer": "existing-reference",
       "phase": "P9",
@@ -3840,12 +5375,12 @@
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/codex-chat-policy.js",
         "node:path",
         "./fs-utils.js",
         "../shared/types.js"
       ],
       "exports": [
-        "CodexStageChats",
         "CodexChatStateStore"
       ],
       "bridgeCalls": [],
@@ -3920,8 +5455,8 @@
     },
     {
       "file": "src/main/codex-cli-task-runner.ts",
-      "lines": 283,
-      "sha256": "862bc44a0400586cabc0eef04dfef6d3615c4ef65fcf7782de3b1602f1e49e96",
+      "lines": 9,
+      "sha256": "019a3d5c013e8deba1f83eb55314af60cd64383fe39cf4bf2917eaa4e5e2d6c8",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -3929,20 +5464,11 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
-        "node:fs/promises",
-        "node:path",
-        "../domain/agent-task-policy.js",
-        "../shared/types.js",
-        "./agent-artifact-import.js",
-        "./agent-cli-adapter.js",
-        "./agent-session-state.js",
-        "./agent-workspace.js",
-        "./codex-cli-adapter.js",
-        "./grok-context.js",
-        "./prompt-plan-patch.js"
+        "../application/codex-cli-task-runner.js",
+        "./agent-runtime-ports.js"
       ],
       "exports": [
-        "CodexCliTaskRunnerOptions",
+        "CodexCliTaskRunner",
         "CodexCliTaskRunner"
       ],
       "bridgeCalls": [],
@@ -4077,8 +5603,8 @@
     },
     {
       "file": "src/main/compiler.ts",
-      "lines": 105,
-      "sha256": "f9ac246d410701f0b967fd41e9233574e5e3db3db23f01052a1e0d2662595d68",
+      "lines": 32,
+      "sha256": "53936f90897bb5feac246a2e554410602940c1d17c42f18d4e859ae584d52d2d",
       "workPackage": "W05",
       "layer": "existing-reference",
       "phase": "P5",
@@ -4088,13 +5614,10 @@
       "imports": [
         "node:crypto",
         "node:path",
-        "../domain/workflow-compilation.js",
-        "../shared/types.js",
+        "../application/workflow-file-compilation.js",
         "./fs-utils.js",
-        "./image-tasks.js",
         "./project-meta.js",
         "./project-transaction.js",
-        "./validation.js",
         "./workflow-api.js",
         "./workflow-template-integrity.js",
         "./workflow-template-paths.js"
@@ -4157,8 +5680,8 @@
     },
     {
       "file": "src/main/execution-run.ts",
-      "lines": 554,
-      "sha256": "bc82abc64f04efa4a227ad25e3bc9834ae8c04ed662e6f8469099a509b5e35be",
+      "lines": 481,
+      "sha256": "168411324f004343efe61260d1251b7236290b11c06f8d7d1a10a48def005444",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -4166,6 +5689,9 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/execution-record-stamp.js",
+        "../application/execution-snapshot-persistence.js",
+        "../domain/execution-storage-policy.js",
         "node:crypto",
         "node:fs",
         "node:fs/promises",
@@ -4177,7 +5703,7 @@
         "../domain/execution-mutation-policy.js",
         "../domain/execution-record-policy.js",
         "../domain/execution-resume.js",
-        "../domain/execution-snapshot-capture.js",
+        "../application/execution-snapshot-observation.js",
         "../domain/execution-snapshot-policy.js",
         "../domain/execution-workflow-policy.js",
         "../shared/types.js",
@@ -4469,8 +5995,8 @@
     },
     {
       "file": "src/main/grok-cli-task-runner.ts",
-      "lines": 263,
-      "sha256": "0484fa6ce28b8494ca21a92eccfef2306829b28673e8ae3852bd6e7804421954",
+      "lines": 9,
+      "sha256": "f8d78283a19f53fb0e4f4ddd8b7acf9fff3080ca6c0421ebad8939515e0a554d",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -4478,18 +6004,11 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
-        "node:fs/promises",
-        "node:path",
-        "../shared/types.js",
-        "./agent-cli-adapter.js",
-        "./agent-artifact-import.js",
-        "./agent-session-state.js",
-        "./agent-workspace.js",
-        "./grok-context.js",
-        "./grok-cli-adapter.js"
+        "../application/grok-cli-task-runner.js",
+        "./agent-runtime-ports.js"
       ],
       "exports": [
-        "GrokCliTaskRunnerOptions",
+        "GrokCliTaskRunner",
         "GrokCliTaskRunner"
       ],
       "bridgeCalls": [],
@@ -4527,8 +6046,8 @@
     },
     {
       "file": "src/main/grok-lora-history.ts",
-      "lines": 81,
-      "sha256": "8ffe9712b119ac5d925a8c0133d7a424fe87a65831358ae852a57ef57efe3008",
+      "lines": 14,
+      "sha256": "650619b2a8193c763938370b5808c2d058af2eabe9edc4570c5f1df685557768",
       "workPackage": "W04",
       "layer": "existing-reference",
       "phase": "P4",
@@ -4538,12 +6057,10 @@
       "imports": [
         "node:fs/promises",
         "node:path",
-        "../shared/types.js",
+        "../application/lora-selection-history.js",
         "./fs-utils.js"
       ],
-      "exports": [
-        "readGrokLoraSelectionHistory"
-      ],
+      "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
@@ -4718,8 +6235,8 @@
     },
     {
       "file": "src/main/ipc-access.ts",
-      "lines": 312,
-      "sha256": "12f9e655f526e4edfc81357ea24378bb5ac5e9fd78b14d9978d5c3bcf3b5693c",
+      "lines": 313,
+      "sha256": "26c756261e4e09bc2737f13b8d32f0c1641ea9eaf784fc057ce1bf1008c6fddd",
       "workPackage": "W01",
       "layer": "existing-reference",
       "phase": "P2",
@@ -4775,8 +6292,8 @@
     },
     {
       "file": "src/main/ipc-registration/assistant.ts",
-      "lines": 271,
-      "sha256": "ce0daf6d3ef5f10bf5b026ca5213158443a6b7b4a6e68dbd940d8f94134249b1",
+      "lines": 203,
+      "sha256": "fbdd508a4ad77662cf1dab14581f2a36a997a313f943107e61a0a00d8b93eec6",
       "workPackage": "W01",
       "layer": "existing-reference",
       "phase": "P2",
@@ -4784,6 +6301,7 @@
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../../application/assistant-commands.js",
         "electron",
         "../../shared/types.js",
         "../ipc-registration.js"
@@ -4812,39 +6330,39 @@
       ],
       "risks": [
         {
-          "line": 1,
+          "line": 2,
           "text": "import type { IpcMainInvokeEvent } from 'electron';"
         },
         {
-          "line": 36,
+          "line": 37,
           "text": "if (event.sender.id !== state.localView.webContents.id)"
         },
         {
-          "line": 78,
+          "line": 53,
           "text": "state.assistantView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, state.assistantContext);"
         },
         {
-          "line": 92,
+          "line": 67,
           "text": "if (event.sender.id !== state.localView.webContents.id)"
         },
         {
-          "line": 114,
+          "line": 90,
           "text": "if (event.sender.id !== state.localView.webContents.id)"
         },
         {
-          "line": 205,
+          "line": 152,
           "text": "handleIpc(IPC.ASSISTANT_SET_DIVIDER_X, (event, screenX: unknown) => {"
         },
         {
-          "line": 206,
+          "line": 153,
           "text": "if (typeof screenX !== 'number' || !Number.isFinite(screenX))"
         },
         {
-          "line": 212,
+          "line": 159,
           "text": "Math.min(0.7, (screenX - bounds.x) / Math.max(bounds.width, 1)),"
         },
         {
-          "line": 225,
+          "line": 172,
           "text": "if (event.sender.id !== state.localView.webContents.id)"
         }
       ],
@@ -4853,8 +6371,8 @@
     },
     {
       "file": "src/main/ipc-registration/execution.ts",
-      "lines": 489,
-      "sha256": "df3815d1e0f982abd6207fa3b935cfe3f5fb98855528d1ff03d1011d1f9fb3fd",
+      "lines": 163,
+      "sha256": "40114a8f61b35e314fe467657c15a5399df4134e45a0cdc489a1b0eea51f516a",
       "workPackage": "W01",
       "layer": "existing-reference",
       "phase": "P2",
@@ -4891,16 +6409,12 @@
       ],
       "risks": [
         {
-          "line": 94,
+          "line": 77,
           "text": "const decision = await dialog.showMessageBox(state.window, {"
         },
         {
-          "line": 130,
+          "line": 113,
           "text": "const decision = await dialog.showMessageBox(owner, {"
-        },
-        {
-          "line": 417,
-          "text": "const confirm = await dialog.showMessageBox({"
         }
       ],
       "migrationAction": "handler内業務ロジックをserviceへ抽出、HTTP入力/認可/確認tokenへ",
@@ -4908,8 +6422,8 @@
     },
     {
       "file": "src/main/ipc-registration/image.ts",
-      "lines": 705,
-      "sha256": "69f920915429d04fe17a94b55c41eb41b42ed987d3a9db8f20d4757bd91a82ab",
+      "lines": 720,
+      "sha256": "1f233aa1462849c2925efa11c5125261f8d175604bd846e25697042a4505d6fe",
       "workPackage": "W01",
       "layer": "existing-reference",
       "phase": "P2",
@@ -4958,6 +6472,7 @@
         "THUMBNAIL_PICKER_COMMIT",
         "THUMBNAIL_PICKER_COMMIT_RESULT",
         "THUMBNAIL_EXPORT",
+        "THUMBNAIL_DELETE_DOCUMENT",
         "THUMBNAIL_DELETE_OUTPUTS",
         "MARKETPLACE_LIST_THUMBNAILS",
         "MARKETPLACE_READ_SOURCE",
@@ -4980,83 +6495,83 @@
       ],
       "risks": [
         {
-          "line": 73,
+          "line": 74,
           "text": "const result = await dialog.showOpenDialog({"
         },
         {
-          "line": 142,
+          "line": 143,
           "text": "const choice = await dialog.showMessageBox(owner.window, {"
         },
         {
-          "line": 159,
+          "line": 160,
           "text": "const choice = await dialog.showMessageBox(owner.window, {"
         },
         {
-          "line": 179,
+          "line": 180,
           "text": "const result = await dialog.showOpenDialog({"
         },
         {
-          "line": 199,
+          "line": 200,
           "text": "logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'list_images', {"
         },
         {
-          "line": 220,
+          "line": 221,
           "text": "app.getPath('userData'),"
         },
         {
-          "line": 243,
+          "line": 244,
           "text": "const prune = thumbnailCachePruneMetrics(app.getPath('userData'));"
         },
         {
-          "line": 255,
+          "line": 256,
           "text": "app.getPath('userData'),"
         },
         {
-          "line": 264,
+          "line": 265,
           "text": "logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'preview_error', {"
         },
         {
-          "line": 273,
+          "line": 274,
           "text": "(await readCachedThumbnailImage(app.getPath('userData'), imagePath, 'editor')) ??"
         },
         {
-          "line": 280,
+          "line": 281,
           "text": "return storeWebpThumbnailPreview(app.getPath('userData'), imagePath, dataUrl);"
         },
         {
-          "line": 284,
+          "line": 285,
           "text": "path.join(app.getAppPath(), 'dist-electron', 'thumbnail-templates'),"
         },
         {
-          "line": 314,
+          "line": 315,
           "text": "logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, 'context_requested', {"
         },
         {
-          "line": 326,
+          "line": 327,
           "text": "const directory = path.dirname(pickerPerformanceLogPath(app.getPath('userData')));"
         },
         {
-          "line": 328,
+          "line": 329,
           "text": "const error = await shell.openPath(directory);"
         },
         {
-          "line": 346,
+          "line": 347,
           "text": "logThumbnailPickerPerformance(app.getPath('userData'), state.sessionId, name, {"
-        },
-        {
-          "line": 474,
-          "text": "app.getPath('userData'),"
         },
         {
           "line": 489,
           "text": "app.getPath('userData'),"
         },
         {
-          "line": 508,
+          "line": 504,
+          "text": "app.getPath('userData'),"
+        },
+        {
+          "line": 523,
           "text": "const choice = await dialog.showMessageBox(owner.window, {"
         },
         {
-          "line": 525,
+          "line": 540,
           "text": "const choice = await dialog.showMessageBox(owner.window, {"
         }
       ],
@@ -5065,8 +6580,8 @@
     },
     {
       "file": "src/main/ipc-registration/integration.ts",
-      "lines": 167,
-      "sha256": "5177e2e692e6ae79f5017a1234f357ff60453ef3516e9b1cf7224c0311087d87",
+      "lines": 154,
+      "sha256": "5cf1b07c13c293f52ebc355bed7900f977d063ee86987af4f102c01f801848ca",
       "workPackage": "W01",
       "layer": "existing-reference",
       "phase": "P2",
@@ -5122,11 +6637,11 @@
           "text": "const r = await dialog.showOpenDialog({"
         },
         {
-          "line": 123,
+          "line": 110,
           "text": "const result = await dialog.showMessageBox({"
         },
         {
-          "line": 144,
+          "line": 131,
           "text": "const result = await dialog.showMessageBox({"
         }
       ],
@@ -5295,8 +6810,8 @@
     },
     {
       "file": "src/main/main.ts",
-      "lines": 2300,
-      "sha256": "ece5503ccdc2b7277367756c5f3e42ee8f80966c600c3cbe0184ae048e3f23a7",
+      "lines": 1907,
+      "sha256": "a26974fdd249d44f6b4029c41218a1fbac3054292ae33ad0687a74e60588e24c",
       "workPackage": "W10",
       "layer": "existing-reference",
       "phase": "P5",
@@ -5304,6 +6819,17 @@
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../application/observed-agent-model-selection.js",
+        "../domain/agent-stage-policy.js",
+        "../application/vast-ssh-endpoint.js",
+        "./thumbnail-service.js",
+        "./fs-utils.js",
+        "../application/execution-recovery-controller.js",
+        "./workflow-api.js",
+        "../application/remote-execution-preparation.js",
+        "../application/execution-launch.js",
+        "../application/execution-commands.js",
+        "../domain/agent-model-policy.js",
         "node:crypto",
         "node:fs/promises",
         "node:path",
@@ -5362,7 +6888,6 @@
         "./ssh-key-pair.js",
         "./thumbnail-image-cache.js",
         "./thumbnail-picker-perf.js",
-        "./thumbnail-service.js",
         "./ui-state.js",
         "./vastai-client.js",
         "./vastai-config.js"
@@ -5374,223 +6899,227 @@
       "registeredChannels": [],
       "risks": [
         {
-          "line": 5,
+          "line": 23,
           "text": "import type { IpcMainInvokeEvent, MenuItemConstructorOptions, WebContents } from 'electron';"
         },
         {
-          "line": 15,
+          "line": 33,
           "text": "} from 'electron';"
         },
         {
-          "line": 312,
+          "line": 329,
           "text": "if (state.localView.webContents.id === contents.id)"
         },
         {
-          "line": 314,
+          "line": 331,
           "text": "if (state.assistantView.webContents.id === contents.id)"
         },
         {
-          "line": 322,
+          "line": 339,
           "text": "if (state.view.webContents.id !== contents.id) continue;"
         },
         {
-          "line": 369,
+          "line": 386,
           "text": "state.localView.webContents.id === contents.id ||"
         },
         {
-          "line": 370,
+          "line": 387,
           "text": "state.assistantView.webContents.id === contents.id"
         },
         {
-          "line": 416,
+          "line": 433,
           "text": "const dev = process.env.VITE_DEV_SERVER_URL;"
         },
         {
-          "line": 421,
+          "line": 438,
           "text": "await v.webContents.loadURL(url.toString());"
         },
         {
-          "line": 423,
+          "line": 440,
           "text": "await v.webContents.loadFile("
         },
         {
-          "line": 514,
+          "line": 531,
           "text": "await dialog.showMessageBox(window, {"
         },
         {
-          "line": 527,
+          "line": 544,
           "text": "if (picker.opener.id === localView.webContents.id) picker.window.close();"
         },
         {
-          "line": 530,
+          "line": 547,
           "text": "if (picker.opener.id === localView.webContents.id) picker.window.close();"
         },
         {
-          "line": 532,
+          "line": 549,
           "text": "localView.webContents.close();"
         },
         {
-          "line": 533,
+          "line": 550,
           "text": "assistantView.webContents.close();"
         },
         {
-          "line": 540,
+          "line": 557,
           "text": "localView.webContents.once('did-finish-load', () => {"
         },
         {
-          "line": 541,
+          "line": 558,
           "text": "localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');"
         },
         {
-          "line": 579,
+          "line": 596,
           "text": "view.webContents.close();"
         },
         {
-          "line": 647,
+          "line": 664,
           "text": "contentsId = view.webContents.id;"
         },
         {
-          "line": 651,
+          "line": 668,
           "text": "logThumbnailPickerPerformance(app.getPath('userData'), sessionId, 'window_opened', {"
         },
         {
-          "line": 654,
+          "line": 671,
           "text": "view.webContents.on('did-finish-load', () => {"
         },
         {
-          "line": 655,
+          "line": 672,
           "text": "logThumbnailPickerPerformance(app.getPath('userData'), sessionId, 'renderer_loaded', {"
         },
         {
-          "line": 672,
+          "line": 689,
           "text": "if (!view.webContents.isDestroyed()) view.webContents.close();"
         },
         {
-          "line": 673,
+          "line": 690,
           "text": "logThumbnailPickerPerformance(app.getPath('userData'), sessionId, 'window_closed', {"
         },
         {
-          "line": 741,
+          "line": 758,
           "text": "contentsId = view.webContents.id;"
         },
         {
-          "line": 758,
+          "line": 775,
           "text": "if (!view.webContents.isDestroyed()) view.webContents.close();"
         },
         {
-          "line": 773,
+          "line": 790,
           "text": "const result = await dialog.showMessageBox({"
         },
         {
-          "line": 805,
+          "line": 822,
           "text": "state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'open', project);"
         },
         {
-          "line": 822,
+          "line": 839,
           "text": "target.state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, 'new');"
         },
         {
-          "line": 828,
+          "line": 845,
           "text": "const selected = await dialog.showOpenDialog({"
         },
         {
-          "line": 840,
+          "line": 857,
           "text": "state.localView.webContents.send(IPC.PROJECT_MENU_COMMAND, command);"
         },
         {
-          "line": 845,
+          "line": 862,
           "text": "const err = await shell.openPath(state.projectRoot);"
         },
         {
-          "line": 847,
+          "line": 864,
           "text": "await dialog.showMessageBox({"
         },
         {
-          "line": 872,
+          "line": 889,
           "text": "await dialog.showMessageBox({"
         },
         {
-          "line": 1364,
+          "line": 1142,
+          "text": "await dialog.showMessageBox({"
+        },
+        {
+          "line": 1157,
+          "text": "await dialog.showMessageBox(owner, {"
+        },
+        {
+          "line": 1200,
           "text": "if (!state || state.localView.webContents.isDestroyed()) return true;"
         },
         {
-          "line": 1373,
+          "line": 1209,
           "text": "senderId: state.localView.webContents.id,"
         },
         {
-          "line": 1380,
+          "line": 1216,
           "text": "state.localView.webContents.send(IPC.EDITOR_FLUSH_REQUEST, id, root);"
         },
         {
-          "line": 1383,
+          "line": 1219,
           "text": "const answer = await dialog.showMessageBox(owner, {"
         },
         {
-          "line": 1404,
+          "line": 1240,
           "text": "const result = await dialog.showMessageBox(owner, {"
         },
         {
-          "line": 1471,
-          "text": "const answer = await dialog.showMessageBox(owner, {"
-        },
-        {
-          "line": 1723,
+          "line": 1367,
           "text": "if (!(process.env.BATCH_STUDIO_CATALOG_PATH ?? '').trim())"
         },
         {
-          "line": 1724,
+          "line": 1368,
           "text": "process.env.BATCH_STUDIO_CATALOG_PATH = catalogService().catalogPath;"
         },
         {
-          "line": 1727,
+          "line": 1371,
           "text": "const next = new CivitaiCatalogService(path.join(app.getPath('userData'), 'civitai'));"
         },
         {
-          "line": 1764,
+          "line": 1408,
           "text": "state.assistantView.webContents.send(IPC.ASSISTANT_CONTEXT_CHANGED, context);"
         },
         {
-          "line": 1825,
+          "line": 1469,
           "text": "state.localView.webContents.send(IPC.AGENT_EVENT, envelope);"
         },
         {
-          "line": 1832,
+          "line": 1476,
           "text": "state.assistantView.webContents.send(IPC.AGENT_EVENT, envelope);"
         },
         {
-          "line": 1911,
+          "line": 1530,
           "text": "state.localView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);"
         },
         {
-          "line": 1912,
+          "line": 1531,
           "text": "state.assistantView.webContents.send(IPC.AUTO_ARTIFACT_EVENT, event);"
         },
         {
-          "line": 1943,
+          "line": 1548,
           "text": "globalBucket = (process.env.BATCH_STUDIO_R2_BUCKET ?? '').trim(),"
         },
         {
-          "line": 1944,
+          "line": 1549,
           "text": "globalPrefix = (process.env.BATCH_STUDIO_R2_MODEL_PREFIX ?? '').trim(),"
         },
         {
-          "line": 2186,
+          "line": 1793,
           "text": "await dialog.showMessageBox({"
         },
         {
-          "line": 2208,
+          "line": 1815,
           "text": "const userData = app.getPath('userData');"
         },
         {
-          "line": 2216,
+          "line": 1823,
           "text": "if (apiKey) process.env.CIVIT_API_KEY = apiKey;"
         },
         {
-          "line": 2219,
+          "line": 1826,
           "text": "if (vastKey) process.env[VASTAI_ENVIRONMENT_VARIABLE] = vastKey;"
         },
         {
-          "line": 2223,
+          "line": 1830,
           "text": "const result = await dialog.showMessageBox({"
         }
       ],
@@ -5631,8 +7160,8 @@
     },
     {
       "file": "src/main/marketplace-image-service.ts",
-      "lines": 463,
-      "sha256": "9107a59bf2326c4f5fd1a5441f7bec93385f9658f8b5705390663d1e92e08960",
+      "lines": 459,
+      "sha256": "1c938d67dfe3af180ac41f9a21f96aef72cb97ff21a4ea41851384594606deea",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -5640,6 +7169,9 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P7",
       "imports": [
+        "../application/editor-document-persistence.js",
+        "../application/current-format-recovery.js",
+        "./thumbnail-service.js",
         "node:crypto",
         "node:fs/promises",
         "node:path",
@@ -5656,7 +7188,6 @@
         "./marketplace-generation-manifest.js",
         "./project-meta.js",
         "./thumbnail-image-cache.js",
-        "./thumbnail-service.js",
         "./tracked-output-cleanup.js"
       ],
       "exports": [
@@ -5680,15 +7211,15 @@
       "registeredChannels": [],
       "risks": [
         {
-          "line": 5,
+          "line": 8,
           "text": "import { type NativeImage, nativeImage } from 'electron';"
         },
         {
-          "line": 152,
-          "text": "saveRevision: normalized.saveRevision ?? Math.max(lastRevision + 1, Date.now() * 1000),"
+          "line": 145,
+          "text": "revision: (last) => Math.max(last + 1, Date.now() * 1000),"
         },
         {
-          "line": 167,
+          "line": 159,
           "text": "const image = nativeImage.createFromBuffer(bytes);"
         }
       ],
@@ -5732,8 +7263,8 @@
     },
     {
       "file": "src/main/model-downstream-reset.ts",
-      "lines": 249,
-      "sha256": "c5b036c3470cd3d06234b8d8bd0ddd579b38918cec777e2004fb6132d599ae11",
+      "lines": 27,
+      "sha256": "d97c3f9edd61a09bc32d48836a60b648586f8e3bd1c7e648e43435516d57cd14",
       "workPackage": "W03",
       "layer": "existing-reference",
       "phase": "P3",
@@ -5744,18 +7275,13 @@
         "node:crypto",
         "node:fs/promises",
         "node:path",
-        "../domain/model-reset-policy.js",
-        "../shared/types.js",
+        "../application/model-downstream-file-service.js",
         "./fs-utils.js",
         "./project-meta.js",
         "./project-transaction.js",
         "../domain/model-impact.js"
       ],
-      "exports": [
-        "ManualResetScope",
-        "resetModelDownstream",
-        "manualResetFrom"
-      ],
+      "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
@@ -5805,7 +7331,7 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "Node処理再利用、dataDir/権限/排他/復旧との接合を検証",
-      "entryReachable": true
+      "entryReachable": false
     },
     {
       "file": "src/main/picker-selection-gate.ts",
@@ -5889,8 +7415,8 @@
     },
     {
       "file": "src/main/project-scan.ts",
-      "lines": 184,
-      "sha256": "6c7a675e7921cd8c514bd196d8897bfcf33b28fe145ee422b51ec89b247561e8",
+      "lines": 76,
+      "sha256": "b01e7b34eef4f5e8c98863ada5364e3c2fec9ad9181da63c9101f90759d4c8cc",
       "workPackage": "W03",
       "layer": "existing-reference",
       "phase": "P3",
@@ -5901,8 +7427,8 @@
         "node:crypto",
         "node:fs/promises",
         "node:path",
-        "../domain/brief-impact-policy.js",
-        "../shared/types.js",
+        "../application/project-observation.js",
+        "../domain/artifact-types.js",
         "./artifact-service.js",
         "./fs-utils.js",
         "./project-meta.js",
@@ -5954,8 +7480,8 @@
     },
     {
       "file": "src/main/prompt-plan-patch.ts",
-      "lines": 73,
-      "sha256": "ae37a4f7baa165353c7c9dcd8dc1dee3001e9b2d0fa45b7bb7023774c2124d7e",
+      "lines": 38,
+      "sha256": "a01ec0d994ee5699fa4c2075292df36de4e8f1b4d9951d11679d2323c6589eed",
       "workPackage": "W03",
       "layer": "existing-reference",
       "phase": "P3",
@@ -5963,6 +7489,7 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../application/prompt-plan-patch.js",
         "node:crypto",
         "../domain/prompt-plan-patch-policy.js",
         "../shared/types.js",
@@ -5982,8 +7509,8 @@
     },
     {
       "file": "src/main/r2-config.ts",
-      "lines": 190,
-      "sha256": "5816c04a69c18d0470fa2159c9d44985dae9e25bae2c9903a9553761cb88e0c4",
+      "lines": 103,
+      "sha256": "9cd46915d30d8730c38a329450cd31eefb765158c8ec6ecffbb19a42a12f9263",
       "workPackage": "W10",
       "layer": "existing-reference",
       "phase": "P5",
@@ -5991,52 +7518,52 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P5",
       "imports": [
+        "../application/r2-connection-use-cases.js",
         "node:path",
         "electron",
-        "./fs-utils.js"
+        "./fs-utils.js",
+        "../domain/r2-connection-policy.js"
       ],
       "exports": [
-        "R2ConnectionInput",
-        "R2ConnectionStatus",
         "R2ConfigStore"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [
         {
-          "line": 2,
+          "line": 3,
           "text": "import { safeStorage } from 'electron';"
         },
         {
-          "line": 48,
+          "line": 15,
           "text": "if (!safeStorage.isEncryptionAvailable())"
         },
         {
-          "line": 50,
+          "line": 17,
           "text": "return safeStorage.encryptString(value).toString('base64');"
         },
         {
-          "line": 55,
+          "line": 22,
           "text": "return safeStorage.decryptString(Buffer.from(value, 'base64'));"
         },
         {
-          "line": 72,
+          "line": 39,
           "text": "accountId: process.env.R2_ACCOUNT_ID ?? '',"
         },
         {
-          "line": 73,
+          "line": 40,
           "text": "accessKeyId: process.env.R2_ACCESS_KEY ?? '',"
         },
         {
-          "line": 74,
+          "line": 41,
           "text": "secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? '',"
         },
         {
-          "line": 75,
+          "line": 42,
           "text": "publicUrl: process.env.R2_PUBLIC_URL ?? '',"
         },
         {
-          "line": 76,
+          "line": 43,
           "text": "cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN ?? '',"
         }
       ],
@@ -6045,8 +7572,8 @@
     },
     {
       "file": "src/main/r2-manager.ts",
-      "lines": 1248,
-      "sha256": "ae2fcf890df4a7d6be4bb403e03964464aef51bb5311de521fdfc4943e116e6e",
+      "lines": 664,
+      "sha256": "bf3ad58bc7678db6ee674eeabe651dcf3ee1742ef31fe41790af73ae3c13736b",
       "workPackage": "W08",
       "layer": "existing-reference",
       "phase": "P5",
@@ -6054,6 +7581,10 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/r2-storage-policy.js",
+        "../application/r2-transfer-runtime.js",
+        "../domain/r2-transfer-policy.js",
+        "../domain/saved-template-policy.js",
         "node:crypto",
         "node:fs",
         "node:fs/promises",
@@ -6073,19 +7604,14 @@
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
-      "risks": [
-        {
-          "line": 298,
-          "text": "const localAppData = process.env.LOCALAPPDATA?.trim();"
-        }
-      ],
+      "risks": [],
       "migrationAction": "Node処理再利用、dataDir/権限/排他/復旧との接合を検証",
       "entryReachable": true
     },
     {
       "file": "src/main/r2-object-index.ts",
-      "lines": 139,
-      "sha256": "cb7dd2e4c994f544ea206b29d38d877f313f702f9be7b36ce71313253446d1a8",
+      "lines": 101,
+      "sha256": "3130fa39bb3326b92485301f38be19a9dcb93837fe06d52195e18b37b4b2a724",
       "workPackage": "W08",
       "layer": "existing-reference",
       "phase": "P5",
@@ -6093,6 +7619,7 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/r2-object-index-policy.js",
         "node:path",
         "@aws-sdk/client-s3",
         "../shared/types.js",
@@ -6110,8 +7637,8 @@
     },
     {
       "file": "src/main/remote-control-plane.ts",
-      "lines": 161,
-      "sha256": "16972be94e22624e7da57c781749ee7dfbb04d1e9e1ce8d471fb5da9552608b6",
+      "lines": 131,
+      "sha256": "c70232964287d4ddc3b68334fb34d87e06c80b3e56263d316c8a81546cc6dcab",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -6119,6 +7646,8 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../application/remote-control-preparation.js",
+        "../domain/remote-request-policy.js",
         "../shared/types.js",
         "./execution-run.js",
         "./ssh-client.js",
@@ -6136,8 +7665,8 @@
     },
     {
       "file": "src/main/remote-environment-bootstrap.ts",
-      "lines": 114,
-      "sha256": "d5f3eefc7b86ac083eaba5197b36628c55295596474aa39237bacf36ad28165a",
+      "lines": 10,
+      "sha256": "19e36027b064cd431e9d9d45162a7aabd25e5b8e2eb83626fbff3483e1f9a722",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -6145,11 +7674,11 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../application/remote-environment-bootstrap.js",
         "./execution-run.js",
         "./remote-control-plane.js"
       ],
       "exports": [
-        "RemoteBootstrapConfig",
         "RemoteEnvironmentBootstrap"
       ],
       "bridgeCalls": [],
@@ -6220,8 +7749,8 @@
     },
     {
       "file": "src/main/remote-model-stager.ts",
-      "lines": 412,
-      "sha256": "ff9e9ae93ca2096d416b1482ea2addb0a595031e0a23c22fb67f8cb099fa070f",
+      "lines": 28,
+      "sha256": "d765358042635b4534ec58469d9e9940dc4606414a92cb8b3c849d16fd4b56d5",
       "workPackage": "W06",
       "layer": "existing-reference",
       "phase": "P6",
@@ -6230,30 +7759,21 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:path",
-        "../shared/types.js",
+        "../application/remote-model-stager.js",
         "./fs-utils.js",
+        "./workflow-api.js",
         "./execution-run.js",
-        "./model-placement-paths.js",
         "./project-meta.js",
         "./r2-manager.js",
         "./remote-control-plane.js",
-        "./remote-worker.js"
+        "../domain/artifact-types.js"
       ],
       "exports": [
         "RemoteModelStager"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
-      "risks": [
-        {
-          "line": 120,
-          "text": "(process.env.BATCH_STUDIO_R2_BUCKET ?? '').trim() || (meta?.settings.r2Bucket?.trim() ?? '');"
-        },
-        {
-          "line": 122,
-          "text": "(process.env.BATCH_STUDIO_R2_MODEL_PREFIX ?? '').trim() ||"
-        }
-      ],
+      "risks": [],
       "migrationAction": "Node処理再利用、dataDir/権限/排他/復旧との接合を検証",
       "entryReachable": true
     },
@@ -6479,8 +7999,8 @@
     },
     {
       "file": "src/main/thumbnail-service.ts",
-      "lines": 333,
-      "sha256": "1e7a369a3dfc3c8f156ee47b2c4f72002abf1e2ace939b14540ee7b12efcb864",
+      "lines": 344,
+      "sha256": "c81e53602b66e3aee32211d82fe5d46a948a079125740ee6bbe29b0dcecba5fb",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -6488,6 +8008,10 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P7",
       "imports": [
+        "../application/editor-document-persistence.js",
+        "../application/current-format-recovery.js",
+        "../application/thumbnail-document-use-cases.js",
+        "../domain/thumbnail-source-policy.js",
         "node:child_process",
         "node:crypto",
         "node:fs/promises",
@@ -6517,41 +8041,43 @@
         "listExportedThumbnails",
         "assertExportedThumbnail",
         "deleteThumbnailOutputs",
-        "exportThumbnail"
+        "exportThumbnail",
+        "thumbnailSourceFacts",
+        "deleteThumbnailDocument"
       ],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [
         {
-          "line": 1,
+          "line": 8,
           "text": "import { execFile } from 'node:child_process';"
         },
         {
-          "line": 5,
+          "line": 12,
           "text": "import { nativeImage } from 'electron';"
         },
         {
-          "line": 44,
+          "line": 51,
           "text": "const powershell = path.join("
         },
         {
-          "line": 45,
+          "line": 52,
           "text": "process.env.SystemRoot || 'C:\\\\Windows',"
         },
         {
-          "line": 49,
+          "line": 56,
           "text": "'powershell.exe',"
         },
         {
-          "line": 53,
+          "line": 60,
           "text": "powershell,"
         },
         {
-          "line": 179,
-          "text": "saveRevision: normalized.saveRevision ?? Math.max(lastRevision + 1, Date.now() * 1000),"
+          "line": 169,
+          "text": "revision: (last) => Math.max(last + 1, Date.now() * 1000),"
         },
         {
-          "line": 324,
+          "line": 309,
           "text": "const image = nativeImage.createFromBuffer(content);"
         }
       ],
@@ -6627,8 +8153,8 @@
     },
     {
       "file": "src/main/vastai-client.ts",
-      "lines": 720,
-      "sha256": "637d0098aea3809301527eefda3a9c967bf0364ba11423dcb191dd1e91a8ca72",
+      "lines": 625,
+      "sha256": "3005e15499cc5530d635ffbb862c413372fc5089e6391a2558edeb7c52d1da16",
       "workPackage": "W07",
       "layer": "existing-reference",
       "phase": "P5",
@@ -6636,15 +8162,16 @@
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../application/vast-offer-use-cases.js",
         "../shared/types.js",
-        "./ssh-key-pair.js"
+        "./ssh-key-pair.js",
+        "../domain/vast-instance-errors.js"
       ],
       "exports": [
         "normalizeVastStatus",
         "normalizeVastOffer",
         "resolveVastComfyUiPort",
         "normalizeVastInstance",
-        "VastAiInstanceNotFoundError",
         "VastAiClient"
       ],
       "bridgeCalls": [],
@@ -6791,8 +8318,8 @@
     },
     {
       "file": "src/preload/index.cjs",
-      "lines": 433,
-      "sha256": "6d9762a8cafa4df5b2aeb52ed1aabb8579e066d016aa80aa206fb2017b18b11d",
+      "lines": 436,
+      "sha256": "3978288c2350f26bfab49c5940e85fa7419511e4dbc9ee2589eec7527d1c73b5",
       "workPackage": "W01",
       "layer": "existing-reference",
       "phase": "P2",
@@ -6812,7 +8339,7 @@
           "text": "const { contextBridge, ipcRenderer } = require('electron');"
         },
         {
-          "line": 418,
+          "line": 421,
           "text": "setDividerScreenX: (screenX) => ipcRenderer.invoke(I.ASSISTANT_SET_DIVIDER_X, screenX),"
         }
       ],
@@ -7686,8 +9213,8 @@
     },
     {
       "file": "src/renderer/ThumbnailStage.tsx",
-      "lines": 1190,
-      "sha256": "c68f580308343e7fb9aa8de7bcee40894437c91e872bc189ca63239d982c9460",
+      "lines": 1187,
+      "sha256": "91a6ec8c16b48b75842bb64aa6c37a9145403c3349a52cfa68ef659becaa3c8c",
       "workPackage": "W09",
       "layer": "existing-reference",
       "phase": "P7",
@@ -7714,7 +9241,7 @@
         "thumbnail",
         "thumbnail.readEditorImage",
         "thumbnail.readImage",
-        "thumbnail.deleteOutputs",
+        "thumbnail.deleteDocument",
         "thumbnail.onPickerPreview",
         "thumbnail.previewResult",
         "thumbnail.onPickerCommit",
@@ -8370,8 +9897,8 @@
     },
     {
       "file": "src/shared/ipc.ts",
-      "lines": 174,
-      "sha256": "1edfa4f4b7d8dd05c753c4f84932503a11d8ae15b6588fdf9607f57ffb617216",
+      "lines": 175,
+      "sha256": "7dc98d8287b010d4844455baf5ad51151cca06e421aeb5609c59f2b780d592bd",
       "workPackage": "W01",
       "layer": "existing-reference",
       "phase": "P2",
@@ -8555,8 +10082,8 @@
     },
     {
       "file": "src/shared/types.ts",
-      "lines": 1167,
-      "sha256": "092e85c553c89c0d12451d3788b610b1308fad9f6256eabf4bd430ba1d0f3a30",
+      "lines": 965,
+      "sha256": "603cc57e87fc3e64e23455487ebd53ce418379085d56169c79f33e968a7a823e",
       "workPackage": "W01",
       "layer": "existing-reference",
       "phase": "P2",
@@ -8565,6 +10092,10 @@
       "electronDependencyRemovalPhase": null,
       "imports": [
         "../domain/artifact-types.js",
+        "../domain/resource-observation-types.js",
+        "../domain/integration-types.js",
+        "../domain/agent-runtime-types.js",
+        "../domain/auto-artifact-types.js",
         "./codex-activity.js"
       ],
       "exports": [
@@ -8573,10 +10104,7 @@
         "LocalModelFile",
         "LocalModelDirectory",
         "AppSettingsStatus",
-        "ArtifactReadResult",
         "GrokLoraSelectionStage",
-        "GrokLoraSelectionHistoryEntry",
-        "LoraFileAvailability",
         "PromptLeaf",
         "PromptBranch",
         "CatalogStatus",
@@ -8585,15 +10113,6 @@
         "CivitaiConnectionStatus",
         "VastAiConnectionInput",
         "VastAiConnectionStatus",
-        "VastAiComfyUiTemplate",
-        "VastAiOfferSearchInput",
-        "VastAiOffer",
-        "VastAiOfferSearchResult",
-        "VastAiRentRequest",
-        "VastAiSshEndpoint",
-        "CatalogSelectionEntry",
-        "CatalogSelectionTemplate",
-        "CatalogSelectionTemplateInput",
         "FinalArtifactImageItem",
         "FinalArtifactImageSource",
         "ThumbnailImageItem",
@@ -8607,42 +10126,16 @@
         "MarketplacePickerSession",
         "MarketplacePickerContext",
         "MarketplacePickerSelection",
-        "GrokTask",
         "CompileResult",
         "R2ConnectionInput",
         "R2ConnectionStatus",
         "R2Bucket",
-        "R2Object",
         "R2ListResult",
-        "R2SearchResult",
         "R2DownloadInfo",
         "R2PutUrlInfo",
-        "R2BatchDownloadTemplate",
-        "R2UploadSourceFingerprint",
-        "R2UploadJob",
         "R2Metrics",
-        "GrokContextStage",
-        "AgentProvider",
-        "AssistantPaneProvider",
-        "AutoArtifactProvider",
-        "AgentContext",
-        "AgentCapabilities",
-        "AgentAvailability",
-        "AgentModelOption",
-        "AgentModelSelection",
-        "AgentModelSettings",
-        "AgentWorkspaceDescriptor",
-        "AgentConversationWorkspaceDescriptor",
-        "AgentTaskWorkspaceDescriptor",
-        "AgentTaskRequest",
-        "AgentTurn",
-        "AgentEvent",
-        "AgentEventEnvelope",
-        "AgentConversationMessage",
         "AssistantPaneContext",
         "AssistantPaneSnapshot",
-        "AutoArtifactPhase",
-        "AutoArtifactEvent",
         "CodexMessage",
         "CodexContext",
         "CodexTurnPhase",
@@ -8663,11 +10156,11 @@
       "registeredChannels": [],
       "risks": [
         {
-          "line": 1126,
+          "line": 924,
           "text": "setDividerScreenX: (screenX: number) => Promise<AssistantPaneState>;"
         },
         {
-          "line": 1162,
+          "line": 960,
           "text": "setDividerScreenX: (screenX: number) => Promise<GrokPaneState>;"
         }
       ],
@@ -8784,8 +10277,8 @@
     },
     {
       "file": "tests/agent-artifact-auto.cjs",
-      "lines": 281,
-      "sha256": "baff633033e2b6f3419229ae0938501395ba0d85bfe5adea564a6f088bbc5b17",
+      "lines": 283,
+      "sha256": "cd0756e62c21e8e58300560e8ec6085132e891e5c7cd51c86630635e5e5f9917",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -8819,7 +10312,7 @@
     {
       "file": "tests/agent-foundation.cjs",
       "lines": 148,
-      "sha256": "fdac607cb45047cc8e53a017ade8180c77d8b9e3ca87c34f5beac78324f3e934",
+      "sha256": "0de00e023845508e915526cd2fec89fc8b140de70e8028133b0245dfa70e8287",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -8855,8 +10348,8 @@
     },
     {
       "file": "tests/agent-phase7-regression.cjs",
-      "lines": 151,
-      "sha256": "c51538decb7ad8256e782209f0f2d13859aac5991dd2928f73bb9ced15eb9101",
+      "lines": 159,
+      "sha256": "2fb430e00ffbaf9a58374536fca4b22f419fa0ace924d63239ff6acbce5d299d",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -8958,8 +10451,8 @@
     },
     {
       "file": "tests/assistant-provider.cjs",
-      "lines": 291,
-      "sha256": "3c8875f9bc19645376ec1936e6b6079acd321663558209c0e97a7af5290b4fa8",
+      "lines": 284,
+      "sha256": "fcbd7bfc48720e401602b2beba5f8c83377fb9c8b6bb7717b18500be530decd3",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9032,8 +10525,8 @@
     },
     {
       "file": "tests/business-core.cjs",
-      "lines": 714,
-      "sha256": "070d9c34f9e666776a4cb7cf378d92272c2fcb5bbbdb0e2be2f61cec88f932e9",
+      "lines": 717,
+      "sha256": "2e1b38e231e9e0d7a2f4185e4bb18010233de9e0dfd8f193aa8cf3afc10a74a7",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9067,8 +10560,8 @@
     },
     {
       "file": "tests/caption-stage.cjs",
-      "lines": 131,
-      "sha256": "f3348ae6d3e7af994dc458c38848604f163c93e892945e1cee93576b54fbdba8",
+      "lines": 136,
+      "sha256": "3660eca078469f78b2d7b385ad6f04a5dffc346a11756a8885980b17465ecf7d",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9080,9 +10573,7 @@
         "node:path",
         "./source-match.cjs"
       ],
-      "exports": [
-        "savePixivTitle"
-      ],
+      "exports": [],
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
@@ -9249,8 +10740,8 @@
     },
     {
       "file": "tests/codex-cli-adapter.cjs",
-      "lines": 553,
-      "sha256": "fe8d2accf1e1dd91d98292d0f3e1b0440988edc73a44e40bb4f7211b7892ef4a",
+      "lines": 554,
+      "sha256": "13e2fb566978ebe37bee249bd23166ffd8c863f84c9ed51f17c326646f8a3229",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9411,8 +10902,8 @@
     },
     {
       "file": "tests/core-artifacts.cjs",
-      "lines": 1119,
-      "sha256": "604340bc8640cae15f5d61a9ab564405b936f13e72776a40c446d15012fefd27",
+      "lines": 1131,
+      "sha256": "8b307c4c068a440b34ab8b64fc7f7c7d1ac85554f57a108643b5b0af00b113f0",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9484,6 +10975,30 @@
       "entryReachable": false
     },
     {
+      "file": "tests/core-separation.cjs",
+      "lines": 614,
+      "sha256": "adad3c098411fe4924dc6a30dce5eb901d21fb8ce88a1789ca046226533d054b",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:path",
+        "node:url",
+        "./core-support/memory-ports.cjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "tests/core-support/artifact-fixtures.cjs",
       "lines": 76,
       "sha256": "81bdbb6b905434a8a846c3f2f9e9509e4f800a9600ca02f75dd1dc6e85b121d8",
@@ -9503,8 +11018,8 @@
     },
     {
       "file": "tests/core-support/memory-ports.cjs",
-      "lines": 225,
-      "sha256": "b820ed940a52fdbca61c27ce8f541457778b86cd633a186308199a8e6978e34e",
+      "lines": 354,
+      "sha256": "da9e24fdcb092e7dbb23e6e3a333456b5b8b295ecfcb92c33301973c5dd9109f",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9557,8 +11072,8 @@
     },
     {
       "file": "tests/execution-run.cjs",
-      "lines": 551,
-      "sha256": "2b9743abc587258a7692803995cf2ece4f69b158b5096f38d93448198af4a75b",
+      "lines": 560,
+      "sha256": "a2f8de2557c482b94b1f8fd89e5549f827242cb5bb872c4001a40c2513272a1d",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9593,8 +11108,8 @@
     },
     {
       "file": "tests/execution-safe-exit.cjs",
-      "lines": 105,
-      "sha256": "3bc02666b0c82283c288296c3b5beade3319957d9cc150816accc977aee11906",
+      "lines": 110,
+      "sha256": "00a64ac41057b370e4b6050522ebcd52a97d4042acfb9d3ab6746f2bc625bfcc",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9622,7 +11137,7 @@
     {
       "file": "tests/final-artifact-stage.cjs",
       "lines": 171,
-      "sha256": "86b5d48a630f21e265422c6e59295e1e422e9a2b69353d6fe76f050cf36812d1",
+      "sha256": "7df62909350aa618e193723eba6264527133bcd5e4e164266f7cae64fdd28be4",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9634,8 +11149,8 @@
         "node:path",
         "./source-match.cjs",
         "./main-process-source.cjs",
-        "node:os",
         "node:fs/promises",
+        "node:os",
         "node:assert/strict"
       ],
       "exports": [
@@ -9815,8 +11330,8 @@
     },
     {
       "file": "tests/grok-lora-selection-summary.cjs",
-      "lines": 110,
-      "sha256": "7dd9803ae693bf53bdc45858ba6e93c4c5484be7c135ea00a413117b5655b95d",
+      "lines": 116,
+      "sha256": "b72fb71687e0677418cee042daa101294de32a43cc3d845235c207b41330fa4c",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -9838,8 +11353,8 @@
     },
     {
       "file": "tests/grok-output-contract.cjs",
-      "lines": 272,
-      "sha256": "783048063271f6f4932e524832a27ec428a99e5548a9b58194a5b7b439d5127f",
+      "lines": 271,
+      "sha256": "e132e77cf4dc49d62e79132c9a63895d3850b3007f412d01740fb3396b150c38",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10054,8 +11569,8 @@
     },
     {
       "file": "tests/ipc-contract.cjs",
-      "lines": 102,
-      "sha256": "996a564fb833cfc8da239bd8caa017b7c4f830cbf0d27faaacbef33babfcacb9",
+      "lines": 103,
+      "sha256": "1ca419a3237987617a6de7f3f3da10b2956697043f084189ccb653373f838cdd",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10088,7 +11603,7 @@
     {
       "file": "tests/ipc-registration-modules.cjs",
       "lines": 100,
-      "sha256": "2a51d91efdc8b2916647a0c3fe18bed972917779b6b2697199476a6c14d03c1a",
+      "sha256": "706dd692c030bb80ddea86e64036ae091fb67a0822ec840e5950d0f3e01209ba",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10203,7 +11718,7 @@
     {
       "file": "tests/marketplace-image-stage.cjs",
       "lines": 301,
-      "sha256": "348987ab764b3dc3f63b1ade397f5de4c26a32e0c526fae722a5e95c8d7acfe3",
+      "sha256": "1ef43241a2099395d76321a8bb321dffa8a91de8836d59f72d5f035e9a8cceba",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10484,8 +11999,8 @@
     },
     {
       "file": "tests/navigation.cjs",
-      "lines": 583,
-      "sha256": "1bfe22d25d12eaf729ffb02381eb0958f056b5968623dff785cd4cd957776bd5",
+      "lines": 588,
+      "sha256": "6bc2c23af5da081900789e864b2a3a50d6fcd06a259cda435eb8a5226f8b58bc",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10511,7 +12026,7 @@
           "text": "const { execFileSync } = require('node:child_process');"
         },
         {
-          "line": 375,
+          "line": 380,
           "text": "[tscBin, '-p', path.join(repo, 'tsconfig.electron.json'), '--outDir', runtime],"
         }
       ],
@@ -10588,8 +12103,8 @@
     },
     {
       "file": "tests/project-roots.cjs",
-      "lines": 102,
-      "sha256": "abe72529b3628b47f451b59e99cdb6656a74e01b60f2129f1f8694c4cb9f1a52",
+      "lines": 104,
+      "sha256": "3e1d9b23eedf6de514fe0fd60a9953b2495e38e77a39e1df8981ffe15da4a209",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10607,7 +12122,7 @@
       "registeredChannels": [],
       "risks": [
         {
-          "line": 23,
+          "line": 25,
           "text": "matchCode(appSettings, /safeStorage/, 'GitHub PATをOSの暗号化ストレージへ保存する');"
         }
       ],
@@ -10673,8 +12188,8 @@
     },
     {
       "file": "tests/r2-manager-parity.cjs",
-      "lines": 488,
-      "sha256": "2496805f39a2f82400bf98597afb674e56b71219b5a66ebdf6a366ae0f791274",
+      "lines": 521,
+      "sha256": "23874243ca185399a01ca140ad7e1d7da989e8742ab9c455968a07cda70541dd",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10690,6 +12205,7 @@
         "node:url",
         "node:child_process",
         "./main-process-source.cjs",
+        "node:crypto",
         "@aws-sdk/client-s3"
       ],
       "exports": [],
@@ -10701,7 +12217,7 @@
           "text": "const { execFileSync } = require('node:child_process');"
         },
         {
-          "line": 18,
+          "line": 38,
           "text": "[tscBin, '-p', path.join(repo, 'tsconfig.electron.json'), '--outDir', runtime],"
         }
       ],
@@ -10855,8 +12371,8 @@
     },
     {
       "file": "tests/remote-artifact-retrieval.cjs",
-      "lines": 438,
-      "sha256": "1c5ab0c84ac919fee7ac68282d30bb21fc915f547054481246e7938a68580980",
+      "lines": 442,
+      "sha256": "b00553cdd6d67e27831ee44f8a3e71081ff30dbc98f015103eef2e592467dfb8",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10883,7 +12399,7 @@
           "text": "const { spawn, execFileSync } = require('node:child_process');"
         },
         {
-          "line": 20,
+          "line": 24,
           "text": "[tscBin, '-p', path.join(repo, 'tsconfig.electron.json'), '--outDir', compiled],"
         }
       ],
@@ -11101,8 +12617,8 @@
     },
     {
       "file": "tests/service-integrations-ui.cjs",
-      "lines": 289,
-      "sha256": "03eea0b9b0c4291a98e193eaab723ef8b23b3d69ccf31ace2062efe908e088d0",
+      "lines": 290,
+      "sha256": "3ab9cd5800682f1aad3736cdb02353f9b8b081349302a68a84e0844565ea4e51",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -11220,8 +12736,8 @@
     },
     {
       "file": "tests/thumbnail-stage.cjs",
-      "lines": 541,
-      "sha256": "a2d55d824317c8bbcb268c61e85810645b1e7e613b159aaa8feb76b4758b2d4e",
+      "lines": 549,
+      "sha256": "57c8bd618fbdb2ba19d28fbde9411ff92262fffad1f11239846d86338a4cb3a2",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -11235,7 +12751,8 @@
         "./main-process-source.cjs",
         "node:fs/promises",
         "node:assert/strict",
-        "node:os"
+        "node:os",
+        "node:url"
       ],
       "exports": [
         "assertExportedThumbnail",
@@ -11736,11 +13253,7 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 541
-        },
-        {
-          "file": "src/main/main.ts",
-          "line": 805
+          "line": 558
         },
         {
           "file": "src/main/main.ts",
@@ -11748,7 +13261,11 @@
         },
         {
           "file": "src/main/main.ts",
-          "line": 840
+          "line": 839
+        },
+        {
+          "file": "src/main/main.ts",
+          "line": 857
         }
       ],
       "confirmation": false,
@@ -11766,7 +13283,7 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 1380
+          "line": 1216
         }
       ],
       "confirmation": false,
@@ -12395,7 +13912,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/integration.ts",
-          "line": 136
+          "line": 123
         }
       ],
       "senders": [],
@@ -12413,7 +13930,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/integration.ts",
-          "line": 139
+          "line": 126
         }
       ],
       "senders": [],
@@ -12431,7 +13948,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/integration.ts",
-          "line": 142
+          "line": 129
         }
       ],
       "senders": [],
@@ -12449,7 +13966,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/integration.ts",
-          "line": 158
+          "line": 145
         }
       ],
       "senders": [],
@@ -12467,7 +13984,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/integration.ts",
-          "line": 161
+          "line": 148
         }
       ],
       "senders": [],
@@ -12485,7 +14002,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 49
+          "line": 32
         }
       ],
       "senders": [],
@@ -12503,7 +14020,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 54
+          "line": 37
         }
       ],
       "senders": [],
@@ -12521,7 +14038,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 59
+          "line": 42
         }
       ],
       "senders": [],
@@ -12539,7 +14056,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 66
+          "line": 49
         }
       ],
       "senders": [],
@@ -12557,7 +14074,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 67
+          "line": 50
         }
       ],
       "senders": [],
@@ -12575,7 +14092,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 71
+          "line": 54
         }
       ],
       "senders": [],
@@ -12593,7 +14110,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 78
+          "line": 61
         }
       ],
       "senders": [],
@@ -12611,7 +14128,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 83
+          "line": 66
         }
       ],
       "senders": [],
@@ -12629,7 +14146,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 89
+          "line": 72
         }
       ],
       "senders": [],
@@ -12647,7 +14164,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 144
+          "line": 127
         }
       ],
       "senders": [],
@@ -12665,7 +14182,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 110
+          "line": 93
         }
       ],
       "senders": [],
@@ -12683,7 +14200,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 118
+          "line": 101
         }
       ],
       "senders": [],
@@ -12701,7 +14218,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 126
+          "line": 109
         }
       ],
       "senders": [],
@@ -12719,7 +14236,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 176
+          "line": 132
         }
       ],
       "senders": [],
@@ -12737,7 +14254,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 181
+          "line": 137
         }
       ],
       "senders": [],
@@ -12755,7 +14272,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 226
+          "line": 142
         }
       ],
       "senders": [],
@@ -12773,7 +14290,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 272
+          "line": 147
         }
       ],
       "senders": [],
@@ -12791,7 +14308,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 349
+          "line": 152
         }
       ],
       "senders": [],
@@ -12809,7 +14326,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/execution.ts",
-          "line": 383
+          "line": 157
         }
       ],
       "senders": [],
@@ -12827,7 +14344,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 83
+          "line": 84
         }
       ],
       "senders": [],
@@ -12845,7 +14362,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 87
+          "line": 88
         }
       ],
       "senders": [],
@@ -12863,7 +14380,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 92
+          "line": 93
         }
       ],
       "senders": [],
@@ -12881,7 +14398,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 96
+          "line": 97
         }
       ],
       "senders": [],
@@ -12899,7 +14416,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 101
+          "line": 102
         }
       ],
       "senders": [],
@@ -12917,7 +14434,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 106
+          "line": 107
         }
       ],
       "senders": [],
@@ -12935,7 +14452,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 110
+          "line": 111
         }
       ],
       "senders": [],
@@ -12953,7 +14470,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 116
+          "line": 117
         }
       ],
       "senders": [],
@@ -12971,7 +14488,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 122
+          "line": 123
         }
       ],
       "senders": [],
@@ -12989,7 +14506,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 127
+          "line": 128
         }
       ],
       "senders": [],
@@ -13007,7 +14524,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 132
+          "line": 133
         }
       ],
       "senders": [],
@@ -13025,7 +14542,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 133
+          "line": 134
         }
       ],
       "senders": [],
@@ -13043,7 +14560,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 137
+          "line": 138
         }
       ],
       "senders": [],
@@ -13061,7 +14578,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 154
+          "line": 155
         }
       ],
       "senders": [],
@@ -13079,7 +14596,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 171
+          "line": 172
         }
       ],
       "senders": [],
@@ -13097,7 +14614,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 176
+          "line": 177
         }
       ],
       "senders": [],
@@ -13115,7 +14632,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 188
+          "line": 189
         }
       ],
       "senders": [],
@@ -13133,7 +14650,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 208
+          "line": 209
         }
       ],
       "senders": [],
@@ -13151,7 +14668,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 212
+          "line": 213
         }
       ],
       "senders": [],
@@ -13169,7 +14686,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 270
+          "line": 271
         }
       ],
       "senders": [],
@@ -13187,7 +14704,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 277
+          "line": 278
         }
       ],
       "senders": [],
@@ -13205,7 +14722,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 282
+          "line": 283
         }
       ],
       "senders": [],
@@ -13223,7 +14740,25 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 424
+          "line": 425
+        }
+      ],
+      "senders": [],
+      "confirmation": false,
+      "caveat": ""
+    },
+    {
+      "key": "THUMBNAIL_DELETE_DOCUMENT",
+      "channel": "thumbnail:delete-document",
+      "direction": "invoke",
+      "disposition": "command",
+      "workPackage": "W09",
+      "phase": "P7",
+      "gate": "G09",
+      "handlers": [
+        {
+          "file": "src/main/ipc-registration/image.ts",
+          "line": 437
         }
       ],
       "senders": [],
@@ -13241,7 +14776,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 436
+          "line": 451
         }
       ],
       "senders": [],
@@ -13259,7 +14794,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 288
+          "line": 289
         }
       ],
       "senders": [],
@@ -13277,7 +14812,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 312
+          "line": 313
         }
       ],
       "senders": [],
@@ -13295,7 +14830,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 331
+          "line": 332
         }
       ],
       "senders": [],
@@ -13313,7 +14848,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 324
+          "line": 325
         }
       ],
       "senders": [],
@@ -13331,7 +14866,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 351
+          "line": 352
         }
       ],
       "senders": [],
@@ -13349,7 +14884,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 366
+          "line": 367
         }
       ],
       "senders": [],
@@ -13367,7 +14902,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 393
+          "line": 394
         }
       ],
       "senders": [],
@@ -13385,7 +14920,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 408
+          "line": 409
         }
       ],
       "senders": [],
@@ -13404,7 +14939,7 @@
       "senders": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 358
+          "line": 359
         }
       ],
       "confirmation": false,
@@ -13422,7 +14957,7 @@
       "senders": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 399
+          "line": 400
         }
       ],
       "confirmation": false,
@@ -13440,7 +14975,7 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 671
+          "line": 688
         }
       ],
       "confirmation": false,
@@ -13457,7 +14992,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 498
+          "line": 513
         }
       ],
       "senders": [],
@@ -13475,7 +15010,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 443
+          "line": 458
         }
       ],
       "senders": [],
@@ -13493,7 +15028,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 447
+          "line": 462
         }
       ],
       "senders": [],
@@ -13511,7 +15046,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 459
+          "line": 474
         }
       ],
       "senders": [],
@@ -13529,7 +15064,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 499
+          "line": 514
         }
       ],
       "senders": [],
@@ -13547,7 +15082,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 503
+          "line": 518
         }
       ],
       "senders": [],
@@ -13565,7 +15100,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 520
+          "line": 535
         }
       ],
       "senders": [],
@@ -13583,7 +15118,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 537
+          "line": 552
         }
       ],
       "senders": [],
@@ -13601,7 +15136,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 542
+          "line": 557
         }
       ],
       "senders": [],
@@ -13619,7 +15154,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 559
+          "line": 574
         }
       ],
       "senders": [],
@@ -13637,7 +15172,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 567
+          "line": 582
         }
       ],
       "senders": [],
@@ -13655,7 +15190,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 580
+          "line": 595
         }
       ],
       "senders": [],
@@ -13673,7 +15208,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 614
+          "line": 629
         }
       ],
       "senders": [],
@@ -13691,7 +15226,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 624
+          "line": 639
         }
       ],
       "senders": [],
@@ -13709,7 +15244,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 633
+          "line": 648
         }
       ],
       "senders": [],
@@ -13727,7 +15262,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 647
+          "line": 662
         }
       ],
       "senders": [],
@@ -13745,7 +15280,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 674
+          "line": 689
         }
       ],
       "senders": [],
@@ -13763,7 +15298,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 688
+          "line": 703
         }
       ],
       "senders": [],
@@ -13782,7 +15317,7 @@
       "senders": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 640
+          "line": 655
         }
       ],
       "confirmation": false,
@@ -13800,7 +15335,7 @@
       "senders": [
         {
           "file": "src/main/ipc-registration/image.ts",
-          "line": 680
+          "line": 695
         }
       ],
       "confirmation": false,
@@ -13818,7 +15353,7 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 757
+          "line": 774
         }
       ],
       "confirmation": false,
@@ -14285,7 +15820,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 83
+          "line": 58
         }
       ],
       "senders": [],
@@ -14303,7 +15838,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 104
+          "line": 79
         }
       ],
       "senders": [],
@@ -14321,7 +15856,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 112
+          "line": 88
         }
       ],
       "senders": [],
@@ -14339,7 +15874,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 122
+          "line": 98
         }
       ],
       "senders": [],
@@ -14358,11 +15893,11 @@
       "senders": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 78
+          "line": 53
         },
         {
           "file": "src/main/main.ts",
-          "line": 1764
+          "line": 1408
         }
       ],
       "confirmation": false,
@@ -14379,7 +15914,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 126
+          "line": 102
         }
       ],
       "senders": [],
@@ -14397,7 +15932,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 129
+          "line": 105
         }
       ],
       "senders": [],
@@ -14415,7 +15950,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 145
+          "line": 111
         }
       ],
       "senders": [],
@@ -14433,7 +15968,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 150
+          "line": 115
         }
       ],
       "senders": [],
@@ -14451,7 +15986,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 163
+          "line": 121
         }
       ],
       "senders": [],
@@ -14469,7 +16004,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 177
+          "line": 128
         }
       ],
       "senders": [],
@@ -14487,7 +16022,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 181
+          "line": 132
         }
       ],
       "senders": [],
@@ -14505,7 +16040,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 192
+          "line": 139
         }
       ],
       "senders": [],
@@ -14523,7 +16058,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 198
+          "line": 145
         }
       ],
       "senders": [],
@@ -14541,7 +16076,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 205
+          "line": 152
         }
       ],
       "senders": [],
@@ -14559,7 +16094,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 242
+          "line": 189
         }
       ],
       "senders": [],
@@ -14577,7 +16112,7 @@
       "handlers": [
         {
           "file": "src/main/ipc-registration/assistant.ts",
-          "line": 260
+          "line": 198
         }
       ],
       "senders": [],
@@ -14596,11 +16131,11 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 1825
+          "line": 1469
         },
         {
           "file": "src/main/main.ts",
-          "line": 1832
+          "line": 1476
         }
       ],
       "confirmation": false,
@@ -14618,11 +16153,11 @@
       "senders": [
         {
           "file": "src/main/main.ts",
-          "line": 1911
+          "line": 1530
         },
         {
           "file": "src/main/main.ts",
-          "line": 1912
+          "line": 1531
         }
       ],
       "confirmation": false,
@@ -14840,6 +16375,23 @@
         "G02"
       ],
       "requiredAction": "P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復"
+    },
+    {
+      "file": "tests/core-separation.cjs",
+      "registration": "core-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "G09",
+        "G10"
+      ],
+      "requiredAction": "P1からcore単独回帰に接続済み。P2以降も必須"
     },
     {
       "file": "tests/core-support/artifact-fixtures.cjs",
@@ -15679,6 +17231,13 @@
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
+      "file": "docs/roadmap/business-core-separation-verification.md",
+      "sha256": "8f78ca767363233f13c78b79343a2bed4c59d852561c144c1846aa4879d627d8",
+      "workPackage": "W11",
+      "gate": "G11",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
       "file": "docs/roadmap/implementation-phases.md",
       "sha256": "a0b17150275fdd331c9d6741cc5ef28f436381f342010a565a3e8dbba5ea5c13",
       "workPackage": "W11",
@@ -15729,33 +17288,33 @@
     }
   ],
   "counts": {
-    "files": 363,
-    "source": 247,
-    "tests": 79,
+    "files": 426,
+    "source": 309,
+    "tests": 80,
     "scripts": 9,
-    "ipc": 171,
+    "ipc": 172,
     "resources": 8,
-    "documents": 31,
+    "documents": 32,
     "ownership": {
       "W01": 12,
       "W02": 27,
-      "W03": 26,
-      "W04": 29,
-      "W05": 28,
-      "W06": 41,
-      "W07": 8,
-      "W08": 7,
-      "W09": 41,
+      "W03": 31,
+      "W04": 49,
+      "W05": 32,
+      "W06": 55,
+      "W07": 15,
+      "W08": 13,
+      "W09": 47,
       "W10": 15,
       "W11": 25,
-      "W12": 81,
+      "W12": 82,
       "W13": 11,
       "W14": 12
     },
     "ipcDisposition": {
       "binary-command": 6,
       "binary-query": 8,
-      "command": 65,
+      "command": 66,
       "event": 2,
       "native-replacement": 13,
       "query": 44,
@@ -15763,13 +17322,13 @@
       "ui-local": 5
     },
     "ipcDirection": {
-      "invoke": 160,
+      "invoke": 161,
       "notification": 11
     },
     "testRegistration": {
       "CI-conditional": 2,
       "CI-only": 2,
-      "core-local": 3,
+      "core-local": 4,
       "npm-test": 61,
       "standalone": 6,
       "support": 5
