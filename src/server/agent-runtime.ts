@@ -11,7 +11,7 @@ import { type ActorContext, authorize, BusinessError } from '../domain/contracts
 import type { AgentTaskRequest } from '../domain/agent-runtime-types.js';
 import { fields, HttpFailure, object, type JsonObject } from './http.js';
 import { JobRegistry, type JobDefinition, type PublicJob } from './jobs.js';
-import { AgentStore, agentScopeKey } from './agent-store.js';
+import { AgentStore, agentScopeKey, type AgentRecord } from './agent-store.js';
 import type { DiskProjects } from './project-repository.js';
 
 export interface AgentRuntimeOptions {
@@ -45,6 +45,12 @@ export class AgentRuntime {
   readonly store: AgentStore;
   readonly preferences: AgentPreferencesUseCases;
   readonly definition: JobDefinition;
+  captureArtifact?: (
+    actor: ActorContext,
+    scope: AgentScope,
+    job: PublicJob,
+  ) => Promise<AgentRecord['artifact']>;
+  importArtifact?: (actor: ActorContext, scope: AgentScope, jobId: string) => Promise<unknown>;
   private active = new Map<string, AgentCliAdapter>();
   private pending = new Map<string, Promise<unknown>>();
   private fenced = new Set<string>();
@@ -78,9 +84,11 @@ export class AgentRuntime {
           state:
             record === 'completed'
               ? 'succeeded'
-              : record === 'cancelled'
-                ? 'cancelled'
-                : 'uncertain',
+              : record === 'failed'
+                ? 'failed'
+                : record === 'cancelled'
+                  ? 'cancelled'
+                  : 'uncertain',
         };
       },
     };
@@ -212,6 +220,7 @@ export class AgentRuntime {
     let actor = context.actor;
     let adapter: AgentCliAdapter | undefined;
     let prepared = false;
+    let cliCompleted = false;
     let completion = Promise.resolve();
     let streamBytes = 0;
     let eventFailure: unknown;
@@ -304,10 +313,36 @@ export class AgentRuntime {
           : await adapter.startTask(task, sink);
         if (signal.aborted || this.fenced.has(job.id)) await adapter.stop(turn.turnId);
         await adapter.waitForCompletion(turn.turnId);
+        cliCompleted = true;
         await completion;
         if (eventFailure) throw eventFailure;
         if (this.fenced.has(job.id)) return { state: 'uncertain' };
-        await this.store.finish(actor, scope, job.id, signal.aborted ? 'cancelled' : 'completed');
+        const artifact =
+          !signal.aborted && this.captureArtifact
+            ? await this.captureArtifact(actor, scope, job)
+            : null;
+        await this.store.finish(
+          actor,
+          scope,
+          job.id,
+          signal.aborted ? 'cancelled' : 'completed',
+          artifact,
+        );
+        if (artifact && this.importArtifact) {
+          try {
+            await this.importArtifact(actor, scope, job.id);
+          } catch (error) {
+            await this.store.importResult(
+              actor,
+              scope,
+              job.id,
+              error instanceof BusinessError || error instanceof HttpFailure
+                ? error.code
+                : 'INTERNAL_ERROR',
+            );
+            return { state: 'failed' };
+          }
+        }
         return { state: signal.aborted ? 'cancelled' : 'succeeded' };
       } finally {
         signal.removeEventListener('abort', stop);
@@ -325,9 +360,14 @@ export class AgentRuntime {
         }
       }
       try {
-        await this.store.finish(actor, scope, job.id, 'uncertain');
+        await this.store.finish(
+          actor,
+          scope,
+          job.id,
+          cliCompleted ? 'failed' : prepared ? 'uncertain' : 'failed',
+        );
       } catch {}
-      return { state: prepared ? 'uncertain' : 'failed' };
+      return { state: cliCompleted ? 'failed' : prepared ? 'uncertain' : 'failed' };
     } finally {
       this.active.delete(job.id);
     }

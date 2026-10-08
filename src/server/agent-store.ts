@@ -24,7 +24,9 @@ export interface AgentRecord {
   turnId: string | null;
   taskStage: string | null;
   projectRevision: number | null;
-  state: 'running' | 'completed' | 'cancelled' | 'uncertain';
+  state: 'running' | 'completed' | 'failed' | 'cancelled' | 'uncertain';
+  imported: boolean;
+  importError: string | null;
   artifact: { name: string; sha256: string; size: number } | null;
 }
 interface Store {
@@ -101,6 +103,8 @@ export function validateAgentStore(raw: unknown): Store {
       'projectRevision',
       'state',
       'artifact',
+      'imported',
+      'importError',
     ]);
     const id = identifier(r.jobId);
     identifier(r.userId);
@@ -115,7 +119,13 @@ export function validateAgentStore(raw: unknown): Store {
       (!Number.isSafeInteger(r.projectRevision) || Number(r.projectRevision) < 0)
     )
       throw new HttpFailure(400, 'INVALID_AGENT_STORE');
-    if (!['running', 'completed', 'cancelled', 'uncertain'].includes(String(r.state)))
+    if (!['running', 'completed', 'failed', 'cancelled', 'uncertain'].includes(String(r.state)))
+      throw new HttpFailure(400, 'INVALID_AGENT_STORE');
+    if (
+      typeof r.imported !== 'boolean' ||
+      (r.importError !== null &&
+        (typeof r.importError !== 'string' || !/^[A-Z_]{1,64}$/.test(r.importError)))
+    )
       throw new HttpFailure(400, 'INVALID_AGENT_STORE');
     if (r.artifact !== null) {
       const a = object(r.artifact);
@@ -310,6 +320,8 @@ export class AgentStore {
         projectRevision: revision,
         state: 'running',
         artifact: null,
+        imported: false,
+        importError: null,
       };
       s.records.push(record);
       return record;
@@ -350,7 +362,23 @@ export class AgentStore {
     });
   }
   completion(id: string) {
-    return this.state.records.find((r) => r.jobId === id)?.state ?? 'uncertain';
+    const r = this.state.records.find((r) => r.jobId === id);
+    return r?.importError
+      ? 'failed'
+      : r?.state === 'completed' && r.artifact && !r.imported
+        ? 'uncertain'
+        : (r?.state ?? 'uncertain');
+  }
+  async importResult(actor: ActorContext, scope: AgentScope, id: string, error: string | null) {
+    return this.mutate((s) => {
+      const r = s.records.find(
+        (r) => r.jobId === id && r.userId === actor.userId && same(r.scope, scope),
+      );
+      if (!r || r.state !== 'completed' || !r.artifact)
+        throw new HttpFailure(409, 'AGENT_ARTIFACT_UNAVAILABLE');
+      r.imported = error === null;
+      r.importError = error;
+    });
   }
   async finish(
     actor: ActorContext,

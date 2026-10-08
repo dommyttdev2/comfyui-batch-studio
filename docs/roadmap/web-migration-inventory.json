@@ -387,7 +387,7 @@
     {
       "file": "package.json",
       "lines": 73,
-      "sha256": "7d18368fe3619dc20afc28b5bba1ff5a945879509f36ba8aa81f6e30115462a9",
+      "sha256": "b43251355e08b6644ec2a07ea990a200517038289fdef732d3c5b94a3a4e6117",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -2199,8 +2199,8 @@
     },
     {
       "file": "src/application/project-use-cases.ts",
-      "lines": 578,
-      "sha256": "1a7c617b2da350d6c7a608a3988727caa7b96f91b891affbc1525fd7812f4e36",
+      "lines": 647,
+      "sha256": "542cc6abc7efb1f0f0b260f5ee489d1adca70949ae952e46caf29d4cefed47ce",
       "workPackage": "W03",
       "layer": "application",
       "phase": "P1",
@@ -2225,6 +2225,7 @@
         "./workflow-use-cases.js"
       ],
       "exports": [
+        "AgentJobArtifactSource",
         "ProjectUseCases"
       ],
       "bridgeCalls": [],
@@ -9998,6 +9999,40 @@
       "entryReachable": true
     },
     {
+      "file": "src/server/agent-artifacts.ts",
+      "lines": 152,
+      "sha256": "86dc0fdc4f89ff9fd2e03d5c9014f7d39b57c6f270924fc55bcc4e426530d616",
+      "workPackage": "W04",
+      "layer": "server-infrastructure",
+      "phase": "P4",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs",
+        "node:fs/promises",
+        "node:path",
+        "../domain/contracts.js",
+        "../domain/agent-artifact-policy.js",
+        "../application/agent-use-cases.js",
+        "../application/project-use-cases.js",
+        "./agent-store.js",
+        "./agent-runtime.js",
+        "./http.js",
+        "./jobs.js"
+      ],
+      "exports": [
+        "readAgentArtifact",
+        "AgentArtifacts"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "src/server/agent-cli-runtime.ts",
       "lines": 479,
       "sha256": "e8ecd1b19ca6bedceff3b911320cf25f1ece562af5b710b61a96b1d229f482ca",
@@ -10089,8 +10124,8 @@
     },
     {
       "file": "src/server/agent-runtime.ts",
-      "lines": 336,
-      "sha256": "8e1a585049983564abc1651dada1de3fea1d9ccaff2aa092e645106111c20d30",
+      "lines": 376,
+      "sha256": "db3359b9dcb0acd28a58cfc2618fdd225ff18bd7151b397163ea453bd87ed189",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10126,8 +10161,8 @@
     },
     {
       "file": "src/server/agent-store.ts",
-      "lines": 375,
-      "sha256": "5673bb7ad4f39662f1c485b63f1ad86356f4998b4cd3069d36b4ae406c5b1577",
+      "lines": 403,
+      "sha256": "12e4497d1e05afd1131650577d31fcb9b6810fa8937a7a74a02bd793f3b7d498",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -13772,6 +13807,36 @@
         }
       ],
       "migrationAction": "回帰契約維持、compile先/import/resource前提を更新",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-agent-artifacts.mjs",
+      "lines": 136,
+      "sha256": "abc49796fffd1adee4e545956b4df2c668ec64f514ceeb740485b9de03fbeea8",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:crypto",
+        "../dist-server/application/project-use-cases.js",
+        "../dist-server/server/agent-store.js",
+        "../dist-server/server/agent-artifacts.js",
+        "../dist-server/server/jobs.js",
+        "./server-project-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
     },
     {
@@ -18812,6 +18877,18 @@
       "requiredAction": "P8までに新test実行経路へ接続"
     },
     {
+      "file": "tests/server-agent-artifacts.mjs",
+      "registration": "agent-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
       "file": "tests/server-agent-cli.mjs",
       "registration": "agent-local",
       "treatment": "契約維持・server buildへ適合",
@@ -19549,9 +19626,9 @@
     }
   ],
   "counts": {
-    "files": 489,
-    "source": 341,
-    "tests": 101,
+    "files": 491,
+    "source": 342,
+    "tests": 102,
     "scripts": 16,
     "ipc": 172,
     "resources": 8,
@@ -19560,7 +19637,7 @@
       "W01": 18,
       "W02": 35,
       "W03": 34,
-      "W04": 54,
+      "W04": 55,
       "W05": 33,
       "W06": 55,
       "W07": 15,
@@ -19568,7 +19645,7 @@
       "W09": 47,
       "W10": 26,
       "W11": 29,
-      "W12": 107,
+      "W12": 108,
       "W13": 11,
       "W14": 12
     },
@@ -19589,7 +19666,7 @@
     "testRegistration": {
       "CI-conditional": 2,
       "CI-only": 2,
-      "agent-local": 3,
+      "agent-local": 4,
       "browser-local": 1,
       "core-local": 4,
       "npm-test": 61,
