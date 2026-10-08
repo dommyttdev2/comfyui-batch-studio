@@ -85,7 +85,9 @@ export class R2ObjectTransfers {
         raw.records.length > 128
       )
         throw Error();
-      const seen = new Set<string>();
+      const seen = new Set<string>(),
+        receipts = new Set<string>(),
+        jobs = new Set<string>();
       this.records = raw.records.map((raw) => {
         const r = object(raw);
         fields(r, [
@@ -101,8 +103,15 @@ export class R2ObjectTransfers {
           'transferred',
         ]);
         for (const k of ['id', 'userId', 'receiptId', 'jobId']) identifier(r[k]);
-        if (seen.has(String(r.id))) throw Error();
+        if (
+          seen.has(String(r.id)) ||
+          receipts.has(String(r.receiptId)) ||
+          jobs.has(String(r.jobId))
+        )
+          throw Error();
         seen.add(String(r.id));
+        receipts.add(String(r.receiptId));
+        jobs.add(String(r.jobId));
         const t = object(r.target);
         fields(t, [
           'projectId',

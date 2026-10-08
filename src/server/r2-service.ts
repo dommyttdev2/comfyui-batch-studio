@@ -35,6 +35,7 @@ import {
   type RequestContext,
 } from './http.js';
 import type { IntegrationSettings } from './integration-settings.js';
+import type { JobDefinition, JobRegistry } from './jobs.js';
 import { r2InternalPrefix, verifyR2ConditionalDelete } from './r2-conditions.js';
 import { R2Gateway, type R2Port } from './r2-gateway.js';
 import type { R2ObjectTransfers } from './r2-object-transfers.js';
@@ -90,6 +91,53 @@ function admin(actor: ActorContext): void {
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export class R2Service {
   readonly port: R2Port;
+  private indexJobs?: JobRegistry;
+  private indexGrant?: (actor: ActorContext) => Promise<ActorContext>;
+  readonly indexDefinition: JobDefinition = {
+    globalExclusive: true,
+    validate(input) {
+      fields(input, ['sourceFingerprint']);
+      if (
+        typeof input.sourceFingerprint !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(input.sourceFingerprint)
+      )
+        throw new HttpFailure(400, 'INVALID_INPUT');
+    },
+    reserve: async (job, actor) => {
+      const current = await this.indexActor(actor, job.projectId);
+      admin(current);
+      return { release: async () => {} };
+    },
+    run: async ({ actor, job, input, signal, progress }) => {
+      try {
+        await this.syncIndex(actor, {
+          signal,
+          fingerprint: String(input.sourceFingerprint),
+          validate: async () => {
+            const current = await this.indexActor(actor, job.projectId);
+            admin(current);
+          },
+          progress,
+        });
+        await progress(1);
+        return { state: 'succeeded' };
+      } catch {
+        return { state: signal.aborted ? 'cancelled' : 'failed' };
+      }
+    },
+    reconcile: async () => ({ state: 'failed' }),
+  };
+  attachIndexJobs(jobs: JobRegistry, grant: (actor: ActorContext) => Promise<ActorContext>) {
+    this.indexJobs = jobs;
+    this.indexGrant = grant;
+  }
+  private async indexActor(actor: ActorContext, projectId: string) {
+    if (!this.indexGrant) throw new HttpFailure(503, 'INDEX_RUNTIME_REQUIRED');
+    const current = await this.indexGrant(actor);
+    authorize(current, projectId, 'execute');
+    return current;
+  }
+
   objectTransfers?: R2ObjectTransfers;
   private value: Store | undefined;
   private readonly file: string;
@@ -293,8 +341,8 @@ export class R2Service {
       throw new HttpFailure(503, 'R2_STORE_UNAVAILABLE');
     }
   }
-  async buckets() {
-    const data = await this.port.send('ListBuckets', {});
+  async buckets(signal?: AbortSignal) {
+    const data = await this.port.send('ListBuckets', {}, signal);
     if (!Array.isArray(data.Buckets) || data.Buckets.length > 1000)
       throw new HttpFailure(502, 'R2_PROTOCOL');
     return data.Buckets.map((row: any) => ({
@@ -302,16 +350,20 @@ export class R2Service {
       createdAt: row.CreationDate?.toISOString() ?? null,
     }));
   }
-  async list(name: string, prefix = '', token?: string) {
+  async list(name: string, prefix = '', token?: string, signal?: AbortSignal) {
     bucket(name);
     text(prefix);
     if (token !== undefined) text(token, 4096);
-    const data = await this.port.send('ListObjectsV2', {
-      Bucket: name,
-      Prefix: prefix,
-      ...(token ? { ContinuationToken: token } : {}),
-      MaxKeys: 1000,
-    });
+    const data = await this.port.send(
+      'ListObjectsV2',
+      {
+        Bucket: name,
+        Prefix: prefix,
+        ...(token ? { ContinuationToken: token } : {}),
+        MaxKeys: 1000,
+      },
+      signal,
+    );
     const contents = data.Contents ?? [];
     if (
       !Array.isArray(contents) ||
@@ -343,18 +395,33 @@ export class R2Service {
       nextToken: data.IsTruncated ? data.NextContinuationToken : null,
     };
   }
-  async syncIndex(actor: ActorContext) {
+  async syncIndex(
+    actor: ActorContext,
+    options?: {
+      signal: AbortSignal;
+      fingerprint: string;
+      validate(): Promise<void>;
+      progress(value: number): Promise<void>;
+    },
+  ) {
     admin(actor);
     return this.queue.run(async () => {
+      options?.signal.throwIfAborted();
+      await options?.validate();
       const next = this.current();
+      if (options && next.sourceFingerprint !== options.fingerprint)
+        throw new HttpFailure(409, 'TARGET_CHANGED');
       const entries: Record<string, R2Object[]> = {};
-      for (const b of await this.buckets()) {
+      const buckets = await this.buckets(options?.signal);
+      let processed = 0;
+      for (const b of buckets) {
         const objects: R2Object[] = [];
         const seen = new Set<string>();
         let token: string | undefined;
         for (let pages = 0; ; pages++) {
           if (pages >= 1000) throw new HttpFailure(502, 'R2_PAGE_LIMIT');
-          const page = await this.list(b.name, '', token);
+          options?.signal.throwIfAborted();
+          const page = await this.list(b.name, '', token, options?.signal);
           objects.push(...page.objects);
           if (objects.length > 100000) throw new HttpFailure(502, 'R2_INDEX_LIMIT');
           if (!page.nextToken) break;
@@ -363,7 +430,10 @@ export class R2Service {
           seen.add(token);
         }
         entries[b.name] = objects;
+        await options?.progress((0.95 * ++processed) / Math.max(1, buckets.length));
       }
+      await options?.validate();
+      options?.signal.throwIfAborted();
       if (next.sourceFingerprint !== this.settings.resolve('r2').fingerprint)
         throw new HttpFailure(409, 'TARGET_CHANGED');
       next.buckets = entries;
@@ -769,8 +839,24 @@ export class R2Service {
     if (ctx.request.method !== 'POST') throw new HttpFailure(405, 'METHOD_NOT_ALLOWED');
     admin(ctx.actor);
     if (action === 'index') {
-      fields(ctx.input, []);
-      json(ctx.response, 200, await this.syncIndex(ctx.actor));
+      fields(ctx.input, ['projectId']);
+      const projectId = identifier(ctx.input.projectId);
+      await this.indexActor(ctx.actor, projectId);
+      if (!this.indexJobs) throw new HttpFailure(503, 'INDEX_RUNTIME_REQUIRED');
+      const config = this.settings.resolve('r2');
+      const job = await this.indexJobs.submit(
+        ctx.actor,
+        projectId,
+        'r2-index',
+        identifier(ctx.request.headers['idempotency-key']),
+        { sourceFingerprint: config.fingerprint },
+        {
+          stage: 'index',
+          provider: 'r2',
+          turnId: identifier(ctx.request.headers['idempotency-key']),
+        },
+      );
+      json(ctx.response, 202, { job });
       return true;
     }
     if (action === 'targets') {
@@ -791,7 +877,13 @@ export class R2Service {
           size: metadata.size,
           url: await this.port.signed(
             'GetObject',
-            { Bucket: name, Key: row.key, IfMatch: metadata.etag },
+            {
+              Bucket: name,
+              Key: row.key,
+              IfMatch: metadata.etag,
+              ResponseContentDisposition:
+                "attachment; filename*=UTF-8''" + encodeURIComponent(row.name),
+            },
             expiresIn,
           ),
         });

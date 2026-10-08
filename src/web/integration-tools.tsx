@@ -31,6 +31,7 @@ type Item = {
   }[];
 };
 type Stage = {
+  expectedHash: string | null;
   id: string;
   name: string;
   size: number;
@@ -124,6 +125,10 @@ export function IntegrationTool({
   const [items, setItems] = useState<Item[]>([]),
     [objects, setObjects] = useState<{ key: string; size: number }[]>([]),
     [buckets, setBuckets] = useState<string[]>([]),
+    [templates, setTemplates] = useState<
+      { id: string; name: string; objects: { key: string; name: string; size: number }[] }[]
+    >([]),
+    [downloadLinks, setDownloadLinks] = useState<{ url: string; name: string }[]>([]),
     [transfers, setTransfers] = useState<Transfer[]>([]),
     [resources, setResources] = useState<{ id: string; name: string }[]>([]),
     [roots, setRoots] = useState<{ id: string; name: string }[]>([]),
@@ -156,6 +161,12 @@ export function IntegrationTool({
     : null;
   const lifetime = useRef({ live: true, serial: 0, user: workspace.user }),
     cancelUpload = useRef(false);
+  const hashWorker = useRef<{ worker: Worker; reject(error: Error): void } | null>(null);
+  function stopHash() {
+    hashWorker.current?.worker.terminate();
+    hashWorker.current?.reject(Error('FILE_HASH_CANCELLED'));
+    hashWorker.current = null;
+  }
   state.values ??= {};
   const values = state.values,
     value = (key: string, initial = '') => values[key] ?? initial;
@@ -168,7 +179,9 @@ export function IntegrationTool({
     delete values.nextToken;
     delete values.object;
     setObjects([]);
-  }, [state.bucket, state.path]);
+    setTemplates([]);
+    setDownloadLinks([]);
+  }, [state.bucket, state.path, value('objectSearch')]);
   const projectId = value('projectId', origin?.projectId ?? ''),
     item = items[Number(value('item', '-1'))],
     version = item?.versions?.find((v) => String(v.versionId) === value('version')) ?? item,
@@ -228,6 +241,7 @@ export function IntegrationTool({
       lifetime.current.live = false;
       lifetime.current.serial++;
       cancelUpload.current = true;
+      stopHash();
     };
   }, [tool]);
   async function capture() {
@@ -323,15 +337,61 @@ export function IntegrationTool({
     if (still()) setTransfers(result.transfers);
     return result;
   };
+  async function readObjects(mode: 'list' | 'search', next = false) {
+    const r = await request<{
+      objects: { key: string; size: number }[];
+      nextToken?: string | null;
+    }>(
+      '/integrations/r2/' +
+        mode +
+        '?' +
+        query({
+          bucket: state.bucket,
+          ...(mode === 'list' ? { prefix: state.path } : { query: value('objectSearch') }),
+          ...(next ? { token: value('nextToken') } : {}),
+        }),
+    );
+    setObjects(r.objects);
+    set('object', '');
+    set('nextToken', r.nextToken ?? '');
+    set('pageMode', mode);
+    return { 件数: r.objects.length };
+  }
   async function upload() {
     if (!file || !projectId) throw Error('SOURCE_REQUIRED');
     cancelUpload.current = false;
+    const sha256 = await new Promise<string>((resolve, reject) => {
+      const worker = new Worker(new URL('./file-hash-worker.ts', import.meta.url), {
+        type: 'module',
+      });
+      hashWorker.current = { worker, reject };
+      const finish = () => {
+        worker.terminate();
+        hashWorker.current = null;
+      };
+      worker.onerror = () => {
+        finish();
+        reject(Error('FILE_HASH_FAILED'));
+      };
+      worker.onmessage = (e) => {
+        if (e.data.sha256) {
+          finish();
+          resolve(e.data.sha256);
+        } else if (e.data.error) {
+          finish();
+          reject(Error(e.data.error));
+        }
+      };
+      worker.postMessage(file);
+    });
+    if (!still() || cancelUpload.current) throw Error('FILE_HASH_CANCELLED');
     let current = stage;
     if (!current) {
       current = await request<Stage>('/resources/staging', {
         projectId,
         name: file.name,
         size: file.size,
+        sha256,
       });
       if (still()) {
         setStage(current);
@@ -342,6 +402,7 @@ export function IntegrationTool({
       if (
         current.projectId !== projectId ||
         current.name !== file.name ||
+        current.expectedHash !== sha256 ||
         current.size !== file.size
       )
         throw Error('SOURCE_CHANGED');
@@ -622,35 +683,15 @@ export function IntegrationTool({
             </button>
             <button
               disabled={busy || !state.bucket}
-              onClick={() =>
-                void run(async () => {
-                  const r = await request<{
-                    objects: { key: string; size: number }[];
-                    nextToken?: string | null;
-                  }>(
-                    '/integrations/r2/list?' +
-                      query({
-                        bucket: state.bucket,
-                        prefix: state.path,
-                        ...(value('token') ? { token: value('token') } : {}),
-                      }),
-                  );
-                  if (still()) {
-                    setObjects(r.objects);
-                    set('nextToken', r.nextToken ?? '');
-                  }
-                  return { 件数: r.objects.length };
-                })
-              }
+              onClick={() => void run(() => readObjects('list'))}
             >
               Object一覧
             </button>
             <button
               disabled={busy || !value('nextToken')}
-              onClick={() => {
-                set('token', value('nextToken'));
-                setOutput('次ページの条件に切り替えました。Object一覧を取得してください。');
-              }}
+              onClick={() =>
+                void run(() => readObjects(value('pageMode') as 'list' | 'search', true))
+              }
             >
               次ページ
             </button>
@@ -659,22 +700,13 @@ export function IntegrationTool({
           {input('Object検索', 'objectSearch')}
           <button
             disabled={busy || !state.bucket}
-            onClick={() =>
-              void run(async () => {
-                const r = await request<{ objects: { key: string; size: number }[] }>(
-                  '/integrations/r2/search?' +
-                    query({ bucket: state.bucket, query: value('objectSearch') }),
-                );
-                if (still()) setObjects(r.objects);
-                return r;
-              })
-            }
+            onClick={() => void run(() => readObjects('search'))}
           >
             Indexを検索
           </button>
           <button
-            disabled={busy || !canManage}
-            onClick={() => void run(() => request('/integrations/r2/index', {}))}
+            disabled={busy || !canManage || !projectId}
+            onClick={() => void run(() => request('/integrations/r2/index', { projectId }))}
           >
             Indexを同期
           </button>
@@ -812,6 +844,7 @@ export function IntegrationTool({
             disabled={!busy || !file}
             onClick={() => {
               cancelUpload.current = true;
+              stopHash();
             }}
           >
             staging送信を一時停止
@@ -942,6 +975,7 @@ export function IntegrationTool({
                   '/integrations/r2/templates?' + query({ bucket: state.bucket }),
                 );
                 set('templateRevision', String(r.revision));
+                setTemplates(r.templates);
                 return r;
               })
             }
@@ -964,6 +998,69 @@ export function IntegrationTool({
             }
           >
             選択ObjectをTemplate保存
+          </button>
+          <label>
+            Download template
+            <select
+              aria-label="Download template"
+              value={value('downloadTemplate')}
+              onChange={(e) => set('downloadTemplate', e.target.value)}
+            >
+              <option value="">選択してください</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            disabled={busy || !canManage || !value('downloadTemplate')}
+            onClick={() =>
+              void run(async () => {
+                const template = templates.find((t) => t.id === value('downloadTemplate'));
+                if (!template) throw Error('TEMPLATE_REQUIRED');
+                const r = await request<{
+                  objects: { url: string; name: string }[];
+                  expiresAt: number;
+                }>('/integrations/r2/batch-download-info', {
+                  bucket: state.bucket,
+                  objects: template.objects,
+                  expiresIn: 300,
+                });
+                setDownloadLinks(r.objects);
+                return {
+                  state: '取得リンクを発行しました',
+                  expiresAt: new Date(r.expiresAt).toLocaleString(),
+                };
+              })
+            }
+          >
+            Templateの取得リンクを発行
+          </button>
+          {downloadLinks.map((link, i) => (
+            <p key={String(i)}>
+              <a href={link.url} target="_blank" rel="noreferrer" download={link.name}>
+                {link.name}を取得
+              </a>
+            </p>
+          ))}
+          {input('PUT先Object key', 'putKey')}
+          {input('PUT Content-Type', 'putType', 'application/octet-stream')}
+          <button
+            disabled={busy || !canManage || !state.bucket || !value('putKey')}
+            onClick={() =>
+              void run(() =>
+                request('/integrations/r2/put-url-info', {
+                  bucket: state.bucket,
+                  key: value('putKey'),
+                  contentType: value('putType', 'application/octet-stream'),
+                  expiresIn: 300,
+                }),
+              )
+            }
+          >
+            条件付きPUT URLを発行
           </button>
           {input('削除するTemplate ID', 'templateId')}
           <button
