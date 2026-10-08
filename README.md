@@ -570,3 +570,10 @@ Template と Manifest が対応していません。Manifest が参照する Tem
 - `docs/architecture/remote-execution.md` — Local / Remote Execution、Remote Worker、R2成果物回収とRun復旧
 - `docs/integrations/service-integrations.md` — Vast.ai・接続設定・Instance管理
 - `docs/contracts/project-artifacts.md` — 最終成果物を含むProjectファイルと正本関係
+
+## License
+
+自作のコード・ドキュメント・設定・テンプレート（PSD／PNGを含む）は [MIT License](LICENSE) で公開します。
+第三者ライブラリは各ライセンスに従います。[第三者通知](THIRD_PARTY_NOTICES.md) と
+[ライセンス・配布手順](docs/operations/licensing.md)を参照してください。
+外部ComfyUI、CLI、モデル、利用者の素材・生成物には、それぞれの条件が適用されます。

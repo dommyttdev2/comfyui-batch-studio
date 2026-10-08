@@ -43,6 +43,8 @@ docs/
 
 Docker DesktopでのLinuxローカル検証は [実行手順](operations/docker-local-tests.md) を参照する。
 
+ライセンスと第三者通知の更新・配布手順は [ライセンス運用](operations/licensing.md) を参照する。
+
 ## 3. 各文書の責務
 
 | 文書 | 正本とする内容 |
