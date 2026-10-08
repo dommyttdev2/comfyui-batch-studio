@@ -151,6 +151,23 @@ export class Security {
       boundary: this.boundary,
       authenticate: this.authenticate,
       publicRoute: async (request, response, url) => {
+        if (url.pathname === '/api/v1/logout' && request.method === 'POST') {
+          await this.authenticate(request, true);
+          fields(await readJson(request, 4096), []);
+          const cookie = request.headers.cookie!;
+          const credential = cookie
+            .split(';')
+            .map((c) => c.trim())
+            .find((c) => c.startsWith('batch_session='))!
+            .slice('batch_session='.length);
+          this.sessions.delete(credential);
+          response.setHeader(
+            'Set-Cookie',
+            'batch_session=; HttpOnly; SameSite=Strict; Path=/api/v1; Max-Age=0',
+          );
+          json(response, 200, { loggedOut: true });
+          return true;
+        }
         if (url.pathname !== '/api/v1/session' || request.method !== 'POST') return false;
         if (request.headers.origin !== this.origin) throw new HttpFailure(403, 'ORIGIN_REJECTED');
         fields(await readJson(request, 4096), []);
