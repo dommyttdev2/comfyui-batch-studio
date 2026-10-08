@@ -144,7 +144,7 @@ function owner(file) {
 }
 const scanRoots = ['src', 'scripts', 'tests', '.github', 'templates', 'schemas'];
 const rootFiles = fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isFile()
-  && !['AGENTS.md', 'README.md'].includes(entry.name) && !/\.log$/.test(entry.name)).map((entry) => entry.name);
+  && !['.git', 'AGENTS.md', 'README.md'].includes(entry.name) && !/\.log$/.test(entry.name)).map((entry) => entry.name).sort();
 const files = [...scanRoots.flatMap(walk), ...rootFiles].sort();
 const prior = JSON.parse(read('docs/roadmap/web-migration-inventory.json'));
 const priorByFile = new Map(prior.files.map((row) => [row.file, row]));

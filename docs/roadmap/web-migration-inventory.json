@@ -21,12 +21,11 @@
     ],
     "rootFiles": [
       ".dockerignore",
-      ".git",
       ".gitattributes",
       ".gitignore",
+      "Dockerfile",
       "biome.json",
       "compose.yaml",
-      "Dockerfile",
       "index.html",
       "package-lock.json",
       "package.json",
@@ -124,24 +123,6 @@
       "file": ".dockerignore",
       "lines": 43,
       "sha256": "534e8809f4435ca21680e430de896ea4604ed23a43cc6413a7af9305feac5bdc",
-      "workPackage": "W11",
-      "layer": "existing-reference",
-      "phase": "P8",
-      "gate": "G11",
-      "desktopRemovalPhase": null,
-      "electronDependencyRemovalPhase": null,
-      "imports": [],
-      "exports": [],
-      "bridgeCalls": [],
-      "registeredChannels": [],
-      "risks": [],
-      "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
-    },
-    {
-      "file": ".git",
-      "lines": 2,
-      "sha256": "b4ada777b4a37eb6d08da24677fce7e9af33fd42c35029b43c0a5f848b523787",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -17232,7 +17213,7 @@
     },
     {
       "file": "docs/roadmap/business-core-separation-verification.md",
-      "sha256": "8f78ca767363233f13c78b79343a2bed4c59d852561c144c1846aa4879d627d8",
+      "sha256": "202defc04901dcbda687b059304039dd3504e9cce8970653a1fa8ec774f16ff9",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -17288,7 +17269,7 @@
     }
   ],
   "counts": {
-    "files": 426,
+    "files": 425,
     "source": 309,
     "tests": 80,
     "scripts": 9,
@@ -17306,7 +17287,7 @@
       "W08": 13,
       "W09": 47,
       "W10": 15,
-      "W11": 25,
+      "W11": 24,
       "W12": 82,
       "W13": 11,
       "W14": 12

@@ -51,3 +51,5 @@ AI開始の予約は最初のawaitより前に取得し、失敗時に解放す�
 2026-10-08、PR #310で追加したcore 61ファイル、Mainのruntime接続、core-separationテスト、THUMBNAIL_DELETE_DOCUMENTを正本の監査ツールに登録した。テストはcore-local、削除操作はW09/G09のcommandとして扱う。共有型・template規則は主担当を一つにし、横断する検証gateはtest側に記録した。
 
 `node docs/roadmap/web-migration-audit.cjs --write`と`--check`が成功。426コード・設定（src 309、tests 80、scripts 9）、172通信定義（161 invoke・11 notification）、8 binary asset、32仕様文書を別母集団として再照合した。上のAST調査はJS/TS・関数を中心とする別集計であり、この件数と合算しない。正本索引の未登録・hash/行番号の不一致も確認対象とし、別途作成した解析台帳だけで受入完了とは判断しない。
+
+マージ前の別worktree/Linux再検証で、索引に作業場所固有の`.git`参照ファイルが含まれていたことを検出した。監査対象から除外し、OS依存のroot file列挙順もsortで固定して、425コード・設定へ再集計した。製品ソースの変更はなく、同じ索引をWindowsのworktreeとLinuxのGit metadataなし環境で照合した。
