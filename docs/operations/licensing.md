@@ -25,7 +25,12 @@ licenses:checkは全依存のpath/version/integrity/resolved/dev/license表記�
 
 ## 上流通知の不足
 
-固定版の@electron-internal/extract-zip 1.0.5と@epic-web/invariant 1.0.0はライセンスを宣言していますが、アーカイブと公開コミットに完全なLICENSE本文がありません。通知集にその状態を明記し、著作権者や年を捏造しません。これらは開発依存であり、自作ソースをMITで公開することを妨げません。ツール本体・node_modules全体を再配布する際は上流の完全な通知を取得してください。
+確認日: 2026-10-08。上流通知を固定コミットで追跡し、次の2件を区別します。
+
+- **@electron-internal/extract-zip 1.0.5**: 固定アーカイブとv1.0.5はBSD-2-Clause宣言のみで、完全な本文を含みません。一方、上流は2026-09-10の[PR #19](https://github.com/electron/extract-zip/pull/19)で明示的にMITへ再ライセンスし、著作権表示を含む[LICENSE本文](https://github.com/electron/extract-zip/blob/3c33b76429ebd9bf724bcfc32d3e8fae7eeb3e82/LICENSE)を追加しました。この本文を通知集へ収録しています。[v1.0.5からの差分](https://github.com/electron/extract-zip/compare/v1.0.5...3c33b76429ebd9bf724bcfc32d3e8fae7eeb3e82)はCargo.toml、package.json、README.md、LICENSEのみで、実装ソースは同一です。ただし固定アーカイブのBSD宣言をMITへ書き換えず、後日のMIT本文をBSD本文として扱いません。ツール本体や既存ネイティブバイナリを配布するときは、適用する上流許諾とリンクされた構成要素を確認します。
+- **@epic-web/invariant 1.0.0**: [npmの公式メタデータ](https://registry.npmjs.org/@epic-web%2finvariant/1.0.0)のlicenseはMITです。[固定タグ](https://github.com/epicweb-dev/invariant/tree/547be2246d3c39f8ca44dd0502b1aa70bf4378af)と[確認時のmain](https://github.com/epicweb-dev/invariant/tree/d0cf40958972afb909fb14b2afc85d8c5f1ff5d6)の全ファイル、およびLICENSEの履歴を確認しましたが、完全な本文はありません。READMEはMITを宣言し、存在しないmain/LICENSEへリンクしています。著作権者・年を推定して補完せず、本文未取得として通知集に明記します。この依存を再配布する際は上流の完全な通知を取得してください。
+
+どちらも開発依存です。上流通知の不足や固定版との差異を、自作ソースにMITを適用することと混同しません。
 
 native Biome/Rolldownパッケージには親プロジェクトの通知を収録しています。個別にリンクされたRust/C/C++構成要素の監査を完了したという意味ではありません。開発ツール・ビルド環境自体を配布する場合は、その出荷対象の追加監査が必要です。
 
