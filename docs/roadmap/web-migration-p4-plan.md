@@ -48,6 +48,6 @@ Status: Accepted / G04ローカル受入完了（2026-10-08）。親PR #364で�
 - #360: [PR #370](https://github.com/dommyttdev2/comfyui-batch-studio/pull/370)。
 - #361: [PR #371](https://github.com/dommyttdev2/comfyui-batch-studio/pull/371)。
 - #362: [PR #372](https://github.com/dommyttdev2/comfyui-batch-studio/pull/372)。
-- #363: 正本・受入matrix・運用・索引の完成。対応PRは親PR #364の実装一覧を参照。
+- #363: [PR #373](https://github.com/dommyttdev2/comfyui-batch-studio/pull/373)。
 
 要求境界・実装owner・検証・対象SHAは[受入matrix](../quality/web-p4-acceptance.md)、起動/設定/復旧は[運用正本](../operations/web-agent-runtime.md)、API/所有権/隔離は[契約正本](../contracts/web-agent-runtime.md)に分離する。全コード索引ではAssistant presentationはW02/P4/G04、CLI/store/API/taskはW04/P4/G04、DockerfileはW10、testはW12として主所管を一意にした。P4にCI、version/release、旧データ移行、fallbackを追加していない。次のphaseはP5。
