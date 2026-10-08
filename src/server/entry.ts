@@ -1,5 +1,6 @@
 import { loadConfig } from './config.js';
 import { startServer } from './server.js';
+import { JobRegistry } from './jobs.js';
 import { Security } from './security.js';
 import { FileLease, Ownership } from './ownership.js';
 import path from 'node:path';
@@ -19,9 +20,11 @@ try {
     'server',
     ownership.serverId,
   );
+  const jobs = new JobRegistry(config.dataDir, new Map());
   let runtime;
   try {
-    runtime = await startServer(config, security.http());
+    await jobs.initialize();
+    runtime = await startServer(config, { ...security.http(), route: jobs.route });
   } catch (error) {
     await lease.release();
     throw error;
@@ -32,6 +35,7 @@ try {
     process.once(signal, () => {
       void runtime
         .close()
+        .then(() => jobs.drain())
         .then(() => lease.release())
         .catch(() => {
           process.exitCode = 1;
