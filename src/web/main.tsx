@@ -1,3 +1,4 @@
+import { Dialog, ModalHost } from './modal';
 import { useState, useSyncExternalStore, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api } from './api';
@@ -27,6 +28,8 @@ function App() {
     key: string;
     confirmationId: string;
     revision: number;
+    generation: string;
+    leaseId: string;
   } | null>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
   const tab = w.tabs.find((t) => t.id === w.selected);
@@ -81,6 +84,8 @@ function App() {
         id: t.id,
         key: t.key,
         revision: t.project.revision,
+        generation: t.generation,
+        leaseId: t.project.lease?.leaseId ?? '',
         confirmationId: v.confirmation.id,
       });
     });
@@ -449,33 +454,42 @@ function App() {
             )
           )}
           {reset && (
-            <div className="modal-backdrop">
-              <section role="dialog" aria-modal="true" aria-label="Artifact Reset確認">
-                <h2>Resetの確認</h2>
-                <p>対象Artifactと下書きを削除し、下流をstaleにします。</p>
-                <button onClick={() => setReset(null)}>取消</button>
-                <button
-                  onClick={() =>
-                    void run(async () => {
-                      const t = w.tabs.find((t) => t.id === reset.id);
-                      if (!t || t.project.revision !== reset.revision)
-                        throw Error('TARGET_CHANGED');
-                      await w.action(reset.id, 'reset-artifact', {
-                        key: reset.key,
-                        confirmationId: reset.confirmationId,
-                      });
-                      setReset(null);
-                    })
-                  }
-                >
-                  Resetを実行
-                </button>
-              </section>
-            </div>
+            <Dialog title="Artifact Reset確認" onClose={() => setReset(null)}>
+              <h2>Resetの確認</h2>
+              <p>対象Artifactと下書きを削除し、下流をstaleにします。</p>
+              <button onClick={() => setReset(null)}>取消</button>
+              <button
+                onClick={() =>
+                  void run(async () => {
+                    const t = w.tabs.find((t) => t.id === reset.id);
+                    if (
+                      !t ||
+                      t.project.revision !== reset.revision ||
+                      t.generation !== reset.generation ||
+                      t.project.lease?.leaseId !== reset.leaseId
+                    )
+                      throw Error('TARGET_CHANGED');
+                    await w.action(reset.id, 'reset-artifact', {
+                      key: reset.key,
+                      confirmationId: reset.confirmationId,
+                    });
+                    setReset(null);
+                  })
+                }
+              >
+                Resetを実行
+              </button>
+              {error && <p role="alert">{error}</p>}
+            </Dialog>
           )}
         </>
       )}
     </>
   );
 }
-createRoot(document.getElementById('root')!).render(<App />);
+createRoot(document.getElementById('root')!).render(
+  <>
+    <App />
+    <ModalHost />
+  </>,
+);
