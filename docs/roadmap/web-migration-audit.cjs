@@ -112,7 +112,7 @@ function owner(file) {
     if (name === 'workflow-api') return 'W05';
     return ['http', 'server', 'security', 'events', 'project-api', 'web-static'].includes(name) ? 'W01' : 'W10';
   }
-  if (file === 'scripts/test-web-agent-real.mjs') return 'W12';
+  if (['scripts/test-web-agent-real.mjs', 'scripts/test-web-agent-api-real.mjs'].includes(file)) return 'W12';
   if (file === 'scripts/Dockerfile.agent') return 'W10';
   if (file === 'scripts/check-web-boundaries.cjs' || file === 'scripts/docker-web-test.sh') return 'W12';
   if (file === 'scripts/check-server-boundaries.cjs') return 'W12';
@@ -180,7 +180,7 @@ const rows = files.map((file) => {
   const imports = [...source.matchAll(/(?:from\s*|require\s*\(\s*|import\s*\(\s*|import\s*)['"]([^'"]+)['"]/g)].map((m) => m[1]);
   const workPackage = owner(file);
   return {
-    file, lines: lines.length, sha256: hash(file), workPackage, layer: file.startsWith('src/web/') ? 'web-presentation' : file.startsWith('src/server/') ? 'server-infrastructure' : file.startsWith('src/domain/') ? 'domain' : file.startsWith('src/application/') ? 'application' : 'existing-reference', phase: file.startsWith('src/server/') ? (/^(agent-|codex-cli|grok-cli)/.test(path.basename(file)) ? 'P4' : ['project-registration', 'project-repository', 'project-api', 'workflow-api', 'web-static', 'root-init', 'project-recover'].includes(path.basename(file, '.ts')) ? 'P3' : 'P2') : /^src\/(domain|application)\//.test(file) ? 'P1' : packages[workPackage].phase, gate: packages[workPackage].gate,
+    file, lines: lines.length, sha256: hash(file), workPackage, layer: file.startsWith('src/web/') ? 'web-presentation' : file.startsWith('src/server/') ? 'server-infrastructure' : file.startsWith('src/domain/') ? 'domain' : file.startsWith('src/application/') ? 'application' : 'existing-reference', phase: /^src\/web\/assistant/.test(file) ? 'P4' : file.startsWith('src/server/') ? (/^(agent-|codex-cli|grok-cli)/.test(path.basename(file)) ? 'P4' : ['project-registration', 'project-repository', 'project-api', 'workflow-api', 'web-static', 'root-init', 'project-recover'].includes(path.basename(file, '.ts')) ? 'P3' : 'P2') : /^src\/(domain|application)\//.test(file) ? 'P1' : packages[workPackage].phase, gate: /^src\/web\/assistant/.test(file) ? 'G04' : packages[workPackage].gate,
     desktopRemovalPhase: file.startsWith('src/preload/') || file.startsWith('src/main/ipc-registration') || file === 'src/shared/ipc.ts' || file === 'src/main/main.ts' || workPackage === 'W14' ? 'P9' : null,
     electronDependencyRemovalPhase: imports.includes('electron') && !['W01', 'W14'].includes(workPackage) && file !== 'src/main/main.ts' ? packages[workPackage].phase : null,
     imports: [...new Set(imports)],

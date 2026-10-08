@@ -265,7 +265,8 @@ export class DockerAgentAdapter implements AgentCliAdapter {
           : [],
       }));
     if (!models.length) throw new Error('Empty CLI model catalog.');
-    return { models, selection: { model: models[0].id } };
+    // This catalog does not declare the effective CLI default. Do not infer it from ordering.
+    return { models, selection: { model: null } };
   }
   startTask(task: AgentTaskRequest, sink: AgentEventSink): Promise<AgentTurn> {
     return this.launch(task, null, sink);

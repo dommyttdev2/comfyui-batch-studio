@@ -83,6 +83,15 @@ export async function loadAgentRegistration(
   return {
     directory,
     configuredProviders: [...registered.keys()],
+    assertIsolation: async () => {
+      if ((await realpath(directory)) !== directory || (await realpath(dataDir)) !== data)
+        throw new Error('CLI root identity changed.');
+      for (const project of await new ProjectRegistry(dataDir).records()) {
+        const root = await realpath(project.root);
+        if (contains(root, directory) || contains(directory, root))
+          throw new Error('CLI directory overlaps Project.');
+      }
+    },
     adapter: (scope, jobId) => new DockerAgentAdapter({ ...selected(scope.provider), jobId }),
     stopped: (scope, id) => new DockerAgentAdapter(selected(scope.provider)).absent(id),
     terminate: (scope, id) => new DockerAgentAdapter(selected(scope.provider)).terminate(id),

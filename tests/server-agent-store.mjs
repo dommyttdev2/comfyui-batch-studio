@@ -63,3 +63,28 @@ test('unknown stores and oversized conversation updates rejected without overwri
     await rm(dir, { recursive: true, force: true });
   }
 });
+import { readFile } from 'node:fs/promises';
+import { validateAgentStore } from '../dist-server/server/agent-store.js';
+test('corrupt owner/scope bindings and duplicate message/operation identifiers are rejected on load', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'agent-corruption-'));
+  try {
+    const store = new AgentStore(dir);
+    await store.initialize();
+    const c = await store.select(actor, scope, 'new', null);
+    await store.begin(actor, scope, 'job', c.conversationId, 'hello', null, null);
+    const valid = JSON.parse(await readFile(path.join(dir, 'agents.json'), 'utf8'));
+    for (const mutate of [
+      (s) => (s.records[0].userId = 'other'),
+      (s) => (s.records[0].scope.provider = 'grok'),
+      (s) => s.active[Object.keys(s.active)[0]].sessionIds.push(c.conversationId),
+      (s) => s.conversations[0].messages.push({ ...s.conversations[0].messages[0] }),
+      (s) => s.operations.push({ ...s.operations[0] }),
+    ]) {
+      const corrupted = structuredClone(valid);
+      mutate(corrupted);
+      assert.throws(() => validateAgentStore(corrupted));
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

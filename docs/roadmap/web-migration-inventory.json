@@ -386,8 +386,8 @@
     },
     {
       "file": "package.json",
-      "lines": 74,
-      "sha256": "f540fc8bdaab8da933696e10103954f70603a5f1f190f53574503f4af8c6f8fb",
+      "lines": 75,
+      "sha256": "308207f0e8d7414586f6005629e1b2aca3df175b69da3a9589f73ff6673d5f1f",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -428,7 +428,7 @@
           "text": "\"prebuild:electron\": \"node scripts/check-running-batch-studio.cjs\","
         },
         {
-          "line": 68,
+          "line": 69,
           "text": "\"electron\": \"44.2.0\","
         }
       ],
@@ -528,7 +528,7 @@
     {
       "file": "scripts/Dockerfile.agent",
       "lines": 10,
-      "sha256": "34d49a7381465c1e4dd3586f1dafe254843883d9d67e51e321afecc343331d26",
+      "sha256": "81463faf4bf9a113fdaf9e946ddd76014ce29cdb8e8a76b438e1a7da26e09b50",
       "workPackage": "W10",
       "layer": "existing-reference",
       "phase": "P5",
@@ -760,8 +760,8 @@
     },
     {
       "file": "scripts/docker-web-test.sh",
-      "lines": 12,
-      "sha256": "930e4ad635e8e4a634bb9c14708a5691f6ce61487aee598f675550b84d89fcc4",
+      "lines": 13,
+      "sha256": "6d058d7f82022f055b8b979214339cce0c84c7432fd43fcc57e69280e8a65d29",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -849,9 +849,45 @@
       "entryReachable": false
     },
     {
+      "file": "scripts/test-web-agent-api-real.mjs",
+      "lines": 126,
+      "sha256": "ec0ea4e833838d2495e1dc2d7c7bd391ac17feddc1fdf726e702573d54e466f0",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:fs/promises",
+        "node:path",
+        "../tests/server-project-fixtures.mjs",
+        "../tests/server-project-http-fixtures.mjs",
+        "../tests/server-agent-fixtures.mjs",
+        "../dist-server/server/runtime.js",
+        "../dist-server/server/config.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 10,
+          "text": "if (!process.env[n]) throw Error(n + ' required');"
+        },
+        {
+          "line": 11,
+          "text": "return process.env[n];"
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "scripts/test-web-agent-real.mjs",
-      "lines": 87,
-      "sha256": "9c706a8c40315e7180da887e439ea3c814cfb72b936d27ff1895205e2411e646",
+      "lines": 89,
+      "sha256": "cb28ded63a2a394453c0da9a773e9e7b73ec6b555df486e625bd9da275285f7f",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -10065,8 +10101,8 @@
     },
     {
       "file": "src/server/agent-cli-runtime.ts",
-      "lines": 506,
-      "sha256": "98837ad14bbbcc5560b0d7060eb76e3456bd3c754925dd9475a6df9162958fc6",
+      "lines": 507,
+      "sha256": "8fa445b98ed6450c28581ba3fc07da369f18542c59a4b6f6e45290891e040fc1",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10118,27 +10154,27 @@
           "text": "USERPROFILE: process.env.USERPROFILE,"
         },
         {
-          "line": 386,
+          "line": 387,
           "text": "PATH: process.env.PATH,"
         },
         {
-          "line": 387,
+          "line": 388,
           "text": "SystemRoot: process.env.SystemRoot,"
         },
         {
-          "line": 388,
+          "line": 389,
           "text": "TEMP: process.env.TEMP,"
         },
         {
-          "line": 389,
+          "line": 390,
           "text": "HOME: process.env.HOME,"
         },
         {
-          "line": 390,
+          "line": 391,
           "text": "USERPROFILE: process.env.USERPROFILE,"
         },
         {
-          "line": 399,
+          "line": 400,
           "text": "// stdin is never interpreted by a host shell."
         }
       ],
@@ -10198,8 +10234,8 @@
     },
     {
       "file": "src/server/agent-registration.ts",
-      "lines": 108,
-      "sha256": "15cf8b91c66666c94752baeaa6dc62a1e611c61c1ddf9b84f80a3a1774508feb",
+      "lines": 117,
+      "sha256": "216e2cd9037f0b8fbd64b1917afe20f0c02da495dc38f3f3367386c6456c7900",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10229,8 +10265,8 @@
     },
     {
       "file": "src/server/agent-runtime.ts",
-      "lines": 402,
-      "sha256": "ad917b0d943ee4c2ee1f93c9f74b9c68813a1ff759a2e238de4f6ef5931fe951",
+      "lines": 406,
+      "sha256": "5a22dbcf6af2ed276c14f2bacbb67bb7079fa66211fa92ec923e4a5a576a6a2b",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -10267,8 +10303,8 @@
     },
     {
       "file": "src/server/agent-store.ts",
-      "lines": 441,
-      "sha256": "0a27cedf56b5c4a7a0749ad3eea6c5724ef081d611f086c53ff1b5c7d24afd00",
+      "lines": 472,
+      "sha256": "c118db37dc6219cc18bdd1ca6cde2861baff8bbd116700abbc27a0c570cc19bd",
       "workPackage": "W04",
       "layer": "server-infrastructure",
       "phase": "P4",
@@ -11343,8 +11379,8 @@
       "sha256": "f932004132459dee4b15a08a0c67895845006caa92cf8ee6eb8482116a746b1c",
       "workPackage": "W02",
       "layer": "web-presentation",
-      "phase": "P3",
-      "gate": "G02",
+      "phase": "P4",
+      "gate": "G04",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11369,8 +11405,8 @@
       "sha256": "7ddf813830e47b0a6dd6c5be444f4ca3bef6556dd30d6f08cf7bef1ab7f9e97b",
       "workPackage": "W02",
       "layer": "web-presentation",
-      "phase": "P3",
-      "gate": "G02",
+      "phase": "P4",
+      "gate": "G04",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13975,8 +14011,8 @@
     },
     {
       "file": "tests/server-agent-api.mjs",
-      "lines": 140,
-      "sha256": "911346b63237278b217784a6e72359a37a2783bc9732f42f79ecc93964012035",
+      "lines": 213,
+      "sha256": "bfeeb392031b493592f7015c02eb91fcaf9b0c3daa4889be4e8d02289cdfd631",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -13994,7 +14030,8 @@
         "./server-project-http-fixtures.mjs",
         "../dist-server/server/runtime.js",
         "../dist-server/server/config.js",
-        ", {});\n    assert.equal(repeat.status, 200);\n    assert.equal(repeat.body.project.revision, p.revision);\n    assert.equal(\n      (await f.call("
+        ", {});\n    assert.equal(repeat.status, 200);\n    assert.equal(repeat.body.project.revision, p.revision);\n    assert.equal(\n      (await f.call(",
+        ", async () => {\n  const f = await fixture({ delay: 300 });\n  try {\n    await seedBrief(f.runtime, f.actor, f.id);\n    const result = await f.call("
       ],
       "exports": [],
       "bridgeCalls": [],
@@ -14086,6 +14123,65 @@
       "entryReachable": false
     },
     {
+      "file": "tests/server-agent-crash-fixtures.mjs",
+      "lines": 9,
+      "sha256": "7a943be0979318670515bf6f9792bed4f2479904b602b2e49c61510ed22b8140",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../dist-server/server/runtime.js",
+        "../dist-server/server/config.js",
+        "./server-agent-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-agent-crash.mjs",
+      "lines": 88,
+      "sha256": "8a89a4fd2ccfbddb1c7bc4b60aef1a372a6442de1cc356843aa1340aa37a67a7",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:child_process",
+        "node:events",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "./server-project-fixtures.mjs",
+        "./server-agent-fixtures.mjs",
+        "./server-project-http-fixtures.mjs",
+        "../dist-server/server/runtime.js",
+        "../dist-server/server/config.js",
+        "../dist-server/server/ownership.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 3,
+          "text": "import { fork } from 'node:child_process';"
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "tests/server-agent-fixtures.mjs",
       "lines": 126,
       "sha256": "46abff24b35dd8d2e3dd5865194ad76b895831f4f764f2e7a368c10b9ff0cd33",
@@ -14114,8 +14210,8 @@
     },
     {
       "file": "tests/server-agent-jobs.mjs",
-      "lines": 171,
-      "sha256": "f2bb86df4c4df0dffbbb69e72b61adcb59eef78294fcd30a09c9451b7f7e2856",
+      "lines": 223,
+      "sha256": "e7c1ea2a8b87bc44a5e85b25a588967eb5086e40c33f2c3a0df7fd31e766fa2b",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -14130,7 +14226,35 @@
         "node:path",
         "../dist-server/server/agent-runtime.js",
         "../dist-server/server/jobs.js",
-        "./server-project-fixtures.mjs"
+        "./server-project-fixtures.mjs",
+        "./server-agent-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-agent-registration.mjs",
+      "lines": 40,
+      "sha256": "4753544223014e14b5c8f76ee665c381966883f90a1748aac3347f86f342b084",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:test",
+        "node:assert/strict",
+        "node:fs/promises",
+        "node:path",
+        "node:os",
+        "./server-project-fixtures.mjs",
+        "../dist-server/server/agent-registration.js",
+        "../dist-server/server/ownership.js"
       ],
       "exports": [],
       "bridgeCalls": [],
@@ -14141,8 +14265,8 @@
     },
     {
       "file": "tests/server-agent-store.mjs",
-      "lines": 66,
-      "sha256": "aeb05b33a91e1294fde435a5f7c14c6fb9d1d13b890b013c7602d8953345b37d",
+      "lines": 91,
+      "sha256": "36802985ff40f7c9c7e4c434e65898b6a7a3f2fe2b3443d72354d758fcaa90bf",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
@@ -19173,6 +19297,30 @@
       "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
     },
     {
+      "file": "tests/server-agent-crash-fixtures.mjs",
+      "registration": "support",
+      "treatment": "harness/fixture移植",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P8までに新test実行経路へ接続"
+    },
+    {
+      "file": "tests/server-agent-crash.mjs",
+      "registration": "agent-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
       "file": "tests/server-agent-fixtures.mjs",
       "registration": "support",
       "treatment": "harness/fixture移植",
@@ -19186,6 +19334,18 @@
     },
     {
       "file": "tests/server-agent-jobs.mjs",
+      "registration": "agent-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-agent-registration.mjs",
       "registration": "agent-local",
       "treatment": "契約維持・server buildへ適合",
       "targetGate": "G12",
@@ -19910,10 +20070,10 @@
     }
   ],
   "counts": {
-    "files": 499,
+    "files": 503,
     "source": 347,
-    "tests": 105,
-    "scripts": 16,
+    "tests": 108,
+    "scripts": 17,
     "ipc": 172,
     "resources": 8,
     "documents": 38,
@@ -19929,7 +20089,7 @@
       "W09": 47,
       "W10": 26,
       "W11": 29,
-      "W12": 111,
+      "W12": 115,
       "W13": 11,
       "W14": 12
     },
@@ -19950,14 +20110,14 @@
     "testRegistration": {
       "CI-conditional": 2,
       "CI-only": 2,
-      "agent-local": 5,
+      "agent-local": 7,
       "browser-local": 2,
       "core-local": 4,
       "npm-test": 61,
       "project-local": 6,
       "server-local": 7,
       "standalone": 6,
-      "support": 10
+      "support": 11
     }
   }
 }

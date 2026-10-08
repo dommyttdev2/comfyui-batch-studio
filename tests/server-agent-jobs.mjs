@@ -27,7 +27,6 @@ test('chat/task share a durable reservation before availability and duplicate re
     starts = 0;
   const defs = new Map(),
     jobs = new JobRegistry(f.dir, defs);
-  let sink;
   const adapter = {
     provider: 'codex',
     capabilities: {},
@@ -39,7 +38,6 @@ test('chat/task share a durable reservation before availability and duplicate re
     },
     startTask: async (_task, onEvent) => {
       starts++;
-      sink = onEvent;
       onEvent({ type: 'session.started', at: 1, sessionId: 'cli-session' });
       onEvent({ type: 'turn.started', at: 1, turnId: 'cli-turn' });
       onEvent({ type: 'message.completed', at: 1, text: 'scoped answer' });
@@ -166,5 +164,59 @@ test('unlaunched reservation survives restart as uncertain without executing', a
     assert.equal(runs, 0);
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+import { fixtureAgents } from './server-agent-fixtures.mjs';
+test('forced agent shutdown keeps uncertainty and fences late CLI events', async () => {
+  const f = await projectFixture(),
+    directory = await mkdtemp(path.join(os.tmpdir(), 'agent-force-'));
+  const fixture = fixtureAgents(directory, { hold: true });
+  let sink;
+  const options = {
+    ...fixture,
+    adapter: (scope, id) => {
+      const adapter = fixture.adapter(scope, id),
+        start = adapter.startTask;
+      adapter.startTask = (task, receive) => {
+        sink = receive;
+        return start(task, receive);
+      };
+      return adapter;
+    },
+  };
+  const defs = new Map(),
+    jobs = new JobRegistry(f.dir, defs),
+    runtime = new AgentRuntime(f.dir, f.repo, { read: async () => null }, jobs, options);
+  defs.set('agent', runtime.definition);
+  try {
+    await jobs.initialize();
+    await runtime.initialize();
+    const job = await runtime
+      .bind(f.actor)
+      .chat.start(f.actor, {
+        projectId: f.id,
+        stage: 'story',
+        provider: 'codex',
+        kind: 'chat',
+        text: 'held',
+        sessionId: null,
+      });
+    await poll(() => fixture.state.starts === 1);
+    await jobs.forceUncertain();
+    assert.equal(jobs.get(f.actor, job.id).state, 'uncertain');
+    assert.equal(fixture.state.active.size, 0);
+    assert.throws(
+      () => sink({ type: 'message.completed', at: Date.now(), text: 'late replacement' }),
+      /fenced/,
+    );
+    assert.ok(
+      !JSON.stringify(
+        runtime.store.history(f.actor, { projectId: f.id, stage: 'story', provider: 'codex' }),
+      ).includes('late replacement'),
+    );
+  } finally {
+    await jobs.drain();
+    await f.close();
+    await rm(directory, { recursive: true, force: true });
   }
 });

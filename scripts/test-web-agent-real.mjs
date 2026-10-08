@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { DockerAgentAdapter } from '../dist-server/server/agent-cli-runtime.js';
 const required = (name) => {
@@ -12,6 +12,7 @@ await mkdir(directory, { recursive: true });
 for (const provider of ['codex', 'grok']) {
   const adapter = new DockerAgentAdapter({
     provider,
+    context: required('WEB_AGENT_DOCKER_CONTEXT'),
     docker: required('WEB_AGENT_DOCKER'),
     image: required('WEB_AGENT_IMAGE'),
     directory,
@@ -58,6 +59,7 @@ for (const provider of ['codex', 'grok']) {
   const sentinel = path.join(directory, provider + '-host-only.txt');
   await writeFile(sentinel, marker);
   // The sibling sentinel is intentionally outside both mounts.
+  await rm(path.join(work, 'output/result.json'), { force: true });
   const task = await adapter.startTask(
     {
       ...base,

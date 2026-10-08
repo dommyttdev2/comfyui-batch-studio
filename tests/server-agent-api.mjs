@@ -137,3 +137,76 @@ test('explicit stop and session gate do not depend on HTTP lifetime', async () =
     await f.close();
   }
 });
+import { readFile, writeFile } from 'node:fs/promises';
+test('revoking execute/edit while CLI is running prevents artifact import', async () => {
+  const f = await fixture({ delay: 300 });
+  try {
+    await seedBrief(f.runtime, f.actor, f.id);
+    const result = await f.call('task', { stage: 'story-finalize', extra: '' });
+    assert.equal(result.status, 202);
+    for (let i = 0; i < 100 && f.agents.state.starts === 0; i++)
+      await new Promise((r) => setTimeout(r, 5));
+    assert.equal(f.agents.state.starts, 1);
+    const authFile = path.join(f.dir, 'auth.json');
+    const auth = JSON.parse(await readFile(authFile, 'utf8'));
+    auth.principals[0].permissions = ['read'];
+    await writeFile(authFile, JSON.stringify(auth));
+    await f.runtime.jobs.drain();
+    assert.equal(f.runtime.jobs.get(f.actor, result.body.job.id).state, 'failed');
+    const project = await f.runtime.projectApi.projects.read(f.actor, { projectId: f.id });
+    assert.equal(project.drafts.story, undefined);
+    const history = await f.call('history');
+    assert.equal(history.status, 401);
+    const records = f.runtime.agents.store.publicRecords(f.actor, {
+      projectId: f.id,
+      stage: 'story',
+      provider: 'codex',
+    });
+    assert.equal(records[0].imported, false);
+    assert.equal(records[0].importError, 'FORBIDDEN');
+  } finally {
+    await f.close();
+  }
+});
+test('model preferences persist per provider and declared reasoning capabilities reach the CLI', async () => {
+  const f = await fixture();
+  let restarted;
+  try {
+    const lease = (await f.call('/api/v1/projects/' + f.id + '/commands/acquire-lease', {})).body
+      .project;
+    const input = {
+      expectedRevision: lease.revision,
+      leaseId: lease.lease.leaseId,
+      model: 'fixture-model',
+      reasoningEffort: 'high',
+    };
+    const saved = await f.call('preferences', input, 'model-selection');
+    assert.equal(saved.status, 200);
+    assert.equal((await f.call('preferences')).body.model.reasoningEffort, 'high');
+    assert.equal(
+      (await f.call('/api/v1/projects/' + f.id + '/agents/story/grok/preferences')).body.model,
+      undefined,
+    );
+    const invalid = await f.call('preferences', {
+      ...input,
+      expectedRevision: saved.body.project.revision,
+      reasoningEffort: 'invented',
+    });
+    assert.equal(invalid.status, 400);
+    await f.call('chat', { text: 'model selection', conversationId: null });
+    await f.runtime.jobs.drain();
+    assert.deepEqual(f.agents.state.tasks[0].model, {
+      model: 'fixture-model',
+      reasoningEffort: 'high',
+    });
+    await f.runtime.close();
+    restarted = await createServerRuntime(f.config, { agents: f.agents });
+    const headers = await login(restarted, f.config);
+    const response = await fetch(restarted.origin + f.base + '/preferences', { headers });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).model.reasoningEffort, 'high');
+  } finally {
+    await restarted?.close('stop');
+    await f.close();
+  }
+});
