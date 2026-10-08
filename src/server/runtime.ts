@@ -20,6 +20,7 @@ import { FileLease, Ownership } from './ownership.js';
 import { ProjectApi } from './project-api.js';
 import { ProjectRegistration } from './project-registration.js';
 import { DiskProjects } from './project-repository.js';
+import { ProjectResources } from './project-resources.js';
 import { R2ObjectTransfers } from './r2-object-transfers.js';
 import { R2Service } from './r2-service.js';
 import { R2Transfers } from './r2-transfers.js';
@@ -137,6 +138,16 @@ export async function createServerRuntime(
   externalDefinitions.set('upload-object', transfers.externalDefinition);
   const projectApi = new ProjectApi(repository, catalogs);
   const workflowApi = new WorkflowApi(config, repository, catalogs);
+  const projectResources = new ProjectResources(
+    projectApi,
+    workflowApi,
+    catalogs,
+    files,
+    r2,
+    integrations,
+    (actor) => security.forJob(actor),
+    ssh,
+  );
   let agentOptions: AgentRuntimeOptions | undefined;
   try {
     agentOptions = options.agents ?? (await loadAgentRegistration(config.dataDir));
@@ -223,6 +234,7 @@ export async function createServerRuntime(
         if (await externalOperations.route(context)) return true;
         if (await integrations.route(context)) return true;
         if (await registration.route(context)) return true;
+        if (await projectResources.route(context)) return true;
         if (await workflowApi.route(context)) return true;
         if (await projectApi.route(context)) return true;
         if (await agentApi.route(context)) return true;

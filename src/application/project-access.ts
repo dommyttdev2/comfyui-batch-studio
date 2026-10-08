@@ -8,6 +8,7 @@ import {
 } from '../domain/contracts.js';
 import { assertProjectWritable, assertRunState } from '../domain/execution-policy.js';
 import { promptFallbacksValid } from '../domain/model-draft-policy.js';
+import { resourceBindings } from '../domain/resource-bindings.js';
 import type { Clock, ProjectState } from './project-ports.js';
 export function assertCurrentProject(project: ProjectState, projectId: string): void {
   if (
@@ -29,6 +30,7 @@ export function assertCurrentProject(project: ProjectState, projectId: string): 
     !Object.hasOwn(project, 'lease')
   )
     throw new BusinessError('INVALID_INPUT', 'Current Project state is incomplete.');
+  if (project.resourceBindings !== undefined) resourceBindings(project.resourceBindings);
   for (const run of project.runs) assertRunState(run);
   for (const [key, artifact] of [
     ...Object.entries(project.artifacts),

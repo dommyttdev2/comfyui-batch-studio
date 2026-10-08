@@ -86,3 +86,13 @@ copy/move targetは明示的なprojectIdと確認bindingを必須とする。5Gi
 Windowsの保存は同一のfsync済み一時fileのatomic renameが一時的なread lockで拒否された場合だけ、最大6回の限定再試行を行う。確定fileを削除したり外部操作を繰り返したりしない。保存故障はuncertainとして保持する。
 
 P5-7検証: Windows/Linux(Docker、network none)で連携61件、server18件、core102件を通過。Windowsではagents16件とElectron TypeScript検査も通過。新規転送11件にはPart受理後応答消失、完成応答消失、条件無視、pause/resume/cancel、再起動、source変更、Project bindingを含む。実R2条件互換性と実サービス受入はP5-11に残る。
+
+## Project resourceとPreflight
+
+Projectのconfigure-resourcesはlease/CAS/冪等receiptでresourceBindings（executionTarget、localRootId、r2Bucket、r2Prefix、remoteInstanceId）を現行Web Projectへ保存する。GET resource-rootsは当該Projectに明示登録されたserver fileのrootをlogical IDで返す。rootの実pathをAPIへ渡さない。未設定時はRESOURCE_BINDINGS_REQUIREDとし、旧設定を参照しない。
+
+GET /api/v1/projects/:id/availability|preflightは、確定models/current catalogのidentityからP1のrequiredRemoteModels・placement policyを再利用する。Localは登録root下の厳密なrelative pathとfile identity/SHAを使い、同basenameの再帰検索を行わない。R2は現行indexの完全keyと新しいHeadのsize/ETagが一致する場合だけ観測する。index未作成・変更時は明示エラーとする。Remote Instanceを指定した場合はVast/SSHの現在endpointと既存の明示trustを再照合し、暗黙のkey登録やhost信頼を行わない。
+
+PreflightはP1の現行Project版assessPreflightとWorkflowUseCases.statusを使用し、catalog/resource/Project revisionを前後で再観測してhashを束ねる。応答にはsnapshotId、Project revision、公開resource証明を含める。生成runtimeはP6で接続するためexecutionReady=falseとP6_REQUIREDを明示する。
+
+P5-9検証: 新規7件（実Project/catalog/compilerによるREADY、異なるdirectoryの拒否、Local identity/R2 ETag変更、revision/grant/catalog変更、lease/CAS/strict fields、SSH trust、認証付きHTTP）。Windows/Linuxで通過。Linux連携68件・Project11件、Windows Project11件・core102件も通過。実サービス受入はP5-11で行う。
