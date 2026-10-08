@@ -6,7 +6,7 @@ import { createServerRuntime } from '../dist-server/server/runtime.js';
 import { loadConfig } from '../dist-server/server/config.js';
 import { ProjectRegistration } from '../dist-server/server/project-registration.js';
 import { token } from './server-fixtures.mjs';
-export async function browserFixture(count = 2, definitions, catalog, instrument) {
+export async function browserFixture(count = 2, definitions, catalog, instrument, agents) {
   const f = await projectFixture();
   await f.repo.close();
   const registration = new ProjectRegistration(f.dir);
@@ -27,7 +27,7 @@ export async function browserFixture(count = 2, definitions, catalog, instrument
     await writeFile(catalogFile, JSON.stringify(catalog));
   }
   const config = await loadConfig({ dataDir: f.dir, port: 0 });
-  const runtime = await createServerRuntime(config, { definitions, catalogFile });
+  const runtime = await createServerRuntime(config, { definitions, catalogFile, agents });
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();

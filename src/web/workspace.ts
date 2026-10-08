@@ -35,6 +35,13 @@ export class Workspace {
   eventStatus = '';
   user = '';
   authenticated = false;
+  private packets = new Set<(p: Packet) => void>();
+  onPacket = (fn: (p: Packet) => void) => {
+    this.packets.add(fn);
+    return () => {
+      this.packets.delete(fn);
+    };
+  };
   private revision = 0;
   private listeners = new Set<() => void>();
   private queues = new Map<string, Promise<unknown>>();
@@ -267,6 +274,7 @@ export class Workspace {
     this.emit();
   }
   private packet(packet: Packet) {
+    for (const receive of this.packets) receive(packet);
     if (packet.type === 'snapshot') {
       for (const j of packet.jobs ?? []) this.jobs.set(j.id, j);
       for (const p of packet.projects ?? []) this.invalidate(p.id, p.revision);
