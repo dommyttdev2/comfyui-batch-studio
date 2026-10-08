@@ -96,3 +96,13 @@ GET /api/v1/projects/:id/availability|preflightは、確定models/current catalo
 PreflightはP1の現行Project版assessPreflightとWorkflowUseCases.statusを使用し、catalog/resource/Project revisionを前後で再観測してhashを束ねる。応答にはsnapshotId、Project revision、公開resource証明を含める。生成runtimeはP6で接続するためexecutionReady=falseとP6_REQUIREDを明示する。
 
 P5-9検証: 新規7件（実Project/catalog/compilerによるREADY、異なるdirectoryの拒否、Local identity/R2 ETag変更、revision/grant/catalog変更、lease/CAS/strict fields、SSH trust、認証付きHTTP）。Windows/Linuxで通過。Linux連携68件・Project11件、Windows Project11件・core102件も通過。実サービス受入はP5-11で行う。
+
+### 共通Modalでの外部連携操作（P5-10）
+
+ツールからCivitai Explorer、R2 Browser、Vast.ai、サービス連携、環境設定を選ぶ。Homeでは管理操作を行い、Projectから開いた場合は起点Projectのgeneration/revision/leaseを検証して選択を反映する。dirty Artifactは反映前にflushする。選択したbase modelはconfigureModels、LoRAはimportLoras、差替はreplaceModelsの既存application処理で検証する。
+
+外部の作成・変更・削除・転送・SSH信頼はserverのimmutable targetをprepareし、観測した対象と期限を共通確認画面で表示してからconfirmする。取消は実行しない。receiptの更新・照合は明示操作とし、結果不明の操作を再送しない。開始済みjobはモーダルを閉じても継続する。
+
+Browser fileはProjectを指定して8MiB以下のSHA-256付きbinary chunkをstagingへ送る。中断した送信はstaging IDを開き、同じfileを再選択してserverのoffsetから続ける。転送jobの停止・再開・取消・照合と、server file登録済みresourceの選択を同じModalから行う。download-infoは期限付き署名URLを発行し、attachment指定で別の取得先に開く。設定画面はSecretをpassword fieldに限定し、保存後に消去する。environment sourceのSecretは画面から更新できない。
+
+ローカルChromiumで共通確認/取消/一度の実行、閉じたツールへの遅延応答、Bucket変更によるObject選択失効、8MiB binary分割と全体SHA、Project設定の保持、Secret表示境界、current catalogとLoRA取込を検証した。実サービスの受入は別ゲートとして未完了。

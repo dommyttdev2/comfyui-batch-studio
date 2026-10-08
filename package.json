@@ -40,7 +40,7 @@
     "build:workspace": "npm run build:web && npm run build:server",
     "dev:web": "npm run build:workspace && npm run start:server",
     "typecheck:web": "tsc -p tsconfig.web.json",
-    "test:web": "npm run build:workspace && node --test tests/server-project-browser.mjs tests/server-agent-browser.mjs",
+    "test:web": "npm run build:workspace && node --test tests/server-project-browser.mjs tests/server-agent-browser.mjs tests/server-integration-browser.mjs",
     "recover:project": "node dist-server/server/project-recover.js",
     "test:agents": "npm run build:server && node --test tests/server-agent-cli.mjs tests/server-agent-store.mjs tests/server-agent-jobs.mjs tests/server-agent-artifacts.mjs tests/server-agent-api.mjs tests/server-agent-crash.mjs tests/server-agent-registration.mjs",
     "init:server-agent": "node dist-server/server/agent-init.js",

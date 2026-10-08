@@ -824,7 +824,10 @@ export class R2Service {
                   normalizeR2PutContentType(ctx.input.contentType as string) ?? undefined,
                 IfNoneMatch: '*',
               }
-            : {}),
+            : {
+                ResponseContentDisposition:
+                  "attachment; filename*=UTF-8''" + encodeURIComponent(objectName(k)),
+              }),
         },
         expiresIn,
       );

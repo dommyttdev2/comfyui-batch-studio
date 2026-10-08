@@ -3,23 +3,23 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { syncCivitaiCatalog } from '../application/civitai-catalog-sync.js';
 import type { CatalogRepository } from '../application/project-ports.js';
-import type { ActorContext } from '../domain/contracts.js';
-import { authorize } from '../domain/contracts.js';
 import type { ModelCatalog } from '../domain/artifact-types.js';
 import {
-  calculateStrengthBaseline,
   calculateObservedCheckpointReferences,
+  calculateStrengthBaseline,
   extractGenerationExamples,
 } from '../domain/civitai-catalog-policy.js';
+import type { ActorContext } from '../domain/contracts.js';
+import { authorize } from '../domain/contracts.js';
 import { WebCivitaiClient } from './civitai-client.js';
 import {
   fields,
   HttpFailure,
   identifier,
+  type JsonObject,
   json,
   object,
   type RequestContext,
-  type JsonObject,
 } from './http.js';
 import type { IntegrationSettings } from './integration-settings.js';
 import type { JobDefinition, JobRegistry } from './jobs.js';
@@ -327,6 +327,7 @@ export class CivitaiService implements CatalogRepository {
         .providers.find((p) => p.provider === 'civitai')!;
       json(ctx.response, 200, {
         state: config.state,
+        canManage: ctx.actor.permissions.includes('admin'),
         revision: config.revision,
         syncing: this.syncing,
         jobs: this.jobs.list(ctx.actor).filter((job) => job.kind === 'civitai-sync'),
