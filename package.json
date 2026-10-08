@@ -28,7 +28,10 @@
     "ipc:generate": "node scripts/generate-preload-ipc.cjs",
     "ipc:check": "node scripts/generate-preload-ipc.cjs --check",
     "build:core": "node scripts/check-core-boundaries.cjs && tsc -p tsconfig.core.json",
-    "test:core": "npm run build:core && node tests/core-policy.cjs && node tests/business-core.cjs && node tests/core-artifacts.cjs && node tests/core-separation.cjs"
+    "test:core": "npm run build:core && node tests/core-policy.cjs && node tests/business-core.cjs && node tests/core-artifacts.cjs && node tests/core-separation.cjs",
+    "build:server": "npm run build:core && tsc -p tsconfig.server.json && node scripts/server-build-manifest.cjs",
+    "start:server": "node dist-server/server/entry.js",
+    "test:server": "npm run build:server && node --test tests/server-bootstrap.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
