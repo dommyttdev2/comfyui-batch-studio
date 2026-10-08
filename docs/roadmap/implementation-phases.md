@@ -266,6 +266,8 @@ Exit criteria:
 
 ## Phase 8: Preflight
 
+> 以下は当時の実装履歴です。ScenePrompterExpand登録・独自API・required custom nodesの確認は現行要件ではありません。現行契約は[標準画像実行契約](../architecture/standard-image-execution.md)を参照してください。
+
 Goal: Project を `READY` / `BLOCKED` に判定し、Execution開始前のoperational capabilityを確認する。
 
 Common:
@@ -306,6 +308,8 @@ Exit criteria:
 - operational check failureをavailability missingとして偽装しない。
 
 ## Phase 9: Execution Domain / Local Execution
+
+> 以下のrun-context / prepare / claim / finalize / releaseは廃止済みです。現行Local実行はLeaf単位の標準 POST /prompt とQueue / Historyによる追跡・復旧を使用します。
 
 Goal: `実行` 工程とpersistent Execution Runを導入し、Local ComfyUIでScene Prompt連続生成できる。
 
@@ -377,6 +381,8 @@ Exit criteria:
 - verified existing modelを不要に再downloadしない。
 
 ## Phase 12: Remote Scene Prompt Execution
+
+> 以下のScene Prompt Tools / Expand orchestrationは廃止済みです。現行Remote Workerは標準ノードのLeaf単位graphを順次送信し、Queue / Historyで追跡・復旧します。
 
 Goal: Remote WorkerがRemote localhost ComfyUI APIを使ってScene Prompt連続生成を完了する。
 

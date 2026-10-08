@@ -57,7 +57,7 @@ Grok の Model工程は LoRA selection のみを担当する。返却ファイ�
 
 Model Familyは `project_brief.json` にも保存し、Prompt Plan依頼時に明示的なdialect ruleへ変換する。モデル名からdialectを推測しない。
 
-Workflow生成時は `ScenePrompterExpand` の model mode も Model Family に合わせ、Illustriousでは `Illustrious`、Animaでは `Anima` を指定する。
+Workflow生成時は models.modelFamily に従って標準ノードを組み立てる。追加custom_nodesや独自model modeは使用しない。画像実行の正本は[標準画像実行契約](../architecture/standard-image-execution.md)とする。
 
 ## Placement lookup
 
@@ -99,47 +99,16 @@ templates/
     manifest.json
 ```
 
+Templateはcontract、modelFamilyとgeneration defaultsを保持し、ManifestはTemplateのidentityとSHA-256を保持する。旧Manifestのcommon rolesやノードIDによるpatchは使用しない。
+
 ### Illustrious
 
-`CheckpointLoaderSimple` を使用する。
-
-```text
-CheckpointLoaderSimple
-  MODEL -> Root LoRA Stack.model
-  CLIP  -> Root LoRA Stack.clip
-  VAE   -> VAEDecode.vae
-```
-
-Manifest common roles:
-
-```text
-checkpoint
-rootLoraStack
-planCommonPrompt
-promptOutput
-```
+CheckpointLoaderSimple のMODEL / CLIPをRoot、Branchの順で標準LoraLoaderへ接続し、VAEをVAEDecodeへ接続する。各Leafのlatentには EmptyLatentImage を使用する。
 
 ### Anima
 
-CheckpointLoaderへ押し込まず、3ローダーを明示的に使用する。
+UNETLoader のMODELと CLIPLoader のCLIPをRoot、Branchの順で標準LoraLoaderへ接続し、VAELoader のVAEをVAEDecodeへ接続する。各Leafのlatentには EmptySD3LatentImage を使用する。
 
-```text
-UNETLoader      -> Root LoRA Stack.model
-CLIPLoader      -> Root LoRA Stack.clip
-VAELoader       -> VAEDecode.vae
-```
+### 共通の組み立て
 
-Manifest common roles:
-
-```text
-diffusionModel
-textEncoder
-vae
-rootLoraStack
-planCommonPrompt
-promptOutput
-```
-
-Animaは16-channel latentを必要とするため、KSamplerへは `EmptySD3LatentImage` のLATENTを接続する。既存の `SceneEmptyLatent` はScene Plan上の幅・高さ・batch設定保持に利用し、Compilerが各branchの `EmptySD3LatentImage` へ同じ値を同期する。Illustriousは従来どおり `ScenePrompterExpand` が生成するlatentをKSamplerへ渡す。
-
-Compilerは node type やファイル名からModel Familyを推測しない。`models.modelFamily` でテンプレートを選び、Manifest roleだけを使って基盤モデルを設定する。Branch複製、LoRA Stack、SceneMatrix、Prompt、Sampler、Saveの組み立てはfamily間で共通化する。
+Compilerは models.modelFamily でTemplateを選び、models.json / prompt_plan.json / generation defaultsから標準API graphを構築する。各LoraLoaderはMODEL / CLIP strengthを独立に保持し、LoRAがない場合は直結する。Batch Studioが合成したPositive / NegativeをCLIPTextEncodeへ渡し、各Leafにlatent（batch_size=1）、KSampler、VAEDecode、SaveImageを作成する。SceneMatrix / ScenePrompterExpand / SceneEmptyLatentは使用しない。

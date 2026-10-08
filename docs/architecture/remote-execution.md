@@ -459,16 +459,16 @@ SSH / Remote Worker ready
   -> tracked local changes check
   -> latest release commit checkout
   -> requirements.txt / manager_requirements.txt sync
-  -> custom_node requirements sync
+  -> Manager startup configuration (--enable-manager, if supervisor script exists)
   -> supervisorctl restart comfyui
   -> Remote model staging (aria2)
 ```
 
 GitHub PATは `BATCH_STUDIO_GITHUB_PAT` または `GH_TOKEN` を優先し、Environment Settingsから保存する場合はOSのsafeStorageで暗号化する。RendererへPAT本体を返さず、Execution Runへも永続化しない。Remote hostではWorker requestの一時payloadからsubprocessの `GH_TOKEN` に渡し、`gh auth login` によるcredential file保存は行わない。
 
-ComfyUI releaseは `comfyanonymous/ComfyUI` の `releases/latest` から実行時にtagを取得し、tag名をhard-codeしない。Remote ComfyUIまたは管理対象custom_nodeにtracked local changesがある場合は自動破棄せずbootstrapを停止する。
+ComfyUI releaseは `comfyanonymous/ComfyUI` の `releases/latest` から実行時にtagを取得し、tag名をhard-codeしない。Remote ComfyUI本体にtracked local changesがある場合は自動破棄せずbootstrapを停止する。
 
-Remote bootstrapはComfyUI本体とそのrequirementsのみを準備する。追加custom_nodesの設定・同期は行わない。
+Remote bootstrapはComfyUI本体の requirements.txt と、存在する場合は manager_requirements.txt をインストールする。/opt/supervisor-scripts/comfyui.sh が存在する場合は起動引数に --enable-manager を追加する。Manager設定は残っているが、追加custom_nodesのrepository設定・インストール・同期や独自APIの利用は行わない。画像生成は[標準画像実行契約](standard-image-execution.md)に従う。
 
 model downloadはRemote側の `aria2c` を使用する。presigned URLはprocess argvへ載せずstdinのinput-fileとして渡し、size/SHA-256検証後にatomic renameする。複数モデルが必要な場合は最大4モデルを並列stagingし、各モデル内部ではaria2の最大8接続による分割downloadを行う。
 
