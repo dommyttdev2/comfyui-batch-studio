@@ -33,3 +33,11 @@ R2 uploadはP1 transfer runtimeのpolicyを使い、source fingerprint、uploadI
 P3共通ModalHostを利用する。Civitai/R2/Vast/settingsは管理とProject選択を分け、origin tab generation/project revision/lease/flushを維持する。遅延応答で別Projectを書き換えない。確認tokenはserverで生成し表示factsと対応する。
 
 Windows/Linux/ChromiumでSecret非公開、認可、再送、期限・世代変更、外部await前予約、restart未知状態、streaming切断/offset/hash/quota、multipart照合、Modal条件とProject選択を検証する。実接続はユーザーが明示した新Web設定元を使い、fixture成功を実受入に読み替えない。料金発生/既存resource破壊は実受入のために自動実行せず、具体的な対象と承認が必要。G05/G07/G08/G10の証跡と未検証範囲を記録する。
+
+## 実装済みのIndex/staging現行契約
+
+R2 Index同期はprojectId付きPOSTで202のtrusted r2-index jobを返す。adminとcurrent Project execute grant、settings fingerprintを開始前と原子公開前に確認し、job/eventの世代で追跡する。中断・再起動のunknownを自動実行で解消しない。
+
+Browser送信はWorkerでboundedに全体SHA-256を計算してstaging作成時のexpectedHashへ固定する。owner付きDTOにはprojectId/expectedHashを含め、再開前に選択fileの全体hash・名前・サイズ・Projectを検証する。各binary chunkにもSHAを付け、完了時にはserverが再度全体hashを検証する。同名同サイズのfileを代用品として送らない。
+
+署名GETはattachment dispositionを指定し、batch取得はfresh metadata/ETagに束ねる。署名PUTはadminが明示した新規keyに限定しIfNoneMatch条件を維持する。listのS3 cursorとlocal Index検索cursorを共有せず、画面条件が変われば選択・cursorを失効させる。

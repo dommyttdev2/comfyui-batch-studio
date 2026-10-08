@@ -21,7 +21,7 @@ POSTはadmin、session、Origin/CSRF/buildが必要。bodyはprovider、expected
 
 未登録はunconfigured、無効設定はdisabled、指定Secret/鍵不足・暗号文不一致はunavailable。未知schema/壊れた登録はserver起動を拒否する。旧Secret、別環境変数、平文、fixtureで復旧しない。CLIのDocker subprocessは固定のOS環境変数だけを渡し、統合Secretやmaster keyを継承しない。
 
-実Civitai/R2/Vast、SSHと転送の操作・受入は後続P5子Issueで接続する。この設定実装だけでP5受入完了とは扱わない。
+Civitai/R2/Vast、SSHと転送のAPI・共通Modalは接続済み。実サービス受入は新Web設定元の明示指定待ちであり、設定解決・fixture成功だけでP5受入完了とは扱わない。
 
 ## 外部操作の確認・receipt
 
