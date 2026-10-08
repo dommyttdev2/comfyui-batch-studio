@@ -149,3 +149,7 @@ UI 要望だけで Compiler schema を変えたり、ComfyUI node 内部事情�
 旧 `design.md`、`grok-prompt-contracts.md`、`project-initialization-schema.md` の内容は、この新構成へ責務別に移行した。
 
 移行後は旧文書を残して二重正本にしない。過去内容の履歴は Git history から参照する。
+
+Web移行のP2実装・受入は[P2サーバー基盤計画](roadmap/web-migration-p2-plan.md)、画面内Projectタブとツールモーダルは[Workspace UI計画](roadmap/web-workspace-tabs-plan.md)を参照する。
+
+P2の独立Node serverの起動・認証・API・所有権・停止/復旧は[Webサーバー基盤](architecture/web-server-foundation.md)を参照する。次工程はP3のProject/ArtifactとWeb shell。

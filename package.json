@@ -28,7 +28,12 @@
     "ipc:generate": "node scripts/generate-preload-ipc.cjs",
     "ipc:check": "node scripts/generate-preload-ipc.cjs --check",
     "build:core": "node scripts/check-core-boundaries.cjs && tsc -p tsconfig.core.json",
-    "test:core": "npm run build:core && node tests/core-policy.cjs && node tests/business-core.cjs && node tests/core-artifacts.cjs && node tests/core-separation.cjs"
+    "test:core": "npm run build:core && node tests/core-policy.cjs && node tests/business-core.cjs && node tests/core-artifacts.cjs && node tests/core-separation.cjs",
+    "build:server": "npm run build:core && node scripts/check-server-boundaries.cjs && tsc -p tsconfig.server.json && node scripts/server-build-manifest.cjs",
+    "start:server": "node dist-server/server/entry.js",
+    "test:server": "npm run build:server && node --test tests/server-bootstrap.mjs tests/server-http.mjs tests/server-security.mjs tests/server-ownership.mjs tests/server-jobs.mjs tests/server-events.mjs tests/server-runtime.mjs",
+    "init:server-auth": "node dist-server/server/auth-init.js",
+    "recover:server-lock": "node dist-server/server/recover.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
@@ -36,7 +41,8 @@
     "ag-psd": "^30.2.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "ssh2": "^1.17.0"
+    "ssh2": "^1.17.0",
+    "ws": "8.22.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
@@ -44,6 +50,7 @@
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "@types/ssh2": "^1.15.6",
+    "@types/ws": "8.18.2",
     "@vitejs/plugin-react": "6.1.1",
     "concurrently": "10.0.5",
     "cross-env": "^10.0.0",
