@@ -1,6 +1,6 @@
 # Web Workspaceの起動・運用
 
-Status: Accepted / P3。Project・Artifact・Compiler・画面内タブ・共通Modal Hostの運用正本。[契約](../contracts/web-project-workspace.md)、[受入](../quality/web-p3-acceptance.md)を参照する。
+Status: Accepted / P3/P4。Project・Artifact・Compiler・画面内タブ・共通Modal Hostの運用正本。[契約](../contracts/web-project-workspace.md)、[受入](../quality/web-p3-acceptance.md)を参照する。
 
 ## 独立起動
 
@@ -82,3 +82,5 @@ node docs/roadmap/web-migration-audit.cjs --check
 ```
 
 Docker Desktopではdocker compose build web-testの後、docker compose run --rm web-testを実行する。Linux image内のsrc/dependencies/Chromiumを使い、Electron binaryが存在しないことを確認して上記受入を実行する。Windows node_modulesをmountしない。従来Desktop検証のtest targetは独立して保持する。CIは追加しない。
+
+CLI会話・工程taskは[P4 Agent runtime運用](web-agent-runtime.md)の明示登録後にAssistantPaneから利用する。入力/model/履歴はProject・工程・provider別に保持し、tabを閉じてもserver jobは継続する。

@@ -1,6 +1,6 @@
 # Web Agent runtime契約
 
-Status: Contract / 実装・受入はP4各子Issueで確認する。
+Status: Accepted / P4。[受入matrix](../quality/web-p4-acceptance.md)と[運用正本](../operations/web-agent-runtime.md)を参照する。
 
 ## 所有権と予約
 
@@ -34,4 +34,4 @@ AssistantPaneはProject/stage/provider別に入力/model/history/公開会話ID�
 
 ## 検証
 
-P4-8でWindows/Linux/Chromiumと両実CLIを実行する。models/chat/task/resume/stop、並行開始、切断、再起動uncertain、別scope/session拒否、入力/成果物のpath/hash/revision、他service secret不可視を含める。契約だけでG04 acceptedにしない。
+P4-8でWindows/Linux/Chromiumと両実CLIのローカル受入を実施済み。models/chat/task/resume/stop、並行開始、切断、再起動uncertain、別scope/session拒否、入力/成果物のpath/hash/revision、他service secret不可視を含める。契約だけでG04 acceptedにしない。
