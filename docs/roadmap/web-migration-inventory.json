@@ -386,8 +386,8 @@
     },
     {
       "file": "package.json",
-      "lines": 72,
-      "sha256": "8f8798f1520682fd14a4e5695b2de553b90779657efeae51517ff9b946717a66",
+      "lines": 73,
+      "sha256": "2dfb4c7eb88516b67afc64dc6c94ee3ed56d776c8a3cccabbb3b901c931e1965",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
@@ -428,7 +428,7 @@
           "text": "\"prebuild:electron\": \"node scripts/check-running-batch-studio.cjs\","
         },
         {
-          "line": 66,
+          "line": 67,
           "text": "\"electron\": \"44.2.0\","
         }
       ],
@@ -523,6 +523,24 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "内容・独立version維持、server runtimeへ配置",
+      "entryReachable": false
+    },
+    {
+      "file": "scripts/Dockerfile.agent",
+      "lines": 10,
+      "sha256": "34d49a7381465c1e4dd3586f1dafe254843883d9d67e51e321afecc343331d26",
+      "workPackage": "W10",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G10",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
     },
     {
@@ -827,6 +845,34 @@
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "scripts/test-web-agent-real.mjs",
+      "lines": 87,
+      "sha256": "9c706a8c40315e7180da887e439ea3c814cfb72b936d27ff1895205e2411e646",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:fs/promises",
+        "node:path",
+        "../dist-server/server/agent-cli-runtime.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 6,
+          "text": "const value = process.env[name];"
+        }
+      ],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
     },
@@ -9952,6 +9998,96 @@
       "entryReachable": true
     },
     {
+      "file": "src/server/agent-cli-runtime.ts",
+      "lines": 461,
+      "sha256": "ab2581749c8f7ca7fb30c24ad60ded979d9f8851e6284dd9ca232046bc5e105c",
+      "workPackage": "W04",
+      "layer": "server-infrastructure",
+      "phase": "P4",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:child_process",
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "node:string_decoder",
+        "../application/agent-cli-port.js",
+        "../domain/agent-runtime-types.js",
+        "./codex-cli-events.js",
+        "./grok-cli-events.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "AgentRunnerConfig",
+        "containerArguments",
+        "DockerAgentAdapter"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 1,
+          "text": "import { spawn } from 'node:child_process';"
+        },
+        {
+          "line": 88,
+          "text": "PATH: process.env.PATH,"
+        },
+        {
+          "line": 89,
+          "text": "SystemRoot: process.env.SystemRoot,"
+        },
+        {
+          "line": 90,
+          "text": "TEMP: process.env.TEMP,"
+        },
+        {
+          "line": 91,
+          "text": "HOME: process.env.HOME,"
+        },
+        {
+          "line": 92,
+          "text": "USERPROFILE: process.env.USERPROFILE,"
+        },
+        {
+          "line": 93,
+          "text": "DOCKER_HOST: process.env.DOCKER_HOST,"
+        },
+        {
+          "line": 94,
+          "text": "DOCKER_CONTEXT: process.env.DOCKER_CONTEXT,"
+        },
+        {
+          "line": 360,
+          "text": "PATH: process.env.PATH,"
+        },
+        {
+          "line": 361,
+          "text": "SystemRoot: process.env.SystemRoot,"
+        },
+        {
+          "line": 362,
+          "text": "TEMP: process.env.TEMP,"
+        },
+        {
+          "line": 363,
+          "text": "HOME: process.env.HOME,"
+        },
+        {
+          "line": 364,
+          "text": "USERPROFILE: process.env.USERPROFILE,"
+        },
+        {
+          "line": 373,
+          "text": "// stdin is never interpreted by a host shell."
+        }
+      ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "src/server/auth-init.ts",
       "lines": 38,
       "sha256": "740067c0b4f7361bc1b70a6801c90cd681af18bb865efbd7b5cd3e9da7111203",
@@ -9985,6 +10121,30 @@
           "text": "const projectIds = (process.env.BATCH_STUDIO_PROJECT_IDS ?? '')"
         }
       ],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/codex-cli-events.ts",
+      "lines": 192,
+      "sha256": "9491439ecde2bbcc3ec2e52402c0bd96789370ced70b080b8dd1c603f2ae47eb",
+      "workPackage": "W04",
+      "layer": "server-infrastructure",
+      "phase": "P4",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-runtime-types.js"
+      ],
+      "exports": [
+        "CodexCliNormalizedLine",
+        "CodexCliProtocolError",
+        "CodexCliEventParser"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
     },
@@ -10091,6 +10251,30 @@
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": true
+    },
+    {
+      "file": "src/server/grok-cli-events.ts",
+      "lines": 172,
+      "sha256": "1dd73c1f54aee1e9e4792d00b3051d9f7edb58ba7f679c3ea776da6174b4e389",
+      "workPackage": "W04",
+      "layer": "server-infrastructure",
+      "phase": "P4",
+      "gate": "G04",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../domain/agent-runtime-types.js"
+      ],
+      "exports": [
+        "GrokCliNormalizedLine",
+        "GrokCliProtocolError",
+        "GrokCliEventParser"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
     },
     {
       "file": "src/server/http.ts",
@@ -13518,6 +13702,31 @@
         }
       ],
       "migrationAction": "回帰契約維持、compile先/import/resource前提を更新",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-agent-cli.mjs",
+      "lines": 48,
+      "sha256": "38ea3219b04ed9eb921c48e36d326ff9e1396da89541cba2b70b4aa8cc3ca4b9",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P8",
+      "gate": "G12",
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "../dist-server/server/agent-cli-runtime.js",
+        "../dist-server/server/codex-cli-events.js",
+        "../dist-server/server/grok-cli-events.js",
+        "node:path"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
       "entryReachable": false
     },
     {
@@ -18481,6 +18690,18 @@
       "requiredAction": "P8までに新test実行経路へ接続"
     },
     {
+      "file": "tests/server-agent-cli.mjs",
+      "registration": "agent-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
       "file": "tests/server-bootstrap.mjs",
       "registration": "server-local",
       "treatment": "契約維持・server buildへ適合",
@@ -19014,7 +19235,7 @@
     },
     {
       "file": "docs/contracts/web-agent-runtime.md",
-      "sha256": "ad325963bf75eac9a5e72df837fd32b567cede089f6b852e6574661b6cb55b0f",
+      "sha256": "b742a8a3a6f727056cacd912e640b35d697404de4182401b41d48ea120d6fd9c",
       "workPackage": "W11",
       "gate": "G11",
       "treatment": "移行完了時に該当仕様を更新"
@@ -19182,10 +19403,10 @@
     }
   ],
   "counts": {
-    "files": 479,
-    "source": 336,
-    "tests": 98,
-    "scripts": 14,
+    "files": 485,
+    "source": 339,
+    "tests": 99,
+    "scripts": 16,
     "ipc": 172,
     "resources": 8,
     "documents": 38,
@@ -19193,15 +19414,15 @@
       "W01": 18,
       "W02": 35,
       "W03": 34,
-      "W04": 49,
+      "W04": 52,
       "W05": 33,
       "W06": 55,
       "W07": 15,
       "W08": 13,
       "W09": 47,
-      "W10": 25,
+      "W10": 26,
       "W11": 29,
-      "W12": 103,
+      "W12": 105,
       "W13": 11,
       "W14": 12
     },
@@ -19222,6 +19443,7 @@
     "testRegistration": {
       "CI-conditional": 2,
       "CI-only": 2,
+      "agent-local": 1,
       "browser-local": 1,
       "core-local": 4,
       "npm-test": 61,

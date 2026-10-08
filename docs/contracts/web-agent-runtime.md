@@ -18,7 +18,7 @@ HTTPは受付jobを返す。job状態はP2 registryを正本とする。公開�
 
 管理者が固定Docker image digestとcredential fileを明示登録する。既存ログインはauth.jsonだけを専用runtime homeへ準備し、元home全体・config・MCP・pluginsをmountしない。実行容器にはscopeの入力/出力workspaceと専用provider homeだけをmountする。Project本体、server dataDir、Docker socket、SSH/R2 secretはmountしない。非root・cap-drop・no-new-privileges・read-only root・資源/時間制限を適用する。CLIへのprovider credential公開は認証に必要な権限として明示し、他サービスsecretとの隔離を受入で検証する。
 
-Codex exec JSON、Grok headless streaming-jsonを使用。version/protocol/auth/modelsをprobeし未設定/不一致は利用不可。CLI設定・失敗時のhost実行fallbackは禁止。Grok new sessionは--session-id、resumeは--resumeで区別する。resume結果のsession不一致は失敗し別会話へ保存しない。
+Codex exec JSON、Grok headless streaming-jsonを使用。version/protocol/auth/modelsをprobeし未設定/不一致は利用不可。容器をOS隔離境界とする。現実装はCodex workspace-write/Grok strictを維持する。Docker Desktopの入れ子namespace制約で成果物書き込みは未受入。容器内限定の内蔵sandbox無効化案は自動承認レビューで拒否され、明示承認待ち。host実行や失敗検知後の別profileへのfallbackは禁止。Grok new sessionは--session-id、resumeは--resumeで区別する。resume結果のsession不一致は失敗し別会話へ保存しない。
 
 ## 継続・停止・復旧
 
