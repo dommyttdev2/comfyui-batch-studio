@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { ServerConfig } from './config.js';
 import { EventBroker, attachEvents } from './events.js';
+import { webStatic } from './web-static.js';
 import { fields, HttpFailure, json, type CommandController } from './http.js';
 import { JobRegistry, type JobDefinition } from './jobs.js';
 import { FileLease, Ownership } from './ownership.js';
@@ -63,6 +64,7 @@ export async function createServerRuntime(
     await repository.initialize();
     runtime = await startServer(config, {
       ...security.http(),
+      staticRoute: webStatic(config.webDir),
       commands: options.commands,
       accepting: () => state === 'running',
       route: async (context) => {

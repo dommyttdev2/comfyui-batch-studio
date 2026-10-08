@@ -51,6 +51,7 @@ export interface HttpOptions {
     mutation: boolean,
   ) => Promise<Omit<ActorContext, 'requestId'>>;
   boundary?: (request: IncomingMessage) => void;
+  staticRoute?: (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean>;
   publicRoute?: (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean>;
   route?: (context: RequestContext) => Promise<boolean>;
   accepting?: () => boolean;
@@ -129,10 +130,17 @@ export function createHttpHandler(config: ServerConfig, options: HttpOptions = {
     try {
       options.boundary?.(request);
       const url = new URL(request.url ?? '/', 'http://localhost');
+      if (
+        options.staticRoute &&
+        !url.pathname.startsWith('/api/') &&
+        (await options.staticRoute(request, response, url))
+      )
+        return;
       if (request.method === 'GET' && url.pathname === '/api/v1/health') {
         json(response, 200, {
           apiVersion: API_VERSION,
           buildId: config.buildId,
+          webBuildId: config.webBuildId,
           ready: options.accepting?.() ?? true,
         });
         return;

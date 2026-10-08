@@ -35,7 +35,11 @@
     "init:server-auth": "node dist-server/server/auth-init.js",
     "recover:server-lock": "node dist-server/server/recover.js",
     "init:server-root": "node dist-server/server/root-init.js",
-    "test:projects": "npm run build:server && node --test tests/server-project-registration.mjs tests/server-project-repository.mjs tests/server-project-api.mjs tests/server-project-workflow.mjs"
+    "test:projects": "npm run build:workspace && node --test tests/server-project-registration.mjs tests/server-project-repository.mjs tests/server-project-api.mjs tests/server-project-workflow.mjs tests/server-project-web.mjs",
+    "build:web": "tsc -p tsconfig.web.json && vite build --config vite.web.config.ts",
+    "build:workspace": "npm run build:web && npm run build:server",
+    "dev:web": "npm run build:workspace && npm run start:server",
+    "typecheck:web": "tsc -p tsconfig.web.json"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
