@@ -1,6 +1,6 @@
 # P5受入matrix
 
-Status: 実装完了・ローカル検証済み / 実API読み取りを一部確認 / 総合受入は画面完全実装後（2026-10-09）。親Issue [#374](https://github.com/dommyttdev2/comfyui-batch-studio/issues/374)、親draft PR [#387](https://github.com/dommyttdev2/comfyui-batch-studio/pull/387)。[管理計画](../roadmap/web-migration-p5-plan.md)、[契約](../contracts/web-integrations.md)、[運用](../operations/web-integrations.md)、[全コード索引](../roadmap/web-migration-audit.md)を正本とする。
+Status: 実装完了・ローカル検証済み / 実API読み取りを一部確認 / 総合受入は画面完全実装後（2026-10-09）。親Issue [#374](https://github.com/dommyttdev2/comfyui-batch-studio/issues/374)、親PR [#387](https://github.com/dommyttdev2/comfyui-batch-studio/pull/387)。[管理計画](../roadmap/web-migration-p5-plan.md)、[契約](../contracts/web-integrations.md)、[運用](../operations/web-integrations.md)、[全コード索引](../roadmap/web-migration-audit.md)を正本とする。
 
 ## 要求・実装・検証の一意対応
 
@@ -17,11 +17,11 @@ Status: 実装完了・ローカル検証済み / 実API読み取りを一部確
 | A09 | 実catalog/resource接続 #383 / W05 | resource-bindings、ProjectUseCases、project-resources、P1 model/placement/preflight/compiler | resources7件。canonical catalog、exact Local placement/stat/hash、fresh R2 ETag、Project/grant/世代変更、lease/CAS、remote SSH trust、logical DTO PASS | 実catalog取得確認済み。選択モデルとLocal/R2 snapshotのProject反映は総合受入へ繰越 |
 | A10 | 共通Modal #384 / W02 | integration-tools/modal/api、file hash Worker。管理/Project選択、origin・flush・lease、server確認、binary/job/URL | 新Web検証9件（8 Chromium＋SHA契約1）。Civitai base/LoRA、取消/単回confirm、閉じたtoolの遅延応答、Object条件失効、staging fullSHA/改変再開、設定/Secret、list/search cursor、template/PUT PASS | 利用者がAPI情報取得を確認。共通Modalの操作一巡は画面完全実装後へ繰越 |
 | A11 | 回帰・OS/CLI隔離 #385 / W12 | Docker web-local-test、server/core/Project/agent/browser suites、実CLI受入script | Windows/Linux同じ243件、typechecks/check PASS。実Codex/Grok HTTPも双方PASS | 新外部provider SecretはCLIに渡していない |
-| A12 | 管理・正本・索引 #386 / W11/W12 | audit/inventory、plan/contract/operations、親PR | 一意owner、実行経路、hash/import/IPC索引を再照合。docs/親PRの完了は全実受入後 | #385,#386,#374/親PRは未完了 |
+| A12 | 管理・正本・索引 #386 / W11/W12 | audit/inventory、plan/contract/operations、親PR | 一意owner、実行経路、hash/import/IPC索引を再照合。実装・正本は親PRで統合し、総合受入を分離 | #374/#386は親PR統合確認後に完了、総合受入#385はOPEN |
 
 ## 検証対象と結果
 
-製品最終sourceの子commitは2f6f4eb、P5統合のsquash commitは71f16ac76a3fd64f48c8828156fecd3e84cab0f7。両者のtreeは同じ。後続変更は正本/索引の更新に限定する。親PRの刷新branchへのマージはまだ行っていない。
+製品最終sourceの子commitは2f6f4eb、P5統合のsquash commitは71f16ac76a3fd64f48c8828156fecd3e84cab0f7。両者のtreeは同じ。後続変更は正本/索引の更新に限定する。親PR #387で実装を刷新branchへ統合し、総合受入は#385に分離して追跡する。
 
 | 実行環境 | commands・対象 | 結果 |
 | --- | --- | --- |
@@ -54,4 +54,4 @@ CLI imageはsha256:0ec832945a8c543d07cfe7a9040bcd024102955b332b88d4b5c9df5956633
 
 ## 管理の完了条件
 
-実装子Issue#375–#384はCLOSED、子PR#388–#397はP5統合へsquash済み。#398/#399も統合済み。#385は画面完全実装後の総合受入を追跡するためOPENを維持し、#386/#374と親#387は未完了/draftとして管理する。P6/P7はP5実装を前提に着手でき、P5実受入の延期で止めない。受入Issueは合格証跡が揃うまで閉じず、刷新全体の完了前に全ゲートを検証する。親PRの統合は実装統合と受入の状態を明示して管理し、今回の記録更新だけでは親PRをマージしない。CI/main/version/release変更は行わない。
+実装子Issue#375–#384はCLOSED、子PR#388–#397はP5統合へsquash済み。#398/#399/#400も統合済み。総合受入の延期合意に続く実装統合として、親PR #387をcodex/web-migrationへsquashする。親Issue #374は実装統合、#386は正本・索引・親PR統合の完了としてマージ確認後に閉じる。#385は独立した総合受入の追跡としてOPENを維持する。P5の実装統合完了と、G05/G07/G08/G10の受入完了を分けて管理する。P6/P7は統合済み実装を前提に進め、画面完成後に#385を実施する。 受入Issueは合格証跡が揃うまで閉じず、刷新全体の完了前に全ゲートを検証する。CI/main/version/release変更は行わない。
