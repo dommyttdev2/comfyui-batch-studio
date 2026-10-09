@@ -21787,7 +21787,7 @@
     },
     {
       "file": "docs/operations/web-integrations.md",
-      "sha256": "a5e4bc5147d6db000d0bf612e7d4f7200fcb285ecc06f75a4976fe63cb4d2620",
+      "sha256": "b977c35612cd08731bfa397e0b41cee89af6fe7801a575c2a5c7426ffeaaa43c",
       "workPackage": "W10",
       "gate": "G10",
       "treatment": "移行完了時に該当仕様を更新"
@@ -21836,7 +21836,7 @@
     },
     {
       "file": "docs/quality/web-p5-acceptance.md",
-      "sha256": "a513cdcd1cb555265fde7310b39e4b4c73ca98d86201ebdea07aee610f6b2a26",
+      "sha256": "3882208183b799dd5be87ce19b1d3f31a8c245d58611f5f33974db431e50943d",
       "workPackage": "W12",
       "gate": "G12",
       "treatment": "移行完了時に該当仕様を更新"
