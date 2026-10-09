@@ -5,7 +5,15 @@ export interface Artifact {
   status: 'draft' | 'confirmed' | 'stale';
   validation: { valid: boolean; issues: { code: string; message: string }[] };
 }
+export interface ResourceBindings {
+  executionTarget: 'local' | 'remote';
+  localRootId: string | null;
+  r2Bucket: string | null;
+  r2Prefix: string;
+  remoteInstanceId: number | null;
+}
 export interface Project {
+  resourceBindings?: ResourceBindings | null;
   id: string;
   schema: string;
   revision: number;
@@ -86,6 +94,30 @@ export class Api {
       throw error;
     }
     return value as T;
+  }
+  async uploadChunk(id: string, offset: number, bytes: Uint8Array) {
+    const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource),
+      sha = [...new Uint8Array(digest)].map((v) => v.toString(16).padStart(2, '0')).join('');
+    const response = await fetch('/api/v1/resources/staging/' + encodeURIComponent(id), {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: {
+        'content-type': 'application/octet-stream',
+        'x-batch-api-version': '1',
+        'x-batch-build-id': this.buildId,
+        'x-request-id': crypto.randomUUID(),
+        'x-csrf-token': this.csrf,
+        'x-upload-offset': String(offset),
+        'x-upload-sha256': sha,
+      },
+      body: bytes as BodyInit,
+    });
+    const value = await response.json();
+    if (!response.ok) {
+      if (response.status === 401) this.onInvalidSession();
+      throw new ApiError(value.error?.code ?? 'REQUEST_FAILED', response.status);
+    }
+    return value as { id: string; offset: number; state: string; size: number; name: string };
   }
   async login(token: string) {
     await this.ready();

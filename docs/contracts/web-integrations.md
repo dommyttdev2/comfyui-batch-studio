@@ -1,0 +1,43 @@
+# 新Web外部連携契約（P5）
+
+親Issue #374。現行契約のみ。旧Electron設定・Secret・Project・転送状態を読まず、失敗時に他の設定元やfixtureへ切り替えない。
+
+## 設定とSecret
+
+管理者が停止中のserverにweb-integrations/1を新規登録する。providerはcivitai/r2/vast、endpointは実装側の固定許可先、R2 account/bucket等は厳格に検証する。Secret元は登録時にenvironmentまたはvaultを一つ明示する。environmentは登録された環境変数名だけを参照し、vaultは登録された環境変数の32byte master keyでAES-256-GCM暗号化する。鍵を暗号文と同じstoreに保存しない。Secret値、環境変数名、物理path、暗号文を公開DTO/event/job/ログに出さない。更新はadminとcurrent settings revisionを要求する。vault鍵・指定Secret・許可先が欠けたら利用不可、平文保存は禁止する。
+
+未登録は明示的unconfigured。登録済みの壊れたschema/暗号文/鍵はDEPENDENCY_UNAVAILABLE、空storeに置き換えない。環境元ではbrowserからSecretを書き換えず、vault元でのみ新規Secretを登録する。CLI containerにはこのstore・master key・外部Secret・SSH keyをmount/env渡ししない。
+
+## 認可と確認
+
+管理操作はadmin、閲覧はread、Project選択はproject grant/edit/current revision/leaseを要求する。clientからuser/role/root/path/URL/argv/confirmed booleanを受け取らない。prepareは許可operationとserver取得factsだけからtokenを発行し、user/session/project revision/設定世代/target fingerprint/expiryを束ねる。confirmは同じscopeと再取得factsを検証し、同tokenの予約をdurableに記録してから外部IOを開始する。二重confirm・異なるsession・期限切れ・変更済みtargetは拒否する。
+
+外部操作receiptはreserved/running/succeeded/failed/uncertain。外部受理後に応答が消失した場合、restartはuncertainとし再送しない。RENT、destroy、move/delete、SSH trustを無条件retryしない。read-only照合で確定できた状態だけ更新する。HTTP切断は実行済み操作の取り消しではない。操作idとreceiptで追跡する。リクエスト中の同scope排他を維持する。
+
+## Civitai・Vast・R2
+
+Civitaiは固定public RESTとcollection API、response byte/page/deadline上限、429 Retry-Afterを扱う。同期はP1 catalog syncのportを実装しcurrent catalogを原子的に公開する。cacheは設定世代・期限・schemaを検証し、エラー時に期限切れ結果を成功として返さない。catalog更新はjob/event経由で観測する。
+
+Vastはinstances/templates/offersとP1 offer policyを接続する。RENTはprice/template/disk/offerの最新factsを確認し予約してから実行する。start/stop/reboot/destroyは特定instance identityを束ねる。SSH endpointは登録key resourceと実instanceに限定し、初回host keyと変更時fingerprintを提示する。明示confirmなしに信頼しない。秘密key・filesystem pathは公開しない。生成はP6。
+
+R2は固定account S3 endpointに限定する。bucket/object list、index/search、metadata、download/upload URL、template、metrics、move/deleteを提供する。indexはcurrent schemaのみ、catalog/resource観測と世代/hashを共有する。削除は存在とversion/etag等のfactsを検証する。URL発行とserver downloadは認可を要求し、任意remote URLを受け取らない。小さいJSONにbinary/base64を含めない。
+
+## streamingとmultipart
+
+browserはowner付きstaging resourceを作り、binary chunkを認証・Origin・CSRF・build検証済みrouteに送る。開始offsetとchunk hash、total size、期限/quotaを検証し、保存後のoffsetだけ返す。切断した未確定chunkはtruncateし再開を明示する。完了時に全体hashをstreaming検証する。server fileは管理者登録したresource idのみで、realpath/サイズ/変更fingerprintを再検証する。Projectから物理pathを指定しない。
+
+R2 uploadはP1 transfer runtimeのpolicyを使い、source fingerprint、uploadId、parts/etag、予約をdurable保存する。メモリはbounded chunk/partに限定する。pauseは進行中partを収束させ、resumeはsource再検証とListParts照合を先に行う。cancelはAbortMultipartUploadの確認後だけ確定する。restartはunknownを保持してauto resumeしない。source変更/外部不明では再送禁止。downloadは認可付きHTTP streamで保存先をbrowserに委ねる。
+
+## Webと受入
+
+P3共通ModalHostを利用する。Civitai/R2/Vast/settingsは管理とProject選択を分け、origin tab generation/project revision/lease/flushを維持する。遅延応答で別Projectを書き換えない。確認tokenはserverで生成し表示factsと対応する。
+
+Windows/Linux/ChromiumでSecret非公開、認可、再送、期限・世代変更、外部await前予約、restart未知状態、streaming切断/offset/hash/quota、multipart照合、Modal条件とProject選択を検証する。実接続はユーザーが明示した新Web設定元を使い、fixture成功を実受入に読み替えない。料金発生/既存resource破壊は実受入のために自動実行せず、具体的な対象と承認が必要。G05/G07/G08/G10の証跡と未検証範囲を記録する。
+
+## 実装済みのIndex/staging現行契約
+
+R2 Index同期はprojectId付きPOSTで202のtrusted r2-index jobを返す。adminとcurrent Project execute grant、settings fingerprintを開始前と原子公開前に確認し、job/eventの世代で追跡する。中断・再起動のunknownを自動実行で解消しない。
+
+Browser送信はWorkerでboundedに全体SHA-256を計算してstaging作成時のexpectedHashへ固定する。owner付きDTOにはprojectId/expectedHashを含め、再開前に選択fileの全体hash・名前・サイズ・Projectを検証する。各binary chunkにもSHAを付け、完了時にはserverが再度全体hashを検証する。同名同サイズのfileを代用品として送らない。
+
+署名GETはattachment dispositionを指定し、batch取得はfresh metadata/ETagに束ねる。署名PUTはadminが明示した新規keyに限定しIfNoneMatch条件を維持する。listのS3 cursorとlocal Index検索cursorを共有せず、画面条件が変われば選択・cursorを失効させる。

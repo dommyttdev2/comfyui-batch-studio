@@ -39,6 +39,7 @@ const groups = {
   W14: list('codex-app-server codex-artifact-turn codex-chat-state codex-file-artifact codex-model-selection codex-thread-history codex-turn-monitor grok-artifact-adapter grok-auto-artifact-watcher grok-chat-state grok-navigation-queue grok-navigation'),
 };
 const coreOwners = {
+  'resource-bindings':'W05','r2-snapshot-copy':'W08','r2-storage-policy':'W08','vast-observation-policy':'W07',
   ...Object.fromEntries(list('artifact-file-service project-reset-confirmation manual-project-reset model-downstream-file-service project-observation prompt-plan-patch').map((name) => [name, 'W03'])),
   ...Object.fromEntries(list('agent-cli-port agent-conversation-runner agent-draft-import agent-runtime-ports assistant-commands assistant-provider-preferences auto-artifact-ingestion codex-cli-task-runner grok-cli-task-runner lora-selection-history observed-agent-model-selection agent-conversation-policy agent-model-policy agent-runtime-types agent-stage-policy agent-workspace-policy auto-artifact-selection auto-artifact-types codex-chat-policy').map((name) => [name, 'W04'])),
   ...Object.fromEntries(list('model-availability-observation workflow-file-compilation resource-observation-types workflow-resource-policy').map((name) => [name, 'W05'])),
@@ -104,15 +105,20 @@ const coreOwners = {
   'agent-use-cases': 'W04', 'confirmation-use-cases': 'W10', 'platform-ports': 'W10', 'platform-use-cases': 'W10', 'core': 'W10',
 };
 function owner(file) {
+  if (['src/web/file-sha256.ts','src/web/file-hash-worker.ts'].includes(file))return 'W08';
   if (file.startsWith('src/web/') || file.startsWith('web/')) return 'W02';
   if (file.startsWith('src/server/')) {
     const name = path.basename(file, '.ts');
+    if (/^(civitai-|vast-)/.test(name))return 'W07';
+    if (/^r2-/.test(name)||['staging','transfer-source'].includes(name))return 'W08';
+    if(name==='project-resources')return 'W05';
+    if(name==='external-operations')return 'W01';
     if (/^(agent-|codex-cli|grok-cli)/.test(name)) return 'W04';
     if (['project-repository', 'project-registration'].includes(name)) return 'W03';
     if (name === 'workflow-api') return 'W05';
     return ['http', 'server', 'security', 'events', 'project-api', 'web-static'].includes(name) ? 'W01' : 'W10';
   }
-  if (['scripts/test-web-agent-real.mjs', 'scripts/test-web-agent-api-real.mjs'].includes(file)) return 'W12';
+  if (['scripts/test-web-agent-real.mjs', 'scripts/test-web-agent-api-real.mjs','scripts/test-web-integrations-real.mjs'].includes(file)) return 'W12';
   if (file === 'scripts/Dockerfile.agent') return 'W10';
   if (file === 'scripts/check-web-boundaries.cjs' || file === 'scripts/docker-web-test.sh') return 'W12';
   if (file === 'scripts/check-server-boundaries.cjs') return 'W12';
@@ -175,12 +181,26 @@ const policyActions = {
   'src/main/fs-utils.ts': '新形式のatomic保存/検証。破損時の自動backup採用/空状態置換禁止',
   'src/main/agent-session-state.ts': '新Web session storeのみ。旧session/historyの自動継承・変換なし',
 };
+const p5Server = new Set(list('integration-settings integration-init external-operations civitai-client civitai-service r2-service r2-gateway r2-conditions r2-transfers r2-object-transfers transfer-source staging file-resources file-init ssh-resources ssh-init vast-client vast-service project-resources'));
+const p5Core = new Set(list('resource-bindings r2-snapshot-copy r2-storage-policy vast-observation-policy'));
+function implementationPhase(file,workPackage){
+  const name=path.basename(file).replace(/\.tsx?$/, '');
+  if(file.startsWith('src/server/') && p5Server.has(name))return 'P5';
+  if(file.startsWith('src/web/') && ['integration-tools','file-sha256','file-hash-worker'].includes(name))return 'P5';
+  if(/^src\/(domain|application)\//.test(file) && p5Core.has(name))return 'P5';
+  if(/^src\/web\/assistant/.test(file) || /^tests\/server-agent/.test(file) || /^scripts\/test-web-agent/.test(file))return 'P4';
+  if(/^tests\/server-integration-/.test(file) || file==='tests/web-integration-browser.mjs' || file==='scripts/test-web-integrations-real.mjs')return 'P5';
+  if(/^tests\/server-project-/.test(file))return 'P3';
+  if(file.startsWith('src/server/'))return /^(agent-|codex-cli|grok-cli)/.test(name)?'P4':['project-registration','project-repository','project-api','workflow-api','web-static','root-init','project-recover'].includes(name)?'P3':'P2';
+  return /^src\/(domain|application)\//.test(file)?'P1':packages[workPackage].phase;
+}
 const rows = files.map((file) => {
   const source = read(file), lines = source.split(/\r?\n/);
   const imports = [...source.matchAll(/(?:from\s*|require\s*\(\s*|import\s*\(\s*|import\s*)['"]([^'"]+)['"]/g)].map((m) => m[1]);
   const workPackage = owner(file);
   return {
-    file, lines: lines.length, sha256: hash(file), workPackage, layer: file.startsWith('src/web/') ? 'web-presentation' : file.startsWith('src/server/') ? 'server-infrastructure' : file.startsWith('src/domain/') ? 'domain' : file.startsWith('src/application/') ? 'application' : 'existing-reference', phase: /^src\/web\/assistant/.test(file) ? 'P4' : file.startsWith('src/server/') ? (/^(agent-|codex-cli|grok-cli)/.test(path.basename(file)) ? 'P4' : ['project-registration', 'project-repository', 'project-api', 'workflow-api', 'web-static', 'root-init', 'project-recover'].includes(path.basename(file, '.ts')) ? 'P3' : 'P2') : /^src\/(domain|application)\//.test(file) ? 'P1' : packages[workPackage].phase, gate: /^src\/web\/assistant/.test(file) ? 'G04' : packages[workPackage].gate,
+    file, lines: lines.length, sha256: hash(file), workPackage, layer: file.startsWith('src/web/') ? 'web-presentation' : file.startsWith('src/server/') ? 'server-infrastructure' : file.startsWith('src/domain/') ? 'domain' : file.startsWith('src/application/') ? 'application' : 'existing-reference', phase: implementationPhase(file,workPackage), gate: /^src\/web\/assistant/.test(file) ? 'G04' : packages[workPackage].gate,
+    lastExtendedPhase: ['src/web/modal.tsx','src/web/api.ts','src/server/project-api.ts','src/server/runtime.ts','src/server/storage.ts','src/server/jobs.ts','src/application/project-use-cases.ts','src/application/r2-transfer-runtime.ts','scripts/docker-web-test.sh'].includes(file)?'P5':null,
     desktopRemovalPhase: file.startsWith('src/preload/') || file.startsWith('src/main/ipc-registration') || file === 'src/shared/ipc.ts' || file === 'src/main/main.ts' || workPackage === 'W14' ? 'P9' : null,
     electronDependencyRemovalPhase: imports.includes('electron') && !['W01', 'W14'].includes(workPackage) && file !== 'src/main/main.ts' ? packages[workPackage].phase : null,
     imports: [...new Set(imports)],
@@ -189,7 +209,7 @@ const rows = files.map((file) => {
     registeredChannels: [...source.matchAll(/handleIpc\(\s*IPC\.([A-Z0-9_]+)/g)].map((m) => m[1]),
     risks: lines.flatMap((line, i) => /electron|safeStorage|nativeImage|dialog\.|shell\.|webContents|screenX|Date\.now\(\) \* 1000|\.getPath\(|powershell|SystemRoot|dist-electron|process\.env|child_process/.test(line)
       ? [{ line: i + 1, text: line.trim().slice(0, 170) }] : []),
-    migrationAction: workPackage === 'W14' ? '旧code/store参照を撤去。互換読込・旧データ移行なし'
+    migrationAction: file==='scripts/test-web-integrations-real.mjs' ? 'P5明示した新Web設定のみで実サービスreadを受入。fixture/旧Secretへの代用禁止。write/SSHは別の確認targetで検証' : /^src\/(domain|application)\//.test(file) && p5Core.has(path.basename(file,'.ts')) ? 'P5純粋業務契約。実IO/Secret/物理pathを入れず、server接続とcurrent schemaを検証' : file.startsWith('src/server/') && p5Server.has(path.basename(file,'.ts')) ? 'P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない' : ['src/web/integration-tools.tsx','src/web/file-sha256.ts','src/web/file-hash-worker.ts'].includes(file) ? 'P5共通Modal/binary入口。Project起点・lease/flush/世代・server facts・bounded Workerを保持' : workPackage === 'W14' ? '旧code/store参照を撤去。互換読込・旧データ移行なし'
       : policyActions[file] || priorByFile.get(file)?.migrationAction || (/^src\/(domain|application)\//.test(file) ? 'P1の業務判断・契約を維持。実IOとWeb接続は対応phaseで検証' : '配布設定をWeb/server構成へ適合'),
   };
 });
@@ -261,11 +281,22 @@ for (const row of rows) row.entryReachable = visited.has(row.file);
 const pkg = JSON.parse(read('package.json'));
 const ci = walk('.github').map(read).join('\n');
 const supports = new Set(list('main-process-source.cjs source-match.cjs standard-graph-fixture.cjs'));
+const integrationFeaturePackages={
+ 'server-integration-civitai.mjs':['W01','W07','W10'],
+ 'server-integration-operations.mjs':['W01','W03','W10'],
+ 'server-integration-r2.mjs':['W01','W08','W10'],
+ 'server-integration-resources.mjs':['W01','W03','W05','W07','W08','W10'],
+ 'server-integration-settings.mjs':['W01','W10'],
+ 'server-integration-staging.mjs':['W01','W08','W10'],
+ 'server-integration-transfers.mjs':['W01','W03','W08','W10'],
+ 'server-integration-vast.mjs':['W01','W07','W10'],
+};
 const testCoverage = rows.filter((r) => r.file.startsWith('tests/')).map((r) => {
   const registration = supports.has(path.basename(r.file)) || r.file.startsWith('tests/core-support/') || /fixtures\.mjs$/.test(r.file) ? 'support' : pkg.scripts.test.includes(r.file) ? 'npm-test' : (pkg.scripts['test:core'] || '').includes(r.file) ? 'core-local' : (pkg.scripts['test:server'] || '').includes(r.file) ? 'server-local' : (pkg.scripts['test:agents'] || '').includes(r.file) ? 'agent-local' : (pkg.scripts['test:projects'] || '').includes(r.file) ? 'project-local' : (pkg.scripts['test:web'] || '').includes(r.file) ? 'browser-local'
-    : read('.github/workflows/ci.yml').includes(r.file) ? 'CI-only' : ci.includes(r.file) ? 'CI-conditional' : 'standalone';
+    : /^tests\/server-integration-.*\.mjs$/.test(r.file) && (pkg.scripts['test:integrations']||'').includes('tests/server-integration-*.mjs') ? 'integration-local' : read('.github/workflows/ci.yml').includes(r.file) ? 'CI-only' : ci.includes(r.file) ? 'CI-conditional' : 'standalone';
   const name = path.basename(r.file);
-  const featurePackages = name.startsWith('server-agent') ? (name.includes('browser') ? ['W01', 'W02', 'W04', 'W10', 'W12'] : ['W01', 'W03', 'W04', 'W10', 'W12']) : name.startsWith('server-project') ? ['W01', 'W02', 'W03', 'W05', 'W10', 'W12'] : name.startsWith('server-') ? ['W01', 'W10', 'W12'] : name === 'core-separation.cjs' ? ['W03', 'W04', 'W05', 'W06', 'W07', 'W08', 'W09', 'W10'] : name === 'core-artifacts.cjs' ? ['W03', 'W05', 'W06', 'W09'] : name === 'core-policy.cjs' ? ['W03', 'W06', 'W09', 'W10'] : name === 'business-core.cjs' ? ['W01', 'W03', 'W04', 'W06', 'W09', 'W10'] : supports.has(name) || r.file.startsWith('tests/core-support/') ? ['W12'] : name === 'run.cjs' ? ['W03', 'W05']
+  if(name.startsWith('server-integration-') && !integrationFeaturePackages[name])throw Error('Integration gate coverage missing: '+r.file);
+  const featurePackages = name==='web-integration-browser.mjs' ? ['W01','W02','W05','W07','W08','W10','W12'] : name.startsWith('server-integration-') ? [...integrationFeaturePackages[name],'W12'] : name.startsWith('server-agent') ? (name.includes('browser') ? ['W01', 'W02', 'W04', 'W10', 'W12'] : ['W01', 'W03', 'W04', 'W10', 'W12']) : name.startsWith('server-project') ? ['W01', 'W02', 'W03', 'W05', 'W10', 'W12'] : name.startsWith('server-') ? ['W01', 'W10', 'W12'] : name === 'core-separation.cjs' ? ['W03', 'W04', 'W05', 'W06', 'W07', 'W08', 'W09', 'W10'] : name === 'core-artifacts.cjs' ? ['W03', 'W05', 'W06', 'W09'] : name === 'core-policy.cjs' ? ['W03', 'W06', 'W09', 'W10'] : name === 'business-core.cjs' ? ['W01', 'W03', 'W04', 'W06', 'W09', 'W10'] : supports.has(name) || r.file.startsWith('tests/core-support/') ? ['W12'] : name === 'run.cjs' ? ['W03', 'W05']
     : /service-integrations/.test(name) ? ['W07', 'W08', 'W10'] : /ipc-|marketplace-write-guard/.test(name) ? ['W01']
     : /agent|codex|grok|assistant/.test(name) ? ['W04'] : /r2-/.test(name) ? ['W08']
     : /civitai|vastai/.test(name) ? ['W07'] : /remote|execution|local-comfy/.test(name) ? ['W06']
@@ -275,13 +306,14 @@ const testCoverage = rows.filter((r) => r.file.startsWith('tests/')).map((r) => 
   return { file: r.file, registration, treatment: registration === 'support' ? 'harness/fixture移植'
     : r.imports.includes('electron') ? 'server/browser検証へ置換' : r.imports.includes('./source-match.cjs') || r.imports.includes('./main-process-source.cjs') ? '挙動検証へ置換/補完' : '契約維持・server buildへ適合',
     targetGate: 'G12', featureGates: featurePackages.map((id) => packages[id].gate),
-    requiredAction: registration === 'standalone' ? 'P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復'
-      : ['server-local', 'agent-local', 'project-local', 'browser-local'].includes(registration) ? 'P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須' : registration === 'core-local' ? 'P1からcore単独回帰に接続済み。P2以降も必須' : registration === 'CI-conditional' ? '条件付きperformance CIを維持/置換し発火pathも更新' : 'P8までに新test実行経路へ接続' };
+    requiredAction: registration === 'integration-local' ? 'P5の設定・確認・外部client/resource・streaming/job受入へ接続済み。後続phaseでも必須' : registration === 'standalone' ? 'P0のbaseline-checklistの採否に従いP4で新test経路へ接続/旧test廃止/harness修復'
+      : ['integration-local','server-local', 'agent-local', 'project-local', 'browser-local'].includes(registration) ? 'P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須' : registration === 'core-local' ? 'P1からcore単独回帰に接続済み。P2以降も必須' : registration === 'CI-conditional' ? '条件付きperformance CIを維持/置換し発火pathも更新' : 'P8までに新test実行経路へ接続' };
 });
 const resources = walk('thumbnail/psd-templates').filter((f) => /\.(psd|png)$/.test(f)).map((file) => ({ file, sha256: hash(file), bytes: fs.statSync(path.join(root, file)).size,
   role: file.endsWith('.psd') ? 'runtime-PSD' : 'reference-preview', workPackage: 'W13', phase: 'P8', gate: 'G13' }));
+const documentOwner=(file)=>file.startsWith('docs/quality/')?'W12':file==='docs/contracts/web-integrations.md'?'W01':file==='docs/operations/web-integrations.md'?'W10':'W11';
 const documents = [...walk('docs').filter((f) => f.endsWith('.md') && !f.startsWith('docs/releases/') && !f.startsWith('docs/roadmap/web-migration-')),
-  'README.md', 'AGENTS.md', 'thumbnail/psd-templates/README.md'].map((file) => ({ file, sha256: hash(file), workPackage: 'W11', gate: 'G11',
+  'README.md', 'AGENTS.md', 'thumbnail/psd-templates/README.md'].map((file) => ({ file, sha256: hash(file), workPackage: documentOwner(file), gate: packages[documentOwner(file)].gate,
     treatment: file === 'AGENTS.md' ? '既存rule遵守・変更不要' : file.startsWith('docs/decisions/') ? '過去判断を保持し新判断を追記' : '移行完了時に該当仕様を更新' }));
 const inventory = { date: '2026-10-08', commit: prior.commit, method: 'Regex full-text inventory; text hashes normalize CRLF to LF, binary hashes use exact bytes; actual preload invoke/event direction; exclusive ownership and explicit IPC sets. Reachability includes type imports and is not a deletion proof.',
   policy: { backwardCompatibility: false, legacyDataMigration: false, fallback: false, initialization: 'new dataDir and explicit current-schema settings', failure: 'explicit error; no automatic alternate route' },

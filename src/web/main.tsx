@@ -1,10 +1,11 @@
-import { AssistantPane } from './assistant-pane';
-import { Dialog, ModalHost } from './modal';
-import { useState, useSyncExternalStore, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api } from './api';
-import { workspace as w, artifactKeys } from './workspace';
+import { AssistantPane } from './assistant-pane';
+import { Dialog, ModalHost } from './modal';
+import { artifactKeys, workspace as w } from './workspace';
 import './workspace.css';
+
 const labels: Record<string, string> = {
   brief: '基本設定',
   story: 'ストーリー',

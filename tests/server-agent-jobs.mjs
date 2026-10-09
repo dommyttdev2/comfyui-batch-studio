@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import test from 'node:test';
 import { AgentRuntime } from '../dist-server/server/agent-runtime.js';
 import { JobRegistry } from '../dist-server/server/jobs.js';
 import { projectFixture } from './server-project-fixtures.mjs';
+
 const deferred = () => {
   let resolve;
   const promise = new Promise((r) => (resolve = r));
@@ -166,7 +167,9 @@ test('unlaunched reservation survives restart as uncertain without executing', a
     await rm(dir, { recursive: true, force: true });
   }
 });
+
 import { fixtureAgents } from './server-agent-fixtures.mjs';
+
 test('forced agent shutdown keeps uncertainty and fences late CLI events', async () => {
   const f = await projectFixture(),
     directory = await mkdtemp(path.join(os.tmpdir(), 'agent-force-'));
@@ -191,16 +194,14 @@ test('forced agent shutdown keeps uncertainty and fences late CLI events', async
   try {
     await jobs.initialize();
     await runtime.initialize();
-    const job = await runtime
-      .bind(f.actor)
-      .chat.start(f.actor, {
-        projectId: f.id,
-        stage: 'story',
-        provider: 'codex',
-        kind: 'chat',
-        text: 'held',
-        sessionId: null,
-      });
+    const job = await runtime.bind(f.actor).chat.start(f.actor, {
+      projectId: f.id,
+      stage: 'story',
+      provider: 'codex',
+      kind: 'chat',
+      text: 'held',
+      sessionId: null,
+    });
     await poll(() => fixture.state.starts === 1);
     await jobs.forceUncertain();
     assert.equal(jobs.get(f.actor, job.id).state, 'uncertain');

@@ -131,6 +131,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -149,6 +150,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -167,6 +169,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -194,6 +197,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -221,6 +225,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -244,6 +249,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -271,6 +277,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -289,6 +296,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -307,6 +315,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -325,6 +334,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -386,12 +396,13 @@
     },
     {
       "file": "package.json",
-      "lines": 75,
-      "sha256": "308207f0e8d7414586f6005629e1b2aca3df175b69da3a9589f73ff6673d5f1f",
+      "lines": 79,
+      "sha256": "6db1c1246414785fde1c78cdebb7c34ecb053ef4f30603a47bfdd9f499749734",
       "workPackage": "W11",
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -428,7 +439,7 @@
           "text": "\"prebuild:electron\": \"node scripts/check-running-batch-studio.cjs\","
         },
         {
-          "line": 69,
+          "line": 73,
           "text": "\"electron\": \"44.2.0\","
         }
       ],
@@ -443,6 +454,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -461,6 +473,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -479,6 +492,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -497,6 +511,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -515,6 +530,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -533,6 +549,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -551,6 +568,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -578,6 +596,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -618,12 +637,13 @@
     },
     {
       "file": "scripts/check-server-boundaries.cjs",
-      "lines": 33,
-      "sha256": "52bd1c69937e9c3d2a1a8db26c0897e5428cbba9f2cfd90a72bea3c0b797014b",
+      "lines": 39,
+      "sha256": "925004f75a425cf478f319abe6cb26eda6c4d63f34932081a66adf5d85ad4d84",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -635,7 +655,7 @@
       "registeredChannels": [],
       "risks": [
         {
-          "line": 23,
+          "line": 29,
           "text": "/\\b(?:ipcMain|WebContentsView|BrowserWindow|nativeImage|safeStorage)\\b|import\\s*\\(|require\\s*\\(/.test("
         }
       ],
@@ -650,6 +670,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -671,6 +692,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -717,6 +739,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -735,6 +758,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -760,12 +784,13 @@
     },
     {
       "file": "scripts/docker-web-test.sh",
-      "lines": 13,
-      "sha256": "6d058d7f82022f055b8b979214339cce0c84c7432fd43fcc57e69280e8a65d29",
+      "lines": 14,
+      "sha256": "f92b523cf920aac48de07907771d4658112351031c074af69839645d17bd0042",
       "workPackage": "W12",
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": "P5",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -789,6 +814,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -812,6 +838,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -833,6 +860,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -854,8 +882,9 @@
       "sha256": "ec0ea4e833838d2495e1dc2d7c7bd391ac17feddc1fdf726e702573d54e466f0",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -890,8 +919,9 @@
       "sha256": "cb28ded63a2a394453c0da9a773e9e7b73ec6b555df486e625bd9da275285f7f",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -913,6 +943,43 @@
       "entryReachable": false
     },
     {
+      "file": "scripts/test-web-integrations-real.mjs",
+      "lines": 122,
+      "sha256": "e397e5a4ec4f055adcd75ac1a9e4c8f76e363e69c88af9d43f7909a4acfa5c4f",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G12",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../dist-server/server/config.js",
+        "../dist-server/server/runtime.js",
+        "../tests/server-fixtures.mjs",
+        "../tests/server-project-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 12,
+          "text": "const source = process.env.WEB_INTEGRATIONS_SOURCE_DIR;"
+        },
+        {
+          "line": 81,
+          "text": "const bucket = process.env.WEB_INTEGRATIONS_R2_BUCKET;"
+        }
+      ],
+      "migrationAction": "P5明示した新Web設定のみで実サービスreadを受入。fixture/旧Secretへの代用禁止。write/SSHは別の確認targetで検証",
+      "entryReachable": false
+    },
+    {
       "file": "scripts/update-release.ps1",
       "lines": 116,
       "sha256": "c5c14921c39bd63f2e19bbac26979cd9cb397f0c47e5881d77234000fb12ee3d",
@@ -920,6 +987,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -938,6 +1006,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -964,6 +1033,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -986,6 +1056,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1009,6 +1080,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1038,6 +1110,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1062,6 +1135,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1089,6 +1163,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1116,6 +1191,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1143,6 +1219,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1175,6 +1252,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1205,6 +1283,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1232,6 +1311,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1260,6 +1340,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -1286,6 +1367,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1313,6 +1395,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1339,6 +1422,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1364,6 +1448,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1394,6 +1479,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1420,6 +1506,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1453,6 +1540,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -1474,6 +1562,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1497,6 +1586,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1526,6 +1616,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1550,6 +1641,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1576,6 +1668,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1603,6 +1696,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1630,6 +1724,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1657,6 +1752,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1683,6 +1779,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1707,6 +1804,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1732,6 +1830,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1761,6 +1860,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1791,6 +1891,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1824,6 +1925,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1848,6 +1950,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1872,6 +1975,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1897,6 +2001,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1929,6 +2034,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1955,6 +2061,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -1980,6 +2087,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2004,6 +2112,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2041,6 +2150,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2072,6 +2182,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2096,6 +2207,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2118,16 +2230,17 @@
       "registeredChannels": [],
       "risks": [],
       "migrationAction": "配布設定をWeb/server構成へ適合",
-      "entryReachable": false
+      "entryReachable": true
     },
     {
       "file": "src/application/project-access.ts",
-      "lines": 93,
-      "sha256": "8617f946d4d81c1362b40633b05e76fe64d7e419d02a8b973f11e05e80b1200e",
+      "lines": 95,
+      "sha256": "02b242efc1790467c0ca85dc0ab53b1314ffca97f339991008856368d0a155a5",
       "workPackage": "W03",
       "layer": "application",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2135,6 +2248,7 @@
         "../domain/contracts.js",
         "../domain/execution-policy.js",
         "../domain/model-draft-policy.js",
+        "../domain/resource-bindings.js",
         "./project-ports.js"
       ],
       "exports": [
@@ -2156,6 +2270,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2174,12 +2289,13 @@
     },
     {
       "file": "src/application/project-ports.ts",
-      "lines": 75,
-      "sha256": "d4eda41ab13d9110fb8da0faa635920358c5e4b363ee950982a234ad694b403b",
+      "lines": 78,
+      "sha256": "a9319844e74ad366430271bf3c3234bf582ffcfc49cdbee3a2611b4d93d59cfd",
       "workPackage": "W03",
       "layer": "application",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2187,7 +2303,8 @@
         "../domain/artifact-policy.js",
         "../domain/artifact-types.js",
         "../domain/contracts.js",
-        "../domain/execution-policy.js"
+        "../domain/execution-policy.js",
+        "../domain/resource-bindings.js"
       ],
       "exports": [
         "EditLease",
@@ -2213,6 +2330,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2235,12 +2353,13 @@
     },
     {
       "file": "src/application/project-use-cases.ts",
-      "lines": 647,
-      "sha256": "542cc6abc7efb1f0f0b260f5ee489d1adca70949ae952e46caf29d4cefed47ce",
+      "lines": 660,
+      "sha256": "0dcecda96f3b52eef0322f2771aa903c475b794f49d79ac7d98b3b98866d96db",
       "workPackage": "W03",
       "layer": "application",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": "P5",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2255,6 +2374,7 @@
         "../domain/model-editing.js",
         "../domain/model-reset-policy.js",
         "../domain/prompt-plan-patch-policy.js",
+        "../domain/resource-bindings.js",
         "../domain/text-policy.js",
         "./project-access.js",
         "./project-ports.js",
@@ -2278,6 +2398,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2303,6 +2424,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2319,20 +2441,43 @@
       "entryReachable": true
     },
     {
+      "file": "src/application/r2-snapshot-copy.ts",
+      "lines": 31,
+      "sha256": "b49bd2b604ef5a6d91b185e1f78a6448cc81096b8d0eef2b2c4bb76957755724",
+      "workPackage": "W08",
+      "layer": "application",
+      "phase": "P5",
+      "gate": "G08",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "R2SnapshotCopyPorts",
+        "copyR2Snapshot"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5純粋業務契約。実IO/Secret/物理pathを入れず、server接続とcurrent schemaを検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/application/r2-transfer-runtime.ts",
-      "lines": 567,
-      "sha256": "6b672cecc473f0ad6c5af94a3fc435cc26d1f5d7120b19d6cb77b7b1c099271b",
+      "lines": 586,
+      "sha256": "1f69e0f478544dc6c0b094b6a5f206a28e7421ec11660e8fc764e4a5fb91d1b0",
       "workPackage": "W08",
       "layer": "application",
       "phase": "P1",
       "gate": "G08",
+      "lastExtendedPhase": "P5",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
         "../domain/integration-types.js",
         "../domain/r2-storage-policy.js",
-        "../domain/text-policy.js",
-        "../domain/r2-transfer-policy.js"
+        "../domain/r2-transfer-policy.js",
+        "../domain/text-policy.js"
       ],
       "exports": [
         "TransferStorageOperation",
@@ -2353,6 +2498,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2377,6 +2523,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2403,6 +2550,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2426,6 +2574,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2459,6 +2608,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2484,6 +2634,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2513,6 +2664,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2542,6 +2694,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2567,6 +2720,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2591,6 +2745,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2615,6 +2770,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2639,6 +2795,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2664,6 +2821,7 @@
       "layer": "application",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2699,6 +2857,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -2723,6 +2882,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2748,6 +2908,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2772,6 +2933,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -2812,6 +2974,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2835,6 +2998,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -2861,6 +3025,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2894,6 +3059,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2916,6 +3082,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -2943,6 +3110,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -3051,6 +3219,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3078,6 +3247,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3100,6 +3270,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3124,6 +3295,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3147,6 +3319,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -3168,6 +3341,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3199,6 +3373,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3227,6 +3402,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3251,6 +3427,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3275,6 +3452,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3298,6 +3476,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3325,6 +3504,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -3342,12 +3522,13 @@
     },
     {
       "file": "src/domain/confirmation-policy.ts",
-      "lines": 49,
-      "sha256": "04e4ac88f2d1159080cb44fe3bd711a21719f2babef8a12592aded8f23855887",
+      "lines": 58,
+      "sha256": "8d89d4c263be031e65534e8aa1c08525206086ea27bee5820cbd3c76ca4e01f6",
       "workPackage": "W10",
       "layer": "domain",
       "phase": "P1",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3372,6 +3553,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -3405,6 +3587,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -3426,6 +3609,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -3446,6 +3630,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3468,6 +3653,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3491,6 +3677,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3516,6 +3703,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3541,6 +3729,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3576,6 +3765,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3603,6 +3793,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -3623,6 +3814,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3646,6 +3838,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3668,6 +3861,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3694,6 +3888,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3718,6 +3913,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3741,6 +3937,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3766,6 +3963,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3789,6 +3987,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -3811,6 +4010,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3835,6 +4035,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -3858,6 +4059,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3887,6 +4089,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -3918,6 +4121,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3944,6 +4148,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3968,6 +4173,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -3995,6 +4201,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4023,6 +4230,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4056,6 +4264,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4081,6 +4290,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4105,6 +4315,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4129,6 +4340,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4156,6 +4368,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4182,6 +4395,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4210,6 +4424,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4234,6 +4449,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -4262,6 +4478,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4285,6 +4502,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4315,6 +4533,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -4340,6 +4559,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4361,8 +4581,9 @@
       "sha256": "83d617a41127b54615f996d01cecd24d93b77b92213a8e485fa5f5138a1aa777",
       "workPackage": "W08",
       "layer": "domain",
-      "phase": "P1",
+      "phase": "P5",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4388,7 +4609,7 @@
       "bridgeCalls": [],
       "registeredChannels": [],
       "risks": [],
-      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "migrationAction": "P5純粋業務契約。実IO/Secret/物理pathを入れず、server接続とcurrent schemaを検証",
       "entryReachable": true
     },
     {
@@ -4399,6 +4620,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4424,6 +4646,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4449,6 +4672,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4471,6 +4695,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4494,6 +4719,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -4509,6 +4735,30 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/resource-bindings.ts",
+      "lines": 36,
+      "sha256": "8c97a1c8ddc9d6d39129718d2ec9566510657a9360e322bc729d44d8a451942d",
+      "workPackage": "W05",
+      "layer": "domain",
+      "phase": "P5",
+      "gate": "G05",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./contracts.js"
+      ],
+      "exports": [
+        "ResourceBindings",
+        "resourceBindings"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5純粋業務契約。実IO/Secret/物理pathを入れず、server接続とcurrent schemaを検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/resource-observation-types.ts",
       "lines": 27,
       "sha256": "60616192f8f97c9827fadc1a4236f1196f7231d4a1bba8b82017727c8975b4df",
@@ -4516,6 +4766,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4542,6 +4793,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4568,6 +4820,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -4588,6 +4841,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -4608,6 +4862,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4635,6 +4890,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4673,6 +4929,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4697,6 +4954,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -4719,6 +4977,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -4740,6 +4999,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -4753,6 +5013,34 @@
       "entryReachable": true
     },
     {
+      "file": "src/domain/vast-observation-policy.ts",
+      "lines": 192,
+      "sha256": "77bbe2010ea78a43af621ec5d308b2aa8e06605c02863a97a18077ba4606ebea",
+      "workPackage": "W07",
+      "layer": "domain",
+      "phase": "P5",
+      "gate": "G07",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./artifact-types.js",
+        "./integration-types.js"
+      ],
+      "exports": [
+        "normalizeVastStatus",
+        "normalizeComfyUiTemplate",
+        "normalizeVastOffer",
+        "resolveVastComfyUiPort",
+        "normalizeVastInstance"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5純粋業務契約。実IO/Secret/物理pathを入れず、server接続とcurrent schemaを検証",
+      "entryReachable": true
+    },
+    {
       "file": "src/domain/vast-offer-policy.ts",
       "lines": 91,
       "sha256": "26b6d381f77e8b5a877b7b6b025ac5561d937359a3f2d3fa79b45a5b57ef0bdf",
@@ -4760,6 +5048,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4786,6 +5075,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4810,6 +5100,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4838,6 +5129,7 @@
       "layer": "domain",
       "phase": "P1",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -4859,6 +5151,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4892,6 +5185,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4912,6 +5206,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4944,6 +5239,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4968,6 +5264,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -4993,6 +5290,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5018,6 +5316,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5048,6 +5347,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5073,6 +5373,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5110,6 +5411,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P5",
       "imports": [
@@ -5172,6 +5474,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5205,6 +5508,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5229,6 +5533,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5256,6 +5561,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5285,6 +5591,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5310,6 +5617,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5335,6 +5643,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5393,6 +5702,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -5422,6 +5732,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P5",
       "imports": [
@@ -5472,6 +5783,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -5525,6 +5837,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5562,6 +5875,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -5583,6 +5897,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5608,6 +5923,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5648,6 +5964,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5672,6 +5989,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5696,6 +6014,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5729,6 +6048,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5753,6 +6073,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -5775,6 +6096,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5798,6 +6120,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -5820,6 +6143,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5850,6 +6174,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5875,6 +6200,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5897,6 +6223,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5959,6 +6286,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -5995,6 +6323,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6021,6 +6350,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6057,6 +6387,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6088,6 +6419,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6122,6 +6454,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6146,6 +6479,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6188,6 +6522,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6212,6 +6547,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6236,6 +6572,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6263,6 +6600,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6286,6 +6624,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6312,6 +6651,7 @@
       "layer": "existing-reference",
       "phase": "P9",
       "gate": "G14",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -6337,6 +6677,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -6357,6 +6698,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6382,6 +6724,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P7",
       "imports": [
@@ -6432,6 +6775,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6452,6 +6796,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6481,6 +6826,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6509,6 +6855,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6588,6 +6935,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6639,6 +6987,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6797,6 +7146,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6867,6 +7217,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6937,6 +7288,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -6991,6 +7343,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7027,6 +7380,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7345,6 +7699,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7377,6 +7732,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P7",
       "imports": [
@@ -7445,6 +7801,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7480,6 +7837,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7507,6 +7865,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7532,6 +7891,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7552,6 +7912,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -7573,6 +7934,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7603,6 +7965,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7632,6 +7995,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7665,6 +8029,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7697,6 +8062,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7726,6 +8092,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P5",
       "imports": [
@@ -7789,6 +8156,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7827,6 +8195,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7854,6 +8223,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7882,6 +8252,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7906,6 +8277,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7943,6 +8315,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7966,6 +8339,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -7996,6 +8370,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -8017,6 +8392,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8043,6 +8419,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8070,6 +8447,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8097,6 +8475,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8121,6 +8500,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8145,6 +8525,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P7",
       "imports": [
@@ -8191,6 +8572,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8216,6 +8598,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P7",
       "imports": [
@@ -8303,6 +8686,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8327,6 +8711,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8350,6 +8735,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8364,25 +8750,23 @@
     },
     {
       "file": "src/main/vastai-client.ts",
-      "lines": 625,
-      "sha256": "3005e15499cc5530d635ffbb862c413372fc5089e6391a2558edeb7c52d1da16",
+      "lines": 467,
+      "sha256": "366cbb675f71d1dcdd418a345f87d98920023dba365d94fb2e7ff6e34bbae297",
       "workPackage": "W07",
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
+        "../domain/vast-observation-policy.js",
         "../application/vast-offer-use-cases.js",
         "../shared/types.js",
         "./ssh-key-pair.js",
         "../domain/vast-instance-errors.js"
       ],
       "exports": [
-        "normalizeVastStatus",
-        "normalizeVastOffer",
-        "resolveVastComfyUiPort",
-        "normalizeVastInstance",
         "VastAiClient"
       ],
       "bridgeCalls": [],
@@ -8399,6 +8783,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P5",
       "imports": [
@@ -8453,6 +8838,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8479,6 +8865,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8502,6 +8889,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8535,6 +8923,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8565,6 +8954,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8639,6 +9029,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8666,6 +9057,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8700,6 +9092,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8732,6 +9125,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8762,6 +9156,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8791,6 +9186,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8842,6 +9238,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8870,6 +9267,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8897,6 +9295,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8948,6 +9347,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -8975,6 +9375,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9003,6 +9404,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9036,6 +9438,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9083,6 +9486,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9113,6 +9517,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9143,6 +9548,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9171,6 +9577,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9205,6 +9612,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9259,6 +9667,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9289,6 +9698,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9320,6 +9730,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9342,6 +9753,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9366,6 +9778,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9396,6 +9809,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9430,6 +9844,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9477,6 +9892,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9501,6 +9917,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9519,6 +9936,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9537,6 +9955,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9555,6 +9974,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9573,6 +9993,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9594,6 +10015,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9614,6 +10036,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9632,6 +10055,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9652,6 +10076,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9670,6 +10095,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9697,6 +10123,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9727,6 +10154,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G07",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9765,6 +10193,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9794,6 +10223,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9812,6 +10242,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9830,6 +10261,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9848,6 +10280,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9866,6 +10299,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9884,6 +10318,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9902,6 +10337,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9920,6 +10356,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9938,6 +10375,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -9961,6 +10399,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -9979,6 +10418,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10009,6 +10449,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10042,6 +10483,7 @@
       "layer": "server-infrastructure",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10072,6 +10514,7 @@
       "layer": "server-infrastructure",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10107,6 +10550,7 @@
       "layer": "server-infrastructure",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10189,6 +10633,7 @@
       "layer": "server-infrastructure",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10240,6 +10685,7 @@
       "layer": "server-infrastructure",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10271,6 +10717,7 @@
       "layer": "server-infrastructure",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10309,6 +10756,7 @@
       "layer": "server-infrastructure",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10342,6 +10790,7 @@
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10372,6 +10821,67 @@
       "entryReachable": false
     },
     {
+      "file": "src/server/civitai-client.ts",
+      "lines": 197,
+      "sha256": "a83dae3067ad479ae71e2dc819651e8ad72ba3fb47e597a19ba204744b451bef",
+      "workPackage": "W07",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G07",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:timers/promises",
+        "../application/civitai-catalog-sync.js",
+        "./http.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "WebCivitaiClient"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/civitai-service.ts",
+      "lines": 462,
+      "sha256": "ca9a372994fa8a93405265937aacd723deb9cb676a2e4a744e79578a7bc4c7ce",
+      "workPackage": "W07",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G07",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../application/civitai-catalog-sync.js",
+        "../application/project-ports.js",
+        "../domain/artifact-types.js",
+        "../domain/civitai-catalog-policy.js",
+        "../domain/contracts.js",
+        "./civitai-client.js",
+        "./http.js",
+        "./integration-settings.js",
+        "./jobs.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "CivitaiService"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
       "file": "src/server/codex-cli-events.ts",
       "lines": 192,
       "sha256": "9491439ecde2bbcc3ec2e52402c0bd96789370ced70b080b8dd1c603f2ae47eb",
@@ -10379,6 +10889,7 @@
       "layer": "server-infrastructure",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10403,6 +10914,7 @@
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10430,6 +10942,7 @@
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10472,6 +10985,7 @@
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10500,6 +11014,112 @@
       "entryReachable": true
     },
     {
+      "file": "src/server/external-operations.ts",
+      "lines": 633,
+      "sha256": "38df5a85a28d4edef295363f67df87ba0010a3fd8cbe79e351d06dea35ecf371",
+      "workPackage": "W01",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G01",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../domain/confirmation-policy.js",
+        "../domain/contracts.js",
+        "./http.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "ExternalOperation",
+        "ExternalFacts",
+        "ExternalDefinition",
+        "ExternalOperations"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/file-init.ts",
+      "lines": 32,
+      "sha256": "63d1dd2dd21b4e6834b32f32a910f64890230bcefe639d4a5c9f71f7a9dc30d4",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G10",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:path",
+        "./config.js",
+        "./file-resources.js",
+        "./ownership.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 7,
+          "text": "const config = await loadConfig({ dataDir: process.env.BATCH_STUDIO_DATA_DIR ?? '' });"
+        },
+        {
+          "line": 17,
+          "text": "id: process.env.BATCH_STUDIO_FILE_ID ?? '',"
+        },
+        {
+          "line": 18,
+          "text": "root: process.env.BATCH_STUDIO_FILE_ROOT ?? '',"
+        },
+        {
+          "line": 19,
+          "text": "file: process.env.BATCH_STUDIO_FILE_PATH ?? '',"
+        },
+        {
+          "line": 20,
+          "text": "projectIds: (process.env.BATCH_STUDIO_FILE_PROJECTS ?? '').split(','),"
+        }
+      ],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/file-resources.ts",
+      "lines": 273,
+      "sha256": "4d3f5823048e770246c0bccf96a537191d116ed7de4c176908b438b5621a13d9",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G10",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../domain/contracts.js",
+        "./http.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "FileResources"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
       "file": "src/server/grok-cli-events.ts",
       "lines": 172,
       "sha256": "1dd73c1f54aee1e9e4792d00b3051d9f7edb58ba7f679c3ea776da6174b4e389",
@@ -10507,6 +11127,7 @@
       "layer": "server-infrastructure",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10525,12 +11146,13 @@
     },
     {
       "file": "src/server/http.ts",
-      "lines": 188,
-      "sha256": "b8eab1f51f47e394c61f106eaecf0ea64401475d15fe816feef1ffbe26c51d73",
+      "lines": 191,
+      "sha256": "12c5088613352f9815bcabbf0ef9b74f79dd9afbba39425d17215acef37db5cb",
       "workPackage": "W01",
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10559,13 +11181,111 @@
       "entryReachable": true
     },
     {
+      "file": "src/server/integration-init.ts",
+      "lines": 67,
+      "sha256": "3b3250eb509c4dc898e30ac9db82a9989072c64760749258c2954e6cad107a0a",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G10",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:path",
+        "./config.js",
+        "./integration-settings.js",
+        "./ownership.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 11,
+          "text": "const config = await loadConfig({ dataDir: process.env.BATCH_STUDIO_DATA_DIR ?? '' });"
+        },
+        {
+          "line": 18,
+          "text": "const source = process.env.BATCH_STUDIO_SECRET_SOURCE;"
+        },
+        {
+          "line": 21,
+          "text": "const selected = (process.env.BATCH_STUDIO_INTEGRATION_PROVIDERS ?? '').split(',');"
+        },
+        {
+          "line": 38,
+          "text": "accessKeyId: process.env.BATCH_STUDIO_SECRET_R2_ACCESS_KEY_ID!,"
+        },
+        {
+          "line": 39,
+          "text": "secretAccessKey: process.env.BATCH_STUDIO_SECRET_R2_SECRET_ACCESS_KEY!,"
+        },
+        {
+          "line": 41,
+          "text": ": { apiKey: process.env['BATCH_STUDIO_SECRET_' + provider.toUpperCase() + '_API_KEY']! };"
+        },
+        {
+          "line": 45,
+          "text": "account: process.env.BATCH_STUDIO_R2_ACCOUNT,"
+        },
+        {
+          "line": 46,
+          "text": "...(process.env.BATCH_STUDIO_R2_PUBLIC_URL"
+        },
+        {
+          "line": 47,
+          "text": "? { publicUrl: process.env.BATCH_STUDIO_R2_PUBLIC_URL }"
+        }
+      ],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/integration-settings.ts",
+      "lines": 392,
+      "sha256": "9cc06e6a62cb298e618bf525f14d5cc47815f6df7a6e4811de5f7d20320937b4",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G10",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../domain/contracts.js",
+        "./http.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "providers",
+        "IntegrationProvider",
+        "IntegrationSettings"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 99,
+          "text": "private readonly environment: NodeJS.ProcessEnv = process.env,"
+        }
+      ],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
       "file": "src/server/jobs.ts",
-      "lines": 549,
-      "sha256": "cb397749fdf1b4d1069d6c79a435a25cda26d8db096f0b7c455e3586d0b1ec00",
+      "lines": 589,
+      "sha256": "4b9a6295f21fe2027459474bf9c983055bac62586e11b9da468977f572708f16",
       "workPackage": "W10",
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G10",
+      "lastExtendedPhase": "P5",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10597,6 +11317,7 @@
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10624,23 +11345,24 @@
     },
     {
       "file": "src/server/project-api.ts",
-      "lines": 167,
-      "sha256": "c6c9d5c380467119ae7529ddaca52c8ae24e47a5f8b773d1541f40f1d8a9f645",
+      "lines": 174,
+      "sha256": "e1b14dc16025eab3bc89be2fd507d8a95b31930472c4ac228843fae61e35dc28",
       "workPackage": "W01",
       "layer": "server-infrastructure",
       "phase": "P3",
       "gate": "G01",
+      "lastExtendedPhase": "P5",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:crypto",
-        "../domain/contracts.js",
-        "../domain/artifact-policy.js",
         "../application/project-ports.js",
-        "../application/project-use-cases.js",
         "../application/project-reset-confirmation.js",
-        "./project-repository.js",
-        "./http.js"
+        "../application/project-use-cases.js",
+        "../domain/artifact-policy.js",
+        "../domain/contracts.js",
+        "./http.js",
+        "./project-repository.js"
       ],
       "exports": [
         "publicProject",
@@ -10660,6 +11382,7 @@
       "layer": "server-infrastructure",
       "phase": "P3",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10701,6 +11424,7 @@
       "layer": "server-infrastructure",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10732,6 +11456,7 @@
       "layer": "server-infrastructure",
       "phase": "P3",
       "gate": "G03",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10759,6 +11484,216 @@
       "entryReachable": true
     },
     {
+      "file": "src/server/project-resources.ts",
+      "lines": 238,
+      "sha256": "1f808dd82d5f9475c6be70b28b9d22c7249a78c28cf1832018ee0d5aa4c713e0",
+      "workPackage": "W05",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G05",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "../application/preflight.js",
+        "../application/project-ports.js",
+        "../domain/artifact-types.js",
+        "../domain/availability-policy.js",
+        "../domain/canonical-artifact.js",
+        "../domain/contracts.js",
+        "../domain/model-placement.js",
+        "../domain/resource-bindings.js",
+        "../domain/workflow-graph.js",
+        "./file-resources.js",
+        "./http.js",
+        "./integration-settings.js",
+        "./project-api.js",
+        "./r2-service.js",
+        "./ssh-resources.js",
+        "./workflow-api.js"
+      ],
+      "exports": [
+        "ProjectResources"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/r2-conditions.ts",
+      "lines": 94,
+      "sha256": "2020da8f3d7f0e23b29196ec08080b4c04d2f9bb662066808d2e609928f6e45a",
+      "workPackage": "W08",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G08",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "./http.js",
+        "./r2-gateway.js"
+      ],
+      "exports": [
+        "r2InternalPrefix",
+        "verifyR2ConditionalDelete",
+        "verifyR2ConditionalCompletion"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/r2-gateway.ts",
+      "lines": 115,
+      "sha256": "3b1af426efe5fa835bbc499d14dc32cdfa14bcf310ef0d1dfb3c7af42e246865",
+      "workPackage": "W08",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G08",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "@aws-sdk/client-s3",
+        "@aws-sdk/s3-request-presigner",
+        "./http.js",
+        "./integration-settings.js"
+      ],
+      "exports": [
+        "R2OperationName",
+        "R2Port",
+        "R2Gateway"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/r2-object-transfers.ts",
+      "lines": 472,
+      "sha256": "a8eba449e37a7f307b4ade46b96ad6b736510e2ca191c375251c3dda3a54d785",
+      "workPackage": "W08",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G08",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "node:stream",
+        "../application/r2-snapshot-copy.js",
+        "../domain/contracts.js",
+        "./http.js",
+        "./integration-settings.js",
+        "./jobs.js",
+        "./r2-conditions.js",
+        "./r2-gateway.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "SnapshotTarget",
+        "R2ObjectTransfers"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/r2-service.ts",
+      "lines": 967,
+      "sha256": "8941375ba4cc27458a76c4c44ff82537b7b673449a010d6e28d6b3358f891cb5",
+      "workPackage": "W08",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G08",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "node:stream",
+        "node:stream/promises",
+        "../domain/contracts.js",
+        "../domain/integration-types.js",
+        "../domain/r2-object-index-policy.js",
+        "../domain/r2-storage-policy.js",
+        "../domain/resource-observation-types.js",
+        "../domain/saved-template-policy.js",
+        "./external-operations.js",
+        "./http.js",
+        "./integration-settings.js",
+        "./jobs.js",
+        "./r2-conditions.js",
+        "./r2-gateway.js",
+        "./r2-object-transfers.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "R2Service"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/r2-transfers.ts",
+      "lines": 1120,
+      "sha256": "8f426e641c3bb7d601dde6a5acd532130383fa595c228c6a4ac6fe231a568fb9",
+      "workPackage": "W08",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G08",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../application/r2-transfer-runtime.js",
+        "../domain/contracts.js",
+        "../domain/integration-types.js",
+        "../domain/r2-storage-policy.js",
+        "../domain/r2-transfer-policy.js",
+        "./external-operations.js",
+        "./file-resources.js",
+        "./http.js",
+        "./integration-settings.js",
+        "./jobs.js",
+        "./r2-conditions.js",
+        "./r2-gateway.js",
+        "./staging.js",
+        "./storage.js",
+        "./transfer-source.js"
+      ],
+      "exports": [
+        "R2Transfers"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
       "file": "src/server/recover.ts",
       "lines": 14,
       "sha256": "832ba98afbef15be28a549b142fd77b077b2a9cba4c8901755e014a19c4f48f4",
@@ -10766,6 +11701,7 @@
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10793,6 +11729,7 @@
       "layer": "server-infrastructure",
       "phase": "P3",
       "gate": "G10",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10830,33 +11767,45 @@
     },
     {
       "file": "src/server/runtime.ts",
-      "lines": 200,
-      "sha256": "b7d51aa3816885cb306f1244dd20f9dee83e7dc9ee0ba026857446f1546f39cc",
+      "lines": 325,
+      "sha256": "86a264a24d3185f509a03382135d4a5aca7726a25d7bca498bfd4831ed55fec4",
       "workPackage": "W10",
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G10",
+      "lastExtendedPhase": "P5",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:path",
-        "./config.js",
-        "./events.js",
-        "./web-static.js",
-        "./http.js",
-        "./jobs.js",
-        "./ownership.js",
-        "./workflow-api.js",
-        "./project-api.js",
-        "./project-repository.js",
-        "./project-registration.js",
-        "./agent-runtime.js",
         "./agent-api.js",
         "./agent-artifacts.js",
-        "./agent-store.js",
         "./agent-registration.js",
+        "./agent-runtime.js",
+        "./agent-store.js",
+        "./civitai-service.js",
+        "./config.js",
+        "./events.js",
+        "./external-operations.js",
+        "./file-resources.js",
+        "./http.js",
+        "./integration-settings.js",
+        "./jobs.js",
+        "./ownership.js",
+        "./project-api.js",
+        "./project-registration.js",
+        "./project-repository.js",
+        "./project-resources.js",
+        "./r2-object-transfers.js",
+        "./r2-service.js",
+        "./r2-transfers.js",
         "./security.js",
-        "./server.js"
+        "./server.js",
+        "./ssh-resources.js",
+        "./staging.js",
+        "./vast-service.js",
+        "./web-static.js",
+        "./workflow-api.js"
       ],
       "exports": [
         "within",
@@ -10876,6 +11825,7 @@
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10904,6 +11854,7 @@
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10921,13 +11872,134 @@
       "entryReachable": true
     },
     {
+      "file": "src/server/ssh-init.ts",
+      "lines": 38,
+      "sha256": "fca891676f5687e8942d103d2bb9b3113a91a9ee5edec9ddf7802433772512b8",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G10",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:path",
+        "./config.js",
+        "./integration-settings.js",
+        "./ownership.js",
+        "./ssh-resources.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [
+        {
+          "line": 9,
+          "text": "const config = await loadConfig({ dataDir: process.env.BATCH_STUDIO_DATA_DIR ?? '' });"
+        },
+        {
+          "line": 21,
+          "text": "id: process.env.BATCH_STUDIO_SSH_ID ?? '',"
+        },
+        {
+          "line": 22,
+          "text": "root: process.env.BATCH_STUDIO_SSH_ROOT ?? '',"
+        },
+        {
+          "line": 23,
+          "text": "privateFile: process.env.BATCH_STUDIO_SSH_PRIVATE_FILE ?? '',"
+        },
+        {
+          "line": 24,
+          "text": "publicFile: process.env.BATCH_STUDIO_SSH_PUBLIC_FILE ?? '',"
+        },
+        {
+          "line": 25,
+          "text": "user: process.env.BATCH_STUDIO_SSH_USER ?? '',"
+        },
+        {
+          "line": 26,
+          "text": "directory: process.env.BATCH_STUDIO_SSH_DIRECTORY ?? '',"
+        }
+      ],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": false
+    },
+    {
+      "file": "src/server/ssh-resources.ts",
+      "lines": 562,
+      "sha256": "16cfa678076d3bde6c3d6034de1afa3924c9f5f6f37a6693677333e1dc48e403",
+      "workPackage": "W10",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G10",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:dns/promises",
+        "node:fs/promises",
+        "node:net",
+        "node:path",
+        "ssh2",
+        "../application/vast-ssh-endpoint.js",
+        "../domain/contracts.js",
+        "./external-operations.js",
+        "./http.js",
+        "./integration-settings.js",
+        "./storage.js",
+        "./vast-client.js"
+      ],
+      "exports": [
+        "probeSsh",
+        "captureSshHostKey",
+        "SshResources"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/staging.ts",
+      "lines": 450,
+      "sha256": "ac8f1b693af99ad31fba1521aeafc312564025a1c020b2a7727e992481ffd31a",
+      "workPackage": "W08",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G08",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../domain/contracts.js",
+        "./http.js",
+        "./storage.js"
+      ],
+      "exports": [
+        "Staging"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
       "file": "src/server/storage.ts",
-      "lines": 41,
-      "sha256": "22e99f8af1874192595300306ac1dbdb41fed8de7c01a74e107311c2f5d46c31",
+      "lines": 56,
+      "sha256": "d3bb888fce97f7433cce8b67b8531893d2c2de6e305fe37768bc01cfed333448",
       "workPackage": "W10",
       "layer": "server-infrastructure",
       "phase": "P2",
       "gate": "G10",
+      "lastExtendedPhase": "P5",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10946,6 +12018,95 @@
       "entryReachable": true
     },
     {
+      "file": "src/server/transfer-source.ts",
+      "lines": 123,
+      "sha256": "6e4c77ff26a3da090c53069d64a82ebdcb20f48bbcf32b65fc4a3aa1068ee64b",
+      "workPackage": "W08",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G08",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "../domain/integration-types.js",
+        "../domain/r2-transfer-policy.js"
+      ],
+      "exports": [
+        "verifiedSourceHandle",
+        "sourceFingerprint",
+        "verifiedSourcePart"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/vast-client.ts",
+      "lines": 258,
+      "sha256": "336037cef363779dee382ff9c7af5cd072150bbbc21e468d44d535a62066df9d",
+      "workPackage": "W07",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G07",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "../application/vast-offer-use-cases.js",
+        "../domain/vast-instance-errors.js",
+        "../domain/vast-observation-policy.js",
+        "./http.js"
+      ],
+      "exports": [
+        "vastId",
+        "WebVastClient"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
+      "file": "src/server/vast-service.ts",
+      "lines": 324,
+      "sha256": "2d02bd97c1b2efbbacf5d3bf6476e4f6336d652d0d99a22e50f3da47a697e301",
+      "workPackage": "W07",
+      "layer": "server-infrastructure",
+      "phase": "P5",
+      "gate": "G07",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:crypto",
+        "node:fs/promises",
+        "node:path",
+        "../domain/contracts.js",
+        "../domain/integration-types.js",
+        "../domain/vast-instance-errors.js",
+        "../domain/vast-offer-policy.js",
+        "./external-operations.js",
+        "./http.js",
+        "./integration-settings.js",
+        "./storage.js",
+        "./vast-client.js"
+      ],
+      "exports": [
+        "VastService"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5新Web実IO。現行schema・明示Secret/resource・認可/確認/世代/未知結果を検証し旧取得元を使わない",
+      "entryReachable": true
+    },
+    {
       "file": "src/server/web-static.ts",
       "lines": 45,
       "sha256": "1a7c211742e8f38ef155941717fbc7eca3e5bea7e14d00a2f3843f58fe18814a",
@@ -10953,6 +12114,7 @@
       "layer": "server-infrastructure",
       "phase": "P3",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -10973,11 +12135,12 @@
     {
       "file": "src/server/workflow-api.ts",
       "lines": 152,
-      "sha256": "83d0f8d1086ad39dc7d87fa343a5aacc80c95c0786f43cbc8cacb347592c71c4",
+      "sha256": "adde513376608de6339943a602968b5decce266371751eb51ff3b547b8108f9c",
       "workPackage": "W05",
       "layer": "server-infrastructure",
       "phase": "P3",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11011,6 +12174,7 @@
       "layer": "existing-reference",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11038,6 +12202,7 @@
       "layer": "existing-reference",
       "phase": "P6",
       "gate": "G06",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11063,6 +12228,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11083,6 +12249,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": "P9",
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11105,6 +12272,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11123,6 +12291,7 @@
       "layer": "existing-reference",
       "phase": "P7",
       "gate": "G09",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11143,6 +12312,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11163,6 +12333,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11183,6 +12354,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11203,6 +12375,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G05",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11223,6 +12396,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11248,6 +12422,7 @@
       "layer": "existing-reference",
       "phase": "P5",
       "gate": "G08",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11268,6 +12443,7 @@
       "layer": "existing-reference",
       "phase": "P2",
       "gate": "G01",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11349,17 +12525,19 @@
     },
     {
       "file": "src/web/api.ts",
-      "lines": 149,
-      "sha256": "d03b5676a7d6f827c879c6a4215d68d507eea379b354713d2f2cf7ff906b6264",
+      "lines": 181,
+      "sha256": "c78d234bd1b34e7ce80704878d799ffbd3b8465d3dfbec254c7131e362306f64",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": "P5",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
       "exports": [
         "Artifact",
+        "ResourceBindings",
         "Project",
         "Job",
         "Packet",
@@ -11376,18 +12554,19 @@
     {
       "file": "src/web/assistant-pane.tsx",
       "lines": 267,
-      "sha256": "f932004132459dee4b15a08a0c67895845006caa92cf8ee6eb8482116a746b1c",
+      "sha256": "dab02484115e51de8eed812d23369bee03e97b90a90986cff2583ffdbe5760be",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
         "react",
         "./assistant",
-        "./workspace",
         "./modal",
+        "./workspace",
         ", {})}\n                      >\n                        成果物を再取り込み\n                      </button>\n                    ) : null}\n                  </span>\n                ))}\n            </div>\n          ))}\n        </>\n      )}\n      {discard && (\n        <Dialog title="
       ],
       "exports": [
@@ -11402,11 +12581,12 @@
     {
       "file": "src/web/assistant.ts",
       "lines": 268,
-      "sha256": "7ddf813830e47b0a6dd6c5be444f4ca3bef6556dd30d6f08cf7bef1ab7f9e97b",
+      "sha256": "d22ad7b493d2f3a1dab55377c2241dfe6f10e783368a553502f6d8d3c3058dd5",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P4",
       "gate": "G04",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11433,6 +12613,7 @@
       "layer": "web-presentation",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11447,21 +12628,93 @@
       "entryReachable": true
     },
     {
+      "file": "src/web/file-hash-worker.ts",
+      "lines": 16,
+      "sha256": "aaa2c8bd03d401cff18db31795051d3ee275c278ba9744695e64502e6663c764",
+      "workPackage": "W08",
+      "layer": "web-presentation",
+      "phase": "P5",
+      "gate": "G08",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "./file-sha256"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5共通Modal/binary入口。Project起点・lease/flush/世代・server facts・bounded Workerを保持",
+      "entryReachable": false
+    },
+    {
+      "file": "src/web/file-sha256.ts",
+      "lines": 98,
+      "sha256": "cf4e0058be1865f348d0f1c53229d374720b682653858c62232f3efa3eb65ceb",
+      "workPackage": "W08",
+      "layer": "web-presentation",
+      "phase": "P5",
+      "gate": "G08",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [],
+      "exports": [
+        "Sha256"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5共通Modal/binary入口。Project起点・lease/flush/世代・server facts・bounded Workerを保持",
+      "entryReachable": false
+    },
+    {
+      "file": "src/web/integration-tools.tsx",
+      "lines": 1585,
+      "sha256": "7bb57c592ec0704ee011d7aa4dbd5750a805b6a520523dcaad92ad7c520c5657",
+      "workPackage": "W02",
+      "layer": "web-presentation",
+      "phase": "P5",
+      "gate": "G02",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "react",
+        "./api",
+        "./modal",
+        "./workspace"
+      ],
+      "exports": [
+        "ToolState",
+        "ToolConfirmation",
+        "Observation",
+        "IntegrationTool"
+      ],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "P5共通Modal/binary入口。Project起点・lease/flush/世代・server facts・bounded Workerを保持",
+      "entryReachable": true
+    },
+    {
       "file": "src/web/main.tsx",
-      "lines": 459,
-      "sha256": "710cc1c0fe3f90bab60d91dc9a3f373e16e9d49876e94182c43571c3c660bfd1",
+      "lines": 460,
+      "sha256": "cd2ff71e751074e013131739a060b70847f4b09617c69c865dbb887d15ba00b5",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
-        "./assistant-pane",
-        "./modal",
         "react",
         "react-dom/client",
         "./api",
+        "./assistant-pane",
+        "./modal",
         "./workspace",
         "./workspace.css"
       ],
@@ -11474,17 +12727,19 @@
     },
     {
       "file": "src/web/modal.tsx",
-      "lines": 244,
-      "sha256": "d0406953e13b2a225407be4402c31a6daa5d9ea10892bfa82dcb3a49a90740c3",
+      "lines": 300,
+      "sha256": "7dc8e5386a154d1458c8de0545a378e46f2c609f0423dce3bc8652adb9708264",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": "P5",
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
         "react",
         "react-dom",
+        "./integration-tools",
         "./workspace"
       ],
       "exports": [
@@ -11507,6 +12762,7 @@
       "layer": "web-presentation",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11519,12 +12775,13 @@
     },
     {
       "file": "src/web/workspace.css",
-      "lines": 254,
-      "sha256": "d737accff6b7bd102cf3e29018f08d503973b09ea5c686baa90d12115899f5de",
+      "lines": 306,
+      "sha256": "036624df2d8705443bf0c1593f4b74055430c216bfed2eda9e23f0cc3b5da851",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11538,11 +12795,12 @@
     {
       "file": "src/web/workspace.ts",
       "lines": 324,
-      "sha256": "95967e75fbd9eab62466d3de5d81f0fa73a54eb3577e320cc999238d87853256",
+      "sha256": "caf55b8481caf51ef06ab7cc99f6f24741d968a5786a475289e338c61ec37eca",
       "workPackage": "W02",
       "layer": "web-presentation",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11569,6 +12827,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11587,6 +12846,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11605,6 +12865,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11623,6 +12884,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11641,6 +12903,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11659,6 +12922,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G13",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -11677,6 +12941,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11711,6 +12976,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11748,6 +13014,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11782,6 +13049,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11816,6 +13084,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11851,6 +13120,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11889,6 +13159,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11925,6 +13196,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P8",
       "imports": [
@@ -11960,6 +13232,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -11982,6 +13255,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12016,6 +13290,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12082,6 +13357,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12140,6 +13416,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12176,6 +13453,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12210,6 +13488,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12233,6 +13512,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12268,6 +13548,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12302,6 +13583,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12329,6 +13611,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12352,6 +13635,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12376,6 +13660,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12400,6 +13685,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -12418,6 +13704,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12438,6 +13725,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12472,6 +13760,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12508,6 +13797,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12536,6 +13826,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12565,6 +13856,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12600,6 +13892,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12636,6 +13929,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12670,6 +13964,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12692,6 +13987,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12730,6 +14026,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12753,6 +14050,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12776,6 +14074,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12810,6 +14109,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12846,6 +14146,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P8",
       "imports": [
@@ -12900,6 +14201,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12934,6 +14236,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -12969,6 +14272,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13002,6 +14306,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13026,6 +14331,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13062,6 +14368,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13083,6 +14390,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13117,6 +14425,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13141,6 +14450,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13175,6 +14485,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13198,6 +14509,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13238,6 +14550,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13272,6 +14585,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13338,6 +14652,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13376,6 +14691,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13399,6 +14715,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13435,6 +14752,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13469,6 +14787,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13503,6 +14822,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13531,6 +14851,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13566,6 +14887,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13588,6 +14910,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13626,6 +14949,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13660,6 +14984,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13681,6 +15006,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": "P8",
       "imports": [
@@ -13771,6 +15097,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13808,6 +15135,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13843,6 +15171,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13877,6 +15206,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13913,6 +15243,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13947,6 +15278,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -13982,6 +15314,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14015,8 +15348,9 @@
       "sha256": "bfeeb392031b493592f7015c02eb91fcaf9b0c3daa4889be4e8d02289cdfd631",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14046,8 +15380,9 @@
       "sha256": "abc49796fffd1adee4e545956b4df2c668ec64f514ceeb740485b9de03fbeea8",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14076,8 +15411,9 @@
       "sha256": "bcf2d53d51a7f4df91e24f6ae7eef64f16f5e6a87fa9f6290c7e84794fa75edb",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14103,8 +15439,9 @@
       "sha256": "38ea3219b04ed9eb921c48e36d326ff9e1396da89541cba2b70b4aa8cc3ca4b9",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14128,8 +15465,9 @@
       "sha256": "7a943be0979318670515bf6f9792bed4f2479904b602b2e49c61510ed22b8140",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14150,8 +15488,9 @@
       "sha256": "8a89a4fd2ccfbddb1c7bc4b60aef1a372a6442de1cc356843aa1340aa37a67a7",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14187,8 +15526,9 @@
       "sha256": "46abff24b35dd8d2e3dd5865194ad76b895831f4f764f2e7a368c10b9ff0cd33",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14210,20 +15550,21 @@
     },
     {
       "file": "tests/server-agent-jobs.mjs",
-      "lines": 223,
-      "sha256": "e7c1ea2a8b87bc44a5e85b25a588967eb5086e40c33f2c3a0df7fd31e766fa2b",
+      "lines": 224,
+      "sha256": "c42e10cda643b7d19dbfedc24b238d987a7c134527c0725fbc5039506547b104",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
         "node:assert/strict",
-        "node:test",
         "node:fs/promises",
         "node:os",
         "node:path",
+        "node:test",
         "../dist-server/server/agent-runtime.js",
         "../dist-server/server/jobs.js",
         "./server-project-fixtures.mjs",
@@ -14242,8 +15583,9 @@
       "sha256": "4753544223014e14b5c8f76ee665c381966883f90a1748aac3347f86f342b084",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14269,8 +15611,9 @@
       "sha256": "36802985ff40f7c9c7e4c434e65898b6a7a3f2fe2b3443d72354d758fcaa90bf",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P4",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14296,6 +15639,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14322,6 +15666,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14350,6 +15695,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14380,6 +15726,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14401,6 +15748,261 @@
       "entryReachable": false
     },
     {
+      "file": "tests/server-integration-civitai.mjs",
+      "lines": 386,
+      "sha256": "5f9885f0e78e319b2f9107c806e20003c9fbc0be53c27c065df82c26507c5889",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G12",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "../dist-server/server/civitai-client.js",
+        "../dist-server/server/civitai-service.js",
+        "../dist-server/server/integration-settings.js",
+        "../dist-server/server/jobs.js",
+        "./server-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-integration-operations.mjs",
+      "lines": 345,
+      "sha256": "578786eb9f49951766c0eee2b01b48a0a2f81f524755e478acc153f0d9059124",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G12",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:crypto",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "../dist-server/server/external-operations.js",
+        "./server-fixtures.mjs",
+        "../dist-server/server/runtime.js",
+        "../dist-server/server/config.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-integration-r2.mjs",
+      "lines": 618,
+      "sha256": "902cd816adf42e164aced99da8dd0ab1f9df15e73fecb273455206297166dbd7",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G12",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:crypto",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:stream",
+        "node:test",
+        "../dist-server/server/external-operations.js",
+        "../dist-server/server/integration-settings.js",
+        "../dist-server/server/jobs.js",
+        "../dist-server/server/r2-service.js",
+        "./server-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-integration-resources.mjs",
+      "lines": 361,
+      "sha256": "cab39fcac5bd02aff6100d6d2b985fb53a8671c23c2b04252d7a3b55981466b8",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G12",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:fs/promises",
+        "node:module",
+        "node:os",
+        "node:path",
+        "node:test",
+        "../dist-server/domain/resource-bindings.js",
+        "../dist-server/server/config.js",
+        "../dist-server/server/file-resources.js",
+        "../dist-server/server/integration-settings.js",
+        "../dist-server/server/project-api.js",
+        "../dist-server/server/project-resources.js",
+        "../dist-server/server/r2-service.js",
+        "../dist-server/server/security.js",
+        "../dist-server/server/server.js",
+        "../dist-server/server/workflow-api.js",
+        "./server-fixtures.mjs",
+        "./server-project-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-integration-settings.mjs",
+      "lines": 231,
+      "sha256": "001c22d312a7dd3ab6d1a03bf409a9f6a46b3d759b52681563d9880c61813544",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G12",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "../dist-server/server/integration-settings.js",
+        "./server-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-integration-staging.mjs",
+      "lines": 213,
+      "sha256": "1c2f30269fd5d0455406177d9f84a7cc08a1fad38a870a81ae719da177ce98b9",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G12",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:test",
+        "node:crypto",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:http",
+        "../dist-server/server/staging.js",
+        "./server-fixtures.mjs",
+        "../dist-server/server/file-resources.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-integration-transfers.mjs",
+      "lines": 516,
+      "sha256": "b42f2ca5badac5cbc90ce5dbf8b293f93474de745cdde087238c3f1eb6af887f",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G12",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:crypto",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:stream",
+        "node:test",
+        "../dist-server/server/external-operations.js",
+        "../dist-server/server/file-resources.js",
+        "../dist-server/server/integration-settings.js",
+        "../dist-server/server/jobs.js",
+        "../dist-server/server/r2-object-transfers.js",
+        "../dist-server/server/r2-transfers.js",
+        "../dist-server/server/staging.js",
+        "../dist-server/server/transfer-source.js"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
+      "file": "tests/server-integration-vast.mjs",
+      "lines": 477,
+      "sha256": "ff8031979f648160fe32ffd64531ae1ac26c7fa5e92e766d06c5e514eab25f8a",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G12",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:crypto",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "node:test",
+        "ssh2",
+        "../dist-server/server/external-operations.js",
+        "../dist-server/server/integration-settings.js",
+        "../dist-server/server/ssh-resources.js",
+        "../dist-server/server/vast-client.js",
+        "../dist-server/server/vast-service.js",
+        "./server-fixtures.mjs"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "tests/server-jobs.mjs",
       "lines": 236,
       "sha256": "d090c7a5c451d35bc0a147235b973975a4f02419ea2a7da948a0adb9530312ac",
@@ -14408,6 +16010,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14435,6 +16038,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14465,8 +16069,9 @@
       "sha256": "81a75c124824463c359292d50c91a646f294cd64ca9c7288e22c5a090cb79343",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P3",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14547,8 +16152,9 @@
       "sha256": "c09e0c5722ed919cd4c4cac63eaa048d08fc59548fe0f65ecd4129c73dfd87e4",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P3",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14573,8 +16179,9 @@
       "sha256": "b899749c4f10a4480cbcb03bd21c4f7d784555b622428f97142f391fc33d3095",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P3",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14602,8 +16209,9 @@
       "sha256": "9341f41fe3ec06d726f180e39fa321d87ea2cb95e4e43c619a2c45ab1984be2a",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P3",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14681,8 +16289,9 @@
       "sha256": "b78a5595834a1dedabf89b2e24445d4b02ebed2bc6c0c0d41d96031fdd37dd2b",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P3",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14713,8 +16322,9 @@
       "sha256": "dadb471d1064bab673aeb63fad76e5a5690b0ee10b0b49b2109e09e29f686821",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P3",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14736,8 +16346,9 @@
       "sha256": "5fd968a7c8be0f8cfeb2dadc11dc2939590b659e7dfdacebb2c8df76db9f5595",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P3",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14763,8 +16374,9 @@
       "sha256": "05a34fff9215c9fdac06f68d8c2db6aac14d86f574812db67a9c81f53e05d7bb",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P3",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14795,8 +16407,9 @@
       "sha256": "33c2ee6257100c848a7561355b8e2881f1098c659b8b1e6e38e9d135108dc579",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P3",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14822,8 +16435,9 @@
       "sha256": "21dadfebf15f0c37cf224169d157c2ba4a9ffeb62d04fe31b9d0fd4108bac2a8",
       "workPackage": "W12",
       "layer": "existing-reference",
-      "phase": "P8",
+      "phase": "P3",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14853,6 +16467,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14893,6 +16508,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14916,6 +16532,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14940,6 +16557,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14960,6 +16578,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -14983,6 +16602,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -15001,6 +16621,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -15035,6 +16656,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -15067,6 +16689,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -15101,6 +16724,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -15129,6 +16753,35 @@
       "entryReachable": false
     },
     {
+      "file": "tests/web-integration-browser.mjs",
+      "lines": 440,
+      "sha256": "f6cc206ec1a1f12668f93dcf4875093d2363ca21494d798c08817558f8787e5e",
+      "workPackage": "W12",
+      "layer": "existing-reference",
+      "phase": "P5",
+      "gate": "G12",
+      "lastExtendedPhase": null,
+      "desktopRemovalPhase": null,
+      "electronDependencyRemovalPhase": null,
+      "imports": [
+        "node:assert/strict",
+        "node:crypto",
+        "node:test",
+        "@playwright/test",
+        "./server-project-browser-fixtures.mjs",
+        "node:module",
+        "node:fs/promises",
+        "vite",
+        "data:text/javascript;base64,"
+      ],
+      "exports": [],
+      "bridgeCalls": [],
+      "registeredChannels": [],
+      "risks": [],
+      "migrationAction": "配布設定をWeb/server構成へ適合",
+      "entryReachable": false
+    },
+    {
       "file": "tests/workflow-api-graph.cjs",
       "lines": 262,
       "sha256": "fe79d06ea2ddf3b2ccecf6d1e8a45361ac7b4cacecb385d40e304f8028780e18",
@@ -15136,6 +16789,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -15170,6 +16824,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -15204,6 +16859,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G12",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -15239,6 +16895,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -15257,6 +16914,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -15280,6 +16938,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -15298,6 +16957,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -15316,6 +16976,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -15334,6 +16995,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -15357,6 +17019,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -15378,6 +17041,7 @@
       "layer": "existing-reference",
       "phase": "P8",
       "gate": "G11",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [
@@ -15405,6 +17069,7 @@
       "layer": "existing-reference",
       "phase": "P3",
       "gate": "G02",
+      "lastExtendedPhase": null,
       "desktopRemovalPhase": null,
       "electronDependencyRemovalPhase": null,
       "imports": [],
@@ -19437,6 +21102,113 @@
       "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
     },
     {
+      "file": "tests/server-integration-civitai.mjs",
+      "registration": "integration-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G07",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P5の設定・確認・外部client/resource・streaming/job受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-integration-operations.mjs",
+      "registration": "integration-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G03",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P5の設定・確認・外部client/resource・streaming/job受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-integration-r2.mjs",
+      "registration": "integration-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G08",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P5の設定・確認・外部client/resource・streaming/job受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-integration-resources.mjs",
+      "registration": "integration-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G03",
+        "G05",
+        "G07",
+        "G08",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P5の設定・確認・外部client/resource・streaming/job受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-integration-settings.mjs",
+      "registration": "integration-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P5の設定・確認・外部client/resource・streaming/job受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-integration-staging.mjs",
+      "registration": "integration-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G08",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P5の設定・確認・外部client/resource・streaming/job受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-integration-transfers.mjs",
+      "registration": "integration-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G03",
+        "G08",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P5の設定・確認・外部client/resource・streaming/job受入へ接続済み。後続phaseでも必須"
+    },
+    {
+      "file": "tests/server-integration-vast.mjs",
+      "registration": "integration-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G07",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P5の設定・確認・外部client/resource・streaming/job受入へ接続済み。後続phaseでも必須"
+    },
+    {
       "file": "tests/server-jobs.mjs",
       "registration": "server-local",
       "treatment": "契約維持・server buildへ適合",
@@ -19717,6 +21489,22 @@
       "requiredAction": "P8までに新test実行経路へ接続"
     },
     {
+      "file": "tests/web-integration-browser.mjs",
+      "registration": "browser-local",
+      "treatment": "契約維持・server buildへ適合",
+      "targetGate": "G12",
+      "featureGates": [
+        "G01",
+        "G02",
+        "G05",
+        "G07",
+        "G08",
+        "G10",
+        "G12"
+      ],
+      "requiredAction": "P2からserver/HTTP/WSのローカル受入へ接続済み。後続phaseでも必須"
+    },
+    {
       "file": "tests/workflow-api-graph.cjs",
       "registration": "npm-test",
       "treatment": "契約維持・server buildへ適合",
@@ -19928,6 +21716,13 @@
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
+      "file": "docs/contracts/web-integrations.md",
+      "sha256": "0a7585a91bbf293aa8baa3494d810bf7eafa414065356dae790f55077ac2a831",
+      "workPackage": "W01",
+      "gate": "G01",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
       "file": "docs/contracts/web-project-workspace.md",
       "sha256": "566fb8932c5c1c94dbde1ace381874f29297f563711802a5d79f3df009ba69c0",
       "workPackage": "W11",
@@ -19991,6 +21786,13 @@
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
+      "file": "docs/operations/web-integrations.md",
+      "sha256": "b977c35612cd08731bfa397e0b41cee89af6fe7801a575c2a5c7426ffeaaa43c",
+      "workPackage": "W10",
+      "gate": "G10",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
       "file": "docs/operations/web-workspace.md",
       "sha256": "a0c4f485c7c1a4e6bbc8ec57ef110fb278b5d57569df9aadbeddffc5415e80df",
       "workPackage": "W11",
@@ -20007,29 +21809,36 @@
     {
       "file": "docs/quality/standard-image-execution-validation.md",
       "sha256": "9cb80b3be614cc79a5afa1d99fd726537145c9856509a328251b37dfe11b1360",
-      "workPackage": "W11",
-      "gate": "G11",
+      "workPackage": "W12",
+      "gate": "G12",
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
       "file": "docs/quality/validation-and-security.md",
       "sha256": "bac7a62aeddcf69d1556bc086fe13b02e7c2b5388eceb7c9e502ab184a2ae996",
-      "workPackage": "W11",
-      "gate": "G11",
+      "workPackage": "W12",
+      "gate": "G12",
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
       "file": "docs/quality/web-p3-acceptance.md",
       "sha256": "b17185961590ae4286f0c75aba254ae0654d9d6d54ad318ef1d78ae61d841898",
-      "workPackage": "W11",
-      "gate": "G11",
+      "workPackage": "W12",
+      "gate": "G12",
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
       "file": "docs/quality/web-p4-acceptance.md",
       "sha256": "ca6f7155853efc01e3188e5bcfdbbfd210cb5eec981eaf5eb9e44fe3137d9c34",
-      "workPackage": "W11",
-      "gate": "G11",
+      "workPackage": "W12",
+      "gate": "G12",
+      "treatment": "移行完了時に該当仕様を更新"
+    },
+    {
+      "file": "docs/quality/web-p5-acceptance.md",
+      "sha256": "0b358567f9d483d9d83261824f7ec4c83c5dccad1744073e05b71a2a60aacb81",
+      "workPackage": "W12",
+      "gate": "G12",
       "treatment": "移行完了時に該当仕様を更新"
     },
     {
@@ -20104,26 +21913,26 @@
     }
   ],
   "counts": {
-    "files": 503,
-    "source": 347,
-    "tests": 108,
-    "scripts": 17,
+    "files": 538,
+    "source": 372,
+    "tests": 117,
+    "scripts": 18,
     "ipc": 172,
     "resources": 8,
-    "documents": 40,
+    "documents": 43,
     "ownership": {
-      "W01": 18,
-      "W02": 37,
+      "W01": 19,
+      "W02": 38,
       "W03": 34,
       "W04": 58,
-      "W05": 33,
+      "W05": 35,
       "W06": 55,
-      "W07": 15,
-      "W08": 13,
+      "W07": 20,
+      "W08": 23,
       "W09": 47,
-      "W10": 26,
+      "W10": 32,
       "W11": 29,
-      "W12": 115,
+      "W12": 125,
       "W13": 11,
       "W14": 12
     },
@@ -20145,8 +21954,9 @@
       "CI-conditional": 2,
       "CI-only": 2,
       "agent-local": 7,
-      "browser-local": 2,
+      "browser-local": 3,
       "core-local": 4,
+      "integration-local": 8,
       "npm-test": 61,
       "project-local": 6,
       "server-local": 7,

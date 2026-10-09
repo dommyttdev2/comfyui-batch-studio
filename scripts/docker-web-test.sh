@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 test ! -f node_modules/electron/dist/electron
+npm run test:integrations
 npm run test:projects
 npm run test:web
 npm run test:agents

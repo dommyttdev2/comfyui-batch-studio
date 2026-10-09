@@ -1,12 +1,12 @@
-import { randomUUID, createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import type { CatalogRepository, ProjectState } from '../application/project-ports.js';
+import { confirmedProjectReset } from '../application/project-reset-confirmation.js';
+import { ProjectUseCases } from '../application/project-use-cases.js';
+import { downstream } from '../domain/artifact-policy.js';
 import type { ActorContext, ArtifactKey, MutationCommand } from '../domain/contracts.js';
 import { authorize } from '../domain/contracts.js';
-import { downstream } from '../domain/artifact-policy.js';
-import type { ProjectState, CatalogRepository } from '../application/project-ports.js';
-import { ProjectUseCases } from '../application/project-use-cases.js';
-import { confirmedProjectReset } from '../application/project-reset-confirmation.js';
+import { fields, HttpFailure, identifier, json, type RequestContext } from './http.js';
 import type { DiskProjects } from './project-repository.js';
-import { HttpFailure, fields, identifier, json, type RequestContext } from './http.js';
 export function publicProject(actor: ActorContext, p: ProjectState) {
   const owned =
     !!p.lease && p.lease.userId === actor.userId && p.lease.sessionId === actor.sessionId;
@@ -23,6 +23,7 @@ export function publicProject(actor: ActorContext, p: ProjectState) {
           ...(owned ? { leaseId: p.lease.id } : {}),
         }
       : null,
+    resourceBindings: p.resourceBindings ?? null,
     runSummaries: p.runs.map((r) => ({ id: r.id, state: r.lifecycle })),
   };
 }
@@ -66,6 +67,7 @@ export class ProjectApi {
       'prepare-reset': ['target', 'stage'],
       'configure-models': ['family', 'base', 'textEncoder', 'vae'],
       'replace-models': ['expected', 'next'],
+      'import-loras': ['payload', 'stage'],
       'patch-prompt-plan': ['raw'],
     };
     if (!shape[action]) return false;
@@ -141,6 +143,11 @@ export class ProjectApi {
             return this.projects.configureModels(
               actor,
               command as Parameters<ProjectUseCases['configureModels']>[1],
+            );
+          case 'import-loras':
+            return this.projects.importLoras(
+              actor,
+              command as Parameters<ProjectUseCases['importLoras']>[1],
             );
           case 'replace-models':
             return this.projects.replaceModels(

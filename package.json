@@ -40,11 +40,15 @@
     "build:workspace": "npm run build:web && npm run build:server",
     "dev:web": "npm run build:workspace && npm run start:server",
     "typecheck:web": "tsc -p tsconfig.web.json",
-    "test:web": "npm run build:workspace && node --test tests/server-project-browser.mjs tests/server-agent-browser.mjs",
+    "test:web": "npm run build:workspace && node --test tests/server-project-browser.mjs tests/server-agent-browser.mjs tests/web-integration-browser.mjs",
     "recover:project": "node dist-server/server/project-recover.js",
     "test:agents": "npm run build:server && node --test tests/server-agent-cli.mjs tests/server-agent-store.mjs tests/server-agent-jobs.mjs tests/server-agent-artifacts.mjs tests/server-agent-api.mjs tests/server-agent-crash.mjs tests/server-agent-registration.mjs",
     "init:server-agent": "node dist-server/server/agent-init.js",
-    "test:agents:real": "npm run build:workspace && node scripts/test-web-agent-real.mjs && node scripts/test-web-agent-api-real.mjs"
+    "test:agents:real": "npm run build:workspace && node scripts/test-web-agent-real.mjs && node scripts/test-web-agent-api-real.mjs",
+    "init:server-integrations": "node dist-server/server/integration-init.js",
+    "test:integrations": "npm run build:server && node --test tests/server-integration-*.mjs",
+    "init:server-file": "node dist-server/server/file-init.js",
+    "init:server-ssh": "npm run build:server && node dist-server/server/ssh-init.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
