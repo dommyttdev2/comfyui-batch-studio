@@ -2,7 +2,7 @@
 
 Status: 実装完了・Windows/Linuxローカル検証済み / API読み取り一部確認 / 総合受入は画面完全実装後（2026-10-09）。
 
-親Issue [#374](https://github.com/dommyttdev2/comfyui-batch-studio/issues/374)。P4統合0744c5549c024b7f95759b752a2cad5375fe3bfdから開始する。統合branch codex/web-p5-374-integrations、親draft PR [#387](https://github.com/dommyttdev2/comfyui-batch-studio/pull/387)はcodex/web-migrationへ。子branchは最新統合から作成し、依存完了順に子PRをsquash統合する。CI/main/version/release変更なし。旧データmigration・後方互換・fallbackは禁止。
+親Issue [#374](https://github.com/dommyttdev2/comfyui-batch-studio/issues/374)。P4統合0744c5549c024b7f95759b752a2cad5375fe3bfdから開始する。統合branch codex/web-p5-374-integrations、親PR [#387](https://github.com/dommyttdev2/comfyui-batch-studio/pull/387)はcodex/web-migrationへ。子branchは最新統合から作成し、依存完了順に子PRをsquash統合する。CI/main/version/release変更なし。旧データmigration・後方互換・fallbackは禁止。
 
 ## 子Issueと一意の責務
 
@@ -44,7 +44,7 @@ G05は実catalogとLocal/R2のresource観測、G07はCivitai/cache/429とVast管
 | #383 model/resource/Preflight | [#396](https://github.com/dommyttdev2/comfyui-batch-studio/pull/396) | CLOSED |
 | #384 共通Modal | [#397](https://github.com/dommyttdev2/comfyui-batch-studio/pull/397) | CLOSED |
 | #385 OS/実受入 | [#398](https://github.com/dommyttdev2/comfyui-batch-studio/pull/398) | 独立した受入修正は統合済み。Windows/Linux243件・実Codex/Grok PASS。実Civitai同期/検索と利用者によるAPI取得を確認。残る総合受入は画面完全実装後へ繰越、OPEN |
-| #386 正本/索引/親統合 | 正本・索引更新を子PR化する | 索引538 code/config、372src、117tests、18scripts、172IPCを再照合。総合受入繰越とUI継承要件を正本に記録。親PR統合までOPEN |
+| #386 正本/索引/親統合 | 正本・索引更新を子PR化する | 索引538 code/config、372src、117tests、18scripts、172IPCを再照合。総合受入繰越とUI継承要件を正本に記録。親PR統合確認後に完了 |
 
 [受入matrix](../quality/web-p5-acceptance.md)に要求・実装・test・実環境の状態を一意に対応付ける。製品sourceの最新P5統合は71f16ac76a3fd64f48c8828156fecd3e84cab0f7。ここからの正本/索引更新は製品挙動を変更しない。
 
@@ -54,4 +54,4 @@ P5は「実装完了・総合受入待ち」とし、P6/P7の実装着手を止�
 
 画面の完了条件は、Electron版のログイン後ホーム・環境設定/サービス設定の全項目・各工程のレイアウトと操作感を継承すること。画面内Projectタブと共通ツールModalは既定のWeb方針を維持する。P6/P7で各機能に接続する画面を実装し、P7完了時に画面横断の継承を検証する。API受入用簡易UIを最終画面とみなさない。
 
-#385は総合受入までOPEN、#386/#374と親#387はOPEN/draftを維持する。今回の文書更新で親PRはマージせず、実装統合と受入の状態を分けて記録する。受入延期を受入済みや実生成成功と読み替えず、P6実生成の検証はP6で実施する。
+総合受入の延期合意に続く実装統合として、親PR #387をcodex/web-migrationへsquashする。親Issue #374は実装統合、#386は正本・索引・親PR統合の完了としてマージ確認後に閉じる。#385は独立した総合受入の追跡としてOPENを維持する。P5の実装統合完了と、G05/G07/G08/G10の受入完了を分けて管理する。P6/P7は統合済み実装を前提に進め、画面完成後に#385を実施する。 受入延期を受入済みや実生成成功と読み替えず、P6実生成の検証はP6で実施する。

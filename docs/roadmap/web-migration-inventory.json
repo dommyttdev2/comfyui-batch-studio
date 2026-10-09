@@ -21836,7 +21836,7 @@
     },
     {
       "file": "docs/quality/web-p5-acceptance.md",
-      "sha256": "3882208183b799dd5be87ce19b1d3f31a8c245d58611f5f33974db431e50943d",
+      "sha256": "0b358567f9d483d9d83261824f7ec4c83c5dccad1744073e05b71a2a60aacb81",
       "workPackage": "W12",
       "gate": "G12",
       "treatment": "移行完了時に該当仕様を更新"
