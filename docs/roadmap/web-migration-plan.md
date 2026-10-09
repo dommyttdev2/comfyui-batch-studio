@@ -339,7 +339,7 @@ Wは責任分担の分類、Pはmilestone、Gは受入条件とし、それぞ�
 | P4 | 会話・履歴・model API/UI、工程task・成果物、停止/resume/並行開始 | 両providerの実CLI受入 |
 | P5 | 新SecretStoreと新規設定、Civitai catalog、R2転送、Vast.ai/確認契約、model/Preflight統合 | 指定経路での外部連携と秘密・確認・転送の契約 |
 | P6 | Local生成、Remote生成/SSH、停止と課金finalization、再起動・結果不明の照合 | 実ComfyUI生成と復旧・資源競合 |
-| P7 | codecとcache、Picker、PSD/font/editor保存、Caption/Marketplace/ZIP | 画像・後処理・memory/perfの一致 |
+| P7 | codecとcache、Picker、PSD/font/editor保存、Caption/Marketplace/ZIP、Electron版ホーム/設定/各工程UIの継承完了 | 画像・後処理・memory/perfの一致、画面内タブ/共通Modalを保った全画面のレイアウト・操作感・設定項目の一致 |
 | P8 | 新規配布/start/ローカル検証、空dataDirからの登録、旧形式拒否・fallback禁止検証 | 新Web全工程と明示error |
 | P9 | 旧code/store参照整理、Electron依存・入口の撤去 | clean installで全gate通過 |
 
@@ -403,4 +403,4 @@ P1は親Issue #305 / PR #309が完了し、刷新branchのf221c1799a668e757e6f4d
 
 P2はPR #323で刷新branchの053cd134920a573179bb99072545b3cd977f0021にsquash統合済み。P3親Issue [#334](https://github.com/dommyttdev2/comfyui-batch-studio/issues/334)と子Issue #335–#343を起票し、codex/web-p3-334-project-workspaceから刷新branch向け親draft PRを作成する。責務・依存と受入は[P3実行計画](web-migration-p3-plan.md)に一本化する。P3はProject/Artifact/Compiler fixture・画面内タブ・共通Modal Hostを実装し、Windows/Linux/Chromiumのローカル受入を完了した。P4は親Issue [#354](https://github.com/dommyttdev2/comfyui-batch-studio/issues/354)・親PR [#364](https://github.com/dommyttdev2/comfyui-batch-studio/pull/364)でCLI会話/taskと独立Web AssistantPaneを接続し、G04のローカル受入を完了した。[P4計画](web-migration-p4-plan.md)、[P4受入](../quality/web-p4-acceptance.md)、[CLI運用](../operations/web-agent-runtime.md)を正本とする。次はP5の実catalog/R2/resource接続。詳細と残るphase境界は[P3受入](../quality/web-p3-acceptance.md)、[運用](../operations/web-workspace.md)を参照する。
 
-P5は親Issue [#374](https://github.com/dommyttdev2/comfyui-batch-studio/issues/374)・親draft PR [#387](https://github.com/dommyttdev2/comfyui-batch-studio/pull/387)で管理する。新Web設定/Secret、Civitai・R2・Vast.ai・SSH、bounded staging/multipart、current model/resource/Preflight、共通Modalの実装子Issue#375–#384を完了し、子PRをP5統合へsquashした。Windows/Linuxの243件と実Codex/Grok回帰は通過したが、actual Civitai/R2/Vastと具体的resourceのG05/G07/G08/G10受入は新設定元待ちである。[P5計画](web-migration-p5-plan.md)、[P5受入](../quality/web-p5-acceptance.md)、[統合運用](../operations/web-integrations.md)を正本とし、#385/#386と親#374/#387はOPEN/draftを維持する。全実受入後に刷新branchへ親PRをsquashし、P6へ進む。
+P5は親Issue [#374](https://github.com/dommyttdev2/comfyui-batch-studio/issues/374)・親draft PR [#387](https://github.com/dommyttdev2/comfyui-batch-studio/pull/387)で管理する。実装子Issue#375–#384とWindows/Linux243件・実Codex/Grok回帰を完了した。2026-10-09に既存環境変数を明示登録し、3 provider ready・Secret非保存、実Civitai同期/検索（14 Collection・80結果・HTTP 200）を確認し、利用者もAPI情報取得を確認した。ユーザー合意により、P5は「実装完了・総合受入待ち」として残るG05/G07/G08/G10を画面完全実装後へ繰り越す。P6/P7の実装着手は延期したP5総合受入で止めない。Electron版のログイン後ホーム・設定項目・各工程のレイアウト/操作感をP6/P7で継承し、画面内Projectタブと共通ツールModalを維持する。全画面完成後、刷新全体の完了前に#385の総合受入を実施する。[P5計画](web-migration-p5-plan.md)、[P5受入](../quality/web-p5-acceptance.md)、[統合運用](../operations/web-integrations.md)を正本とし、#385/#386/#374と親#387はOPEN/draftを維持する。今回の方針更新は親PRのマージや受入済み宣言ではない。

@@ -1,6 +1,6 @@
 # P5: 設定・外部連携・streaming転送
 
-Status: 実装子Issue10件完了 / Windows・Linux fixture受入済み / 実サービス設定元待ち（2026-10-08）。
+Status: 実装完了・Windows/Linuxローカル検証済み / API読み取り一部確認 / 総合受入は画面完全実装後（2026-10-09）。
 
 親Issue [#374](https://github.com/dommyttdev2/comfyui-batch-studio/issues/374)。P4統合0744c5549c024b7f95759b752a2cad5375fe3bfdから開始する。統合branch codex/web-p5-374-integrations、親draft PR [#387](https://github.com/dommyttdev2/comfyui-batch-studio/pull/387)はcodex/web-migrationへ。子branchは最新統合から作成し、依存完了順に子PRをsquash統合する。CI/main/version/release変更なし。旧データmigration・後方互換・fallbackは禁止。
 
@@ -43,11 +43,15 @@ G05は実catalogとLocal/R2のresource観測、G07はCivitai/cache/429とVast管
 | #382 Vast/SSH | [#394](https://github.com/dommyttdev2/comfyui-batch-studio/pull/394) | CLOSED |
 | #383 model/resource/Preflight | [#396](https://github.com/dommyttdev2/comfyui-batch-studio/pull/396) | CLOSED |
 | #384 共通Modal | [#397](https://github.com/dommyttdev2/comfyui-batch-studio/pull/397) | CLOSED |
-| #385 OS/実受入 | [#398](https://github.com/dommyttdev2/comfyui-batch-studio/pull/398) | 独立した受入修正は統合済み。Windows/Linux243件・実Codex/Grok PASS。実Civitai/R2/Vastと具体的resource受入は新設定元待ちでOPEN |
-| #386 正本/索引/親統合 | 正本・索引更新を子PR化する | 索引538 code/config、372src、117tests、18scripts、172IPCを再照合。全実受入と親PR統合までOPEN |
+| #385 OS/実受入 | [#398](https://github.com/dommyttdev2/comfyui-batch-studio/pull/398) | 独立した受入修正は統合済み。Windows/Linux243件・実Codex/Grok PASS。実Civitai同期/検索と利用者によるAPI取得を確認。残る総合受入は画面完全実装後へ繰越、OPEN |
+| #386 正本/索引/親統合 | 正本・索引更新を子PR化する | 索引538 code/config、372src、117tests、18scripts、172IPCを再照合。総合受入繰越とUI継承要件を正本に記録。親PR統合までOPEN |
 
 [受入matrix](../quality/web-p5-acceptance.md)に要求・実装・test・実環境の状態を一意に対応付ける。製品sourceの最新P5統合は71f16ac76a3fd64f48c8828156fecd3e84cab0f7。ここからの正本/索引更新は製品挙動を変更しない。
 
-新Web設定元の回答後は、明示登録→read-only service受入→選択catalog/Local/R2 resource観測→具体的R2転送/SSH確認の順にG05/G07/G08/G10を受け入れる。料金発生・既存resource破壊は具体的対象を確認して承認する。条件付きS3機能が実環境で非対応ならfallbackを使わず未受入として修正する。fixtureを実成功に置き換えない。
+2026-10-09のユーザー合意で、残る総合受入を画面完全実装後へ繰り越した。既存環境変数を受入用launcherから固定Web変数へ明示割当し、3 provider ready・Secret非保存を確認した。実Civitai同期/検索は14 Collection・80結果・HTTP 200、利用者はAPI情報取得を確認している。詳細な証跡範囲と未完了項目は受入matrixへ一本化する。
 
-すべて通過後に#385を閉じ、正本のStatusと最終SHAを更新し、親#387をreadyにしてcodex/web-migrationへsquashする。親マージ確認後に#386/#374を閉じる。それまでは親draftを維持する。P6には実catalog/resourceとSSH信頼・転送jobの新契約を渡すが、P5未受入のままP6完了や実生成成功を宣言しない。
+P5は「実装完了・総合受入待ち」とし、P6/P7の実装着手を止めない。残るProject/resource反映、R2操作・転送/再開、Vast lifecycle、SSH初回信頼、確認/取消/別Projectの隔離は#385で追跡し、完成画面から刷新全体の完了前に受け入れる。必要な課金・破壊操作は具体的対象と確認を伴う。条件非対応時はfallbackを使わず明示errorとする。
+
+画面の完了条件は、Electron版のログイン後ホーム・環境設定/サービス設定の全項目・各工程のレイアウトと操作感を継承すること。画面内Projectタブと共通ツールModalは既定のWeb方針を維持する。P6/P7で各機能に接続する画面を実装し、P7完了時に画面横断の継承を検証する。API受入用簡易UIを最終画面とみなさない。
+
+#385は総合受入までOPEN、#386/#374と親#387はOPEN/draftを維持する。今回の文書更新で親PRはマージせず、実装統合と受入の状態を分けて記録する。受入延期を受入済みや実生成成功と読み替えず、P6実生成の検証はP6で実施する。
